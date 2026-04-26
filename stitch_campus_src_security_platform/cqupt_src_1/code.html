@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CQUPT-SRC 校园漏洞响应与安全学习平台</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e1e3dd",
+                        "secondary": "#575e70",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#191c19",
+                        "outline": "#71796f",
+                        "surface-container-low": "#f2f4ee",
+                        "surface-variant": "#e1e3dd",
+                        "surface-tint": "#306a3d",
+                        "primary-fixed": "#b2f2b9",
+                        "on-background": "#191c19",
+                        "error": "#ba1a1a",
+                        "background": "#0F1511",
+                        "on-secondary-fixed": "#141b2b",
+                        "tertiary": "#6c2b3c",
+                        "on-primary-fixed-variant": "#155127",
+                        "tertiary-container": "#894253",
+                        "on-primary-container": "#a0dea7",
+                        "on-secondary-container": "#5c6274",
+                        "secondary-fixed-dim": "#c0c6db",
+                        "on-tertiary-container": "#ffbeca",
+                        "inverse-on-surface": "#eff2eb",
+                        "surface-container": "#ecefe8",
+                        "on-primary-fixed": "#00210a",
+                        "surface-container-high": "#e7e9e2",
+                        "primary-container": "#2a6438",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#97d59e",
+                        "surface-dim": "#d8dbd4",
+                        "on-tertiary-fixed": "#3c0517",
+                        "secondary-container": "#d9dff5",
+                        "surface": "#f8faf3",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#733142",
+                        "on-secondary": "#ffffff",
+                        "primary": "#0e4c23",
+                        "outline-variant": "#c0c9bd",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-bright": "#f8faf3",
+                        "on-secondary-fixed-variant": "#404758",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#97d59e",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#414940",
+                        "tertiary-fixed": "#ffd9df",
+                        "tertiary-fixed-dim": "#ffb1c0",
+                        "secondary-fixed": "#dce2f7",
+                        "inverse-surface": "#2e312d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container-max": "1200px",
+                        "md": "24px",
+                        "xl": "80px",
+                        "sm": "12px",
+                        "base": "8px",
+                        "xs": "4px",
+                        "lg": "48px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h2": ["Inter"],
+                        "h1": ["Inter"],
+                        "display": ["Inter"],
+                        "mono": ["Space Grotesk"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }],
+                        "label-sm": ["13px", { "lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "h2": ["24px", { "lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "h1": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "mono": ["14px", { "lineHeight": "1.5", "letterSpacing": "0", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #0F1511;
+            color: #ffffff;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glow-effect {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(42, 100, 56, 0.15) 0%, rgba(15, 21, 17, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-white">
+<!-- Ambient Glows -->
+<div class="glow-effect top-[-100px] left-[-100px]"></div>
+<div class="glow-effect top-[40%] right-[-150px]"></div>
+<!-- TopNavBar -->
+<nav class="sticky top-0 z-50 w-full bg-[#0F1511]/70 backdrop-blur-xl border-b border-white/[0.05] shadow-sm">
+<div class="flex justify-between items-center h-16 px-8 max-w-[1440px] mx-auto font-sans tracking-tight text-sm font-medium">
+<!-- Brand -->
+<div class="flex items-center">
+<img alt="CQUPT-SRC Logo" class="h-10 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uhQEk295E02t-sLulwIibSLpcaZ2_eAOsK5EIgTFZsO9EywrC6W7MhnAXUS4uskJcwIFPUrxQoVl0E7iV25AUBs5wNtv9xz33ETKOE_mPlCpTcvSLSxOE5iFkfLc6g4_Dr9xvkCiyEM3iOtus-tuRYjj-varFLYUpEyvTDTHDEEmXUbi3fyyEoQ1qmrBUSBkR0RmS4S-fF92msvM5ZgXgGW55yweTIJ5PQjQZ4oxrqmcwhKMv8-v7f0DfPnm0ee1aFoTAI8WxeKqA"/>
+</div>
+<!-- Navigation Links (Web) -->
+<div class="hidden md:flex items-center gap-8">
+<a class="text-green-400 font-semibold cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">首页</a>
+<a class="text-slate-400 cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">平台规则</a>
+<a class="text-slate-400 cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">公开公告</a>
+<a class="text-slate-400 cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">证书查询</a>
+<a class="text-slate-400 cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">学习资源</a>
+<a class="text-slate-400 cursor-pointer active:scale-95 transition-transform hover:text-green-400 transition-colors duration-200" href="#">关于平台</a>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4">
+<button class="hidden md:flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-slate-300 text-[20px]">dark_mode</span>
+</button>
+<div class="flex items-center gap-3">
+<button class="px-4 py-1.5 rounded-full text-sm font-medium text-slate-300 hover:text-white border border-white/10 hover:bg-white/5 transition-all">登录</button>
+<button class="px-4 py-1.5 rounded-full text-sm font-medium bg-[#2A6438] text-white hover:bg-[#306a3d] transition-all shadow-[0_0_15px_rgba(42,100,56,0.3)]">注册</button>
+</div>
+</div>
+</div>
+</nav>
+<main class="relative z-10">
+<!-- Hero Section -->
+<section class="pt-32 pb-24 px-8 max-w-container-max mx-auto text-center relative">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 mb-8">
+<span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+<span class="text-xs font-medium text-green-400 tracking-wider">SECURE PLATFORM LIVE</span>
+</div>
+<h1 class="font-display text-display text-white mb-6 tracking-tight leading-tight max-w-4xl mx-auto">
+            CQUPT-SRC 校园漏洞响应与<br/>安全学习平台
+        </h1>
+<p class="font-body-lg text-body-lg text-slate-400 max-w-2xl mx-auto mb-10">
+            连接漏洞响应、学习实践、证书激励与校园安全共建。打造下一代高校信息安全防线。
+        </p>
+<div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+<button class="px-8 py-3 rounded-full bg-[#2A6438] text-white font-medium hover:bg-[#306a3d] transition-all flex items-center gap-2 w-full sm:w-auto shadow-[0_0_20px_rgba(42,100,56,0.4)]">
+                立即登录
+                <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+<button class="px-8 py-3 rounded-full bg-white/5 text-white font-medium hover:bg-white/10 border border-white/10 transition-all flex items-center gap-2 w-full sm:w-auto">
+                查询证书
+                <span class="material-symbols-outlined text-[18px]">search</span>
+</button>
+</div>
+<!-- Hero Dashboard Preview (Abstract) -->
+<div class="mt-20 relative mx-auto max-w-5xl">
+<div class="absolute inset-0 bg-gradient-to-b from-transparent to-[#0F1511] z-10 rounded-xl"></div>
+<div class="glass-panel rounded-xl p-2 border border-white/10 overflow-hidden shadow-2xl relative">
+<img alt="Dashboard Preview" class="rounded-lg opacity-40 w-full h-auto object-cover max-h-[400px] grayscale mix-blend-luminosity" data-alt="Abstract sleek dark mode data dashboard interface with subtle green accents, charts, and terminal windows in high resolution" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_GQ-KaLcgmXvG0tlO8f2SS-QQ0hoxrU22VfkznhFiu-4vRlIOC1zpnGHwyS7o8w0SBRecW5kCRZSPxqkXw69BfsXIqGoZUMDt4IVJSiHzlxbqPchqvpFW3RjVD2ryKoY2kSvEmDYqJWLsxofVfeeJIqYSGuS7LJcXkTyFEx5EzfTCQE0UlNcZNLJGWRJC8JMJlnF_2ZZLjnp9ilA2WaWbu23wXI4IakBEe8GAiTQ-53l6nYts0Xa0L6DZwyQtPDUZ8vUVGtLPg3Q"/>
+</div>
+</div>
+</section>
+<!-- New Bilingual Platform Intro Section -->
+<section class="py-24 px-8 max-w-container-max mx-auto border-t border-white/[0.05]">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
+<!-- Chinese Text - Optimized for visual length equality -->
+<div class="space-y-10">
+<div class="h-1 w-12 bg-[#2A6438] rounded-full"></div>
+<div class="space-y-8">
+<p class="text-[20px] leading-[2] text-slate-200 font-medium tracking-wide" style="text-indent: 2em;">
+                        CQUPT-SRC 是面向校园网络安全建设的漏洞响应与安全学习平台，连接学生、学院、信息化部门与校园资产责任单位，构建从漏洞提交、分级审核、修复跟进、复测归档到积分与证书激励的全链路协同体系。它不以“收集漏洞”为终点，而是希望让每一个有效风险都能被规范记录、及时响应、持续跟踪，并最终沉淀为学校安全治理和学生能力成长的一部分。
+                    </p>
+<p class="text-[20px] leading-[2] text-slate-400" style="text-indent: 2em;">
+                        在这里，同学可以在合法授权的范围内参与真实安全实践，获取工具资源，进入靶场训练，提交校园网络资产中的有效漏洞，并通过审核反馈、积分奖励和漏洞证书获得正向激励；审核员和管理者可以借助平台完成漏洞分级、价值判断、修复协同、复测归档、审计追踪和数据分析，让校园安全工作从零散沟通走向体系化运营。
+                    </p>
+<p class="text-[20px] leading-[2] text-slate-400" style="text-indent: 2em;">
+                        这不只是一个漏洞提交入口，也不只是一个安全学习网站，而是一个以平台驱动网络安全教育、产教融合、人才发现与校园安全治理共同发展的长期系统。它希望让学生在真实场景中建立规则意识与工程能力，让学院获得可观测的人才培养数据，让学校补足漏洞响应与安全建设能力，最终形成可复制、可持续的高校网络安全产教融合实践案例。
+                    </p>
+</div>
+</div>
+<!-- English Text - Kept compact -->
+<div class="space-y-10">
+<div class="h-1 w-12 bg-slate-700 rounded-full"></div>
+<div class="space-y-6">
+<p class="text-[15px] leading-[1.65] text-slate-300 font-medium font-sans" style="text-indent: 2em;">
+                        CQUPT-SRC is a vulnerability response and security learning platform built for campus cybersecurity development. It connects students, the School, information technology departments, and campus asset owners, forming a full-chain collaborative system that covers vulnerability submission, severity review, remediation tracking, retesting and archiving, as well as points and certificate-based incentives. Its goal is not simply to “collect vulnerabilities,” but to ensure that every valid risk can be properly recorded, promptly responded to, continuously followed up, and eventually transformed into part of the University’s security governance and students’ capability growth.
+                    </p>
+<p class="text-[15px] leading-[1.65] text-slate-500 font-sans" style="text-indent: 2em;">
+                        Here, students can participate in real-world security practice within a lawful and authorized scope. They can access security tools and learning resources, train in cyber ranges, submit valid vulnerabilities found in campus network assets, and receive positive incentives through review feedback, points rewards, and vulnerability certificates. Reviewers and administrators can use the platform to complete vulnerability classification, value assessment, remediation coordination, retesting, archiving, audit tracing, and data analysis, enabling campus security work to move from fragmented communication toward systematic operation.
+                    </p>
+<p class="text-[15px] leading-[1.65] text-slate-500 font-sans" style="text-indent: 2em;">
+                        CQUPT-SRC is more than a vulnerability submission portal, and more than a security learning website. It is a long-term system that uses a platform-based approach to jointly promote cybersecurity education, industry-education integration, talent discovery, and campus security governance. It aims to help students build rule awareness and engineering capabilities in real scenarios, provide the School with observable data for talent cultivation, strengthen the University’s vulnerability response and security construction capabilities, and ultimately form a replicable and sustainable model of cybersecurity industry-education integration in higher education.
+                    </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 1: 平台能力 (Bento Grid) -->
+<section class="py-24 px-8 max-w-container-max mx-auto relative">
+<h2 class="font-h2 text-h2 text-white mb-12 text-center">核心能力</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Card 1 (Span 2) -->
+<div class="glass-panel rounded-2xl p-8 md:col-span-2 group hover:bg-white/5 transition-colors relative overflow-hidden">
+<div class="absolute right-[-20px] top-[-20px] opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-[150px]">bug_report</span>
+</div>
+<div class="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mb-6 border border-green-500/20">
+<span class="material-symbols-outlined text-green-400">bug_report</span>
+</div>
+<h3 class="text-xl font-semibold text-white mb-3">漏洞响应</h3>
+<p class="text-slate-400 font-body-md text-body-md max-w-md">标准化漏洞提交流程，快速响应与修复跟踪。保护校园网络生态，建立可靠的安全反馈闭环。</p>
+</div>
+<!-- Card 2 -->
+<div class="glass-panel rounded-2xl p-8 group hover:bg-white/5 transition-colors">
+<div class="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-6 border border-blue-500/20">
+<span class="material-symbols-outlined text-blue-400">school</span>
+</div>
+<h3 class="text-xl font-semibold text-white mb-3">安全学习</h3>
+<p class="text-slate-400 font-body-md text-body-md">体系化课程与实战文档，从基础理论到高级攻防全覆盖。</p>
+</div>
+<!-- Card 3 -->
+<div class="glass-panel rounded-2xl p-8 group hover:bg-white/5 transition-colors">
+<div class="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center mb-6 border border-purple-500/20">
+<span class="material-symbols-outlined text-purple-400">terminal</span>
+</div>
+<h3 class="text-xl font-semibold text-white mb-3">靶场实践</h3>
+<p class="text-slate-400 font-body-md text-body-md">隔离的沙箱环境，提供真实漏洞复现与攻防演练场景。</p>
+</div>
+<!-- Card 4 (Span 2) -->
+<div class="glass-panel rounded-2xl p-8 md:col-span-2 group hover:bg-white/5 transition-colors relative overflow-hidden">
+<div class="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-6 border border-amber-500/20">
+<span class="material-symbols-outlined text-amber-400">military_tech</span>
+</div>
+<h3 class="text-xl font-semibold text-white mb-3">证书激励</h3>
+<p class="text-slate-400 font-body-md text-body-md max-w-md">提交高价值漏洞可获得官方认可的致谢证书，助力个人能力背书与职业发展。</p>
+<div class="mt-6 flex items-center gap-2 text-sm text-amber-400 font-medium">
+                    了解激励细则 <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: 证书查询 -->
+<section class="py-24 bg-white/[0.02] border-y border-white/[0.05]">
+<div class="px-8 max-w-4xl mx-auto text-center">
+<h2 class="font-h2 text-h2 text-white mb-6">证书真伪验证</h2>
+<p class="text-slate-400 font-body-md text-body-md mb-8 max-w-2xl mx-auto">输入证书编号或提交者ID，即刻验证由 CQUPT-SRC 颁发的漏洞贡献荣誉证书有效性。</p>
+<div class="glass-panel rounded-2xl p-2 max-w-xl mx-auto flex items-center focus-within:ring-2 focus-within:ring-[#2A6438]/50 transition-all">
+<span class="material-symbols-outlined text-slate-400 ml-4 mr-2">search</span>
+<input class="bg-transparent border-none text-white w-full focus:ring-0 placeholder:text-slate-600 font-mono text-sm py-3" placeholder="输入证书编号 (e.g. SRC-2024-001)" type="text"/>
+<button class="bg-[#2A6438] hover:bg-[#306a3d] text-white px-6 py-2 rounded-xl text-sm font-medium transition-colors ml-2 whitespace-nowrap">
+                    查询
+                </button>
+</div>
+</div>
+</section>
+<!-- Footer -->
+<footer class="w-full py-12 border-t border-slate-800 bg-slate-950">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 max-w-[1440px] mx-auto gap-4 text-xs font-normal text-slate-400">
+<div class="font-bold text-white tracking-tighter text-sm">CQUPT-SRC</div>
+<div class="flex gap-6">
+<a class="hover:text-green-400 transition-colors duration-300" href="#">隐私政策</a>
+<a class="hover:text-green-400 transition-colors duration-300" href="#">用户协议</a>
+<a class="hover:text-green-400 transition-colors duration-300" href="#">联系我们</a>
+<a class="hover:text-green-400 transition-colors duration-300" href="#">加入我们</a>
+</div>
+<div>© 2024 CQUPT-SRC 校园漏洞响应与安全学习平台. All rights reserved.</div>
+</div>
+</footer>
+</main>
+</body></html>

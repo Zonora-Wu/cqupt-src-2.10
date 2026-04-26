@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-mono: "Space Grotesk", "JetBrains Mono", ui-monospace, monospace;
+
+  --color-brand-50: #eef7f0;
+  --color-brand-100: #d8ecdd;
+  --color-brand-200: #b3d9be;
+  --color-brand-300: #86bd98;
+  --color-brand-400: #5c9c72;
+  --color-brand-500: #3c7d51;
+  --color-brand-600: #2a6438;
+  --color-brand-700: #23532f;
+  --color-brand-800: #1f4229;
+  --color-brand-900: #1b3724;
+  --color-brand-950: #0f1f14;
+}
+
+:root {
+  --app-bg: #f7f9f7;
+  --app-surface: #ffffff;
+  --app-surface-muted: #eef3ef;
+  --app-text: #111827;
+  --app-text-muted: #647067;
+  --app-border: #dde5de;
+  --app-primary: #2a6438;
+  --app-radius: 8px;
+
+  color-scheme: light;
+  color: var(--app-text);
+  background: var(--app-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+  --app-bg: #0f1511;
+  --app-surface: #151b17;
+  --app-surface-muted: #1d251f;
+  --app-text: #f4f7f2;
+  --app-text-muted: #a9b5aa;
+  --app-border: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100%;
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  background: var(--app-bg);
+}
+
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
