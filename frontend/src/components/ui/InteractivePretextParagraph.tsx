@@ -1,4 +1,3 @@
-import { layoutWithLines, prepareWithSegments } from '@chenglou/pretext'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type PointerPoint = {
@@ -6,9 +5,11 @@ type PointerPoint = {
   y: number
 }
 
-type RenderedLine = {
-  characterPositions: number[]
-  text: string
+type CharacterBox = {
+  character: string
+  height: number
+  left: number
+  top: number
   width: number
 }
 
@@ -25,44 +26,29 @@ type InteractivePretextParagraphProps = {
   text: string
 }
 
-const EFFECT_RADIUS = 76
-const MAX_OFFSET = 20
+const EFFECT_RADIUS = 86
+const MAX_OFFSET = 24
 
 export function InteractivePretextParagraph({
   className,
-  locale = 'zh-CN',
   pointer: pagePointer,
   text,
 }: InteractivePretextParagraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const characterRefs = useRef<Array<Array<HTMLSpanElement | null>>>([])
-  const [lines, setLines] = useState<RenderedLine[]>([])
-  const [lineHeight, setLineHeight] = useState(24)
+  const hiddenTextRef = useRef<HTMLParagraphElement | null>(null)
+  const [characters, setCharacters] = useState<CharacterBox[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
 
   const characterOffsets = useMemo(() => {
     const pointer = getLocalPointer(containerRef.current, pagePointer)
-    const container = containerRef.current
-    if (!pointer || !container) return lines.map((line) => splitCharacters(line.text).map(() => zeroOffset()))
+    if (!pointer) return characters.map(() => zeroOffset())
 
-    const containerRect = container.getBoundingClientRect()
-    return lines.map((line, lineIndex) => {
-      const characters = splitCharacters(line.text)
-
-      return characters.map((_, characterIndex) => {
-        const node = characterRefs.current[lineIndex]?.[characterIndex]
-        if (!node) {
-          const fallbackX = line.characterPositions[characterIndex] ?? line.width / 2
-          return getCharacterOffset(pointer, fallbackX, lineIndex * lineHeight + lineHeight / 2)
-        }
-
-        const rect = node.getBoundingClientRect()
-        const centerX = rect.left - containerRect.left + rect.width / 2
-        const centerY = rect.top - containerRect.top + rect.height / 2
-        return getCharacterOffset(pointer, centerX, centerY)
-      })
+    return characters.map((character) => {
+      const centerX = character.left + character.width / 2
+      const centerY = character.top + character.height / 2
+      return getCharacterOffset(pointer, centerX, centerY)
     })
-  }, [lineHeight, lines, pagePointer])
+  }, [characters, pagePointer])
 
   useEffect(() => {
     const motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -81,90 +67,85 @@ export function InteractivePretextParagraph({
   }, [])
 
   useEffect(() => {
-    const element = containerRef.current
-    if (!element) return
+    const container = containerRef.current
+    const hiddenText = hiddenTextRef.current
+    if (!container || !hiddenText) return
 
     const measure = () => {
-      const styles = window.getComputedStyle(element)
-      const width = element.clientWidth
-      if (!width) return
+      const textNode = hiddenText.firstChild
+      if (!textNode) return
 
-      const font = [
-        styles.fontStyle,
-        styles.fontVariant,
-        styles.fontWeight,
-        styles.fontSize,
-        styles.fontFamily,
-      ].join(' ')
-      const nextLineHeight = parseLineHeight(styles.lineHeight, styles.fontSize)
-      const prepared = prepareWithSegments(text, font, {
-        letterSpacing: parseFloat(styles.letterSpacing) || 0,
-        whiteSpace: 'normal',
-        wordBreak: locale === 'zh-CN' ? 'normal' : 'normal',
-      })
-      const result = layoutWithLines(prepared, width, nextLineHeight)
+      const containerRect = container.getBoundingClientRect()
+      const measuredCharacters: CharacterBox[] = []
 
-      setLineHeight(nextLineHeight)
-      setLines(result.lines.map((line) => ({ ...getMeasuredCharacters(line.text, font), text: line.text, width: line.width })))
+      for (let index = 0; index < text.length; index += 1) {
+        const range = document.createRange()
+        range.setStart(textNode, index)
+        range.setEnd(textNode, index + 1)
+
+        const rect = range.getClientRects()[0]
+        range.detach()
+
+        if (!rect) continue
+
+        measuredCharacters.push({
+          character: text[index],
+          height: rect.height,
+          left: rect.left - containerRect.left,
+          top: rect.top - containerRect.top,
+          width: rect.width,
+        })
+      }
+
+      setCharacters(measuredCharacters)
     }
 
     measure()
     const resizeObserver = new ResizeObserver(measure)
-    resizeObserver.observe(element)
+    resizeObserver.observe(container)
+    resizeObserver.observe(hiddenText)
+
+    if ('fonts' in document) {
+      document.fonts.ready.then(measure)
+    }
+
     return () => resizeObserver.disconnect()
-  }, [locale, text])
+  }, [text])
 
   if (!isEnabled) {
     return <p className={className}>{text}</p>
   }
 
   return (
-    <div
-      className={`${className} relative [text-indent:0]`}
-      ref={containerRef}
-      role="presentation"
-    >
-      {lines.length === 0 && text}
-      {lines.map((line, lineIndex) => {
-        const characters = splitCharacters(line.text)
+    <div className={`${className} relative [text-indent:0]`} ref={containerRef} role="presentation">
+      <p
+        aria-hidden="true"
+        className="invisible whitespace-normal [text-align-last:left] [text-indent:2em]"
+        ref={hiddenTextRef}
+      >
+        {text}
+      </p>
 
-        return (
-          <span
-            className="relative z-10 block"
-            key={`${lineIndex}-${line.text}`}
-            style={{
-              height: lineHeight,
-              marginLeft: lineIndex === 0 ? '2em' : 0,
-            }}
-          >
-            <span aria-hidden="true" className="invisible block whitespace-pre">
-              {line.text}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 block">
+        {characters.map((character, index) => {
+          const offset = characterOffsets[index] ?? zeroOffset()
+
+          return (
+            <span
+              className="absolute inline-block whitespace-pre rounded-sm will-change-transform"
+              key={`${index}-${character.character}`}
+              style={{
+                left: character.left,
+                top: character.top,
+                transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${1 + offset.force * 0.025})`,
+                transition: 'transform 70ms ease-out',
+              }}
+            >
+              {character.character}
             </span>
-            {characters.map((character, characterIndex) => {
-              const offset = characterOffsets[lineIndex]?.[characterIndex] ?? zeroOffset()
-              const left = line.characterPositions[characterIndex] ?? 0
-
-              return (
-                <span
-                  className="absolute top-0 inline-block whitespace-pre rounded-sm will-change-transform"
-                  key={`${lineIndex}-${characterIndex}-${character}`}
-                  ref={(node) => {
-                    characterRefs.current[lineIndex] ??= []
-                    characterRefs.current[lineIndex][characterIndex] = node
-                  }}
-                  style={{
-                    left,
-                    transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${1 + offset.force * 0.025})`,
-                    transition: 'transform 70ms ease-out',
-                  }}
-                >
-                  {character}
-                </span>
-              )
-            })}
-          </span>
-        )
-      })}
+          )
+        })}
+      </span>
     </div>
   )
 }
@@ -188,42 +169,12 @@ function getCharacterOffset(pointer: PointerPoint, centerX: number, centerY: num
 
   const force = ((EFFECT_RADIUS - distance) / EFFECT_RADIUS) ** 2
   return {
+    force,
     x: (dx / distance) * MAX_OFFSET * force,
     y: (dy / distance) * MAX_OFFSET * force,
-    force,
   }
-}
-
-function splitCharacters(value: string) {
-  return Array.from(value)
-}
-
-function getMeasuredCharacters(value: string, font: string) {
-  const canvas = document.createElement('canvas')
-  const context = canvas.getContext('2d')
-  if (!context) {
-    return { characterPositions: splitCharacters(value).map((_, index) => index * 8) }
-  }
-
-  context.font = font
-  const characters = splitCharacters(value)
-  let measuredText = ''
-  const characterPositions = characters.map((character) => {
-    const left = context.measureText(measuredText).width
-    measuredText += character
-    return left
-  })
-
-  return { characterPositions }
 }
 
 function zeroOffset(): CharacterOffset {
   return { force: 0, x: 0, y: 0 }
-}
-
-function parseLineHeight(lineHeight: string, fontSize: string) {
-  if (lineHeight === 'normal') {
-    return (parseFloat(fontSize) || 16) * 1.2
-  }
-  return parseFloat(lineHeight) || (parseFloat(fontSize) || 16) * 1.2
 }

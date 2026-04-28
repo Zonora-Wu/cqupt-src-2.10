@@ -1,7 +1,7 @@
 import {
   ArrowRight,
   Badge,
-  ChevronsRight,
+  Eye,
   EyeOff,
   GraduationCap,
   Lock,
@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react'
 import { motion } from 'motion/react'
+import { useState } from 'react'
+import { SlideVerify } from '../ui/SlideVerify'
 
 type RegisterModalProps = {
   onClose: () => void
@@ -21,8 +23,24 @@ type RegisterModalProps = {
 const identityTypes = ['本科生', '研究生', '教师', '信息化办老师', '社团/工作室成员', '校外访客']
 
 export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) {
+  const [sliderVerified, setSliderVerified] = useState(false)
+  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+
+    if (!sliderVerified) {
+      setError('请先完成滑块验证')
+      return
+    }
+
+    setError('注册接口待后端接入')
+  }
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto px-4 py-8">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
       <button
         aria-label="关闭注册弹窗"
         className="absolute inset-0 bg-slate-950/35 backdrop-blur-md dark:bg-black/70"
@@ -31,7 +49,7 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
       />
       <motion.section
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="relative my-auto w-full max-w-[500px] rounded-lg border border-black/10 bg-white/90 p-8 text-slate-950 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111411]/90 dark:text-white"
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-lg border border-black/10 bg-white/90 p-8 text-slate-950 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111411]/90 dark:text-white"
         initial={{ opacity: 0, y: 20, scale: 0.98 }}
         transition={{ duration: 0.24, ease: 'easeOut' }}
       >
@@ -58,7 +76,7 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
           <p className="mt-1 text-sm text-slate-500 dark:text-white/50">CQUPT-SRC 校园漏洞响应平台</p>
         </header>
 
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <Input icon={<User />} placeholder="用户名" type="text" />
           <Input icon={<Badge />} placeholder="统一认证码" type="text" />
 
@@ -92,15 +110,22 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
           </div>
 
           <div>
-            <label className="relative block">
+            <div className="group relative">
               <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
               <input
                 className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
                 placeholder="密码"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
               />
-              <EyeOff className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
-            </label>
+              <button
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/35 dark:hover:text-white/60"
+                onClick={() => setShowPassword((v) => !v)}
+                type="button"
+              >
+                {showPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+              </button>
+            </div>
             <p className="mt-1 pl-1 text-xs leading-5 text-slate-500 dark:text-white/45">
               长度至少8位，需包含数字、字母及符号中至少两种组合
             </p>
@@ -108,14 +133,7 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
 
           <Input icon={<LockKeyhole />} placeholder="确认密码" type="password" />
 
-          <div className="relative flex h-10 cursor-pointer items-center overflow-hidden rounded-lg border border-black/10 bg-white/70 dark:border-white/10 dark:bg-white/5">
-            <div className="absolute bottom-0 left-0 top-0 z-10 flex w-10 items-center justify-center border-r border-white/20 bg-brand-600 text-white transition hover:brightness-110">
-              <ChevronsRight className="h-5 w-5" />
-            </div>
-            <div className="w-full select-none text-center text-xs font-medium text-slate-500 dark:text-white/40">
-              向右滑动完成验证
-            </div>
-          </div>
+          <SlideVerify onChange={setSliderVerified} />
 
           <div className="space-y-2 pt-1">
             <CheckboxText text="同意用户协议" />
@@ -130,6 +148,12 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
             立即注册
             <ArrowRight className="h-4 w-4" />
           </button>
+
+          {error && (
+            <div className="rounded-lg border border-red-500/15 bg-red-500/10 p-3 text-xs leading-5 text-red-700 dark:border-red-300/15 dark:text-red-200">
+              {error}
+            </div>
+          )}
         </form>
 
         <footer className="mt-5 border-t border-black/5 pt-5 text-center text-sm dark:border-white/5">

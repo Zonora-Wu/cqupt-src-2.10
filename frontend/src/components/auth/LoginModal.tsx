@@ -1,12 +1,93 @@
-import { ArrowRight, ChevronsRight, Lock, Mail, User, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
 import { motion } from 'motion/react'
+import { useEffect, useState } from 'react'
+import { SlideVerify } from '../ui/SlideVerify'
+import {
+  type AuthUser,
+  isValidEmail,
+  loginWithEmailCode,
+  loginWithUnifiedCode,
+  sendEmailLoginCode,
+} from '../../services/auth'
 
 type LoginModalProps = {
   onClose: () => void
+  onLoginSuccess: (user: AuthUser) => void
   onSwitchToRegister: () => void
 }
 
-export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
+type LoginMode = 'email' | 'sso'
+
+export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: LoginModalProps) {
+  const [mode, setMode] = useState<LoginMode>('sso')
+  const [unifiedCode, setUnifiedCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('')
+  const [emailCode, setEmailCode] = useState('')
+  const [countdown, setCountdown] = useState(0)
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sliderVerified, setSliderVerified] = useState(false)
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
+
+  useEffect(() => {
+    if (countdown <= 0) return
+
+    const timer = window.setTimeout(() => {
+      setCountdown((value) => value - 1)
+    }, 1000)
+
+    return () => window.clearTimeout(timer)
+  }, [countdown])
+
+  const handleSendEmailCode = async () => {
+    if (countdown > 0 || isSendingCode) return
+
+    setMessage(null)
+
+    if (!isValidEmail(email)) {
+      setMessage({ text: '请输入正确的邮箱地址', type: 'error' })
+      return
+    }
+
+    try {
+      setIsSendingCode(true)
+      const result = await sendEmailLoginCode(email)
+      setCountdown(60)
+      setMessage({ text: `${result.message}，演示验证码为 123456`, type: 'success' })
+    } catch (error) {
+      setMessage({ text: getErrorMessage(error), type: 'error' })
+    } finally {
+      setIsSendingCode(false)
+    }
+  }
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMessage(null)
+
+    if (!sliderVerified) {
+      setMessage({ text: '请先完成滑块验证', type: 'error' })
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      const result =
+        mode === 'sso'
+          ? await loginWithUnifiedCode({ code: unifiedCode, password })
+          : await loginWithEmailCode({ code: emailCode, email })
+      setMessage({ text: '登录成功，正在进入用户首页', type: 'success' })
+      window.setTimeout(() => {
+        onLoginSuccess(result.user)
+      }, 300)
+    } catch (error) {
+      setMessage({ text: getErrorMessage(error), type: 'error' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
       <button
@@ -45,50 +126,83 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
         </header>
 
         <div className="mb-5 grid grid-cols-2 border-b border-black/10 text-sm font-medium dark:border-white/10">
-          <button className="border-b-2 border-brand-600 pb-3 text-brand-700 dark:border-brand-200 dark:text-brand-100" type="button">
+          <button
+            className={`border-b-2 pb-3 transition ${
+              mode === 'sso'
+                ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
+                : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
+            }`}
+            onClick={() => {
+              setMode('sso')
+              setMessage(null)
+            }}
+            type="button"
+          >
             统一认证登录
           </button>
-          <button className="pb-3 text-slate-400 transition hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75" type="button">
+          <button
+            className={`border-b-2 pb-3 transition ${
+              mode === 'email'
+                ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
+                : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
+            }`}
+            onClick={() => {
+              setMode('email')
+              setMessage(null)
+            }}
+            type="button"
+          >
             邮箱验证登录
           </button>
         </div>
 
-        <form className="space-y-5">
-          <div className="space-y-3">
-            <label className="group relative block">
-              <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
-              <input
-                className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
-                placeholder="统一认证号 / 学号"
-                type="text"
-              />
-            </label>
-            <label className="group relative block">
-              <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
-              <input
-                className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
-                placeholder="密码"
-                type="password"
-              />
-            </label>
-          </div>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {mode === 'sso' ? (
+            <SsoLoginFields
+              password={password}
+              unifiedCode={unifiedCode}
+              onPasswordChange={setPassword}
+              onUnifiedCodeChange={setUnifiedCode}
+            />
+          ) : (
+            <EmailLoginFields
+              countdown={countdown}
+              email={email}
+              emailCode={emailCode}
+              isSendingCode={isSendingCode}
+              onCodeChange={setEmailCode}
+              onEmailChange={setEmail}
+              onSendCode={handleSendEmailCode}
+            />
+          )}
 
-          <div className="relative flex h-10 cursor-pointer items-center overflow-hidden rounded-lg border border-black/10 bg-white/70 dark:border-white/10 dark:bg-white/5">
-            <div className="absolute bottom-0 left-0 top-0 z-10 flex w-10 items-center justify-center border-r border-white/20 bg-brand-600 text-white transition hover:brightness-110">
-              <ChevronsRight className="h-5 w-5" />
-            </div>
-            <div className="w-full select-none text-center text-xs font-medium text-slate-500 dark:text-white/40">
-              向右滑动完成验证
-            </div>
-          </div>
+          <SlideVerify onChange={setSliderVerified} />
 
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmitting}
             type="submit"
           >
-            登录
+            {isSubmitting ? '登录中...' : '登录'}
           </button>
         </form>
+
+        {message && (
+          <div
+            className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-xs leading-5 ${
+              message.type === 'success'
+                ? 'border-brand-600/15 bg-brand-600/10 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80'
+                : 'border-red-500/15 bg-red-500/10 text-red-700 dark:border-red-300/15 dark:text-red-200'
+            }`}
+          >
+            {message.type === 'success' ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <span>{message.text}</span>
+          </div>
+        )}
 
         <footer className="mt-5 flex items-center justify-between border-t border-black/5 pt-5 text-sm dark:border-white/5">
           <button className="text-slate-500 transition hover:text-slate-950 dark:text-white/40 dark:hover:text-white" type="button">
@@ -111,4 +225,115 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
       </motion.section>
     </div>
   )
+}
+
+function SsoLoginFields({
+  onPasswordChange,
+  onUnifiedCodeChange,
+  password,
+  unifiedCode,
+}: {
+  onPasswordChange: (value: string) => void
+  onUnifiedCodeChange: (value: string) => void
+  password: string
+  unifiedCode: string
+}) {
+  const [showPassword, setShowPassword] = useState(false)
+  const EyeIcon = showPassword ? Eye : EyeOff
+
+  return (
+    <div className="space-y-3">
+      <label className="group relative block">
+        <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
+        <input
+          className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          onChange={(event) => onUnifiedCodeChange(event.target.value)}
+          placeholder="统一认证码"
+          type="text"
+          value={unifiedCode}
+        />
+      </label>
+      <div className="group relative">
+        <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
+        <input
+          className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          onChange={(event) => onPasswordChange(event.target.value)}
+          placeholder="密码"
+          type={showPassword ? 'text' : 'password'}
+          value={password}
+        />
+        <button
+          aria-label={showPassword ? '隐藏密码' : '显示密码'}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/30 dark:hover:text-white/60"
+          onClick={() => setShowPassword((v) => !v)}
+          type="button"
+        >
+          <EyeIcon className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function EmailLoginFields({
+  countdown,
+  email,
+  emailCode,
+  isSendingCode,
+  onCodeChange,
+  onEmailChange,
+  onSendCode,
+}: {
+  countdown: number
+  email: string
+  emailCode: string
+  isSendingCode: boolean
+  onCodeChange: (value: string) => void
+  onEmailChange: (value: string) => void
+  onSendCode: () => void
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="group relative block">
+        <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
+        <input
+          autoComplete="email"
+          className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          onChange={(event) => onEmailChange(event.target.value)}
+          placeholder="邮箱"
+          type="email"
+          value={email}
+        />
+      </label>
+
+      <div className="flex gap-3">
+        <label className="group relative block flex-1">
+          <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
+          <input
+            autoComplete="one-time-code"
+            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            inputMode="numeric"
+            maxLength={6}
+            onChange={(event) => onCodeChange(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6 位验证码"
+            type="text"
+            value={emailCode}
+          />
+        </label>
+        <button
+          className="w-28 rounded-lg border border-black/10 bg-white/70 px-3 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-55 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+          disabled={countdown > 0 || isSendingCode}
+          onClick={onSendCode}
+          type="button"
+        >
+          {isSendingCode ? '发送中' : countdown > 0 ? `${countdown}s` : '获取验证码'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  return '操作失败，请稍后重试'
 }
