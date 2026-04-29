@@ -33,6 +33,12 @@ import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
+import {
+  listReviewQueue,
+  openAttachmentPreview,
+  reviewVulnerability,
+} from '../../services/vulnerabilities'
+import type { ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
 import { AdminCertificateManagement } from '../admin/AdminCertificateManagement'
 
 type AuditorHomeProps = {
@@ -40,13 +46,15 @@ type AuditorHomeProps = {
   user: AuthUser
 }
 
-type ReviewLevel = '严重' | '高危' | '中危' | '低危'
+type ReviewLevel = '严重' | '高危' | '中危' | '低危' | '信息'
 type ReviewStatus = '待初审' | '审核中' | '待补充' | '已确认' | '已驳回'
 type RetestStatus = '待复测' | '复测中' | '复测通过' | '退回修复'
 type AnnouncementStatus = '草稿' | '已发布' | '已下架'
 
 type ReviewReport = {
+  attachments: ReviewQueueItem['attachments']
   id: string
+  reportId: string
   title: string
   asset: string
   owner: string
@@ -62,6 +70,7 @@ type ReviewReport = {
   reproduce: string
   requestPacket: string
   repair: string
+  points: number
 }
 
 type RetestItem = {
@@ -93,16 +102,18 @@ type ConfirmAction = {
   description: string
   confirmLabel?: string
   danger?: boolean
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
 } | null
 
 const auditorMenuItems = ['首页', '漏洞审核', '复测归档', '证书管理', 'AI 辅助', '审核记录', '公告管理']
 const reviewStatusOptions = ['全部状态', '待初审', '审核中', '待补充', '已确认', '已驳回']
-const levelOptions = ['全部等级', '严重', '高危', '中危', '低危']
+const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
 
 const reviewReports: ReviewReport[] = [
   {
+    attachments: [],
     id: 'SRC-2026-0008',
+    reportId: 'mock-src-2026-0008',
     title: '统一认证入口弱口令策略绕过风险',
     asset: 'auth.cqupt.edu.cn',
     owner: '信息化办公室',
@@ -118,9 +129,12 @@ const reviewReports: ReviewReport[] = [
     reproduce: '1. 使用授权测试账号进入统一认证登录页。\n2. 构造弱口令边界条件。\n3. 观察服务端策略校验结果。\n4. 记录前后端响应差异。',
     requestPacket: 'POST /cas/login HTTP/1.1\nHost: auth.cqupt.edu.cn\nContent-Type: application/x-www-form-urlencoded\n\nusername=test&password=******',
     repair: '统一服务端密码策略校验逻辑，补充弱口令命中日志，并对历史弱口令账号进行强制改密。',
+    points: 0,
   },
   {
+    attachments: [],
     id: 'SRC-2026-0007',
+    reportId: 'mock-src-2026-0007',
     title: '实验教学平台越权访问课程附件',
     asset: 'lab.cqupt.edu.cn',
     owner: '教务处',
@@ -136,9 +150,12 @@ const reviewReports: ReviewReport[] = [
     reproduce: '1. 登录授权学生账号。\n2. 获取本人课程附件下载链接。\n3. 替换 courseId 与 fileId。\n4. 验证是否可下载非授权课程资料。',
     requestPacket: 'GET /api/course/file/download?courseId=1024&fileId=7788 HTTP/1.1\nHost: lab.cqupt.edu.cn',
     repair: '下载接口应校验用户与课程、班级、附件之间的授权关系，并记录异常访问日志。',
+    points: 0,
   },
   {
+    attachments: [],
     id: 'SRC-2026-0006',
+    reportId: 'mock-src-2026-0006',
     title: '校园门户接口敏感信息返回过多',
     asset: 'portal.cqupt.edu.cn/api/user',
     owner: '信息化办公室',
@@ -154,6 +171,7 @@ const reviewReports: ReviewReport[] = [
     reproduce: '1. 登录普通账号。\n2. 请求用户详情接口。\n3. 检查响应字段。\n4. 验证是否返回超出业务需要的数据。',
     requestPacket: 'GET /api/user/profile HTTP/1.1\nHost: portal.cqupt.edu.cn\nAuthorization: Bearer ******',
     repair: '按业务场景拆分接口字段，默认隐藏敏感字段，增加字段级访问控制。',
+    points: 260,
   },
 ]
 
@@ -241,6 +259,7 @@ const levelStyles: Record<ReviewLevel, string> = {
   高危: 'bg-orange-500 text-white',
   中危: 'bg-amber-500 text-white',
   低危: 'bg-slate-500 text-white',
+  信息: 'bg-sky-500 text-white',
 }
 
 const reviewStatusStyles: Record<ReviewStatus, string> = {
@@ -419,13 +438,38 @@ function AuditorReviewQueue() {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('全部状态')
   const [level, setLevel] = useState('全部等级')
+  const [reports, setReports] = useState<ReviewReport[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
   const [selectedReport, setSelectedReport] = useState<ReviewReport | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [done, setDone] = useState('')
+  const [reviewNote, setReviewNote] = useState('')
+  const [finalSeverity, setFinalSeverity] = useState<ReviewLevel>('中危')
+  const [reviewPoints, setReviewPoints] = useState('260')
+  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null)
+
+  const loadReports = async () => {
+    setIsLoading(true)
+    setErrorMessage('')
+
+    try {
+      const result = await listReviewQueue()
+      setReports(result.items.map(mapReviewQueueItem))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '审核队列加载失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadReports()
+  }, [])
 
   const filteredReports = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
-    return reviewReports.filter((item) => {
+    return reports.filter((item) => {
       const matchesKeyword =
         !normalizedKeyword ||
         item.id.toLowerCase().includes(normalizedKeyword) ||
@@ -436,11 +480,54 @@ function AuditorReviewQueue() {
       const matchesLevel = level === '全部等级' || item.level === level
       return matchesKeyword && matchesStatus && matchesLevel
     })
-  }, [keyword, level, status])
+  }, [keyword, level, reports, status])
 
   const complete = (message: string) => {
     setDone(message)
     window.setTimeout(() => setDone(''), 2200)
+  }
+
+  const openReport = (item: ReviewReport) => {
+    setSelectedReport(item)
+    setReviewNote(defaultReviewNote(item.status))
+    setFinalSeverity(item.level)
+    setReviewPoints(String(item.points || defaultPointsForLevel(item.level)))
+  }
+
+  const submitReview = async (decision: ReviewDecisionPayload['decision']) => {
+    if (!selectedReport) return
+
+    try {
+      const payload: ReviewDecisionPayload = {
+        decision,
+        note: reviewNote,
+      }
+
+      if (decision === 'CONFIRM') {
+        payload.finalSeverity = finalSeverity
+        payload.points = Number(reviewPoints)
+      }
+
+      const result = await reviewVulnerability(selectedReport.reportId, payload)
+      complete(`审核已完成：${result.reportNo} 已更新为 ${result.status}`)
+      setSelectedReport(null)
+      await loadReports()
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '审核操作失败')
+    }
+  }
+
+  const handlePreviewAttachment = async (attachmentId: string) => {
+    setPreviewingAttachmentId(attachmentId)
+    setErrorMessage('')
+
+    try {
+      await openAttachmentPreview(attachmentId)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'PDF 预览失败')
+    } finally {
+      setPreviewingAttachmentId(null)
+    }
   }
 
   if (selectedReport) {
@@ -493,6 +580,31 @@ function AuditorReviewQueue() {
               </SurfacePanel>
 
               <SurfacePanel className="p-4">
+                <div className="mb-4 grid gap-3">
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">审核意见</span>
+                    <textarea
+                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      onChange={(event) => setReviewNote(event.target.value)}
+                      placeholder="请填写审核依据、复现结论、补充要求或驳回原因"
+                      value={reviewNote}
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SelectInput label="最终等级" onChange={(value) => setFinalSeverity(value as ReviewLevel)} options={levelOptions.filter((item) => item !== '全部等级')} value={finalSeverity} />
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">奖励积分</span>
+                      <input
+                        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        min={0}
+                        max={10000}
+                        onChange={(event) => setReviewPoints(event.target.value)}
+                        type="number"
+                        value={reviewPoints}
+                      />
+                    </label>
+                  </div>
+                </div>
                 <div className="grid gap-2">
                   <ReviewActionButton
                     label="确认有效"
@@ -500,7 +612,7 @@ function AuditorReviewQueue() {
                       setConfirmAction({
                         title: '确认该漏洞有效？',
                         description: '确认后，该报告将进入修复协同流程，并通知资产责任单位处理。',
-                        onConfirm: () => complete('已确认漏洞有效'),
+                        onConfirm: () => submitReview('CONFIRM'),
                       })
                     }
                   />
@@ -510,7 +622,7 @@ function AuditorReviewQueue() {
                       setConfirmAction({
                         title: '确认要求补充材料？',
                         description: '系统将通知提交人补充复现边界、影响证明、截图或请求包等材料。',
-                        onConfirm: () => complete('补充材料通知已发送'),
+                        onConfirm: () => submitReview('NEEDS_SUPPLEMENT'),
                       })
                     }
                   />
@@ -523,7 +635,7 @@ function AuditorReviewQueue() {
                         description: '驳回后将通知提交人原因。请确认该报告确实不符合平台提交规范或无法复现。',
                         danger: true,
                         confirmLabel: '确认驳回',
-                        onConfirm: () => complete('报告已驳回'),
+                        onConfirm: () => submitReview('REJECT'),
                       })
                     }
                   />
@@ -548,6 +660,35 @@ function AuditorReviewQueue() {
                   <h3 className="text-sm font-semibold">修复建议</h3>
                   <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-400">{selectedReport.repair}</p>
                 </section>
+                {selectedReport.attachments.length > 0 && (
+                  <section className="mt-5">
+                    <h3 className="text-sm font-semibold">PDF 附件</h3>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
+                      {selectedReport.attachments.map((attachment) => (
+                        <div
+                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.035]"
+                          key={attachment.id}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{attachment.originalName}</p>
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                              {formatFileSize(attachment.sizeBytes)}
+                            </p>
+                          </div>
+                          <button
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                            disabled={previewingAttachmentId === attachment.id}
+                            onClick={() => void handlePreviewAttachment(attachment.id)}
+                            type="button"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            {previewingAttachmentId === attachment.id ? '打开中' : '预览'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </SurfacePanel>
 
               <SurfacePanel className="p-6">
@@ -573,6 +714,11 @@ function AuditorReviewQueue() {
           title="漏洞审核"
           description="处理分派给你的漏洞报告，结合 AI 初评完成复现、价值判断、补充材料要求和审核结论。"
         />
+        {errorMessage && (
+          <SurfacePanel className="mt-4 border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
+            {errorMessage}
+          </SurfacePanel>
+        )}
         {done && <SuccessNotice>{done}</SuccessNotice>}
         <FilterBar>
           <SearchInput label="搜索漏洞" onChange={setKeyword} placeholder="编号、标题、资产或提交人" value={keyword} />
@@ -581,10 +727,15 @@ function AuditorReviewQueue() {
           <ResetButton onClick={() => { setKeyword(''); setStatus('全部状态'); setLevel('全部等级') }} />
         </FilterBar>
         <div className="mt-5 grid gap-3">
+          {isLoading && (
+            <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              正在加载审核队列...
+            </SurfacePanel>
+          )}
           {filteredReports.map((item) => (
-            <ReviewReportRow item={item} key={item.id} onOpen={() => setSelectedReport(item)} />
+            <ReviewReportRow item={item} key={item.reportId} onOpen={() => openReport(item)} />
           ))}
-          {filteredReports.length === 0 && <EmptyState label="没有匹配的漏洞报告" />}
+          {!isLoading && filteredReports.length === 0 && <EmptyState label="没有匹配的漏洞报告" />}
         </div>
       </PageShell>
       <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={() => { confirmAction?.onConfirm(); setConfirmAction(null) }} />
@@ -1061,6 +1212,82 @@ function ReviewReportRow({ item, onOpen }: { item: ReviewReport; onOpen: () => v
       </div>
     </SurfacePanel>
   )
+}
+
+function mapReviewQueueItem(item: ReviewQueueItem): ReviewReport {
+  return {
+    aiScore: item.attachments.length > 0 ? 82 : 68,
+    aiSummary: item.lastEvent?.note || getReviewHint(item.status),
+    aiTags: buildReviewTags(item),
+    asset: item.assetName,
+    attachments: item.attachments,
+    description: item.impactAssessment,
+    id: item.reportNo,
+    level: (item.finalSeverity ?? item.selfSeverity) as ReviewLevel,
+    owner: item.ownerUnit || '待确认',
+    points: item.points,
+    repair: item.repairSuggestion,
+    reportId: item.id,
+    reproduce: item.reproductionSteps,
+    requestPacket: item.requestPacket || '提交材料未包含触发请求包。',
+    status: item.status as ReviewStatus,
+    submittedAt: formatDateTime(item.submittedAt),
+    submitter: `${item.submitter.name}（${item.submitter.unifiedCode}）`,
+    title: item.title,
+    updatedAt: formatDateTime(item.updatedAt),
+  }
+}
+
+function buildReviewTags(item: ReviewQueueItem) {
+  const tags = [item.vulnerabilityType]
+  if (item.attachments.length > 0) tags.push('含附件')
+  if (item.status === '待初审') tags.push('待复现')
+  if (item.status === '待补充') tags.push('材料补充')
+  if (item.finalSeverity) tags.push('已定级')
+  return tags.slice(0, 4)
+}
+
+function getReviewHint(status: string) {
+  if (status === '待补充') return '该报告已要求提交人补充材料，请等待用户完善复现证据后继续审核。'
+  if (status === '审核中') return '该报告正在审核中，请结合附件、请求包和测试边界确认漏洞有效性。'
+  if (status === '已确认') return '该报告已确认有效，可进入修复协同、复测和证书流程。'
+  if (status === '已驳回') return '该报告已驳回，历史意见已保留用于审计。'
+  return '该报告等待初审，请先确认授权边界、复现完整性和影响范围。'
+}
+
+function defaultReviewNote(status: ReviewStatus) {
+  if (status === '待补充') return '请补充复现步骤、影响范围、测试边界说明或必要的脱敏证明材料。'
+  if (status === '已驳回') return '该报告暂不符合平台漏洞提交规范或无法在授权范围内复现。'
+  return '经审核，报告材料基本完整，漏洞影响和复现路径明确。'
+}
+
+function defaultPointsForLevel(level: ReviewLevel) {
+  if (level === '严重') return 800
+  if (level === '高危') return 500
+  if (level === '中危') return 260
+  if (level === '低危') return 80
+  return 20
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return '未提交'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatFileSize(sizeBytes: number) {
+  if (sizeBytes < 1024) return `${sizeBytes} B`
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 function PageShell({ children, size = 'lg' }: { children: ReactNode; size?: 'md' | 'lg' }) {

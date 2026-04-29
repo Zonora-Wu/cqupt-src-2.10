@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../../backend/node_modules/@prisma/client/.prisma/client"
+  output   = "../../backend/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -184,6 +184,7 @@ model User {
   receivedCertificates  Certificate[]              @relation("CertificateRecipient")
   issuedCertificates    Certificate[]              @relation("CertificateIssuer")
   revokedCertificates   Certificate[]              @relation("CertificateRevoker")
+  createdCertificateTemplates CertificateTemplate[] @relation("CertificateTemplateCreator")
   pointEntries          PointLedgerEntry[]          @relation("PointUser")
   operatedPointEntries  PointLedgerEntry[]          @relation("PointOperator")
   redemptions           MallRedemption[]            @relation("RedemptionUser")
@@ -505,16 +506,44 @@ model Certificate {
   revokedById     String?
   revokeReason    String?             @db.Text
   pdfStorageKey   String?
+  templateId      String?
+  templateSnapshot Json?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   vulnerability   VulnerabilityReport @relation(fields: [vulnerabilityId], references: [id])
   recipient       User                @relation("CertificateRecipient", fields: [recipientId], references: [id])
   issuedBy        User?               @relation("CertificateIssuer", fields: [issuedById], references: [id])
   revokedBy       User?               @relation("CertificateRevoker", fields: [revokedById], references: [id])
+  template        CertificateTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([recipientId])
   @@index([issuedById])
   @@index([status])
+  @@index([templateId])
+}
+
+model CertificateTemplate {
+  id                 String        @id @default(cuid())
+  name               String
+  version            String        @unique
+  templateStorageKey String
+  templateMimeType   String
+  templateSizeBytes  Int
+  templateSha256     String
+  sealStorageKey     String?
+  sealMimeType       String?
+  sealSizeBytes      Int?
+  sealSha256         String?
+  layoutJson         Json
+  active             Boolean       @default(false)
+  createdById        String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  createdBy          User?         @relation("CertificateTemplateCreator", fields: [createdById], references: [id])
+  certificates       Certificate[]
+
+  @@index([active])
+  @@index([createdById])
 }
 
 model PointLedgerEntry {

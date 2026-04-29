@@ -16,10 +16,16 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import {
+  getActiveCertificateTemplate,
+  uploadCertificateSeal,
+  uploadCertificateTemplateBackground,
+} from '../../services/systemSettings'
+import type { CertificateTemplateSummary } from '../../services/systemSettings'
 
 type SettingsSection =
   | '基础设置'
@@ -51,6 +57,8 @@ const settingSections: Array<{ label: SettingsSection; icon: ReactNode; descript
 ]
 
 export function AdminSystemSettings() {
+  const templateInputRef = useRef<HTMLInputElement | null>(null)
+  const sealInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [openRegister, setOpenRegister] = useState(true)
@@ -61,9 +69,71 @@ export function AdminSystemSettings() {
   const [defaultLogin, setDefaultLogin] = useState('统一认证码 + 密码')
   const [pdfMode, setPdfMode] = useState('后端生成 PDF')
   const [backendAccess, setBackendAccess] = useState('校园网访问')
+  const [certificateTemplate, setCertificateTemplate] = useState<CertificateTemplateSummary | null>(null)
+  const [certificateTemplateMessage, setCertificateTemplateMessage] = useState('')
+  const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
 
   const confirmChange = (nextState: Exclude<ConfirmState, null>) => {
     setConfirmState(nextState)
+  }
+
+  useEffect(() => {
+    let active = true
+
+    async function loadCertificateTemplate() {
+      try {
+        const template = await getActiveCertificateTemplate()
+        if (active) {
+          setCertificateTemplate(template)
+        }
+      } catch (error) {
+        if (active) {
+          setCertificateTemplateMessage(error instanceof Error ? error.message : '证书模板信息加载失败')
+        }
+      }
+    }
+
+    void loadCertificateTemplate()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleTemplateUpload = async (file: File | undefined) => {
+    if (!file) return
+
+    setCertificateTemplateMessage('')
+    setIsUploadingTemplate(true)
+
+    try {
+      const template = await uploadCertificateTemplateBackground(file)
+      setCertificateTemplate(template)
+      setCertificateTemplateMessage('证书背景模板已上传并启用。')
+    } catch (error) {
+      setCertificateTemplateMessage(error instanceof Error ? error.message : '证书背景模板上传失败')
+    } finally {
+      setIsUploadingTemplate(false)
+      if (templateInputRef.current) templateInputRef.current.value = ''
+    }
+  }
+
+  const handleSealUpload = async (file: File | undefined) => {
+    if (!file) return
+
+    setCertificateTemplateMessage('')
+    setIsUploadingTemplate(true)
+
+    try {
+      const template = await uploadCertificateSeal(file)
+      setCertificateTemplate(template)
+      setCertificateTemplateMessage('电子印章已上传并绑定到当前模板。')
+    } catch (error) {
+      setCertificateTemplateMessage(error instanceof Error ? error.message : '电子印章上传失败')
+    } finally {
+      setIsUploadingTemplate(false)
+      if (sealInputRef.current) sealInputRef.current.value = ''
+    }
   }
 
   return (
@@ -452,11 +522,56 @@ export function AdminSystemSettings() {
                 />
                 <SettingRow control={<SelectInput label="" options={['默认开启', '默认关闭', '签发时选择']} value="默认开启" />} description="决定新证书是否默认支持公开核验。公开页面必须避免展示敏感个人信息。" title="公开核验策略" />
                 <SettingRow control={<TextField value="https://src.cqupt.edu.cn/cert" />} description="用于生成证书二维码和公开核验链接。" title="核验二维码域名" />
+                <SettingRow
+                  control={
+                    <div className="rounded-lg border border-black/10 bg-white/60 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+                      {certificateTemplate ? (
+                        <div className="space-y-1">
+                          <p className="font-semibold">{certificateTemplate.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">版本：{certificateTemplate.version}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">格式：{certificateTemplate.templateMimeType}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">印章：{certificateTemplate.sealConfigured ? '已配置' : '未配置'}</p>
+                        </div>
+                      ) : (
+                        <p className="text-slate-500 dark:text-slate-400">当前未启用证书模板</p>
+                      )}
+                    </div>
+                  }
+                  description="签发证书时会读取当前启用模板。历史证书后续会保留签发时的模板版本与快照。"
+                  title="当前启用模板"
+                />
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <ActionButton icon={<Upload className="h-4 w-4" />} label="上传证书背景" />
-                  <ActionButton icon={<Upload className="h-4 w-4" />} label="上传电子签章" />
+                  <ActionButton
+                    disabled={isUploadingTemplate}
+                    icon={<Upload className="h-4 w-4" />}
+                    label={isUploadingTemplate ? '上传中...' : '上传证书背景'}
+                    onClick={() => templateInputRef.current?.click()}
+                  />
+                  <ActionButton
+                    disabled={isUploadingTemplate}
+                    icon={<Upload className="h-4 w-4" />}
+                    label="上传电子签章"
+                    onClick={() => sealInputRef.current?.click()}
+                  />
                   <ActionButton icon={<FileBadge2 className="h-4 w-4" />} label="测试生成 PDF" />
+                  <input
+                    accept="application/pdf,image/png"
+                    className="hidden"
+                    onChange={(event) => void handleTemplateUpload(event.target.files?.[0])}
+                    ref={templateInputRef}
+                    type="file"
+                  />
+                  <input
+                    accept="image/png"
+                    className="hidden"
+                    onChange={(event) => void handleSealUpload(event.target.files?.[0])}
+                    ref={sealInputRef}
+                    type="file"
+                  />
                 </div>
+                {certificateTemplateMessage && (
+                  <p className="px-6 pb-4 pt-2 text-sm text-brand-700 dark:text-green-300">{certificateTemplateMessage}</p>
+                )}
               </SettingsCard>
             )}
 
@@ -628,14 +743,28 @@ function SettingToggle({
   )
 }
 
-function ActionButton({ danger = false, icon, label }: { danger?: boolean; icon: ReactNode; label: string }) {
+function ActionButton({
+  danger = false,
+  disabled = false,
+  icon,
+  label,
+  onClick,
+}: {
+  danger?: boolean
+  disabled?: boolean
+  icon: ReactNode
+  label: string
+  onClick?: () => void
+}) {
   return (
     <button
       className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
         danger
           ? 'border-red-500/20 text-red-700 hover:bg-red-500/10 dark:text-red-300'
           : 'border-black/10 text-slate-700 hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10'
-      }`}
+      } disabled:cursor-not-allowed disabled:opacity-55`}
+      disabled={disabled}
+      onClick={onClick}
       type="button"
     >
       {icon}

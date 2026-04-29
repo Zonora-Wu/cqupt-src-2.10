@@ -1,9 +1,31 @@
 import { Award, CheckCircle2, FileSearch, LockKeyhole, Search, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { publicVerifyCertificate } from '../../services/certificates'
+import type { PublicCertificateVerifyResult } from '../../services/certificates'
 
 const visibleFields = ['证书编号', '获得者脱敏信息', '证书类型', '贡献等级', '颁发日期', '证书状态']
 const hiddenFields = ['漏洞 URL', '复现步骤', '附件内容', '审核备注', '敏感资产信息', '内部处置记录']
 
 export function CertificateVerify() {
+  const [certificateNo, setCertificateNo] = useState('')
+  const [result, setResult] = useState<PublicCertificateVerifyResult | null>(null)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function searchCertificate() {
+    setMessage('')
+    setResult(null)
+    setLoading(true)
+    try {
+      const data = await publicVerifyCertificate(certificateNo)
+      setResult(data)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '证书查询失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
       <section className="mx-auto max-w-4xl text-center">
@@ -24,18 +46,48 @@ export function CertificateVerify() {
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               className="w-full rounded-lg border border-black/10 bg-white/80 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-black/20 dark:text-white dark:placeholder:text-slate-600"
-              placeholder="CQUPT-SRC-2026-VULN-000001"
+              onChange={(event) => setCertificateNo(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void searchCertificate()
+              }}
+              placeholder="CQUPT-SRC-CERT-2026-XXXXXX"
               type="text"
+              value={certificateNo}
             />
           </div>
-          <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-700" type="button">
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loading}
+            onClick={() => void searchCertificate()}
+            type="button"
+          >
             <FileSearch className="h-4 w-4" />
-            查询证书
+            {loading ? '查询中...' : '查询证书'}
           </button>
         </div>
-        <p className="mt-4 text-xs leading-5 text-slate-500">
-          示例页面暂不连接真实数据库，后续接入后将由后端校验证书编号和证书状态。
-        </p>
+        <p className="mt-4 text-xs leading-5 text-slate-500">公开查询仅返回脱敏后的证书核验信息。</p>
+        {message && (
+          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+            {message}
+          </div>
+        )}
+        {result && (
+          <div className="mt-5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-5 text-left">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-semibold">证书有效</span>
+            </div>
+            <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 dark:text-slate-300">
+              <p>证书编号：{result.certificateNo}</p>
+              <p>获得者：{result.recipientName}</p>
+              <p>统一认证码：{result.unifiedCode}</p>
+              <p>颁发日期：{formatDate(result.issuedAt)}</p>
+              <p>漏洞编号：{result.vulnerability.reportNo}</p>
+              <p>最终等级：{result.vulnerability.finalSeverity ?? '未公开'}</p>
+              <p className="sm:col-span-2">贡献标题：{result.vulnerability.title}</p>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="mt-14 grid gap-6 lg:grid-cols-2">
@@ -82,4 +134,12 @@ export function CertificateVerify() {
       </section>
     </main>
   )
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '未公开'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return date.toLocaleDateString('zh-CN')
 }

@@ -1,10 +1,10 @@
-import { Body, Controller, Inject, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
-import { normalizeCreateVulnerabilityBody } from './vulnerability.validation'
-import { CreateVulnerabilityBody } from './vulnerability.types'
+import { normalizeCreateVulnerabilityBody, normalizeReviewVulnerabilityBody } from './vulnerability.validation'
+import { CreateVulnerabilityBody, ReviewVulnerabilityBody } from './vulnerability.types'
 import { VulnerabilitiesService } from './vulnerabilities.service'
 
 type RequestLike = {
@@ -31,6 +31,30 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class VulnerabilitiesController {
   constructor(@Inject(VulnerabilitiesService) private readonly vulnerabilities: VulnerabilitiesService) {}
+
+  @Get('my')
+  @RequirePermissions('vulnerability:read_own')
+  listMyReports(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.vulnerabilities.listMyReports(user)
+  }
+
+  @Get('review-queue')
+  @RequirePermissions('vulnerability:review')
+  listReviewQueue() {
+    return this.vulnerabilities.listReviewQueue()
+  }
+
+  @Post(':reportId/review')
+  @RequirePermissions('vulnerability:review')
+  reviewReport(
+    @Param('reportId') reportId: string,
+    @Body() body: ReviewVulnerabilityBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const input = normalizeReviewVulnerabilityBody(body)
+    return this.vulnerabilities.reviewReport(reportId, input, user, getRequestMeta(req))
+  }
 
   @Post()
   @RequirePermissions('vulnerability:create')

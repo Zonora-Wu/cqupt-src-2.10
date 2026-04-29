@@ -28,6 +28,103 @@ export type UploadVulnerabilityAttachmentResponse = {
   uploadedAt: string
 }
 
+export type MyVulnerabilityAttachment = {
+  id: string
+  originalName: string
+  sizeBytes: number
+  uploadedAt: string
+}
+
+export type MyVulnerabilityItem = {
+  assetName: string
+  attachments: MyVulnerabilityAttachment[]
+  finalSeverity: string | null
+  id: string
+  lastEvent: {
+    action: string
+    createdAt: string
+    note: string | null
+  } | null
+  ownerUnit: string | null
+  points: number
+  reportNo: string
+  selfSeverity: string
+  status: string
+  submittedAt: string | null
+  title: string
+  updatedAt: string
+  vulnerabilityType: string
+}
+
+export type MyVulnerabilityListResponse = {
+  items: MyVulnerabilityItem[]
+  stats: {
+    confirmed: number
+    needSupplement: number
+    pending: number
+    total: number
+  }
+}
+
+export type ReviewQueueItem = {
+  assetName: string
+  assetUrl: string | null
+  attachments: MyVulnerabilityAttachment[]
+  finalSeverity: string | null
+  id: string
+  impactAssessment: string
+  lastEvent: {
+    action: string
+    createdAt: string
+    note: string | null
+  } | null
+  ownerUnit: string | null
+  points: number
+  repairSuggestion: string
+  reportNo: string
+  requestPacket: string | null
+  reproductionSteps: string
+  selfSeverity: string
+  status: string
+  submittedAt: string | null
+  submitter: {
+    email: string
+    name: string
+    unifiedCode: string
+  }
+  testBoundary: string | null
+  title: string
+  updatedAt: string
+  vulnerabilityType: string
+}
+
+export type ReviewQueueResponse = {
+  items: ReviewQueueItem[]
+  stats: {
+    confirmed: number
+    needSupplement: number
+    pendingReview: number
+    submitted: number
+    total: number
+  }
+}
+
+export type ReviewDecisionPayload = {
+  decision: 'CONFIRM' | 'NEEDS_SUPPLEMENT' | 'REJECT'
+  finalSeverity?: string
+  note: string
+  points?: number
+}
+
+export type ReviewDecisionResponse = {
+  finalSeverity: string | null
+  id: string
+  points: number
+  reportNo: string
+  status: string
+  updatedAt: string
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
 
 export async function createVulnerability(payload: CreateVulnerabilityPayload) {
@@ -57,6 +154,89 @@ export async function createVulnerability(payload: CreateVulnerabilityPayload) {
   }
 
   return data as CreateVulnerabilityResponse
+}
+
+export async function listMyVulnerabilities() {
+  const session = getSavedSession()
+  if (!session?.accessToken) {
+    throw new Error('请先登录后再查看漏洞')
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(`${API_BASE_URL}/vulnerabilities/my`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+      },
+      method: 'GET',
+    })
+  } catch {
+    throw new Error('无法连接后端服务，请确认后端已启动')
+  }
+
+  const data = await parseResponse(response)
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data))
+  }
+
+  return data as MyVulnerabilityListResponse
+}
+
+export async function listReviewQueue() {
+  const session = getSavedSession()
+  if (!session?.accessToken) {
+    throw new Error('请先登录后再查看审核队列')
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(`${API_BASE_URL}/vulnerabilities/review-queue`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+      },
+      method: 'GET',
+    })
+  } catch {
+    throw new Error('无法连接后端服务，请确认后端已启动')
+  }
+
+  const data = await parseResponse(response)
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data))
+  }
+
+  return data as ReviewQueueResponse
+}
+
+export async function reviewVulnerability(reportId: string, payload: ReviewDecisionPayload) {
+  const session = getSavedSession()
+  if (!session?.accessToken) {
+    throw new Error('请先登录后再审核漏洞')
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(`${API_BASE_URL}/vulnerabilities/${reportId}/review`, {
+      body: JSON.stringify(payload),
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    })
+  } catch {
+    throw new Error('无法连接后端服务，请确认后端已启动')
+  }
+
+  const data = await parseResponse(response)
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data))
+  }
+
+  return data as ReviewDecisionResponse
 }
 
 export async function uploadVulnerabilityAttachment(reportId: string, file: File) {

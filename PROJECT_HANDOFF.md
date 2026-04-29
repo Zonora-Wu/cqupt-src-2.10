@@ -174,6 +174,9 @@ GET /api/auth/me
 
 ```text
 POST /api/vulnerabilities
+GET /api/vulnerabilities/my
+GET /api/vulnerabilities/review-queue
+POST /api/vulnerabilities/:reportId/review
 POST /api/vulnerabilities/:reportId/attachments
 GET /api/attachments/:attachmentId/preview
 ```
@@ -182,10 +185,55 @@ GET /api/attachments/:attachmentId/preview
 
 - 已接入 `JwtAuthGuard` 和 `PermissionsGuard`。
 - 需要 `vulnerability:create` 权限。
+- `GET /api/vulnerabilities/my` 需要 `vulnerability:read_own` 权限，只返回当前用户自己的漏洞报告与附件摘要。
+- `GET /api/vulnerabilities/review-queue` 与 `POST /api/vulnerabilities/:reportId/review` 需要 `vulnerability:review` 权限。
 - 提交前校验邮箱已验证、已签署当前激活责任书、可选安全考试通过。
+- 审核员可确认有效、要求补充、驳回报告；操作会写入审核意见、流程事件和审计日志。
+- 确认有效时可写入最终等级和积分流水。
 - 漏洞主体提交后可以上传 PDF 附件，附件保存到 MinIO。
 - PDF 后端校验扩展名、MIME、magic bytes、10MB 大小限制，并记录 SHA-256。
 - PDF 预览只允许提交本人、审核员、管理员访问，并写入 `VIEW_SENSITIVE_ATTACHMENT` 审计日志。
+
+当前系统设置接口：
+
+```text
+GET /api/system-settings/certificate-template/active
+POST /api/system-settings/certificate-template/background
+POST /api/system-settings/certificate-template/seal
+```
+
+说明：
+
+- 以上接口需要 `system:manage` 权限。
+- 管理员可在系统设置上传证书背景模板和电子印章。
+- 背景模板支持 PDF / PNG，最大 20MB。
+- 电子印章支持 PNG，最大 5MB。
+- 上传文件保存到 MinIO，数据库保存模板版本、哈希、大小、布局 JSON 和启用状态。
+- 上传操作会写入 `CHANGE_SYSTEM_SETTING` 审计日志。
+
+当前证书接口：
+
+```text
+GET /api/certificates/manage
+GET /api/certificates/my
+POST /api/certificates
+POST /api/certificates/:certificateId/revoke
+GET /api/certificates/:certificateId/preview
+GET /api/certificates/public/:certificateNo
+```
+
+说明：
+
+- 证书管理队列来自已确认并拥有最终等级的漏洞。
+- 签发证书需要 `certificate:issue` 权限；管理员默认拥有，审核员可通过用户级权限覆盖开启。
+- 一个漏洞最多一张证书。
+- 签发前必须存在当前启用证书模板。
+- 签发前必须存在当前启用证书模板和电子印章。
+- 签发后会生成证书编号、核验码和真实 PDF 文件，PDF 保存到 MinIO。
+- 证书 PDF 已支持读取当前启用 PDF/PNG 背景模板，按 `layoutJson` 叠加文字，并嵌入 PNG 电子印章。
+- 证书 PDF 生成依赖 `pdf-lib` 与 `@pdf-lib/fontkit`，中文字体优先读取 `CERTIFICATE_FONT_PATH`，本地 Windows 默认尝试 `C:\Windows\Fonts\simhei.ttf`。
+- 证书预览必须走后端鉴权接口，不暴露 MinIO 对象 key。
+- 未登录证书查询调用公开核验接口，只返回脱敏信息。
 
 后端本地命令：
 
@@ -685,10 +733,8 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 - 真实 SMTP 邮件发送
 - 用户注册准入
 - 统一认证真实对接
-- 我的漏洞列表接口
-- 漏洞审核流程
 - 积分系统
-- 证书系统
+- 证书模板在线坐标配置
 - 通知系统
 - 审计日志
 - AI 智能体接口
@@ -698,13 +744,11 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 建议继续按以下顺序：
 
-1. 实现我的漏洞列表 API，并将我的漏洞页面从 mock 数据切换为真实接口。
-2. 在我的漏洞详情中接入 PDF 预览入口。
-3. 实现审核员漏洞审核 API。
-4. 实现证书、公告、积分、学习资源接口。
-5. 接入 AI Gateway 与 Hermes Agent。
-6. Docker Compose 完整应用联调。
-7. Ubuntu 云服务器部署。
+1. 实现公告、积分、学习资源接口。
+2. 完善证书模板在线坐标配置，让管理员可以调整文字与印章位置。
+3. 接入 AI Gateway 与 Hermes Agent。
+4. Docker Compose 完整应用联调。
+5. Ubuntu 云服务器部署。
 
 ## 14. 给下一个 Agent 的注意事项
 

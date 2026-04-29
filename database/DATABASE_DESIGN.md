@@ -167,6 +167,15 @@ PENDING_REVIEW / NEEDS_SUPPLEMENT / CONFIRMED
 | `audit_logs` | 审计日志 |
 | `school_profiles` | 单学校部署配置 |
 | `system_settings` | 系统设置 |
+| `certificate_templates` | 证书背景模板、电子印章、布局 JSON 和启用版本 |
+
+证书模板规则：
+
+- 证书模板由管理员在系统设置中维护。
+- 背景模板支持 PDF / PNG，电子印章支持 PNG。
+- 每次上传背景模板会创建一个新版本，并设置为当前启用模板。
+- 已签发证书后续应保存 `templateId` 和 `templateSnapshot`，避免模板变更影响历史证书。
+- 真实证书 PDF 生成时，应读取当前启用模板，在模板上叠加证书编号、姓名、漏洞信息、签发日期、二维码和印章。
 
 审计日志建议默认保留 3 年。后续如果学校有更严格要求，再改为 5 年或长期保留。
 
