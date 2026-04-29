@@ -54,7 +54,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       setIsSendingCode(true)
       const result = await sendEmailLoginCode(email)
       setCountdown(60)
-      setMessage({ text: `${result.message}，演示验证码为 123456`, type: 'success' })
+      setMessage({ text: result.devCode ? `${result.message}，开发验证码为 ${result.devCode}` : result.message, type: 'success' })
     } catch (error) {
       setMessage({ text: getErrorMessage(error), type: 'error' })
     } finally {

@@ -1,37 +1,147 @@
 # CQUPT-SRC
 
-校园漏洞响应与安全学习平台。
+校园漏洞响应与安全学习平台。项目目标是连接学生、审核员、管理员与校园资产责任单位，形成从漏洞提交、审核、修复、复测、归档、证书、积分、学习资源到 AI 辅助的完整闭环。
 
-## 当前状态
+## 当前进度
 
-- `frontend/`：已实现前端原型，包含访客端、用户端、审核员端、管理员端页面。
-- `backend/`：后端正式结构已整理，下一步初始化 NestJS。
-- `database/`：数据库结构目录已预留，下一步设计 Prisma 模型。
-- `deploy/`：Docker、Nginx、云服务器部署目录已预留。
-- `docs/`：API、架构、安全、部署文档目录已预留。
+```text
+已完成：前端原型、正式项目结构、数据库模型设计、后端 NestJS 基础骨架
+进行中：从前端 mock 数据过渡到真实后端接口
+下一步：实现认证与 RBAC 基础模块
+```
 
-## 本地前端运行
+## 技术栈
+
+| 模块 | 技术 |
+|---|---|
+| 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS |
+| 后端 | NestJS 11 + TypeScript |
+| 数据库 | PostgreSQL + Prisma |
+| 缓存/队列 | Redis + BullMQ，后续接入 |
+| 文件存储 | MinIO，后续接入 |
+| AI | Hermes Agent，通过后端 AI Gateway 代理 |
+| 部署 | Docker Compose + Nginx，目标环境 Ubuntu 服务器 |
+
+## 项目结构
+
+```text
+cqupt-src-2.10/
+├── frontend/       # React 前端
+├── backend/        # NestJS 后端
+├── database/       # Prisma schema、数据库设计、seed
+├── deploy/         # Docker、Nginx、部署脚本
+├── docs/           # API、架构、安全、部署文档
+├── tests/          # E2E 测试和测试数据
+├── storage/        # 本地上传文件临时目录，不提交真实文件
+├── tmp/            # 临时文件目录，不提交真实文件
+├── PROJECT_HANDOFF.md
+├── VibeCoding.md
+└── 文档/
+```
+
+完整结构说明见：
+
+```text
+docs/PROJECT_STRUCTURE.md
+```
+
+## 本地运行
+
+### 前端
 
 ```powershell
 cd D:\Code\CQUPT_SRC\cqupt-src-2.10\frontend
 npm.cmd run dev
 ```
 
-## 本地前端构建
+前端默认地址：
+
+```text
+http://localhost:5173
+```
+
+前端构建：
 
 ```powershell
 cd D:\Code\CQUPT_SRC\cqupt-src-2.10\frontend
 npm.cmd run build
 ```
 
-## 后续开发顺序
+### 后端
 
-1. 整理正式项目结构
-2. 设计数据库模型
-3. 初始化后端服务
-4. 实现认证与 RBAC
-5. 接入漏洞提交和审核流程
-6. 接入证书、公告、积分、学习资源
-7. 接入 Hermes Agent
-8. Docker Compose 本地联调
-9. Ubuntu 云服务器部署
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run dev
+```
+
+后端健康检查：
+
+```text
+http://localhost:3000/api/health
+```
+
+后端验证命令：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd run prisma:validate
+```
+
+## 演示账号
+
+当前登录仍为前端模拟。
+
+```text
+学生：2025001 / 123456+-
+审核员：0000001 / auditor123456+-
+管理员：0000000 / admin123456+-
+邮箱验证码：123456
+```
+
+## 数据库设计
+
+数据库设计文档：
+
+```text
+database/DATABASE_DESIGN.md
+database/prisma/schema.prisma
+docs/architecture/DATABASE_MODEL.md
+```
+
+当前模型要点：
+
+- 用户只允许校内注册，访客不入库。
+- 用户只能绑定一个角色。
+- 角色：学生、审核员、管理员。
+- 授权等级：`BASIC / TRUSTED / STAFF`。
+- 授权来源可配置，适配不同学校交付。
+- 资产范围：`PUBLIC / INTERNAL / SPECIAL`。
+- 用户资料只保留学院，不保留专业。
+- 漏洞支持草稿，提交后不可撤回。
+- 一个漏洞只分配一个审核员。
+- 一个漏洞最多一张证书。
+- 附件只允许 PDF，单文件 10MB。
+- AI 原始对话不长期保存，只保存脱敏摘要、skill、FAQ 和人工确认记录。
+
+## 安全原则
+
+- 不提交 `.env`、真实密钥、真实漏洞附件。
+- 前端校验只做体验，后端必须重新校验所有字段。
+- 敏感附件访问必须鉴权并写审计日志。
+- AI 调用必须经过后端代理、脱敏、限流和审计。
+- 证书公开查询必须脱敏。
+- 审核结论和 AI 操作必须人工确认。
+
+## 下一步
+
+1. 实现认证与 RBAC 基础模块。
+2. 接入真实用户登录。
+3. 实现漏洞提交 API。
+4. 实现附件上传与访问控制。
+5. 实现审核员漏洞审核流程。
+6. 接入证书、公告、积分、学习资源接口。
+7. 接入 Hermes Agent。
+8. Docker Compose 本地联调。
+9. Ubuntu 云服务器部署。

@@ -23,8 +23,8 @@ CQUPT-SRC 是一个面向校园网络安全建设的漏洞响应与安全学习�
 当前规划角色：
 
 - 访客：浏览首页、平台规则、公开公告、证书查询、学习资源、关于平台。
-- 学生用户：登录后提交漏洞、查看我的漏洞、学习中心、工具资源、靶场中心、AI 助手、积分商城、我的证书、排行榜、平台公告。
-- 审核员：审核漏洞，使用 AI 初步判断漏洞价值、复现完整性、重复性和建议等级。
+- 学生用户：登录后提交漏洞、查看我的漏洞、学习中心、AI 助手、积分商城、我的证书、排行榜、平台公告。
+- 审核员：审核漏洞、复测归档、管理证书、发布公告，并使用 AI 辅助判断漏洞价值和材料完整性。
 - 管理员：管理用户、角色权限、漏洞流程、积分商城、公告、资源、靶场、日志审计、系统配置。
 
 ## 3. 当前前端技术栈
@@ -54,7 +54,7 @@ frontend/
 新增顶层目录：
 
 ```text
-backend/      后端服务目录，后续初始化 NestJS
+backend/      后端服务目录，已初始化 NestJS
 database/     Prisma schema、迁移与 seed 数据目录
 deploy/       Docker、Nginx、部署脚本目录
 docs/         API、架构、安全、部署文档目录
@@ -81,7 +81,7 @@ README.md
 
 - `storage/` 和 `tmp/` 不提交真实运行数据。
 - `.env`、`.env.*` 不提交，后续只维护 `.env.example`。
-- 后端下一步才初始化依赖和 NestJS，不要在根目录直接执行后端 npm 命令。
+- 后端已初始化依赖和 NestJS，但仍不要在根目录直接执行 npm 命令；前后端命令分别进入 `frontend/` 或 `backend/`。
 
 ## 3.2 数据库模型设计
 
@@ -113,7 +113,7 @@ docs/architecture/DATABASE_MODEL.md
 - AI 原始会话不长期保存，只保存脱敏摘要、skill、FAQ 和人工确认记录。
 - 审计日志覆盖登录、退出、漏洞提交、附件查看、审核、证书、公告、权限、系统设置和 AI 调用。
 
-注意：当前还没有安装 Prisma CLI，因此 `schema.prisma` 尚未通过 `prisma validate`。下一步初始化后端依赖后必须先验证 schema。
+注意：Prisma CLI 已作为后端 devDependency 安装，`schema.prisma` 已通过 `npm.cmd run prisma:validate`。
 
 ## 3.3 后端初始化
 
@@ -125,13 +125,17 @@ docs/architecture/DATABASE_MODEL.md
 backend/
 ├── package.json
 ├── package-lock.json
+├── scripts/
+│   └── prisma-generate.cjs
 ├── tsconfig.json
 ├── tsconfig.build.json
 ├── .env.example
 └── src/
     ├── main.ts
     ├── app.module.ts
+    ├── common/crypto/
     ├── config/env.ts
+    ├── database/seed.ts
     └── modules/health/
         ├── health.module.ts
         └── health.controller.ts
@@ -145,11 +149,49 @@ backend/
 - 环境变量基础校验。
 - 健康检查接口：`GET /api/health`。
 - Prisma schema 使用 `database/prisma/schema.prisma`。
+- Prisma 全局服务：`backend/src/modules/prisma/`。
+- RBAC 权限服务：`backend/src/modules/rbac/`。
+- Auth 登录接口初版：`backend/src/modules/auth/`。
+- 初始 seed：`backend/src/database/seed.ts`。
+
+当前认证接口：
+
+```text
+POST /api/auth/login/password
+POST /api/auth/login/email-code
+POST /api/auth/email-code
+GET /api/auth/me
+```
+
+当前认证与权限基础：
+
+- `JwtAuthGuard`：校验 access token，并将当前用户挂到 request。
+- `PermissionsGuard`：校验当前用户是否拥有接口声明的权限点。
+- `RequirePermissions(...)`：业务接口声明权限使用。
+- `CurrentUser()`：Controller 中读取当前用户。
+
+当前漏洞接口：
+
+```text
+POST /api/vulnerabilities
+POST /api/vulnerabilities/:reportId/attachments
+GET /api/attachments/:attachmentId/preview
+```
+
+说明：
+
+- 已接入 `JwtAuthGuard` 和 `PermissionsGuard`。
+- 需要 `vulnerability:create` 权限。
+- 提交前校验邮箱已验证、已签署当前激活责任书、可选安全考试通过。
+- 漏洞主体提交后可以上传 PDF 附件，附件保存到 MinIO。
+- PDF 后端校验扩展名、MIME、magic bytes、10MB 大小限制，并记录 SHA-256。
+- PDF 预览只允许提交本人、审核员、管理员访问，并写入 `VIEW_SENSITIVE_ATTACHMENT` 审计日志。
 
 后端本地命令：
 
 ```powershell
 cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run prisma:generate
 npm.cmd run typecheck
 npm.cmd run build
 npm.cmd run prisma:validate
@@ -158,6 +200,7 @@ npm.cmd run dev
 
 已验证：
 
+- `npm.cmd run prisma:generate` 通过。
 - `npm.cmd run typecheck` 通过。
 - `npm.cmd run build` 通过。
 - `npm.cmd run prisma:validate` 通过。
@@ -171,7 +214,7 @@ npm.cmd run build
 
 ## 4. 本地运行命令
 
-必须进入 `frontend` 目录执行 npm 命令。
+前端命令必须进入 `frontend` 目录执行。
 
 本地开发：
 
@@ -193,9 +236,22 @@ npm.cmd run build
 ENOENT Could not read package.json
 ```
 
+后端开发：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run dev
+```
+
+后端健康检查：
+
+```text
+http://localhost:3000/api/health
+```
+
 ## 5. 当前演示账号
 
-统一认证登录为前端模拟验证。
+统一认证登录和邮箱验证码登录已经接入后端真实接口；后端已经完成 PostgreSQL migration 与 seed，且管理员密码登录、学生邮箱验证码登录都通过真实接口验证。注册仍是前端占位。
 
 测试账号：
 
@@ -204,12 +260,26 @@ ENOENT Could not read package.json
 密码：123456+-
 ```
 
-登录前需要完成滑块验证。
-
-邮箱验证码登录目前也是前端模拟：
+审核员账号：
 
 ```text
-演示验证码：123456
+统一认证码：0000001
+密码：auditor123456+-
+```
+
+管理员账号：
+
+```text
+统一认证码：0000000
+密码：admin123456+-
+```
+
+登录前需要完成滑块验证。
+
+开发环境邮箱验证码：
+
+```text
+123456
 ```
 
 ## 6. 当前已实现页面
@@ -260,8 +330,6 @@ ENOENT Could not read package.json
 - 提交漏洞
 - 我的漏洞
 - 学习中心
-- 工具资源
-- 靶场中心
 - AI 助手
 - 积分商城
 - 我的证书
@@ -319,6 +387,8 @@ frontend/src/pages/user/UserSubmitVulnerability.tsx
 - 附件上传区域
   - 仅支持 PDF
   - 单个文件不超过 10MB
+  - 已接入后端 MinIO 上传接口
+  - 上传成功后可通过后端受控接口预览 PDF
 - 安全规范提示框
 - 协议勾选
 - 底部提交按钮
@@ -326,8 +396,9 @@ frontend/src/pages/user/UserSubmitVulnerability.tsx
 安全注意：
 
 - Markdown 预览没有使用 `dangerouslySetInnerHTML`，而是渲染 React 节点，避免前端 XSS。
-- PDF 上传只有前端类型和大小校验，后续后端必须重新校验文件类型、大小、内容、病毒扫描和访问权限。
-- 当前提交按钮只是前端 UI，还没有接后端接口。
+- PDF 上传前端有基础类型和大小校验，后端会重新校验文件扩展名、MIME、PDF magic bytes 和访问权限。
+- 当前还没有接入病毒扫描，后续生产环境建议加入 ClamAV 或异步扫描队列。
+- 当前提交按钮已接入真实后端接口。
 
 ## 8. 已抽取的可复用组件
 
@@ -605,31 +676,16 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 前端待做：
 
-- 我的漏洞列表页
-- 漏洞详情页
-- 学习中心
-- 工具资源
-- 靶场中心
-- AI 助手页
-- 积分商城
-- 我的证书
-- 排行榜
-- 平台公告详情
-- 账号安全
-- 外观设置
-- 审核端页面
-- 管理端页面
+- 将 mock 数据逐步替换为真实后端 API。
+- 补齐 API loading / error / empty 状态。
+- 根据真实权限隐藏或禁用操作按钮。
 
 后端待做：
 
-- 后端项目初始化
-- 数据库设计
-- 用户认证
-- 角色权限系统
-- 邮箱验证码
-- 统一认证对接
-- 漏洞提交接口
-- 文件上传接口
+- 真实 SMTP 邮件发送
+- 用户注册准入
+- 统一认证真实对接
+- 我的漏洞列表接口
 - 漏洞审核流程
 - 积分系统
 - 证书系统
@@ -642,16 +698,13 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 建议继续按以下顺序：
 
-1. 完善提交漏洞页表单状态和前端校验。
-2. 实现“我的漏洞”列表页。
-3. 实现漏洞详情页。
-4. 设计后端数据库模型。
-5. 初始化后端服务。
-6. 实现真实登录认证。
-7. 实现漏洞提交 API。
-8. 实现文件上传和安全校验。
-9. 实现审核员端漏洞审核页。
-10. 实现 AI 智能解析接口。
+1. 实现我的漏洞列表 API，并将我的漏洞页面从 mock 数据切换为真实接口。
+2. 在我的漏洞详情中接入 PDF 预览入口。
+3. 实现审核员漏洞审核 API。
+4. 实现证书、公告、积分、学习资源接口。
+5. 接入 AI Gateway 与 Hermes Agent。
+6. Docker Compose 完整应用联调。
+7. Ubuntu 云服务器部署。
 
 ## 14. 给下一个 Agent 的注意事项
 
@@ -662,7 +715,7 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 - 修改代码前先说明将修改哪些文件。
 - 尽量复用已有组件，不要重复造样式。
 - 所有命令必须明确是在本地执行还是云服务器执行。
-- 当前项目主要是前端阶段，命令都在本地 `frontend` 目录执行。
+- 当前项目已进入全栈阶段，前端命令在 `frontend/`，后端命令在 `backend/`。
 - 用户偏好简洁、专业、类似苹果官网的流畅体验，但业务页面要像真实 SRC 平台，不要宣传页。
 - 主题色为 `#2A6438`。
 - 圆角不要太大，当前主要使用 `rounded-lg`。

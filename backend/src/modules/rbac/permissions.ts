@@ -1,0 +1,63 @@
+import { RoleCode } from '@prisma/client'
+
+export const permissionDefinitions = [
+  ['vulnerability:create', '提交漏洞'],
+  ['vulnerability:read_own', '查看自己的漏洞'],
+  ['vulnerability:read_all', '查看全部漏洞'],
+  ['vulnerability:review', '审核漏洞'],
+  ['vulnerability:retest', '复测漏洞'],
+  ['vulnerability:manage', '管理漏洞'],
+  ['attachment:read_sensitive', '查看敏感附件'],
+  ['certificate:read', '查看证书'],
+  ['certificate:issue', '签发证书'],
+  ['certificate:revoke', '撤销证书'],
+  ['announcement:manage', '管理公告'],
+  ['learning:manage', '管理学习资源'],
+  ['mall:manage', '管理积分商城'],
+  ['user:manage', '管理用户'],
+  ['audit:read', '查看审计日志'],
+  ['system:manage', '管理系统设置'],
+  ['ai:use_student', '使用学生 AI'],
+  ['ai:use_auditor', '使用审核员 AI'],
+  ['ai:use_admin', '使用管理员 AI'],
+  ['ai:manage_skills', '管理 AI 知识沉淀'],
+] as const
+
+export type PermissionCode = (typeof permissionDefinitions)[number][0]
+
+export const rolePermissionMap: Record<RoleCode, PermissionCode[]> = {
+  STUDENT: [
+    'vulnerability:create',
+    'vulnerability:read_own',
+    'certificate:read',
+    'ai:use_student',
+  ],
+  AUDITOR: [
+    'vulnerability:read_all',
+    'vulnerability:review',
+    'vulnerability:retest',
+    'vulnerability:manage',
+    'attachment:read_sensitive',
+    'certificate:read',
+    'announcement:manage',
+    'ai:use_auditor',
+  ],
+  ADMIN: [
+    'vulnerability:read_all',
+    'vulnerability:review',
+    'vulnerability:retest',
+    'vulnerability:manage',
+    'attachment:read_sensitive',
+    'certificate:read',
+    'certificate:issue',
+    'certificate:revoke',
+    'announcement:manage',
+    'learning:manage',
+    'mall:manage',
+    'user:manage',
+    'audit:read',
+    'system:manage',
+    'ai:use_admin',
+    'ai:manage_skills',
+  ],
+}

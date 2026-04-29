@@ -10,8 +10,14 @@
 
 后续会补齐：
 
-- `docker-compose.yml`
+- 生产环境 `docker-compose.yml`
 - 前端 Dockerfile
 - 后端 Dockerfile
 - Nginx 配置
 - 环境变量示例
+
+当前已经提供本地依赖编排：
+
+```text
+deploy/docker/docker-compose.local.yml
+```

@@ -1,16 +1,54 @@
 # Prisma
 
-后续放置 Prisma schema。
+这里存放正式数据库 schema。
 
-下一步“数据库模型设计”会在这里创建：
+当前已创建：
 
 - `schema.prisma`
-- 初始迁移
-- 模型说明
+- 数据库模型说明见 `../DATABASE_DESIGN.md`
 
-当前已创建 `schema.prisma` 初稿。
+注意：Prisma CLI 已作为后端 devDependency 安装，当前 schema 已通过验证。
 
-注意：当前仓库还没有初始化后端依赖，也还没有安装 Prisma CLI，因此本阶段只完成模型设计。下一步初始化后端后，需要执行 Prisma validate 和 migration。
+验证命令：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run prisma:validate
+```
+
+生成 Prisma Client：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run prisma:generate
+```
+
+说明：
+
+- schema 文件保留在 `database/prisma/schema.prisma`。
+- Prisma Client 生成到 `backend/node_modules/@prisma/client/.prisma/client`。
+- 生成命令通过 `backend/scripts/prisma-generate.cjs` 执行，避免 Prisma 在项目根目录误生成 `package.json` 和 `node_modules`。
+
+当前已创建并应用初始 migration：
+
+```text
+database/prisma/migrations/20260429080513_init/migration.sql
+```
+
+本地开发数据库端口：
+
+```text
+127.0.0.1:15432
+```
+
+本地执行迁移：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run prisma:migrate:dev -- --name init
+```
+
+说明：迁移脚本默认 `--skip-generate`，避免 Prisma 因 schema 位于 `database/prisma` 而在项目根目录误生成 `package.json` 和 `node_modules`。需要生成 Client 时单独执行 `npm.cmd run prisma:generate`。
 
 当前授权模型：
 
