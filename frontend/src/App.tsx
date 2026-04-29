@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { GuestHome } from './pages/guest/GuestHome'
 import { AdminHome } from './pages/admin/AdminHome'
+import { AuditorHome } from './pages/auditor/AuditorHome'
 import { UserHome } from './pages/user/UserHome'
 import { type AuthUser } from './services/auth'
 
@@ -20,6 +21,14 @@ function App() {
       {currentUser ? (
         currentUser.role === 'admin' ? (
           <AdminHome
+            onLogout={() => {
+              setCurrentUser(null)
+              setAuthModal(null)
+            }}
+            user={currentUser}
+          />
+        ) : currentUser.role === 'auditor' ? (
+          <AuditorHome
             onLogout={() => {
               setCurrentUser(null)
               setAuthModal(null)

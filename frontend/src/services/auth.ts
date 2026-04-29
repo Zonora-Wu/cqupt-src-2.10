@@ -11,7 +11,7 @@ export type UnifiedLoginPayload = {
 export type AuthUser = {
   email?: string
   name: string
-  role: 'student' | 'admin'
+  role: 'student' | 'admin' | 'auditor'
   unifiedCode: string
 }
 
@@ -20,6 +20,8 @@ const DEMO_UNIFIED_CODE = '2025001'
 const DEMO_PASSWORD = '123456+-'
 const DEMO_ADMIN_CODE = '0000000'
 const DEMO_ADMIN_PASSWORD = 'admin123456+-'
+const DEMO_AUDITOR_CODE = '0000001'
+const DEMO_AUDITOR_PASSWORD = 'auditor123456+-'
 
 export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
   await wait(500)
@@ -40,6 +42,18 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
         name: '平台管理员',
         role: 'admin' as const,
         unifiedCode: DEMO_ADMIN_CODE,
+      },
+    }
+  }
+
+  if (payload.code === DEMO_AUDITOR_CODE && payload.password === DEMO_AUDITOR_PASSWORD) {
+    return {
+      token: 'demo-auditor-login-token',
+      user: {
+        email: 'auditor@cqupt-src.local',
+        name: '审核员 A',
+        role: 'auditor' as const,
+        unifiedCode: DEMO_AUDITOR_CODE,
       },
     }
   }

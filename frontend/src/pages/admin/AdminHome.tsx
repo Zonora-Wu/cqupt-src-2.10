@@ -23,6 +23,14 @@ import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
+import { AdminAnnouncementManagement } from './AdminAnnouncementManagement'
+import { AdminAuditLogManagement } from './AdminAuditLogManagement'
+import { AdminCertificateManagement } from './AdminCertificateManagement'
+import { AdminLearningManagement } from './AdminLearningManagement'
+import { AdminPointsMallManagement } from './AdminPointsMallManagement'
+import { AdminSystemSettings } from './AdminSystemSettings'
+import { AdminUserManagement } from './AdminUserManagement'
+import { AdminVulnerabilityManagement } from './AdminVulnerabilityManagement'
 
 type AdminHomeProps = {
   onLogout: () => void
@@ -42,16 +50,17 @@ const adminMenuItems = [
 ]
 
 const overviewStats = [
-  { label: '待审核漏洞', value: '18', hint: '其中高危 4 个', icon: FileSearch },
-  { label: '注册用户', value: '326', hint: '今日新增 12 人', icon: UsersRound },
+  { label: '待审核漏洞', value: '18', hint: '高危 4 个', icon: FileSearch },
+  { label: '待签发证书', value: '5', hint: '需确认归档', icon: FileCheck2 },
+  { label: '待准入用户', value: '28', hint: '答题/责任书', icon: UsersRound },
   { label: '待处理兑换', value: '9', hint: '线下领取确认', icon: Store },
-  { label: '审计事件', value: '1,284', hint: '近 7 天记录', icon: Activity },
 ]
 
 const riskQueue = [
-  { title: '统一认证入口弱口令策略绕过风险', level: '高危', owner: '信息化办公室', time: '10 分钟前' },
-  { title: '实验教学平台越权访问课程附件', level: '中危', owner: '教务处', time: '34 分钟前' },
-  { title: '校园门户接口敏感信息返回过多', level: '中危', owner: '信息化办公室', time: '今天 09:12' },
+  { title: '统一认证入口弱口令策略绕过风险', level: '高危', owner: '信息化办公室', status: '待分派', time: '10 分钟前' },
+  { title: '实验教学平台越权访问课程附件', level: '中危', owner: '教务处', status: '审核中', time: '34 分钟前' },
+  { title: '校园门户接口敏感信息返回过多', level: '中危', owner: '信息化办公室', status: '待复测', time: '今天 09:12' },
+  { title: '在线靶场资源下载链接未鉴权', level: '高危', owner: '网络安全学院', status: '修复中', time: '昨天 18:40' },
 ]
 
 const operationItems = [
@@ -66,6 +75,12 @@ const systemHealth = [
   { label: 'AI 助手', value: '可用', tone: 'bg-brand-600' },
   { label: '邮件服务', value: '待配置', tone: 'bg-amber-500' },
   { label: '审计日志', value: '写入中', tone: 'bg-blue-500' },
+]
+
+const auditLogs = [
+  { action: '漏洞状态变更', actor: '审核员 A', target: 'SRC-2026-0008', time: '09:42' },
+  { action: '用户角色调整', actor: '平台管理员', target: '学生用户', time: '09:18' },
+  { action: '证书签发确认', actor: '审核员 B', target: 'CERT-2026-0002', time: '昨天' },
 ]
 
 export function AdminHome({ onLogout, user }: AdminHomeProps) {
@@ -119,46 +134,76 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         </div>
       </header>
 
-      {activeMenu === '首页' ? (
+      {activeMenu === '漏洞管理' ? (
+        <AdminVulnerabilityManagement />
+      ) : activeMenu === '证书管理' ? (
+        <AdminCertificateManagement />
+      ) : activeMenu === '用户管理' ? (
+        <AdminUserManagement />
+      ) : activeMenu === '公告管理' ? (
+        <AdminAnnouncementManagement />
+      ) : activeMenu === '学习管理' ? (
+        <AdminLearningManagement />
+      ) : activeMenu === '积分商城' ? (
+        <AdminPointsMallManagement />
+      ) : activeMenu === '审计日志' ? (
+        <AdminAuditLogManagement />
+      ) : activeMenu === '系统设置' ? (
+        <AdminSystemSettings />
+      ) : activeMenu === '首页' ? (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <SurfacePanel className="overflow-hidden p-0">
-              <div className="relative p-7 md:p-8">
-                <div className="pointer-events-none absolute right-10 top-8 h-32 w-32 rounded-full bg-brand-600/10 blur-3xl dark:bg-green-300/10" />
-                <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
-                  <LayoutDashboard className="h-3.5 w-3.5" />
-                  Admin Console
-                </p>
-                <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">管理端首页</h1>
-                <p className="mt-4 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
-                  面向平台管理员的运行驾驶舱，集中查看漏洞审核、用户准入、积分兑换、证书签发、系统状态与审计事件。
-                </p>
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+                <LayoutDashboard className="h-3.5 w-3.5" />
+                Admin Console
+              </p>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">管理端首页</h1>
+              <p className="mt-3 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
+                关注待办、风险队列、系统状态和审计记录，快速判断平台今日运行情况。
+              </p>
+            </div>
+          </div>
 
-                <div className="mt-7 grid gap-4 md:grid-cols-4">
-                  {overviewStats.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
-                        <p className="mt-4 text-3xl font-semibold">{item.value}</p>
-                        <p className="mt-1 text-sm font-medium">{item.label}</p>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-                      </div>
-                    )
-                  })}
+          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <SurfacePanel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">今日待办</p>
+                  <h2 className="mt-1 text-xl font-semibold">需要处理的事项</h2>
                 </div>
+                <ShieldAlert className="h-8 w-8 text-brand-700 dark:text-green-300" />
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-4">
+                {overviewStats.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      className="rounded-lg border border-black/5 bg-black/[0.025] p-4 text-left transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-white/[0.035]"
+                      key={item.label}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                        <span className="text-3xl font-semibold">{item.value}</span>
+                      </div>
+                      <p className="mt-3 text-sm font-medium">{item.label}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+                    </button>
+                  )
+                })}
               </div>
             </SurfacePanel>
 
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">系统健康</p>
-                  <h2 className="mt-1 text-xl font-semibold">运行状态</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">系统状态</p>
+                  <h2 className="mt-1 text-xl font-semibold">服务健康</h2>
                 </div>
                 <Gauge className="h-8 w-8 text-brand-700 dark:text-green-300" />
               </div>
-              <div className="mt-5 space-y-3">
+              <div className="mt-5 space-y-2">
                 {systemHealth.map((item) => (
                   <div className="flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
                     <div className="flex items-center gap-3">
@@ -181,8 +226,13 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
               <div className="mt-5 space-y-3">
                 {riskQueue.map((item) => (
                   <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white">{item.level}</span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white">{item.level}</span>
+                        <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+                          {item.status}
+                        </span>
+                      </div>
                       <span className="text-xs text-slate-500 dark:text-slate-400">{item.time}</span>
                     </div>
                     <p className="mt-3 font-medium">{item.title}</p>
@@ -192,6 +242,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
               </div>
             </SurfacePanel>
 
+            <div className="grid gap-6">
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">快捷管理</h2>
@@ -216,6 +267,43 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
                     </button>
                   )
                 })}
+              </div>
+            </SurfacePanel>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <SurfacePanel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold">最近审计日志</h2>
+                <Activity className="h-5 w-5 text-brand-700 dark:text-green-300" />
+              </div>
+              <div className="mt-5 space-y-3">
+                {auditLogs.map((item) => (
+                  <div className="grid gap-3 rounded-lg border border-black/5 bg-black/[0.025] p-4 text-sm md:grid-cols-[160px_minmax(0,1fr)_80px] dark:border-white/10 dark:bg-white/[0.035]" key={`${item.action}-${item.time}`}>
+                    <span className="font-medium">{item.action}</span>
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {item.actor} · {item.target}
+                    </span>
+                    <span className="text-right text-slate-500 dark:text-slate-400">{item.time}</span>
+                  </div>
+                ))}
+              </div>
+            </SurfacePanel>
+
+            <SurfacePanel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold">AI 审核摘要</h2>
+                <ServerCog className="h-5 w-5 text-brand-700 dark:text-green-300" />
+              </div>
+              <div className="mt-5 space-y-3 text-sm">
+                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                  <p className="font-medium">已完成初评 23 份报告</p>
+                  <p className="mt-2 text-slate-500 dark:text-slate-400">标记高价值 4 份，材料不完整 6 份，疑似重复 2 份。</p>
+                </div>
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
+                  建议优先处理高危资产、统一认证相关漏洞和影响范围不明确的报告。
+                </div>
               </div>
             </SurfacePanel>
           </div>

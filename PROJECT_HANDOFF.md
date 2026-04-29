@@ -47,6 +47,42 @@ frontend/
 
 包管理使用 npm。
 
+## 3.1 正式项目结构
+
+当前已经开始从纯前端原型整理为正式全栈项目结构。
+
+新增顶层目录：
+
+```text
+backend/      后端服务目录，后续初始化 NestJS
+database/     Prisma schema、迁移与 seed 数据目录
+deploy/       Docker、Nginx、部署脚本目录
+docs/         API、架构、安全、部署文档目录
+tests/        跨端端到端测试与测试数据目录
+storage/      本地开发上传文件临时目录，仅保留 .gitkeep
+tmp/          临时文件目录，仅保留 .gitkeep
+```
+
+项目结构说明见：
+
+```text
+docs/PROJECT_STRUCTURE.md
+```
+
+根目录已新增：
+
+```text
+README.md
+.gitignore
+.env.example
+```
+
+注意：
+
+- `storage/` 和 `tmp/` 不提交真实运行数据。
+- `.env`、`.env.*` 不提交，后续只维护 `.env.example`。
+- 后端下一步才初始化依赖和 NestJS，不要在根目录直接执行后端 npm 命令。
+
 Windows PowerShell 下运行命令推荐使用：
 
 ```powershell
@@ -552,4 +588,3 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 - 主题色为 `#2A6438`。
 - 圆角不要太大，当前主要使用 `rounded-lg`。
 - 不要使用过度装饰性的渐变球或复杂营销风格。
-
