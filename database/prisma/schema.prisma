@@ -1,0 +1,726 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  STUDENT
+  AUDITOR
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+  LOCKED
+}
+
+enum AuthorizationLevel {
+  BASIC
+  TRUSTED
+  STAFF
+}
+
+enum AssetScope {
+  PUBLIC
+  INTERNAL
+  SPECIAL
+}
+
+enum LoginProvider {
+  UNIFIED_CODE_PASSWORD
+  EMAIL_CODE
+  SCHOOL_SSO
+}
+
+enum VulnerabilitySeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum VulnerabilityStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_REVIEW
+  NEEDS_SUPPLEMENT
+  CONFIRMED
+  FIXING
+  PENDING_RETEST
+  ARCHIVED
+  CERTIFIED
+  REJECTED
+}
+
+enum AttachmentKind {
+  VULNERABILITY_REPORT
+  RETEST_EVIDENCE
+}
+
+enum ReviewDecision {
+  CONFIRM
+  NEEDS_SUPPLEMENT
+  REJECT
+  RETEST_PASS
+  RETURN_TO_FIX
+  ARCHIVE
+}
+
+enum CertificateStatus {
+  PENDING
+  ISSUED
+  REVOKED
+}
+
+enum PointDirection {
+  IN
+  OUT
+  ADJUST
+}
+
+enum MallRedemptionStatus {
+  PENDING_PICKUP
+  PICKED_UP
+  CANCELLED
+}
+
+enum LearningResourceKind {
+  RESOURCE
+  RANGE
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  OFFLINE
+}
+
+enum AnnouncementRange {
+  ALL
+  STUDENTS
+  AUDITORS
+  ADMINS
+}
+
+enum AiSpace {
+  STUDENT
+  AUDITOR
+  ADMIN
+}
+
+enum AiCallPurpose {
+  CHAT
+  VULNERABILITY_PARSE
+  VULNERABILITY_VALUE_REVIEW
+  LEARNING_RECOMMENDATION
+  REPORT_SUMMARY
+  AUDIT_ANALYSIS
+}
+
+enum AiProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE_VULNERABILITY
+  SUBMIT_VULNERABILITY
+  VIEW_SENSITIVE_ATTACHMENT
+  REVIEW_VULNERABILITY
+  CHANGE_VULNERABILITY_STATUS
+  ISSUE_CERTIFICATE
+  REVOKE_CERTIFICATE
+  PUBLISH_ANNOUNCEMENT
+  CHANGE_USER_PERMISSION
+  CHANGE_SYSTEM_SETTING
+  CALL_AI
+}
+
+model User {
+  id                    String              @id @default(cuid())
+  roleId                String
+  role                  Role                @relation(fields: [roleId], references: [id])
+  unifiedCode           String              @unique
+  email                 String              @unique
+  emailVerifiedAt       DateTime?
+  passwordHash          String?
+  name                  String
+  studentNo             String?             @unique
+  college               String?
+  grade                 String?
+  identityText          String?
+  authorizationLevel    AuthorizationLevel  @default(BASIC)
+  authorizationSourceId String?
+  status                UserStatus          @default(PENDING)
+  lastLoginAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  deletedAt             DateTime?
+
+  emailCodes            EmailVerificationCode[]
+  authorizationSource   AuthorizationSource?      @relation(fields: [authorizationSourceId], references: [id])
+  refreshTokens         RefreshToken[]
+  permissionOverrides   UserPermissionOverride[]
+  examAttempts          SecurityExamAttempt[]
+  responsibilitySigns   ResponsibilitySignature[]
+  submittedReports      VulnerabilityReport[]     @relation("ReportSubmitter")
+  assignedReviews       ReviewAssignment[]         @relation("AssignmentAuditor")
+  reviewComments        ReviewComment[]            @relation("ReviewCommentAuthor")
+  uploadedAttachments   VulnerabilityAttachment[]  @relation("AttachmentUploader")
+  vulnerabilityEvents   VulnerabilityEvent[]       @relation("VulnerabilityEventActor")
+  retestRecords         RetestRecord[]             @relation("RetestTester")
+  receivedCertificates  Certificate[]              @relation("CertificateRecipient")
+  issuedCertificates    Certificate[]              @relation("CertificateIssuer")
+  revokedCertificates   Certificate[]              @relation("CertificateRevoker")
+  pointEntries          PointLedgerEntry[]          @relation("PointUser")
+  operatedPointEntries  PointLedgerEntry[]          @relation("PointOperator")
+  redemptions           MallRedemption[]            @relation("RedemptionUser")
+  handledRedemptions    MallRedemption[]            @relation("RedemptionHandler")
+  announcements         Announcement[]             @relation("AnnouncementAuthor")
+  aiCallLogs            AiCallLog[]                 @relation("AiCallUser")
+  aiSkills              AiSkill[]                   @relation("AiSkillCreator")
+  aiFaqEntries          AiFaqEntry[]                @relation("AiFaqCreator")
+  aiActionProposals     AiActionProposal[]          @relation("AiProposalRequester")
+  approvedAiProposals   AiActionProposal[]          @relation("AiProposalApprover")
+  auditLogs             AuditLog[]                  @relation("AuditActor")
+
+  @@index([roleId])
+  @@index([authorizationLevel])
+  @@index([authorizationSourceId])
+  @@index([status])
+}
+
+model AuthorizationSource {
+  id          String              @id @default(cuid())
+  code        String              @unique
+  name        String
+  description String?
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  users       User[]
+}
+
+model AuthorizationPolicy {
+  id          String              @id @default(cuid())
+  level       AuthorizationLevel
+  scope       AssetScope
+  allowed     Boolean             @default(true)
+  description String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([level, scope])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        RoleCode         @unique
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id              String                   @id @default(cuid())
+  code            String                   @unique
+  name            String
+  description     String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  roles           RolePermission[]
+  userOverrides   UserPermissionOverride[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+}
+
+model UserPermissionOverride {
+  id           String     @id @default(cuid())
+  userId       String
+  permissionId String
+  enabled      Boolean
+  reason       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([permissionId])
+}
+
+model EmailVerificationCode {
+  id         String    @id @default(cuid())
+  userId     String?
+  email      String
+  codeHash   String
+  purpose    String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SecurityExamAttempt {
+  id        String    @id @default(cuid())
+  userId    String
+  score     Int?
+  passed    Boolean
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, passed])
+}
+
+model ResponsibilityAgreement {
+  id          String                    @id @default(cuid())
+  version     String                    @unique
+  title       String
+  contentHash String
+  content     String                    @db.Text
+  active      Boolean                   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime                  @default(now())
+  signatures  ResponsibilitySignature[]
+}
+
+model ResponsibilitySignature {
+  id                String                  @id @default(cuid())
+  userId            String
+  agreementId       String
+  signedAt          DateTime                @default(now())
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agreement         ResponsibilityAgreement @relation(fields: [agreementId], references: [id])
+
+  @@unique([userId, agreementId])
+  @@index([signedAt])
+}
+
+model Asset {
+  id             String                @id @default(cuid())
+  name           String
+  url            String?
+  ownerUnit      String
+  scope          AssetScope            @default(PUBLIC)
+  description    String?
+  active         Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  deletedAt      DateTime?
+  reports        VulnerabilityReport[]
+
+  @@index([ownerUnit])
+  @@index([scope])
+}
+
+model VulnerabilityReport {
+  id                  String                  @id @default(cuid())
+  reportNo            String                  @unique
+  submitterId         String
+  assetId             String?
+  title               String
+  assetName           String
+  assetUrl            String?
+  ownerUnit           String?
+  vulnerabilityType   String
+  selfSeverity        VulnerabilitySeverity
+  finalSeverity       VulnerabilitySeverity?
+  status              VulnerabilityStatus     @default(DRAFT)
+  reproductionSteps   String                  @db.Text
+  impactAssessment    String                  @db.Text
+  repairSuggestion    String                  @db.Text
+  requestPacket       String?                 @db.Text
+  testBoundary        String?                 @db.Text
+  aiParsed            Boolean                 @default(false)
+  submittedAt         DateTime?
+  confirmedAt         DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  deletedAt           DateTime?
+
+  submitter           User                    @relation("ReportSubmitter", fields: [submitterId], references: [id])
+  asset               Asset?                  @relation(fields: [assetId], references: [id])
+  attachments         VulnerabilityAttachment[]
+  events              VulnerabilityEvent[]
+  assignment          ReviewAssignment?
+  comments            ReviewComment[]
+  retests             RetestRecord[]
+  certificate         Certificate?
+  pointEntries        PointLedgerEntry[]
+  aiActionProposals   AiActionProposal[]
+
+  @@index([submitterId])
+  @@index([assetId])
+  @@index([status])
+  @@index([finalSeverity])
+  @@index([createdAt])
+}
+
+model VulnerabilityAttachment {
+  id              String              @id @default(cuid())
+  reportId        String
+  uploaderId      String
+  kind            AttachmentKind
+  originalName    String
+  storageKey      String              @unique
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  pageCount       Int?
+  uploadedAt      DateTime            @default(now())
+  deletedAt       DateTime?
+  report          VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  uploader        User                @relation("AttachmentUploader", fields: [uploaderId], references: [id])
+
+  @@index([reportId])
+  @@index([sha256])
+}
+
+model VulnerabilityEvent {
+  id             String                @id @default(cuid())
+  reportId       String
+  actorId        String?
+  action         String
+  fromStatus     VulnerabilityStatus?
+  toStatus       VulnerabilityStatus?
+  note           String?               @db.Text
+  ipAddress      String?
+  userAgent      String?
+  deviceInfo     String?
+  createdAt      DateTime              @default(now())
+  report         VulnerabilityReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor          User?                 @relation("VulnerabilityEventActor", fields: [actorId], references: [id])
+
+  @@index([reportId, createdAt])
+  @@index([actorId])
+}
+
+model ReviewAssignment {
+  id         String              @id @default(cuid())
+  reportId   String              @unique
+  auditorId  String
+  assignedAt DateTime            @default(now())
+  closedAt   DateTime?
+  report     VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  auditor    User                @relation("AssignmentAuditor", fields: [auditorId], references: [id])
+
+  @@index([auditorId])
+}
+
+model ReviewComment {
+  id        String              @id @default(cuid())
+  reportId  String
+  authorId  String
+  decision  ReviewDecision?
+  content   String              @db.Text
+  createdAt DateTime            @default(now())
+  report    VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author    User                @relation("ReviewCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([reportId])
+  @@index([authorId])
+}
+
+model RetestRecord {
+  id                String              @id @default(cuid())
+  reportId          String
+  testerId          String
+  result            ReviewDecision
+  note              String?             @db.Text
+  evidenceStorageKey String?
+  evidenceSha256    String?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime            @default(now())
+  report            VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  tester            User                @relation("RetestTester", fields: [testerId], references: [id])
+
+  @@index([reportId])
+  @@index([testerId])
+}
+
+model Certificate {
+  id              String              @id @default(cuid())
+  certificateNo   String              @unique
+  vulnerabilityId String              @unique
+  recipientId     String
+  issuedById      String?
+  status          CertificateStatus   @default(PENDING)
+  verifyCode      String              @unique
+  publicVerify    Boolean             @default(true)
+  contribution    String              @db.Text
+  issuedAt        DateTime?
+  revokedAt       DateTime?
+  revokedById     String?
+  revokeReason    String?             @db.Text
+  pdfStorageKey   String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  vulnerability   VulnerabilityReport @relation(fields: [vulnerabilityId], references: [id])
+  recipient       User                @relation("CertificateRecipient", fields: [recipientId], references: [id])
+  issuedBy        User?               @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  revokedBy       User?               @relation("CertificateRevoker", fields: [revokedById], references: [id])
+
+  @@index([recipientId])
+  @@index([issuedById])
+  @@index([status])
+}
+
+model PointLedgerEntry {
+  id              String              @id @default(cuid())
+  userId          String
+  operatorId      String?
+  reportId        String?
+  direction       PointDirection
+  points          Int
+  balanceAfter    Int
+  reason          String
+  note            String?             @db.Text
+  createdAt       DateTime            @default(now())
+  user            User                @relation("PointUser", fields: [userId], references: [id])
+  operator        User?               @relation("PointOperator", fields: [operatorId], references: [id])
+  report          VulnerabilityReport? @relation(fields: [reportId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([reportId])
+}
+
+model MallProduct {
+  id             String           @id @default(cuid())
+  name           String
+  description    String?          @db.Text
+  imageUrl       String?
+  pointsCost     Int
+  stock          Int
+  active         Boolean          @default(true)
+  pickupLocation String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+  redemptions    MallRedemption[]
+}
+
+model MallRedemption {
+  id          String               @id @default(cuid())
+  userId      String
+  productId   String
+  handlerId   String?
+  pointsCost  Int
+  status      MallRedemptionStatus @default(PENDING_PICKUP)
+  pickupCode  String               @unique
+  requestedAt DateTime             @default(now())
+  pickedUpAt  DateTime?
+  cancelledAt DateTime?
+  note        String?
+  user        User                 @relation("RedemptionUser", fields: [userId], references: [id])
+  product     MallProduct          @relation(fields: [productId], references: [id])
+  handler     User?                @relation("RedemptionHandler", fields: [handlerId], references: [id])
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+}
+
+model LearningResource {
+  id            String               @id @default(cuid())
+  kind          LearningResourceKind
+  title         String
+  description   String?              @db.Text
+  externalUrl   String
+  coverUrl      String?
+  downloadCount Int                  @default(0)
+  active        Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  deletedAt     DateTime?
+
+  @@index([kind])
+  @@index([active])
+}
+
+model Announcement {
+  id          String            @id @default(cuid())
+  title       String
+  category    String
+  status      AnnouncementStatus @default(DRAFT)
+  range       AnnouncementRange
+  pinned      Boolean           @default(false)
+  summary     String            @db.Text
+  content     String            @db.Text
+  authorId    String
+  publishedAt DateTime?
+  offlineAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+  author      User              @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+
+  @@index([status])
+  @@index([range])
+  @@index([pinned])
+}
+
+model AiCallLog {
+  id                    String        @id @default(cuid())
+  userId                String?
+  aiSpace               AiSpace
+  purpose               AiCallPurpose
+  sanitizedInputSummary String        @db.Text
+  outputSummary         String?       @db.Text
+  modelName             String?
+  hermesRunId           String?
+  tokensUsed            Int?
+  requiresHumanConfirm  Boolean       @default(true)
+  ipAddress             String?
+  userAgent             String?
+  createdAt             DateTime      @default(now())
+  user                  User?         @relation("AiCallUser", fields: [userId], references: [id])
+
+  @@index([aiSpace, purpose])
+  @@index([userId, createdAt])
+}
+
+model AiSkill {
+  id          String    @id @default(cuid())
+  aiSpace     AiSpace
+  title       String
+  content     String    @db.Text
+  source      String?
+  createdById String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   User?     @relation("AiSkillCreator", fields: [createdById], references: [id])
+
+  @@index([aiSpace])
+  @@index([active])
+}
+
+model AiFaqEntry {
+  id          String    @id @default(cuid())
+  aiSpace     AiSpace
+  questionKey String
+  question    String    @db.Text
+  answer      String    @db.Text
+  hitCount    Int       @default(0)
+  createdById String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   User?     @relation("AiFaqCreator", fields: [createdById], references: [id])
+
+  @@unique([aiSpace, questionKey])
+  @@index([active])
+}
+
+model AiActionProposal {
+  id              String              @id @default(cuid())
+  aiSpace          AiSpace
+  requesterId      String?
+  approverId       String?
+  reportId         String?
+  actionType       String
+  sanitizedReason  String             @db.Text
+  payload          Json
+  status           AiProposalStatus   @default(PENDING)
+  decidedAt        DateTime?
+  createdAt        DateTime           @default(now())
+  requester        User?              @relation("AiProposalRequester", fields: [requesterId], references: [id])
+  approver         User?              @relation("AiProposalApprover", fields: [approverId], references: [id])
+  report           VulnerabilityReport? @relation(fields: [reportId], references: [id])
+
+  @@index([aiSpace, status])
+  @@index([reportId])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  actorId     String?
+  action      AuditAction
+  targetType  String
+  targetId    String?
+  result      String
+  ipAddress   String?
+  userAgent   String?
+  requestPath String?
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+}
+
+model SchoolProfile {
+  id                  String   @id @default(cuid())
+  schoolName          String
+  shortName           String
+  logoUrl             String?
+  themeColor          String   @default("#2A6438")
+  emailDomain         String?
+  certificateTemplate String?  @db.Text
+  ruleText            String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}

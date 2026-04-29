@@ -1,6 +1,6 @@
 # Backend
 
-CQUPT-SRC 后端服务目录，后续使用 NestJS + TypeScript 搭建。
+CQUPT-SRC 后端服务目录，使用 NestJS + TypeScript 搭建。
 
 ## 规划职责
 
@@ -14,4 +14,35 @@ CQUPT-SRC 后端服务目录，后续使用 NestJS + TypeScript 搭建。
 
 ## 后续步骤
 
-下一步会在本目录初始化 NestJS 项目，并补齐 `package.json`、`tsconfig`、模块代码和测试配置。
+## 本地开发命令
+
+先安装依赖：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd install
+```
+
+复制环境变量：
+
+```powershell
+copy .env.example .env
+```
+
+开发启动：
+
+```powershell
+npm.cmd run dev
+```
+
+健康检查：
+
+```text
+GET http://localhost:3000/api/health
+```
+
+Prisma schema 验证：
+
+```powershell
+npm.cmd run prisma:validate
+```

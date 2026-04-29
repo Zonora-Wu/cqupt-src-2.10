@@ -83,6 +83,85 @@ README.md
 - `.env`、`.env.*` 不提交，后续只维护 `.env.example`。
 - 后端下一步才初始化依赖和 NestJS，不要在根目录直接执行后端 npm 命令。
 
+## 3.2 数据库模型设计
+
+数据库模型设计已开始，当前产物：
+
+```text
+database/DATABASE_DESIGN.md
+database/prisma/schema.prisma
+docs/architecture/DATABASE_MODEL.md
+```
+
+核心设计：
+
+- PostgreSQL + Prisma。
+- 用户只允许校内注册，访客不入库。
+- 用户只能绑定一个角色。
+- 角色：学生、审核员、管理员。
+- 权限使用 RBAC + 用户级权限覆盖。
+- 审核员证书签发权限由权限点控制，可由管理员开启。
+- 授权等级使用 BASIC/TRUSTED/STAFF 三层模型。
+- 授权来源使用 `authorization_sources` 数据表配置，方便不同学校独立交付。
+- 资产授权范围使用 PUBLIC/INTERNAL/SPECIAL，并通过 `authorization_policies` 控制。
+- 用户资料只保留学院，不再保留专业。
+- 提交漏洞前需要邮箱验证与责任书签署，后续可开启考试通过要求。
+- 漏洞支持草稿，提交后不可撤回。
+- 一个漏洞只分配一个审核员。
+- 一个漏洞最多一张证书。
+- 附件只允许 PDF，保存哈希用于去重和审计。
+- AI 原始会话不长期保存，只保存脱敏摘要、skill、FAQ 和人工确认记录。
+- 审计日志覆盖登录、退出、漏洞提交、附件查看、审核、证书、公告、权限、系统设置和 AI 调用。
+
+注意：当前还没有安装 Prisma CLI，因此 `schema.prisma` 尚未通过 `prisma validate`。下一步初始化后端依赖后必须先验证 schema。
+
+## 3.3 后端初始化
+
+后端 NestJS 基础骨架已初始化。
+
+当前后端目录：
+
+```text
+backend/
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── tsconfig.build.json
+├── .env.example
+└── src/
+    ├── main.ts
+    ├── app.module.ts
+    ├── config/env.ts
+    └── modules/health/
+        ├── health.module.ts
+        └── health.controller.ts
+```
+
+当前后端能力：
+
+- NestJS 应用入口。
+- 全局 API 前缀，默认 `/api`。
+- CORS 白名单读取 `FRONTEND_ORIGIN`。
+- 环境变量基础校验。
+- 健康检查接口：`GET /api/health`。
+- Prisma schema 使用 `database/prisma/schema.prisma`。
+
+后端本地命令：
+
+```powershell
+cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd run prisma:validate
+npm.cmd run dev
+```
+
+已验证：
+
+- `npm.cmd run typecheck` 通过。
+- `npm.cmd run build` 通过。
+- `npm.cmd run prisma:validate` 通过。
+
 Windows PowerShell 下运行命令推荐使用：
 
 ```powershell

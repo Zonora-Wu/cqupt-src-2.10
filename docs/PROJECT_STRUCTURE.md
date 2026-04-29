@@ -5,7 +5,7 @@
 ```text
 cqupt-src-2.10/
 ├── frontend/                 # React + TypeScript + Vite 前端
-├── backend/                  # NestJS 后端，下一步初始化
+├── backend/                  # NestJS 后端，已完成基础初始化
 │   ├── src/
 │   │   ├── modules/          # 业务模块
 │   │   ├── common/           # Guards、Pipes、Decorators、Filters 等通用能力

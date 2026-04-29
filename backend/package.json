@@ -1,0 +1,30 @@
+{
+  "name": "cqupt-src-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CQUPT-SRC backend service",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prisma:validate": "prisma validate --schema ../database/prisma/schema.prisma",
+    "prisma:generate": "prisma generate --schema ../database/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@prisma/client": "^6.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prisma": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
+  }
+}
