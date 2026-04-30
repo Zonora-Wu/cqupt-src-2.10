@@ -11,6 +11,8 @@ export const permissionDefinitions = [
   ['certificate:read', '查看证书'],
   ['certificate:issue', '签发证书'],
   ['certificate:revoke', '撤销证书'],
+  ['point:read', '查看积分'],
+  ['mall:redeem', '兑换积分商品'],
   ['announcement:manage', '管理公告'],
   ['learning:manage', '管理学习资源'],
   ['mall:manage', '管理积分商城'],
@@ -30,6 +32,8 @@ export const rolePermissionMap: Record<RoleCode, PermissionCode[]> = {
     'vulnerability:create',
     'vulnerability:read_own',
     'certificate:read',
+    'point:read',
+    'mall:redeem',
     'ai:use_student',
   ],
   AUDITOR: [

@@ -1,0 +1,102 @@
+import { BadRequestException } from '@nestjs/common'
+import { RoleCode, UserStatus } from '@prisma/client'
+import {
+  ResetUserPasswordBody,
+  UpdateUserPermissionBody,
+  UpdateUserRoleBody,
+  UpdateUserStatusBody,
+} from './users.types'
+
+export function normalizeUpdateUserRoleBody(body: UpdateUserRoleBody) {
+  return {
+    reason: normalizeReason(body.reason, '管理员调整用户角色'),
+    role: normalizeRole(body.role),
+  }
+}
+
+export function normalizeUpdateUserStatusBody(body: UpdateUserStatusBody) {
+  return {
+    reason: normalizeReason(body.reason, '管理员调整账号状态'),
+    status: normalizeStatus(body.status),
+  }
+}
+
+export function normalizeUpdateUserPermissionBody(body: UpdateUserPermissionBody) {
+  return {
+    enabled: normalizeBoolean(body.enabled),
+    permissionCode: requireText(body.permissionCode, '权限点', 3, 80),
+    reason: normalizeReason(body.reason, '管理员调整用户权限覆盖'),
+  }
+}
+
+export function normalizeResetUserPasswordBody(body: ResetUserPasswordBody) {
+  return {
+    reason: normalizeReason(body.reason, '管理员重置用户密码'),
+  }
+}
+
+function normalizeRole(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new BadRequestException('用户角色格式不正确')
+  }
+
+  const role = value.trim()
+  if (role === RoleCode.STUDENT || role === '学生') return RoleCode.STUDENT
+  if (role === RoleCode.AUDITOR || role === '审核员') return RoleCode.AUDITOR
+  if (role === RoleCode.ADMIN || role === '管理员') return RoleCode.ADMIN
+
+  throw new BadRequestException('用户角色不正确')
+}
+
+function normalizeStatus(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new BadRequestException('账号状态格式不正确')
+  }
+
+  const status = value.trim()
+  if (status === UserStatus.ACTIVE || status === '正常') return UserStatus.ACTIVE
+  if (status === UserStatus.PENDING || status === '待准入') return UserStatus.PENDING
+  if (status === UserStatus.DISABLED || status === '已禁用') return UserStatus.DISABLED
+  if (status === UserStatus.LOCKED || status === '已锁定') return UserStatus.LOCKED
+
+  throw new BadRequestException('账号状态不正确')
+}
+
+function normalizeBoolean(value: unknown) {
+  if (typeof value !== 'boolean') {
+    throw new BadRequestException('权限开关格式不正确')
+  }
+
+  return value
+}
+
+function normalizeReason(value: unknown, defaultValue: string) {
+  if (value === undefined || value === null || value === '') return defaultValue
+  if (typeof value !== 'string') {
+    throw new BadRequestException('操作原因格式不正确')
+  }
+
+  const reason = value.trim()
+  if (reason.length > 500) {
+    throw new BadRequestException('操作原因不能超过 500 个字符')
+  }
+
+  return reason || defaultValue
+}
+
+function requireText(value: unknown, label: string, minLength: number, maxLength: number) {
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`${label}格式不正确`)
+  }
+
+  const text = value.trim()
+  if (text.length < minLength) {
+    throw new BadRequestException(`${label}至少需要 ${minLength} 个字符`)
+  }
+
+  if (text.length > maxLength) {
+    throw new BadRequestException(`${label}不能超过 ${maxLength} 个字符`)
+  }
+
+  return text
+}

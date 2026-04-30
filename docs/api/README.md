@@ -1,6 +1,6 @@
 # API Docs
 
-API 文档目录。当前已完成健康检查、认证登录、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验接口初版。
+API 文档目录。当前已完成健康检查、认证登录、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城接口初版。
 
 ## 当前接口
 
@@ -549,6 +549,504 @@ GET /api/certificates/public/:certificateNo
 - 该接口不需要登录。
 - 仅返回可公开核验的有效证书。
 - 返回获得者姓名与统一认证码的脱敏信息，不返回漏洞 URL、复现步骤、附件、审核备注等敏感内容。
+
+### 公开公告列表
+
+```text
+GET /api/announcements/public
+```
+
+说明：
+
+- 该接口不需要登录。
+- 仅返回 `PUBLISHED` 且发布范围为 `ALL` 的公告。
+- 按置顶、发布时间倒序排列。
+
+### 公开公告详情
+
+```text
+GET /api/announcements/public/:id
+```
+
+说明：
+
+- 该接口不需要登录。
+- 仅允许查看公开发布公告详情。
+
+### 登录用户可见公告列表
+
+```text
+GET /api/announcements/visible
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+说明：
+
+- 学生可见：`ALL`、`STUDENTS`。
+- 审核员可见：`ALL`、`AUDITORS`。
+- 管理员可见：`ALL`、`ADMINS`。
+- 仅返回 `PUBLISHED` 公告。
+
+### 登录用户可见公告详情
+
+```text
+GET /api/announcements/visible/:id
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+### 公告管理列表
+
+```text
+GET /api/announcements/manage
+```
+
+权限要求：
+
+```text
+announcement:manage
+```
+
+返回所有未删除公告，包括草稿、已发布和已下架。
+
+### 新建公告草稿
+
+```text
+POST /api/announcements
+```
+
+权限要求：
+
+```text
+announcement:manage
+```
+
+请求示例：
+
+```json
+{
+  "title": "关于规范漏洞报告附件提交格式的通知",
+  "category": "规则更新",
+  "range": "全体用户",
+  "pinned": true,
+  "summary": "漏洞报告附件建议使用 PDF 格式，截图需去除无关个人信息。",
+  "content": "公告正文..."
+}
+```
+
+说明：
+
+- 新建后默认为草稿。
+- 操作会写入审计日志。
+
+### 修改公告
+
+```text
+PATCH /api/announcements/:id
+```
+
+权限要求：
+
+```text
+announcement:manage
+```
+
+说明：
+
+- 可修改标题、分类、发布范围、置顶状态、摘要和正文。
+- 操作会写入审计日志。
+
+### 发布公告
+
+```text
+POST /api/announcements/:id/publish
+```
+
+权限要求：
+
+```text
+announcement:manage
+```
+
+说明：
+
+- 状态变为 `PUBLISHED`。
+- 写入发布时间。
+- 操作会写入审计日志，metadata.action 为 `publish`。
+
+### 下线公告
+
+```text
+POST /api/announcements/:id/offline
+```
+
+权限要求：
+
+```text
+announcement:manage
+```
+
+说明：
+
+- 状态变为 `OFFLINE`。
+- 写入下线时间。
+- 普通用户和访客不再可见。
+- 操作会写入审计日志，metadata.action 为 `offline`。
+
+### 登录用户学习资源列表
+
+```text
+GET /api/learning
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+说明：
+
+- 访客不可访问真实学习资源和外部链接。
+- 登录用户可查看已上架、未删除的学习资料与靶场资源。
+- 返回资源标题、类型、分类、说明、外部链接和访问次数。
+
+### 访问学习资源 / 进入靶场
+
+```text
+POST /api/learning/:id/click
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+说明：
+
+- 仅允许访问已上架资源。
+- 后端会将 `downloadCount` 加 1，并返回外部链接。
+- 当前阶段资源均为外部链接，不涉及 MinIO 文件下载。
+
+### 学习资源管理列表
+
+```text
+GET /api/learning/manage
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+说明：
+
+- 当前仅管理员拥有 `learning:manage`。
+- 审核员不管理学习资源。
+- 返回所有未删除学习资源，包括已上架和已下架。
+
+### 新建学习资源
+
+```text
+POST /api/learning
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+请求示例：
+
+```json
+{
+  "kind": "RESOURCE",
+  "category": "工具资源",
+  "title": "Burp Suite Community 下载入口",
+  "description": "Web 请求代理、重放与漏洞验证常用工具。",
+  "externalUrl": "https://portswigger.net/burp/communitydownload",
+  "active": true
+}
+```
+
+字段说明：
+
+- `kind`：`RESOURCE` 或 `RANGE`。
+- `category`：资源分类，例如 `工具资源`、`文档资料`、`Web靶场`。
+- `externalUrl`：必须是 `http://` 或 `https://` 开头的有效地址。
+
+### 修改学习资源
+
+```text
+PATCH /api/learning/:id
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+说明：可修改类型、分类、标题、说明、外部链接和上架状态。操作写入审计日志。
+
+### 上架学习资源
+
+```text
+POST /api/learning/:id/enable
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+### 下架学习资源
+
+```text
+POST /api/learning/:id/disable
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+### 删除学习资源
+
+```text
+DELETE /api/learning/:id
+```
+
+权限要求：
+
+```text
+learning:manage
+```
+
+说明：
+
+- 删除为软删除。
+- 创建、修改、上架、下架、删除都会写入 `AuditLog`，动作为 `MANAGE_LEARNING_RESOURCE`。
+
+### 积分概览
+
+```text
+GET /api/points/summary
+```
+
+权限要求：
+
+```text
+point:read
+```
+
+返回当前用户可用积分、累计收入、累计支出、调整积分和待领取兑换数。
+
+### 积分流水
+
+```text
+GET /api/points/ledger
+```
+
+权限要求：
+
+```text
+point:read
+```
+
+说明：积分以流水为准，漏洞奖励、商城兑换、取消返还都会写入 `PointLedgerEntry`。
+
+### 用户商品列表
+
+```text
+GET /api/mall/products
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+说明：
+
+- 仅登录用户可访问。
+- 只返回已上架、未删除商品。
+- 当前商品兑换采用蓝山工作室线下领取，不提供邮寄。
+
+### 用户提交兑换申请
+
+```text
+POST /api/mall/redemptions
+```
+
+权限要求：
+
+```text
+mall:redeem
+```
+
+请求示例：
+
+```json
+{
+  "productId": "mall_demo_notebook"
+}
+```
+
+事务规则：
+
+- 校验商品已上架、库存充足。
+- 校验用户可用积分充足。
+- 校验每人限兑数量。
+- 扣减库存。
+- 创建兑换订单。
+- 创建积分支出流水。
+- 创建兑换状态事件。
+
+### 用户兑换记录
+
+```text
+GET /api/mall/redemptions/my
+```
+
+权限要求：
+
+```text
+mall:redeem
+```
+
+### 管理员商品列表
+
+```text
+GET /api/mall/manage/products
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+### 管理员新建商品
+
+```text
+POST /api/mall/manage/products
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+请求示例：
+
+```json
+{
+  "name": "CQUPT-SRC 定制笔记本",
+  "category": "实体奖励",
+  "description": "用于记录漏洞复现过程、学习笔记和靶场训练思路。",
+  "imageUrl": "",
+  "pointsCost": 280,
+  "stock": 18,
+  "status": "ACTIVE",
+  "perUserLimit": 2,
+  "pickupLocation": "蓝山工作室",
+  "pickupInstructions": "兑换成功后请携带校园卡或有效身份证明前往蓝山工作室领取。",
+  "sortOrder": 80
+}
+```
+
+### 管理员修改商品
+
+```text
+PATCH /api/mall/manage/products/:id
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+### 商品上架 / 下架 / 删除
+
+```text
+POST   /api/mall/manage/products/:id/activate
+POST   /api/mall/manage/products/:id/deactivate
+DELETE /api/mall/manage/products/:id
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+说明：
+
+- 库存为 0 的商品不能上架。
+- 存在待领取兑换记录的商品不能删除。
+- 删除为软删除。
+
+### 管理员兑换处理列表
+
+```text
+GET /api/mall/manage/redemptions
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+### 确认线下领取
+
+```text
+POST /api/mall/manage/redemptions/:id/complete
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+说明：仅待领取订单可确认领取，确认后状态变为 `COMPLETED`。
+
+### 取消兑换
+
+```text
+POST /api/mall/manage/redemptions/:id/cancel
+```
+
+权限要求：
+
+```text
+mall:manage
+```
+
+说明：
+
+- 仅待领取订单可取消。
+- 取消会通过事务返还积分、恢复库存、写入兑换事件。
+- 商品管理、确认领取、取消兑换都会写入 `AuditLog`，动作为 `MANAGE_MALL`。
 
 ## API 安全原则
 

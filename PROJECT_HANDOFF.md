@@ -22,10 +22,10 @@ CQUPT-SRC 是一个面向校园网络安全建设的漏洞响应与安全学习�
 
 当前规划角色：
 
-- 访客：浏览首页、平台规则、公开公告、证书查询、学习资源、关于平台。
+- 访客：浏览首页、平台规则、公开公告、证书查询、关于平台；学习资源页只展示登录引导，不暴露真实资源和外部链接。
 - 学生用户：登录后提交漏洞、查看我的漏洞、学习中心、AI 助手、积分商城、我的证书、排行榜、平台公告。
 - 审核员：审核漏洞、复测归档、管理证书、发布公告，并使用 AI 辅助判断漏洞价值和材料完整性。
-- 管理员：管理用户、角色权限、漏洞流程、积分商城、公告、资源、靶场、日志审计、系统配置。
+- 管理员：管理用户、角色权限、漏洞流程、积分商城、公告、学习资源/靶场、日志审计、系统配置。
 
 ## 3. 当前前端技术栈
 
@@ -114,6 +114,15 @@ docs/architecture/DATABASE_MODEL.md
 - 审计日志覆盖登录、退出、漏洞提交、附件查看、审核、证书、公告、权限、系统设置和 AI 调用。
 
 注意：Prisma CLI 已作为后端 devDependency 安装，`schema.prisma` 已通过 `npm.cmd run prisma:validate`。
+
+当前已应用 migration：
+
+```text
+20260429080513_init
+20260429125156_certificate_templates
+20260430093000_learning_resources
+20260430103000_points_mall
+```
 
 ## 3.3 后端初始化
 
@@ -235,6 +244,84 @@ GET /api/certificates/public/:certificateNo
 - 证书预览必须走后端鉴权接口，不暴露 MinIO 对象 key。
 - 未登录证书查询调用公开核验接口，只返回脱敏信息。
 
+当前公告接口：
+
+```text
+GET /api/announcements/public
+GET /api/announcements/public/:id
+GET /api/announcements/visible
+GET /api/announcements/visible/:id
+GET /api/announcements/manage
+GET /api/announcements/manage/:id
+POST /api/announcements
+PATCH /api/announcements/:id
+POST /api/announcements/:id/publish
+POST /api/announcements/:id/offline
+```
+
+说明：
+
+- 公开公告只返回已发布且范围为全体用户的公告。
+- 登录用户公告会按角色隔离可见范围：学生、审核员、管理员分别只能看到面向自己的公告和全体公告。
+- 管理员和审核员通过 `announcement:manage` 权限管理公告。
+- 新建公告默认保存为草稿。
+- 发布、下线、修改都会写入 `AuditLog`，统一使用 `PUBLISH_ANNOUNCEMENT`，在 metadata.action 中区分 `create_draft`、`update`、`publish`、`offline`。
+- 前端管理员公告管理页、审核员公告管理页、访客公开公告页、登录用户平台公告页已接入真实接口。
+
+当前学习资源接口：
+
+```text
+GET /api/learning
+POST /api/learning/:id/click
+GET /api/learning/manage
+POST /api/learning
+PATCH /api/learning/:id
+POST /api/learning/:id/enable
+POST /api/learning/:id/disable
+DELETE /api/learning/:id
+```
+
+说明：
+
+- 学习资源与靶场资源已合并为学习管理。
+- 访客不能查看真实资源，也不能拿到外部链接。
+- 登录用户可在学习中心查看已上架资源，点击访问会统计次数。
+- 当前资源只使用外部链接，不涉及文件上传或 MinIO。
+- 管理端只有管理员拥有 `learning:manage`，审核员不管理学习资源。
+- 管理员学习管理页已接入真实接口，支持新增、编辑、上架、下架和删除。
+- 管理操作写入 `AuditLog`，动作为 `MANAGE_LEARNING_RESOURCE`。
+
+当前积分商城接口：
+
+```text
+GET /api/points/summary
+GET /api/points/ledger
+GET /api/mall/products
+POST /api/mall/redemptions
+GET /api/mall/redemptions/my
+GET /api/mall/manage/products
+POST /api/mall/manage/products
+PATCH /api/mall/manage/products/:id
+POST /api/mall/manage/products/:id/activate
+POST /api/mall/manage/products/:id/deactivate
+DELETE /api/mall/manage/products/:id
+GET /api/mall/manage/redemptions
+POST /api/mall/manage/redemptions/:id/complete
+POST /api/mall/manage/redemptions/:id/cancel
+```
+
+说明：
+
+- 积分以 `PointLedgerEntry` 流水为准，不只依赖用户表缓存字段。
+- 漏洞审核奖励写入积分收入流水。
+- 商城兑换写入积分支出流水，取消兑换写入积分返还流水。
+- 商品状态为 `DRAFT / ACTIVE / INACTIVE`。
+- 兑换状态为 `PENDING_PICKUP / COMPLETED / CANCELED / EXPIRED`。
+- 商品兑换采用蓝山工作室线下领取，不提供邮寄。
+- 用户兑换申请使用数据库事务处理积分扣减、库存扣减、兑换订单和兑换事件。
+- 管理员取消兑换使用数据库事务返还积分、恢复库存，并写入兑换事件。
+- 商品管理、确认领取、取消兑换写入 `AuditLog`，动作为 `MANAGE_MALL`。
+
 后端本地命令：
 
 ```powershell
@@ -340,7 +427,7 @@ http://localhost:3000/api/health
 - 平台规则
 - 公开公告
 - 证书查询
-- 学习资源
+- 学习资源（登录引导，不展示真实资源）
 - 关于平台
 - 登录弹窗
 - 注册弹窗
@@ -736,7 +823,7 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 - 积分系统
 - 证书模板在线坐标配置
 - 通知系统
-- 审计日志
+- 审计日志查询页 API
 - AI 智能体接口
 - Docker 部署
 
@@ -744,8 +831,8 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 建议继续按以下顺序：
 
-1. 实现公告、积分、学习资源接口。
-2. 完善证书模板在线坐标配置，让管理员可以调整文字与印章位置。
+1. 完善证书模板在线坐标配置，让管理员可以调整文字与印章位置。
+2. 实现审计日志查询 API，替换管理员审计日志 mock。
 3. 接入 AI Gateway 与 Hermes Agent。
 4. Docker Compose 完整应用联调。
 5. Ubuntu 云服务器部署。

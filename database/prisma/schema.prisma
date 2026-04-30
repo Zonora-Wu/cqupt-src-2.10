@@ -88,8 +88,15 @@ enum PointDirection {
 
 enum MallRedemptionStatus {
   PENDING_PICKUP
-  PICKED_UP
-  CANCELLED
+  COMPLETED
+  CANCELED
+  EXPIRED
+}
+
+enum MallProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
 }
 
 enum LearningResourceKind {
@@ -143,6 +150,9 @@ enum AuditAction {
   ISSUE_CERTIFICATE
   REVOKE_CERTIFICATE
   PUBLISH_ANNOUNCEMENT
+  MANAGE_LEARNING_RESOURCE
+  MANAGE_MALL
+  MANAGE_USER
   CHANGE_USER_PERMISSION
   CHANGE_SYSTEM_SETTING
   CALL_AI
@@ -189,6 +199,7 @@ model User {
   operatedPointEntries  PointLedgerEntry[]          @relation("PointOperator")
   redemptions           MallRedemption[]            @relation("RedemptionUser")
   handledRedemptions    MallRedemption[]            @relation("RedemptionHandler")
+  createdMallProducts   MallProduct[]               @relation("MallProductCreator")
   announcements         Announcement[]             @relation("AnnouncementAuthor")
   aiCallLogs            AiCallLog[]                 @relation("AiCallUser")
   aiSkills              AiSkill[]                   @relation("AiSkillCreator")
@@ -551,6 +562,7 @@ model PointLedgerEntry {
   userId          String
   operatorId      String?
   reportId        String?
+  redemptionId    String?
   direction       PointDirection
   points          Int
   balanceAfter    Int
@@ -560,50 +572,79 @@ model PointLedgerEntry {
   user            User                @relation("PointUser", fields: [userId], references: [id])
   operator        User?               @relation("PointOperator", fields: [operatorId], references: [id])
   report          VulnerabilityReport? @relation(fields: [reportId], references: [id])
+  redemption      MallRedemption?      @relation(fields: [redemptionId], references: [id])
 
   @@index([userId, createdAt])
   @@index([reportId])
+  @@index([redemptionId])
 }
 
 model MallProduct {
-  id             String           @id @default(cuid())
-  name           String
-  description    String?          @db.Text
-  imageUrl       String?
-  pointsCost     Int
-  stock          Int
-  active         Boolean          @default(true)
-  pickupLocation String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  deletedAt      DateTime?
-  redemptions    MallRedemption[]
+  id                 String            @id @default(cuid())
+  name               String
+  category           String            @default("实体奖励")
+  description        String?           @db.Text
+  imageUrl           String?
+  pointsCost         Int
+  stock              Int
+  status             MallProductStatus @default(DRAFT)
+  perUserLimit       Int               @default(1)
+  pickupLocation     String?           @default("蓝山工作室")
+  pickupInstructions String?           @db.Text
+  sortOrder          Int               @default(0)
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+  redemptions        MallRedemption[]
+  createdBy          User?             @relation("MallProductCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([category])
+  @@index([sortOrder])
 }
 
 model MallRedemption {
-  id          String               @id @default(cuid())
-  userId      String
-  productId   String
-  handlerId   String?
-  pointsCost  Int
-  status      MallRedemptionStatus @default(PENDING_PICKUP)
-  pickupCode  String               @unique
-  requestedAt DateTime             @default(now())
-  pickedUpAt  DateTime?
-  cancelledAt DateTime?
-  note        String?
-  user        User                 @relation("RedemptionUser", fields: [userId], references: [id])
-  product     MallProduct          @relation(fields: [productId], references: [id])
-  handler     User?                @relation("RedemptionHandler", fields: [handlerId], references: [id])
+  id           String                @id @default(cuid())
+  userId       String
+  productId    String
+  handlerId    String?
+  pointsCost   Int
+  status       MallRedemptionStatus  @default(PENDING_PICKUP)
+  pickupCode   String                @unique
+  requestedAt  DateTime              @default(now())
+  completedAt  DateTime?
+  canceledAt   DateTime?
+  expiresAt    DateTime?
+  note         String?               @db.Text
+  user         User                  @relation("RedemptionUser", fields: [userId], references: [id])
+  product      MallProduct           @relation(fields: [productId], references: [id])
+  handler      User?                 @relation("RedemptionHandler", fields: [handlerId], references: [id])
+  events       MallRedemptionEvent[]
+  pointEntries PointLedgerEntry[]
 
   @@index([userId])
   @@index([productId])
   @@index([status])
 }
 
+model MallRedemptionEvent {
+  id           String                @id @default(cuid())
+  redemptionId String
+  actorId      String?
+  fromStatus   MallRedemptionStatus?
+  toStatus     MallRedemptionStatus
+  note         String?               @db.Text
+  createdAt    DateTime              @default(now())
+  redemption   MallRedemption        @relation(fields: [redemptionId], references: [id], onDelete: Cascade)
+
+  @@index([redemptionId, createdAt])
+}
+
 model LearningResource {
   id            String               @id @default(cuid())
   kind          LearningResourceKind
+  category      String
   title         String
   description   String?              @db.Text
   externalUrl   String
@@ -615,6 +656,7 @@ model LearningResource {
   deletedAt     DateTime?
 
   @@index([kind])
+  @@index([category])
   @@index([active])
 }
 

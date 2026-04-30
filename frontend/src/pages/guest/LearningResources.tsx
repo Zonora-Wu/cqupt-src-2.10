@@ -1,13 +1,10 @@
-import { BookOpen, Download, FlaskConical, Search, Sparkles, Tags, Terminal } from 'lucide-react'
+import { BookOpen, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
 
-const resources = [
-  { title: 'Burp Suite 入门指南', type: '工具教程', level: '入门', icon: Terminal },
-  { title: 'Web 漏洞报告写作规范', type: '文档资料', level: '入门', icon: BookOpen },
-  { title: 'SQL 注入基础靶场', type: '靶场训练', level: '基础', icon: FlaskConical },
-  { title: 'XSS 漏洞复现与修复建议', type: '学习文章', level: '进阶', icon: Sparkles },
+const accessNotes = [
+  '学习资料、工具入口和靶场链接仅面向已登录校内用户开放。',
+  '进入资源或靶场时，平台会记录访问次数，用于资源维护和学习服务优化。',
+  '所有训练活动必须遵守 CQUPT-SRC 授权测试规则和校园网络安全测试行为边界。',
 ]
-
-const categories = ['Web 安全', '工具资源', '靶场实践', '报告规范', '安全合规', 'AI 推荐']
 
 export function LearningResources() {
   return (
@@ -17,58 +14,40 @@ export function LearningResources() {
           <BookOpen className="h-4 w-4" />
           学习资源
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">从学习到实践的安全成长路径</h1>
+        <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">登录后进入学习中心</h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
-          平台将沉淀工具、文档、靶场、课程和经验文章，帮助同学在授权范围内建立真实、规范、可持续的安全能力。
+          CQUPT-SRC 的工具资料、学习文档和靶场资源仅向已认证的校内用户开放。请完成登录后，在用户端学习中心查看可访问资源。
         </p>
       </section>
 
-      <section className="mx-auto mt-14 max-w-3xl rounded-lg border border-black/10 bg-white/70 p-3 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
-        <div className="flex items-center gap-3">
-          <Search className="ml-2 h-5 w-5 text-slate-400" />
-          <input
-            className="min-w-0 flex-1 border-none bg-transparent py-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
-            placeholder="搜索工具、靶场、漏洞类型或学习路径"
-            type="text"
-          />
-          <button className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-700" type="button">
-            搜索
-          </button>
-        </div>
-      </section>
-
-      <section className="mt-10 flex flex-wrap gap-3">
-        {categories.map((item) => (
-          <button className="inline-flex items-center gap-2 rounded-lg border border-black/10 bg-white/70 px-4 py-2 text-sm text-slate-700 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300 dark:hover:bg-white/[0.06]" key={item} type="button">
-            <Tags className="h-4 w-4" />
-            {item}
-          </button>
+      <section className="mx-auto mt-14 grid max-w-5xl gap-5 md:grid-cols-3">
+        {accessNotes.map((note, index) => (
+          <article
+            className="rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]"
+            key={note}
+          >
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
+              {index === 0 && <LockKeyhole className="h-6 w-6" />}
+              {index === 1 && <Sparkles className="h-6 w-6" />}
+              {index === 2 && <ShieldCheck className="h-6 w-6" />}
+            </div>
+            <p className="text-sm leading-7 text-slate-600 dark:text-slate-400">{note}</p>
+          </article>
         ))}
       </section>
 
-      <section className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        {resources.map((item) => {
-          const Icon = item.icon
-          return (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]" key={item.title}>
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
-                <Icon className="h-6 w-6" />
-              </div>
-              <div className="mb-3 flex gap-2">
-                <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs text-brand-700 dark:text-green-300">{item.type}</span>
-                <span className="rounded-md bg-slate-500/10 px-2 py-1 text-xs text-slate-600 dark:text-slate-400">{item.level}</span>
-              </div>
-              <h2 className="text-lg font-semibold">{item.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                后续可接入资源详情、下载权限、收藏记录和 AI 学习路径推荐。
-              </p>
-              <button className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300" type="button">
-                <Download className="h-4 w-4" />
-                查看资源
-              </button>
-            </article>
-          )
-        })}
+      <section className="mx-auto mt-10 max-w-5xl rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+          <div>
+            <h2 className="text-xl font-semibold">为什么访客不可查看资源？</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-400">
+              平台资源包含安全工具、训练入口和测试规范，必须结合用户身份、授权范围和责任书签署状态使用。访客页面仅提供平台说明和证书公开核验能力。
+            </p>
+          </div>
+          <div className="rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm font-medium text-brand-700 dark:text-green-300">
+            校内认证后可用
+          </div>
+        </div>
       </section>
     </main>
   )

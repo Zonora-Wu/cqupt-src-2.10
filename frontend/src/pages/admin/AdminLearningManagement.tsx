@@ -1,174 +1,99 @@
 import {
   AlertTriangle,
-  BookOpen,
+  CheckCircle2,
   Edit3,
-  Eye,
+  ExternalLink,
   Filter,
   GraduationCap,
   Layers3,
-  Link2,
   Plus,
   Power,
+  RefreshCw,
   Target,
-  Upload,
+  Trash2,
   X,
 } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
-
-type LearningTab = '资源管理' | '靶场管理'
-type ItemStatus = '已上架' | '草稿' | '已下架'
-type Difficulty = '入门' | '进阶' | '实战'
-
-type ResourceItem = {
-  id: string
-  title: string
-  category: '工具下载' | '学习资料'
-  status: ItemStatus
-  difficulty: Difficulty
-  owner: string
-  size: string
-  downloads: number
-  updatedAt: string
-  description: string
-  tags: string[]
-}
-
-type RangeItem = {
-  id: string
-  title: string
-  type: 'Web 靶场' | '权限控制' | '漏洞复测' | '综合实战'
-  status: ItemStatus
-  difficulty: Difficulty
-  environment: '在线环境' | 'Docker 镜像' | '校内专用'
-  owner: string
-  participants: number
-  updatedAt: string
-  description: string
-  tags: string[]
-}
+import {
+  createLearningResource,
+  deleteLearningResource,
+  disableLearningResource,
+  enableLearningResource,
+  listManagedLearningResources,
+  updateLearningResource,
+} from '../../services/learning'
+import type { LearningKind, LearningResourceItem, LearningResourcePayload } from '../../services/learning'
 
 type ConfirmAction = {
-  title: string
-  description: string
-  confirmLabel?: string
+  confirmLabel: string
   danger?: boolean
-  onConfirm: () => void
+  description: string
+  onConfirm: () => Promise<void>
+  title: string
 } | null
 
-const statusOptions = ['全部状态', '已上架', '草稿', '已下架']
-const difficultyOptions = ['全部难度', '入门', '进阶', '实战']
-const resourceCategoryOptions = ['全部类型', '工具下载', '学习资料']
-const rangeTypeOptions = ['全部类型', 'Web 靶场', '权限控制', '漏洞复测', '综合实战']
-
-const resources: ResourceItem[] = [
-  {
-    id: 'RES-2026-001',
-    title: 'Web 漏洞测试基础工具包',
-    category: '工具下载',
-    status: '已上架',
-    difficulty: '入门',
-    owner: '平台管理员',
-    size: '128 MB',
-    downloads: 246,
-    updatedAt: '2026-04-24',
-    description: '包含请求重放、目录枚举、编码转换、弱口令自查等常用工具说明与下载入口。',
-    tags: ['Web', '工具', '基础'],
-  },
-  {
-    id: 'RES-2026-002',
-    title: 'CQUPT-SRC 漏洞提交规范手册',
-    category: '学习资料',
-    status: '已上架',
-    difficulty: '入门',
-    owner: '审核员 A',
-    size: '3.6 MB',
-    downloads: 318,
-    updatedAt: '2026-04-22',
-    description: '说明漏洞报告结构、复现材料边界、敏感数据处理方式和禁止行为。',
-    tags: ['规范', '报告', '边界'],
-  },
-  {
-    id: 'RES-2026-003',
-    title: '日志分析与漏洞复测辅助工具',
-    category: '工具下载',
-    status: '草稿',
-    difficulty: '实战',
-    owner: '审核员 B',
-    size: '56 MB',
-    downloads: 0,
-    updatedAt: '2026-04-28',
-    description: '面向复测阶段的请求记录整理、时间线生成和修复前后差异对比。',
-    tags: ['日志', '复测', '分析'],
-  },
-]
-
-const ranges: RangeItem[] = [
-  {
-    id: 'RANGE-2026-001',
-    title: '权限控制与越权漏洞训练靶场',
-    type: '权限控制',
-    status: '已上架',
-    difficulty: '进阶',
-    environment: '在线环境',
-    owner: '网络安全学院',
-    participants: 128,
-    updatedAt: '2026-04-20',
-    description: '覆盖水平越权、垂直越权、接口鉴权缺失和越权复测方法。',
-    tags: ['越权', '接口', '靶场'],
-  },
-  {
-    id: 'RANGE-2026-002',
-    title: 'SQL 注入基础到利用证明训练',
-    type: 'Web 靶场',
-    status: '已上架',
-    difficulty: '入门',
-    environment: '在线环境',
-    owner: '网络安全学院',
-    participants: 96,
-    updatedAt: '2026-04-18',
-    description: '从参数识别、报错判断到安全证明材料整理，强调不下载、不破坏数据。',
-    tags: ['SQLi', '复现', '证明'],
-  },
-  {
-    id: 'RANGE-2026-003',
-    title: '校园门户敏感信息返回复测场景',
-    type: '漏洞复测',
-    status: '草稿',
-    difficulty: '实战',
-    environment: '校内专用',
-    owner: '信息化办公室',
-    participants: 0,
-    updatedAt: '2026-04-28',
-    description: '用于训练接口字段最小化、复测记录整理和修复前后响应对比。',
-    tags: ['复测', '接口', '数据最小化'],
-  },
-]
-
-const statusClassMap: Record<ItemStatus, string> = {
-  已上架: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  草稿: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
-  已下架: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+type FormState = LearningResourcePayload & {
+  id?: string
 }
 
-const difficultyClassMap: Record<Difficulty, string> = {
-  入门: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  进阶: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
-  实战: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+const emptyForm: FormState = {
+  active: true,
+  category: '工具资源',
+  description: '',
+  externalUrl: '',
+  kind: 'RESOURCE',
+  title: '',
 }
+
+const kindOptions = ['全部类型', '工具资料', '靶场资源']
+const statusOptions = ['全部状态', '已上架', '已下架']
+const categoryPresets = ['工具资源', '文档资料', 'Web靶场', '权限控制靶场', '代码审计靶场', '报告规范']
 
 export function AdminLearningManagement() {
-  const [activeTab, setActiveTab] = useState<LearningTab>('资源管理')
+  const [resources, setResources] = useState<LearningResourceItem[]>([])
   const [keyword, setKeyword] = useState('')
+  const [kind, setKind] = useState('全部类型')
   const [status, setStatus] = useState('全部状态')
-  const [difficulty, setDifficulty] = useState('全部难度')
-  const [type, setType] = useState('全部类型')
-  const [editingItem, setEditingItem] = useState<ResourceItem | RangeItem | null>(null)
+  const [editing, setEditing] = useState<FormState | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
-  const [actionDone, setActionDone] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function loadResources() {
+    setError('')
+    setLoading(true)
+    try {
+      const response = await listManagedLearningResources()
+      setResources(response.items)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '学习资源加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadResources()
+  }, [])
+
+  const summary = useMemo(() => {
+    const active = resources.filter((item) => item.active).length
+    const resource = resources.filter((item) => item.kind === 'RESOURCE').length
+    const range = resources.filter((item) => item.kind === 'RANGE').length
+    return [
+      { label: '全部内容', value: resources.length, hint: '未删除资源' },
+      { label: '已上架', value: active, hint: '学生可访问' },
+      { label: '工具资料', value: resource, hint: '文档与工具链接' },
+      { label: '靶场资源', value: range, hint: '外部训练入口' },
+    ]
+  }, [resources])
 
   const filteredResources = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
@@ -176,152 +101,145 @@ export function AdminLearningManagement() {
     return resources.filter((item) => {
       const matchesKeyword =
         !normalizedKeyword ||
-        item.id.toLowerCase().includes(normalizedKeyword) ||
         item.title.toLowerCase().includes(normalizedKeyword) ||
         item.description.toLowerCase().includes(normalizedKeyword) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword))
+        item.category.toLowerCase().includes(normalizedKeyword) ||
+        item.externalUrl.toLowerCase().includes(normalizedKeyword)
+      const matchesKind = kind === '全部类型' || item.kindLabel === kind
       const matchesStatus = status === '全部状态' || item.status === status
-      const matchesDifficulty = difficulty === '全部难度' || item.difficulty === difficulty
-      const matchesType = type === '全部类型' || item.category === type
 
-      return matchesKeyword && matchesStatus && matchesDifficulty && matchesType
+      return matchesKeyword && matchesKind && matchesStatus
     })
-  }, [difficulty, keyword, status, type])
+  }, [kind, keyword, resources, status])
 
-  const filteredRanges = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase()
-
-    return ranges.filter((item) => {
-      const matchesKeyword =
-        !normalizedKeyword ||
-        item.id.toLowerCase().includes(normalizedKeyword) ||
-        item.title.toLowerCase().includes(normalizedKeyword) ||
-        item.description.toLowerCase().includes(normalizedKeyword) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword))
-      const matchesStatus = status === '全部状态' || item.status === status
-      const matchesDifficulty = difficulty === '全部难度' || item.difficulty === difficulty
-      const matchesType = type === '全部类型' || item.type === type
-
-      return matchesKeyword && matchesStatus && matchesDifficulty && matchesType
-    })
-  }, [difficulty, keyword, status, type])
-
-  const completeAction = (message: string) => {
-    setActionDone(message)
-    window.setTimeout(() => setActionDone(''), 2200)
+  function flashMessage(nextMessage: string) {
+    setMessage(nextMessage)
+    window.setTimeout(() => setMessage(''), 2200)
   }
 
-  const resetFilters = () => {
-    setKeyword('')
-    setStatus('全部状态')
-    setDifficulty('全部难度')
-    setType('全部类型')
+  function openCreateModal(kindValue: LearningKind) {
+    setEditing({
+      ...emptyForm,
+      category: kindValue === 'RANGE' ? 'Web靶场' : '工具资源',
+      kind: kindValue,
+    })
+  }
+
+  function openEditModal(item: LearningResourceItem) {
+    setEditing({
+      active: item.active,
+      category: item.category,
+      description: item.description,
+      externalUrl: item.externalUrl,
+      id: item.id,
+      kind: item.kind,
+      title: item.title,
+    })
+  }
+
+  async function handleSave(payload: FormState) {
+    setSaving(true)
+    setError('')
+    try {
+      if (payload.id) {
+        const updated = await updateLearningResource(payload.id, payload)
+        setResources((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+        flashMessage('学习资源已更新')
+      } else {
+        const created = await createLearningResource(payload)
+        setResources((current) => [created, ...current])
+        flashMessage('学习资源已创建')
+      }
+      setEditing(null)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function runResourceAction(action: () => Promise<LearningResourceItem>, successMessage: string) {
+    setError('')
+    try {
+      const updated = await action()
+      setResources((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      flashMessage(successMessage)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : '操作失败')
+    }
+  }
+
+  async function runDeleteAction(id: string) {
+    setError('')
+    try {
+      await deleteLearningResource(id)
+      setResources((current) => current.filter((item) => item.id !== id))
+      flashMessage('学习资源已删除')
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : '删除失败')
+    }
   }
 
   return (
     <>
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <PageHeader
             eyebrow="Learning Ops"
             eyebrowIcon={<GraduationCap className="h-3.5 w-3.5" />}
             title="学习管理"
-            description="统一管理工具资源、学习资料和靶场内容，支持资源上架、草稿编辑、下架和 AI 学习推荐数据维护。"
+            description="统一维护学习资料、工具入口和靶场外部链接。学生登录后才可查看与访问，访问行为会计入资源使用次数。"
           />
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-            onClick={() =>
-              setEditingItem(
-                activeTab === '资源管理'
-                  ? {
-                      id: 'RES-2026-NEW',
-                      title: '',
-                      category: '学习资料',
-                      status: '草稿',
-                      difficulty: '入门',
-                      owner: '平台管理员',
-                      size: '待上传',
-                      downloads: 0,
-                      updatedAt: '2026-04-28',
-                      description: '',
-                      tags: [],
-                    }
-                  : {
-                      id: 'RANGE-2026-NEW',
-                      title: '',
-                      type: 'Web 靶场',
-                      status: '草稿',
-                      difficulty: '入门',
-                      environment: '在线环境',
-                      owner: '网络安全学院',
-                      participants: 0,
-                      updatedAt: '2026-04-28',
-                      description: '',
-                      tags: [],
-                    },
-              )
-            }
-            type="button"
-          >
-            <Plus className="h-4 w-4" />
-            {activeTab === '资源管理' ? '新增资源' : '新增靶场'}
-          </button>
-        </div>
-
-        {actionDone && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            {actionDone}
-          </div>
-        )}
-
-        <SurfacePanel className="mt-6 p-2">
-          <div className="grid gap-2 md:grid-cols-2">
-            {(['资源管理', '靶场管理'] as LearningTab[]).map((tab) => (
-              <button
-                className={`rounded-lg px-4 py-3 text-left transition ${
-                  activeTab === tab
-                    ? 'bg-brand-600 text-white'
-                    : 'text-slate-700 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10'
-                }`}
-                key={tab}
-                onClick={() => {
-                  setActiveTab(tab)
-                  resetFilters()
-                }}
-                type="button"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  {tab === '资源管理' ? <Layers3 className="h-4 w-4" /> : <Target className="h-4 w-4" />}
-                  {tab}
-                </span>
-                <span className={`mt-1 block text-xs ${activeTab === tab ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {tab === '资源管理' ? '管理工具下载与学习资料' : '管理在线靶场与训练环境'}
-                </span>
-              </button>
-            ))}
-          </div>
-        </SurfacePanel>
-
-        <SurfacePanel className="relative z-30 mt-5 p-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_160px_160px_180px_auto] xl:items-end">
-            <SearchInput
-              label={activeTab === '资源管理' ? '搜索资源' : '搜索靶场'}
-              onChange={setKeyword}
-              placeholder="编号、标题、描述或标签"
-              value={keyword}
-            />
-            <SelectInput
-              label={activeTab === '资源管理' ? '资源类型' : '靶场类型'}
-              onChange={setType}
-              options={activeTab === '资源管理' ? resourceCategoryOptions : rangeTypeOptions}
-              value={type}
-            />
-            <SelectInput label="状态" onChange={setStatus} options={statusOptions} value={status} />
-            <SelectInput label="难度" onChange={setDifficulty} options={difficultyOptions} value={difficulty} />
+          <div className="flex flex-wrap gap-3">
             <button
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-              onClick={resetFilters}
+              onClick={() => void loadResources()}
+              type="button"
+            >
+              <RefreshCw className="h-4 w-4" />
+              刷新
+            </button>
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm font-medium text-brand-700 transition hover:bg-brand-600/15 dark:text-green-300"
+              onClick={() => openCreateModal('RANGE')}
+              type="button"
+            >
+              <Target className="h-4 w-4" />
+              新增靶场
+            </button>
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+              onClick={() => openCreateModal('RESOURCE')}
+              type="button"
+            >
+              <Plus className="h-4 w-4" />
+              新增资源
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-4">
+          {summary.map((item) => (
+            <SurfacePanel className="p-4" key={item.label}>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold">{item.value}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+            </SurfacePanel>
+          ))}
+        </div>
+
+        <SurfacePanel className="relative z-30 mt-5 p-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_170px_170px_auto] xl:items-end">
+            <SearchInput label="搜索内容" onChange={setKeyword} placeholder="标题、说明、分类或链接" value={keyword} />
+            <SelectInput label="类型" onChange={setKind} options={kindOptions} value={kind} />
+            <SelectInput label="状态" onChange={setStatus} options={statusOptions} value={status} />
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+              onClick={() => {
+                setKeyword('')
+                setKind('全部类型')
+                setStatus('全部状态')
+              }}
               type="button"
             >
               <Filter className="h-4 w-4" />
@@ -330,235 +248,192 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-5 grid gap-3">
-          {activeTab === '资源管理'
-            ? filteredResources.map((item) => (
-                <LearningRow
-                  key={item.id}
-                  leftIcon={<BookOpen className="h-5 w-5" />}
-                  meta={[
-                    `类型：${item.category}`,
-                    `大小：${item.size}`,
-                    `下载：${item.downloads}`,
-                    `负责人：${item.owner}`,
-                    `更新：${item.updatedAt}`,
-                  ]}
-                  onEdit={() => setEditingItem(item)}
-                  onToggleStatus={() =>
-                    setConfirmAction({
-                      title: item.status === '已上架' ? '确认下架资源？' : '确认上架资源？',
-                      description:
-                        item.status === '已上架'
-                          ? `下架后，学生将无法在学习中心下载「${item.title}」。历史下载记录仍会保留。`
-                          : `上架后，学生可在学习中心看到并下载「${item.title}」。请确认文件来源和内容合规。`,
-                      danger: item.status === '已上架',
-                      confirmLabel: item.status === '已上架' ? '确认下架' : '确认上架',
-                      onConfirm: () => completeAction(item.status === '已上架' ? '资源已下架' : '资源已上架'),
-                    })
-                  }
-                  primaryActionLabel={item.status === '已上架' ? '下架' : '上架'}
-                  tags={item.tags}
-                  title={item.title}
-                  description={item.description}
-                  difficulty={item.difficulty}
-                  status={item.status}
-                  id={item.id}
-                />
-              ))
-            : filteredRanges.map((item) => (
-                <LearningRow
-                  key={item.id}
-                  leftIcon={<Target className="h-5 w-5" />}
-                  meta={[
-                    `类型：${item.type}`,
-                    `环境：${item.environment}`,
-                    `参与：${item.participants}`,
-                    `负责人：${item.owner}`,
-                    `更新：${item.updatedAt}`,
-                  ]}
-                  onEdit={() => setEditingItem(item)}
-                  onToggleStatus={() =>
-                    setConfirmAction({
-                      title: item.status === '已上架' ? '确认下架靶场？' : '确认上架靶场？',
-                      description:
-                        item.status === '已上架'
-                          ? `下架后，学生将无法从学习中心进入「${item.title}」。已有训练记录不会删除。`
-                          : `上架后，学生可进入「${item.title}」进行训练。请确认环境隔离、安全边界和访问权限。`,
-                      danger: item.status === '已上架',
-                      confirmLabel: item.status === '已上架' ? '确认下架' : '确认上架',
-                      onConfirm: () => completeAction(item.status === '已上架' ? '靶场已下架' : '靶场已上架'),
-                    })
-                  }
-                  primaryActionLabel={item.status === '已上架' ? '下架' : '上架'}
-                  tags={item.tags}
-                  title={item.title}
-                  description={item.description}
-                  difficulty={item.difficulty}
-                  status={item.status}
-                  id={item.id}
-                />
-              ))}
+        {message && (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" />
+            {message}
+          </div>
+        )}
+        {error && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-          {activeTab === '资源管理' && filteredResources.length === 0 && <EmptyLearningState label="没有匹配的资源" />}
-          {activeTab === '靶场管理' && filteredRanges.length === 0 && <EmptyLearningState label="没有匹配的靶场" />}
+        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
+            <span>内容</span>
+            <span>类型</span>
+            <span>分类</span>
+            <span>状态</span>
+            <span>使用次数</span>
+            <span className="text-right">操作</span>
+          </div>
+
+          {loading && <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</div>}
+
+          {!loading &&
+            filteredResources.map((item) => (
+              <LearningResourceRow
+                item={item}
+                key={item.id}
+                onDelete={() =>
+                  setConfirmAction({
+                    confirmLabel: '确认删除',
+                    danger: true,
+                    description: `删除后「${item.title}」将不再出现在管理列表中，学生端也无法访问。历史统计数据仍会保留在数据库记录中。`,
+                    onConfirm: () => runDeleteAction(item.id),
+                    title: '删除学习资源？',
+                  })
+                }
+                onEdit={() => openEditModal(item)}
+                onToggle={() =>
+                  setConfirmAction({
+                    confirmLabel: item.active ? '确认下架' : '确认上架',
+                    danger: item.active,
+                    description: item.active
+                      ? `下架后，登录用户将不能再看到或访问「${item.title}」。`
+                      : `上架后，登录用户可以看到并访问「${item.title}」，访问会统计次数。`,
+                    onConfirm: () =>
+                      runResourceAction(
+                        () => (item.active ? disableLearningResource(item.id) : enableLearningResource(item.id)),
+                        item.active ? '学习资源已下架' : '学习资源已上架',
+                      ),
+                    title: item.active ? '下架学习资源？' : '上架学习资源？',
+                  })
+                }
+              />
+            ))}
         </div>
+
+        {!loading && filteredResources.length === 0 && (
+          <EmptyState icon={<Layers3 className="h-10 w-10" />} title="没有匹配的学习资源" description="调整关键词、类型或状态后再试一次。" />
+        )}
       </section>
 
-      <EditLearningModal
-        activeTab={activeTab}
-        item={editingItem}
-        onClose={() => setEditingItem(null)}
-        onDone={() => completeAction(activeTab === '资源管理' ? '资源草稿已保存' : '靶场草稿已保存')}
+      <LearningResourceModal
+        initialValue={editing}
+        onClose={() => setEditing(null)}
+        onSave={(payload) => void handleSave(payload)}
+        saving={saving}
       />
       <ConfirmDialog
         state={confirmAction}
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
-          confirmAction?.onConfirm()
+          const action = confirmAction?.onConfirm
           setConfirmAction(null)
+          if (action) void action()
         }}
       />
     </>
   )
 }
 
-function LearningRow({
-  description,
-  difficulty,
-  id,
-  leftIcon,
-  meta,
+function LearningResourceRow({
+  item,
+  onDelete,
   onEdit,
-  onToggleStatus,
-  primaryActionLabel,
-  status,
-  tags,
-  title,
+  onToggle,
 }: {
-  description: string
-  difficulty: Difficulty
-  id: string
-  leftIcon: ReactNode
-  meta: string[]
+  item: LearningResourceItem
+  onDelete: () => void
   onEdit: () => void
-  onToggleStatus: () => void
-  primaryActionLabel: string
-  status: ItemStatus
-  tags: string[]
-  title: string
+  onToggle: () => void
 }) {
-  return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
-        <div className="flex gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
-            {leftIcon}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{id}</span>
-              <StatusBadge status={status} />
-              <DifficultyBadge difficulty={difficulty} />
-            </div>
-            <h2 className="mt-2 text-lg font-semibold tracking-tight">{title}</h2>
-            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-              {meta.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <span className="rounded-md bg-black/[0.04] px-2 py-1 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400" key={tag}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+  const Icon = item.kind === 'RANGE' ? Target : Layers3
 
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-          <button
-            className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-            type="button"
-          >
-            <Eye className="h-4 w-4" />
-            预览
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-            onClick={onEdit}
-            type="button"
-          >
-            <Edit3 className="h-4 w-4" />
-            编辑
-          </button>
-          <button
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition ${
-              primaryActionLabel === '下架' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
-            }`}
-            onClick={onToggleStatus}
-            type="button"
-          >
-            <Power className="h-4 w-4" />
-            {primaryActionLabel}
-          </button>
+  return (
+    <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10">
+      <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">{item.title}</h2>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
+            <a
+              className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
+              href={item.externalUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{item.externalUrl}</span>
+            </a>
+          </div>
         </div>
       </div>
-    </SurfacePanel>
+      <TableCell>{item.kindLabel}</TableCell>
+      <TableCell>{item.category}</TableCell>
+      <TableCell>
+        <span
+          className={`rounded-md border px-2 py-1 text-xs font-medium ${
+            item.active
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
+          }`}
+        >
+          {item.status}
+        </span>
+      </TableCell>
+      <TableCell>{item.downloadCount} 次</TableCell>
+      <div className="flex items-center justify-end gap-2">
+        <IconButton label="编辑" onClick={onEdit}>
+          <Edit3 className="h-4 w-4" />
+        </IconButton>
+        <IconButton label={item.active ? '下架' : '上架'} onClick={onToggle}>
+          <Power className="h-4 w-4" />
+        </IconButton>
+        <IconButton danger label="删除" onClick={onDelete}>
+          <Trash2 className="h-4 w-4" />
+        </IconButton>
+      </div>
+    </div>
   )
 }
 
-function StatusBadge({ status }: { status: ItemStatus }) {
-  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${statusClassMap[status]}`}>{status}</span>
-}
-
-function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
-  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${difficultyClassMap[difficulty]}`}>{difficulty}</span>
-}
-
-function EmptyLearningState({ label }: { label: string }) {
-  return (
-    <SurfacePanel className="p-10 text-center">
-      <AlertTriangle className="mx-auto h-10 w-10 text-slate-400" />
-      <h2 className="mt-4 text-xl font-semibold">{label}</h2>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词、类型、状态或难度后再试一次。</p>
-    </SurfacePanel>
-  )
-}
-
-function EditLearningModal({
-  activeTab,
-  item,
+function LearningResourceModal({
+  initialValue,
   onClose,
-  onDone,
+  onSave,
+  saving,
 }: {
-  activeTab: LearningTab
-  item: ResourceItem | RangeItem | null
+  initialValue: FormState | null
   onClose: () => void
-  onDone: () => void
+  onSave: (payload: FormState) => void
+  saving: boolean
 }) {
-  if (!item) return null
+  const [form, setForm] = useState<FormState>(emptyForm)
 
-  const isResource = activeTab === '资源管理'
-  const itemType = isResource ? (item as ResourceItem).category : (item as RangeItem).type
+  useEffect(() => {
+    if (initialValue) {
+      setForm(initialValue)
+    }
+  }, [initialValue])
+
+  if (!initialValue) return null
+
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    onSave(form)
+  }
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <form
+        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95"
+        onSubmit={submit}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
-              {isResource ? <Layers3 className="h-5 w-5" /> : <Target className="h-5 w-5" />}
-              <span className="text-sm font-medium">{isResource ? 'Resource Editor' : 'Range Editor'}</span>
-            </div>
-            <h2 className="mt-2 text-2xl font-semibold">{item.id.includes('NEW') ? (isResource ? '新增资源' : '新增靶场') : isResource ? '编辑资源' : '编辑靶场'}</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              保存为草稿后可在管理列表中继续编辑，上架操作需要二次确认。
-            </p>
+            <p className="text-sm font-medium text-brand-700 dark:text-green-300">{form.id ? '编辑学习内容' : '新增学习内容'}</p>
+            <h2 className="mt-2 text-2xl font-semibold">{form.kind === 'RANGE' ? '靶场资源' : '工具资料'}</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">当前仅维护外部链接，资源内容由第三方页面或学校后续服务承载。</p>
           </div>
           <button
-            aria-label="关闭学习内容编辑"
+            aria-label="关闭学习资源弹窗"
             className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
             onClick={onClose}
             type="button"
@@ -568,62 +443,43 @@ function EditLearningModal({
         </div>
 
         <div className="mt-6 grid gap-4">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{isResource ? '资源标题' : '靶场标题'}</span>
-            <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-              defaultValue={item.title}
-              placeholder={isResource ? '请输入资源标题' : '请输入靶场标题'}
-            />
-          </label>
-
           <div className="grid gap-4 md:grid-cols-3">
             <SelectInput
-              label={isResource ? '资源类型' : '靶场类型'}
-              options={isResource ? ['工具下载', '学习资料'] : ['Web 靶场', '权限控制', '漏洞复测', '综合实战']}
-              value={itemType}
+              label="类型"
+              onChange={(value) => updateField('kind', value === '靶场资源' ? 'RANGE' : 'RESOURCE')}
+              options={['工具资料', '靶场资源']}
+              value={form.kind === 'RANGE' ? '靶场资源' : '工具资料'}
             />
-            <SelectInput label="难度等级" options={['入门', '进阶', '实战']} value={item.difficulty} />
-            <SelectInput label="状态" options={['草稿', '已上架', '已下架']} value={item.status} />
+            <SelectInput
+              label="分类"
+              onChange={(value) => updateField('category', value)}
+              options={categoryPresets}
+              value={form.category}
+            />
+            <SelectInput
+              label="状态"
+              onChange={(value) => updateField('active', value === '已上架')}
+              options={['已上架', '已下架']}
+              value={form.active ? '已上架' : '已下架'}
+            />
           </div>
 
+          <Field label="标题" onChange={(value) => updateField('title', value)} placeholder="例如：OWASP WebGoat 靶场" value={form.title} />
+          <Field
+            label="外部链接"
+            onChange={(value) => updateField('externalUrl', value)}
+            placeholder="https://example.com/resource"
+            value={form.externalUrl}
+          />
           <label className="block">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">内容说明</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">说明</span>
             <textarea
-              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-              defaultValue={item.description}
-              placeholder="说明内容用途、适用对象、使用边界和注意事项"
+              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(event) => updateField('description', event.target.value)}
+              placeholder="说明资源用途、适合对象、使用边界和注意事项"
+              value={form.description}
             />
           </label>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">负责人</span>
-              <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                defaultValue={item.owner}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">标签</span>
-              <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                defaultValue={item.tags.join('，')}
-                placeholder="用顿号或逗号分隔"
-              />
-            </label>
-          </div>
-
-          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
-            <p className="text-sm font-medium">{isResource ? '文件 / 下载地址' : '靶场入口 / 环境配置'}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {isResource ? '后续接入文件上传、下载地址和权限控制。' : '后续接入在线环境地址、Docker 镜像、启动参数和访问权限。'}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <ActionButton icon={<Upload className="h-4 w-4" />} label={isResource ? '上传文件' : '上传配置'} />
-              <ActionButton icon={<Link2 className="h-4 w-4" />} label="配置链接" />
-            </div>
-          </div>
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -635,31 +491,71 @@ function EditLearningModal({
             取消
           </button>
           <button
-            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700"
-            onClick={() => {
-              onDone()
-              onClose()
-            }}
-            type="button"
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving}
+            type="submit"
           >
-            保存草稿
+            {saving ? '保存中...' : '保存'}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   )
 }
 
-function ActionButton({ icon, label }: { icon: ReactNode; label: string }) {
+function Field({
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  label: string
+  onChange: (value: string) => void
+  placeholder?: string
+  value: string
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      <input
+        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        value={value}
+      />
+    </label>
+  )
+}
+
+function IconButton({
+  children,
+  danger,
+  label,
+  onClick,
+}: {
+  children: ReactNode
+  danger?: boolean
+  label: string
+  onClick: () => void
+}) {
   return (
     <button
-      className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm transition ${
+        danger
+          ? 'border-red-500/20 text-red-600 hover:bg-red-500/10 dark:text-red-300'
+          : 'border-black/10 text-slate-600 hover:bg-black/5 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
+      }`}
+      onClick={onClick}
+      title={label}
       type="button"
     >
-      {icon}
-      {label}
+      {children}
     </button>
   )
+}
+
+function TableCell({ children }: { children: ReactNode }) {
+  return <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">{children}</div>
 }
 
 function ConfirmDialog({
@@ -706,7 +602,7 @@ function ConfirmDialog({
             onClick={onConfirm}
             type="button"
           >
-            {state.confirmLabel ?? '确认'}
+            {state.confirmLabel}
           </button>
         </div>
       </div>

@@ -39,6 +39,7 @@ import {
   reviewVulnerability,
 } from '../../services/vulnerabilities'
 import type { ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
+import { AdminAnnouncementManagement } from '../admin/AdminAnnouncementManagement'
 import { AdminCertificateManagement } from '../admin/AdminCertificateManagement'
 
 type AuditorHomeProps = {
@@ -345,7 +346,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       ) : activeMenu === '审核记录' ? (
         <AuditorReviewHistory />
       ) : activeMenu === '公告管理' ? (
-        <AuditorAnnouncementManagement />
+        <AdminAnnouncementManagement />
       ) : (
         <AuditorProfile user={user} />
       )}
@@ -1150,6 +1151,8 @@ function EditAuditorAnnouncementModal({
     </div>
   )
 }
+
+void AuditorAnnouncementManagement
 
 function AuditorProfile({ user }: { user: AuthUser }) {
   return (

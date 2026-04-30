@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   FileSignature,
   Filter,
+  KeyRound,
   LockKeyhole,
   ShieldCheck,
   UserCog,
@@ -11,235 +12,117 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
-
-type UserRole = '学生' | '审核员' | '管理员'
-type AccountStatus = '正常' | '待准入' | '已禁用' | '已锁定'
-type AccessStatus = '未答题' | '答题通过' | '已签责任书' | '未通过'
-
-type AdminUser = {
-  id: string
-  name: string
-  unifiedCode: string
-  email: string
-  phone: string
-  college: string
-  major: string
-  grade: string
-  role: UserRole
-  accountStatus: AccountStatus
-  accessStatus: AccessStatus
-  emailVerified: boolean
-  responsibilitySigned: boolean
-  responsibilityVersion: string
-  responsibilitySignedAt: string
-  quizScore: number
-  quizTime: string
-  submissions: number
-  validReports: number
-  points: number
-  certificates: number
-  rank: number
-  lastLogin: string
-  lastIp: string
-  failedLogins: number
-  source: '本地注册' | '统一认证同步' | '管理员导入'
-  registeredAt: string
-  notes: Array<{
-    action: string
-    actor: string
-    time: string
-    note: string
-  }>
-}
+import {
+  getManagedUserDetail,
+  getUserManagementOptions,
+  listManagedUsers,
+  resetManagedUserPassword,
+  updateManagedUserRole,
+  updateManagedUserStatus,
+} from '../../services/users'
+import type { ManagedUserDetail, ManagedUserItem, RoleCode, UserManagementOptions, UserStatusCode } from '../../services/users'
 
 type ConfirmAction = {
-  title: string
-  description: string
   confirmLabel?: string
   danger?: boolean
-  onConfirm: () => void
+  description: string
+  onConfirm: () => Promise<void>
+  title: string
 } | null
 
-const roleOptions = ['全部角色', '学生', '审核员', '管理员']
+const roleOptions = ['全部角色', '学生用户', '审核员', '管理员']
 const accountStatusOptions = ['全部状态', '正常', '待准入', '已禁用', '已锁定']
 const accessStatusOptions = ['全部准入', '未答题', '答题通过', '已签责任书', '未通过']
-const collegeOptions = ['全部单位', '网络空间安全与信息法学院', '计算机科学与技术学院', '信息化办公室', '教务处', '团委']
 
-const users: AdminUser[] = [
-  {
-    id: 'U-2026-0001',
-    name: '星火同学',
-    unifiedCode: '2025001',
-    email: 'spark@example.edu.cn',
-    phone: '138****2026',
-    college: '网络空间安全与信息法学院',
-    major: '网络空间安全',
-    grade: '2025 级',
-    role: '学生',
-    accountStatus: '正常',
-    accessStatus: '已签责任书',
-    emailVerified: true,
-    responsibilitySigned: true,
-    responsibilityVersion: 'CQUPT-SRC-RULE-2026-01',
-    responsibilitySignedAt: '2026-04-20 19:22',
-    quizScore: 92,
-    quizTime: '2026-04-20 19:10',
-    submissions: 8,
-    validReports: 5,
-    points: 1260,
-    certificates: 2,
-    rank: 3,
-    lastLogin: '2026-04-28 09:12',
-    lastIp: '10.20.18.24',
-    failedLogins: 0,
-    source: '本地注册',
-    registeredAt: '2026-04-19 13:40',
-    notes: [
-      { action: '完成答题准入', actor: '系统', time: '2026-04-20 19:10', note: '答题得分 92，达到提交漏洞门槛。' },
-      { action: '签署责任书', actor: '星火同学', time: '2026-04-20 19:22', note: '签署版本 CQUPT-SRC-RULE-2026-01。' },
-      { action: '提交高价值漏洞', actor: '星火同学', time: '2026-04-27 10:24', note: '提交统一认证相关漏洞报告。' },
-    ],
-  },
-  {
-    id: 'U-2026-0002',
-    name: '审核员 A',
-    unifiedCode: '3001001',
-    email: 'reviewer-a@example.edu.cn',
-    phone: '139****1101',
-    college: '信息化办公室',
-    major: '安全运维',
-    grade: '教职工',
-    role: '审核员',
-    accountStatus: '正常',
-    accessStatus: '已签责任书',
-    emailVerified: true,
-    responsibilitySigned: true,
-    responsibilityVersion: 'CQUPT-SRC-REVIEWER-2026-01',
-    responsibilitySignedAt: '2026-04-18 09:30',
-    quizScore: 100,
-    quizTime: '2026-04-18 09:20',
-    submissions: 0,
-    validReports: 0,
-    points: 0,
-    certificates: 0,
-    rank: 0,
-    lastLogin: '2026-04-28 08:40',
-    lastIp: '10.10.2.18',
-    failedLogins: 0,
-    source: '管理员导入',
-    registeredAt: '2026-04-18 09:00',
-    notes: [
-      { action: '导入账号', actor: '平台管理员', time: '2026-04-18 09:00', note: '创建审核员账号。' },
-      { action: '角色授权', actor: '平台管理员', time: '2026-04-18 09:05', note: '授予漏洞审核权限。' },
-    ],
-  },
-  {
-    id: 'U-2026-0003',
-    name: '南山同学',
-    unifiedCode: '2025007',
-    email: 'nanshan@example.edu.cn',
-    phone: '137****5007',
-    college: '计算机科学与技术学院',
-    major: '计算机科学与技术',
-    grade: '2025 级',
-    role: '学生',
-    accountStatus: '待准入',
-    accessStatus: '答题通过',
-    emailVerified: true,
-    responsibilitySigned: false,
-    responsibilityVersion: '未签署',
-    responsibilitySignedAt: '未签署',
-    quizScore: 88,
-    quizTime: '2026-04-27 21:02',
-    submissions: 1,
-    validReports: 0,
-    points: 0,
-    certificates: 0,
-    rank: 0,
-    lastLogin: '2026-04-27 21:18',
-    lastIp: '10.30.9.44',
-    failedLogins: 1,
-    source: '统一认证同步',
-    registeredAt: '2026-04-27 20:50',
-    notes: [
-      { action: '同步账号', actor: '统一认证', time: '2026-04-27 20:50', note: '从学校身份源同步基础信息。' },
-      { action: '完成答题', actor: '南山同学', time: '2026-04-27 21:02', note: '尚未签署责任书。' },
-    ],
-  },
-  {
-    id: 'U-2026-0004',
-    name: '平台管理员',
-    unifiedCode: '0000000',
-    email: 'admin@example.edu.cn',
-    phone: '136****0000',
-    college: '信息化办公室',
-    major: '平台管理',
-    grade: '管理员',
-    role: '管理员',
-    accountStatus: '正常',
-    accessStatus: '已签责任书',
-    emailVerified: true,
-    responsibilitySigned: true,
-    responsibilityVersion: 'CQUPT-SRC-ADMIN-2026-01',
-    responsibilitySignedAt: '2026-04-18 08:30',
-    quizScore: 100,
-    quizTime: '2026-04-18 08:20',
-    submissions: 0,
-    validReports: 0,
-    points: 0,
-    certificates: 0,
-    rank: 0,
-    lastLogin: '2026-04-28 09:30',
-    lastIp: '10.10.1.8',
-    failedLogins: 0,
-    source: '管理员导入',
-    registeredAt: '2026-04-18 08:00',
-    notes: [
-      { action: '初始化管理员', actor: '系统', time: '2026-04-18 08:00', note: '初始化平台管理员账号。' },
-      { action: '修改系统设置', actor: '平台管理员', time: '2026-04-28 09:20', note: '调整 AI 与证书模板配置。' },
-    ],
-  },
-]
-
-const roleClassMap: Record<UserRole, string> = {
-  学生: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  审核员: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  管理员: 'border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300',
+const roleClassMap: Record<RoleCode, string> = {
+  ADMIN: 'border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300',
+  AUDITOR: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  STUDENT: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 }
 
-const accountStatusClassMap: Record<AccountStatus, string> = {
-  正常: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  待准入: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+const statusClassMap: Record<string, string> = {
   已禁用: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   已锁定: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  待准入: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  正常: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 }
 
-const accessStatusClassMap: Record<AccessStatus, string> = {
-  未答题: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
-  答题通过: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+const accessClassMap: Record<string, string> = {
   已签责任书: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  未答题: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   未通过: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+  答题通过: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
 }
 
 export function AdminUserManagement() {
+  const [users, setUsers] = useState<ManagedUserItem[]>([])
+  const [options, setOptions] = useState<UserManagementOptions | null>(null)
   const [keyword, setKeyword] = useState('')
   const [role, setRole] = useState('全部角色')
   const [accountStatus, setAccountStatus] = useState('全部状态')
   const [accessStatus, setAccessStatus] = useState('全部准入')
   const [college, setCollege] = useState('全部单位')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [roleUser, setRoleUser] = useState<AdminUser | null>(null)
+  const [selectedUser, setSelectedUser] = useState<ManagedUserDetail | null>(null)
+  const [roleUser, setRoleUser] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
-  const [actionDone, setActionDone] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function loadUsers() {
+    setError('')
+    setLoading(true)
+    try {
+      const [userResponse, optionResponse] = await Promise.all([listManagedUsers(), getUserManagementOptions()])
+      setUsers(userResponse.items)
+      setOptions(optionResponse)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '用户管理数据加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadDetail(id: string) {
+    setError('')
+    setDetailLoading(true)
+    try {
+      const detail = await getManagedUserDetail(id)
+      setSelectedUser(detail)
+      setSelectedId(id)
+    } catch (detailError) {
+      setError(detailError instanceof Error ? detailError.message : '用户详情加载失败')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadUsers()
+  }, [])
+
+  const collegeOptions = useMemo(() => ['全部单位', ...(options?.colleges ?? [])], [options])
+
+  const summary = useMemo(
+    () => [
+      { label: '全部用户', value: users.length, hint: '未删除账号' },
+      { label: '学生', value: users.filter((item) => item.role === 'STUDENT').length, hint: '提交与学习' },
+      { label: '审核员', value: users.filter((item) => item.role === 'AUDITOR').length, hint: '审核与公告' },
+      { label: '待准入', value: users.filter((item) => item.status === 'PENDING').length, hint: '需完成准入' },
+    ],
+    [users],
+  )
 
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
-
     return users.filter((item) => {
       const matchesKeyword =
         !normalizedKeyword ||
@@ -247,215 +130,249 @@ export function AdminUserManagement() {
         item.unifiedCode.toLowerCase().includes(normalizedKeyword) ||
         item.email.toLowerCase().includes(normalizedKeyword) ||
         item.college.toLowerCase().includes(normalizedKeyword) ||
-        item.phone.toLowerCase().includes(normalizedKeyword)
-      const matchesRole = role === '全部角色' || item.role === role
-      const matchesAccountStatus = accountStatus === '全部状态' || item.accountStatus === accountStatus
-      const matchesAccessStatus = accessStatus === '全部准入' || item.accessStatus === accessStatus
+        item.studentNo.toLowerCase().includes(normalizedKeyword)
+      const matchesRole = role === '全部角色' || item.roleLabel === role
+      const matchesStatus = accountStatus === '全部状态' || item.accountStatus === accountStatus
+      const matchesAccess = accessStatus === '全部准入' || item.accessStatus === accessStatus
       const matchesCollege = college === '全部单位' || item.college === college
-
-      return matchesKeyword && matchesRole && matchesAccountStatus && matchesAccessStatus && matchesCollege
+      return matchesKeyword && matchesRole && matchesStatus && matchesAccess && matchesCollege
     })
-  }, [accountStatus, accessStatus, college, keyword, role])
+  }, [accountStatus, accessStatus, college, keyword, role, users])
 
-  const selectedUser = selectedId ? users.find((item) => item.id === selectedId) ?? null : null
-
-  const completeAction = (message: string) => {
-    setActionDone(message)
-    window.setTimeout(() => setActionDone(''), 2200)
+  function flashMessage(nextMessage: string) {
+    setMessage(nextMessage)
+    window.setTimeout(() => setMessage(''), 2600)
   }
 
-  if (selectedUser) {
+  function mergeUpdatedUser(updated: ManagedUserItem) {
+    setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    if (selectedUser?.id === updated.id) {
+      void loadDetail(updated.id)
+    }
+  }
+
+  async function runStatusAction(id: string, status: UserStatusCode, reason: string, successMessage: string) {
+    setError('')
+    try {
+      const updated = await updateManagedUserStatus(id, status, reason)
+      mergeUpdatedUser(updated)
+      flashMessage(successMessage)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : '操作失败')
+    }
+  }
+
+  async function runPasswordReset(id: string) {
+    setError('')
+    try {
+      const result = await resetManagedUserPassword(id, '管理员从用户管理页发起密码重置')
+      flashMessage(result.temporaryPassword ? `临时密码：${result.temporaryPassword}` : result.message)
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : '密码重置失败')
+    }
+  }
+
+  if (selectedId) {
     return (
       <>
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-            onClick={() => setSelectedId(null)}
+            onClick={() => {
+              setSelectedId(null)
+              setSelectedUser(null)
+            }}
             type="button"
           >
             <ArrowLeft className="h-4 w-4" />
             返回用户列表
           </button>
 
-          {actionDone && (
-            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" />
-              {actionDone}
+          {message && <SuccessMessage message={message} />}
+          {error && <ErrorMessage message={error} />}
+          {detailLoading && <SurfacePanel className="mt-5 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载用户详情...</SurfacePanel>}
+
+          {selectedUser && (
+            <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+                <SurfacePanel className="p-6 text-center">
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-black/10 bg-brand-600 text-2xl font-semibold text-white dark:border-white/10">
+                    {selectedUser.name.slice(0, 1)}
+                  </div>
+                  <h1 className="mt-4 text-2xl font-semibold">{selectedUser.name}</h1>
+                  <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">{selectedUser.unifiedCode}</p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <RoleBadge user={selectedUser} />
+                    <SimpleBadge className={statusClassMap[selectedUser.accountStatus]}>{selectedUser.accountStatus}</SimpleBadge>
+                    <SimpleBadge className={accessClassMap[selectedUser.accessStatus]}>{selectedUser.accessStatus}</SimpleBadge>
+                  </div>
+                  <div className="mt-5 space-y-3 text-left text-sm text-slate-600 dark:text-slate-400">
+                    <p>邮箱验证：{selectedUser.emailVerified ? '已验证' : '未验证'}</p>
+                    <p>责任书：{selectedUser.responsibilitySigned ? '已签署' : '未签署'}</p>
+                    <p>最近登录：{formatDateTime(selectedUser.lastLogin)}</p>
+                    <p>最近 IP：{selectedUser.lastIp || '暂无记录'}</p>
+                  </div>
+                </SurfacePanel>
+
+                <SurfacePanel className="p-4">
+                  <div className="grid gap-2">
+                    <button
+                      className="rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+                      onClick={() => setRoleUser(selectedUser)}
+                      type="button"
+                    >
+                      调整角色
+                    </button>
+                    <ActionButton
+                      label="重置密码"
+                      onClick={() =>
+                        setConfirmAction({
+                          description: '重置后旧登录态会失效。开发环境会返回临时密码，生产环境应改为发送重置邮件。',
+                          onConfirm: () => runPasswordReset(selectedUser.id),
+                          title: '确认重置密码？',
+                        })
+                      }
+                    />
+                    <ActionButton
+                      label={selectedUser.status === 'LOCKED' ? '解锁账号' : '锁定账号'}
+                      onClick={() =>
+                        setConfirmAction({
+                          description:
+                            selectedUser.status === 'LOCKED'
+                              ? '解锁后用户可以重新登录平台。'
+                              : '锁定后用户暂时无法登录，适合处理异常登录或疑似盗号。',
+                          onConfirm: () =>
+                            runStatusAction(
+                              selectedUser.id,
+                              selectedUser.status === 'LOCKED' ? 'ACTIVE' : 'LOCKED',
+                              selectedUser.status === 'LOCKED' ? '管理员解锁账号' : '管理员锁定账号',
+                              selectedUser.status === 'LOCKED' ? '账号已解锁' : '账号已锁定',
+                            ),
+                          title: selectedUser.status === 'LOCKED' ? '确认解锁账号？' : '确认锁定账号？',
+                        })
+                      }
+                    />
+                    <ActionButton
+                      danger
+                      label={selectedUser.status === 'DISABLED' ? '启用账号' : '禁用账号'}
+                      onClick={() =>
+                        setConfirmAction({
+                          danger: selectedUser.status !== 'DISABLED',
+                          description:
+                            selectedUser.status === 'DISABLED'
+                              ? '启用后用户可以恢复登录和使用对应角色权限。'
+                              : '禁用后用户无法登录，未完成流程不会删除。',
+                          onConfirm: () =>
+                            runStatusAction(
+                              selectedUser.id,
+                              selectedUser.status === 'DISABLED' ? 'ACTIVE' : 'DISABLED',
+                              selectedUser.status === 'DISABLED' ? '管理员启用账号' : '管理员禁用账号',
+                              selectedUser.status === 'DISABLED' ? '账号已启用' : '账号已禁用',
+                            ),
+                          title: selectedUser.status === 'DISABLED' ? '确认启用账号？' : '确认禁用账号？',
+                        })
+                      }
+                    />
+                  </div>
+                </SurfacePanel>
+              </div>
+
+              <div className="space-y-6">
+                <DetailPanel title="基础信息" icon={<UserRound className="h-5 w-5" />}>
+                  <InfoGrid
+                    rows={[
+                      ['姓名', selectedUser.name],
+                      ['统一认证码', selectedUser.unifiedCode],
+                      ['邮箱', selectedUser.email],
+                      ['学号', selectedUser.studentNo || '未填写'],
+                      ['学院 / 单位', selectedUser.college || '未填写'],
+                      ['年级', selectedUser.grade || '未填写'],
+                      ['身份说明', selectedUser.identityText || '未填写'],
+                      ['授权等级', selectedUser.authorizationLevel],
+                      ['注册时间', formatDateTime(selectedUser.createdAt)],
+                    ]}
+                  />
+                </DetailPanel>
+
+                <DetailPanel title="准入与责任书" icon={<FileSignature className="h-5 w-5" />}>
+                  <InfoGrid
+                    rows={[
+                      ['答题分数', selectedUser.securityExamScore === null ? '未答题' : `${selectedUser.securityExamScore} 分`],
+                      ['答题时间', formatDateTime(selectedUser.securityExamTime)],
+                      ['是否通过', selectedUser.securityExamPassed ? '已通过' : '未通过或未答题'],
+                      ['责任书版本', selectedUser.responsibilityVersion || '未签署'],
+                      ['签署时间', formatDateTime(selectedUser.responsibilitySignedAt)],
+                      ['允许提交漏洞', selectedUser.responsibilitySigned && selectedUser.emailVerified ? '满足基础条件' : '不满足'],
+                    ]}
+                  />
+                </DetailPanel>
+
+                <DetailPanel title="贡献数据" icon={<ShieldCheck className="h-5 w-5" />}>
+                  <div className="grid gap-3 md:grid-cols-5">
+                    {[
+                      ['累计提交', selectedUser.submissions],
+                      ['有效漏洞', selectedUser.validReports],
+                      ['当前积分', selectedUser.points],
+                      ['证书数量', selectedUser.certificates],
+                      ['权限覆盖', selectedUser.permissionOverrides.length],
+                    ].map(([label, value]) => (
+                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                        <p className="mt-2 text-xl font-semibold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </DetailPanel>
+
+                <DetailPanel title="权限覆盖" icon={<KeyRound className="h-5 w-5" />}>
+                  <div className="space-y-3">
+                    {selectedUser.permissionOverrides.map((item) => (
+                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.code}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <SimpleBadge className={item.enabled ? statusClassMap.正常 : statusClassMap.已禁用}>
+                            {item.enabled ? '开启' : '关闭'}
+                          </SimpleBadge>
+                        </div>
+                        <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{item.code}</p>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{item.reason || '无备注'}</p>
+                      </div>
+                    ))}
+                    {selectedUser.permissionOverrides.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">暂无用户级权限覆盖。</p>}
+                  </div>
+                </DetailPanel>
+
+                <DetailPanel title="最近审计" icon={<LockKeyhole className="h-5 w-5" />}>
+                  <div className="space-y-4">
+                    {selectedUser.auditEvents.map((event) => (
+                      <div className="border-l border-brand-600/30 pl-4" key={`${event.action}-${event.createdAt}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{event.action}</p>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.createdAt)}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {event.targetType} · {event.result}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </DetailPanel>
+              </div>
             </div>
           )}
-
-          <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-              <SurfacePanel className="p-6 text-center">
-                <button
-                  className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-black/10 bg-brand-600 text-2xl font-semibold text-white transition hover:scale-[1.02] dark:border-white/10"
-                  type="button"
-                >
-                  {selectedUser.name.slice(0, 1)}
-                </button>
-                <h1 className="mt-4 text-2xl font-semibold">{selectedUser.name}</h1>
-                <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">{selectedUser.unifiedCode}</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  <RoleBadge role={selectedUser.role} />
-                  <AccountStatusBadge status={selectedUser.accountStatus} />
-                  <AccessStatusBadge status={selectedUser.accessStatus} />
-                </div>
-                <div className="mt-5 space-y-3 text-left text-sm text-slate-600 dark:text-slate-400">
-                  <p>邮箱验证：{selectedUser.emailVerified ? '已验证' : '未验证'}</p>
-                  <p>责任书：{selectedUser.responsibilitySigned ? '已签署' : '未签署'}</p>
-                  <p>最近登录：{selectedUser.lastLogin}</p>
-                  <p>最近 IP：{selectedUser.lastIp}</p>
-                </div>
-              </SurfacePanel>
-
-              <SurfacePanel className="p-4">
-                <div className="grid gap-2">
-                  <button
-                    className="rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-                    onClick={() => setRoleUser(selectedUser)}
-                    type="button"
-                  >
-                    调整角色
-                  </button>
-                  <ActionButton
-                    label="重置密码"
-                    onClick={() =>
-                      setConfirmAction({
-                        title: '确认重置密码？',
-                        description: '重置后系统将生成临时密码或发送重置链接。该操作会写入审计日志，并通知用户尽快修改密码。',
-                        onConfirm: () => completeAction('密码重置已记录'),
-                      })
-                    }
-                  />
-                  <ActionButton
-                    label={selectedUser.accountStatus === '已锁定' ? '解锁账号' : '锁定账号'}
-                    onClick={() =>
-                      setConfirmAction({
-                        title: selectedUser.accountStatus === '已锁定' ? '确认解锁账号？' : '确认锁定账号？',
-                        description:
-                          selectedUser.accountStatus === '已锁定'
-                            ? '解锁后用户可以重新登录平台。建议先确认异常登录风险已经排除。'
-                            : '锁定后用户暂时无法登录，适合处理异常登录、疑似盗号或需要临时保护的账号。',
-                        onConfirm: () => completeAction(selectedUser.accountStatus === '已锁定' ? '账号已解锁' : '账号已锁定'),
-                      })
-                    }
-                  />
-                  <ActionButton
-                    danger
-                    label={selectedUser.accountStatus === '已禁用' ? '启用账号' : '禁用账号'}
-                    onClick={() =>
-                      setConfirmAction({
-                        title: selectedUser.accountStatus === '已禁用' ? '确认启用账号？' : '确认禁用账号？',
-                        description:
-                          selectedUser.accountStatus === '已禁用'
-                            ? '启用后用户可以恢复登录和使用对应角色权限。'
-                            : '禁用后用户将无法登录平台，未完成的漏洞流程不会删除，但该用户不能继续提交或补充材料。',
-                        danger: selectedUser.accountStatus !== '已禁用',
-                        onConfirm: () => completeAction(selectedUser.accountStatus === '已禁用' ? '账号已启用' : '账号已禁用'),
-                      })
-                    }
-                  />
-                  <ActionButton
-                    label="重新发送验证邮件"
-                    onClick={() =>
-                      setConfirmAction({
-                        title: '确认重新发送验证邮件？',
-                        description: `系统将向 ${selectedUser.email} 发送验证邮件。请确认邮箱地址准确。`,
-                        onConfirm: () => completeAction('验证邮件已发送'),
-                      })
-                    }
-                  />
-                </div>
-              </SurfacePanel>
-            </div>
-
-            <div className="space-y-6">
-              <DetailPanel title="基础信息" icon={<UserRound className="h-5 w-5" />}>
-                <InfoGrid
-                  rows={[
-                    ['姓名', selectedUser.name],
-                    ['统一认证码', selectedUser.unifiedCode],
-                    ['邮箱', selectedUser.email],
-                    ['手机号', selectedUser.phone],
-                    ['学院 / 单位', selectedUser.college],
-                    ['专业', selectedUser.major],
-                    ['年级', selectedUser.grade],
-                    ['注册来源', selectedUser.source],
-                    ['注册时间', selectedUser.registeredAt],
-                  ]}
-                />
-              </DetailPanel>
-
-              <DetailPanel title="准入与责任书" icon={<FileSignature className="h-5 w-5" />}>
-                <InfoGrid
-                  rows={[
-                    ['答题分数', `${selectedUser.quizScore} 分`],
-                    ['答题时间', selectedUser.quizTime],
-                    ['是否达标', selectedUser.quizScore >= 80 ? '已达标' : '未达标'],
-                    ['责任书版本', selectedUser.responsibilityVersion],
-                    ['签署时间', selectedUser.responsibilitySignedAt],
-                    ['允许提交漏洞', selectedUser.responsibilitySigned && selectedUser.quizScore >= 80 ? '允许' : '不允许'],
-                  ]}
-                />
-              </DetailPanel>
-
-              <DetailPanel title="贡献数据" icon={<ShieldCheck className="h-5 w-5" />}>
-                <div className="grid gap-3 md:grid-cols-5">
-                  {[
-                    ['累计提交', selectedUser.submissions],
-                    ['有效漏洞', selectedUser.validReports],
-                    ['当前积分', selectedUser.points],
-                    ['证书数量', selectedUser.certificates],
-                    ['排行榜', selectedUser.rank ? `第 ${selectedUser.rank} 名` : '未上榜'],
-                  ].map(([label, value]) => (
-                    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-                      <p className="mt-2 text-xl font-semibold">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </DetailPanel>
-
-              <DetailPanel title="账号安全" icon={<LockKeyhole className="h-5 w-5" />}>
-                <InfoGrid
-                  rows={[
-                    ['最近登录', selectedUser.lastLogin],
-                    ['最近登录 IP', selectedUser.lastIp],
-                    ['登录失败次数', `${selectedUser.failedLogins} 次`],
-                    ['账号状态', selectedUser.accountStatus],
-                    ['邮箱验证', selectedUser.emailVerified ? '已验证' : '未验证'],
-                    ['二次验证', '待接入'],
-                  ]}
-                />
-              </DetailPanel>
-
-              <DetailPanel title="操作记录" icon={<UserCog className="h-5 w-5" />}>
-                <div className="space-y-4">
-                  {selectedUser.notes.map((note) => (
-                    <div className="border-l border-brand-600/30 pl-4" key={`${note.action}-${note.time}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium">{note.action}</p>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{note.time}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{note.actor}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{note.note}</p>
-                    </div>
-                  ))}
-                </div>
-              </DetailPanel>
-            </div>
-          </div>
         </section>
 
-        <RoleModal user={roleUser} onClose={() => setRoleUser(null)} onConfirm={() => completeAction('角色调整已记录到审计日志')} />
-        <ConfirmDialog
-          state={confirmAction}
-          onCancel={() => setConfirmAction(null)}
-          onConfirm={() => {
-            confirmAction?.onConfirm()
-            setConfirmAction(null)
+        <RoleModal
+          options={options}
+          user={roleUser}
+          onClose={() => setRoleUser(null)}
+          onConfirm={async (target, nextRole, reason) => {
+            const updated = await updateManagedUserRole(target.id, nextRole, reason)
+            mergeUpdatedUser(updated)
+            flashMessage('角色已调整')
           }}
         />
+        <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
       </>
     )
   }
@@ -468,32 +385,26 @@ export function AdminUserManagement() {
             eyebrow="User Ops"
             eyebrowIcon={<UsersRound className="h-3.5 w-3.5" />}
             title="用户管理"
-            description="管理学生、审核员和管理员账号，处理准入状态、责任书、角色权限、账号安全与统一认证信息。"
+            description="管理学生、审核员和管理员账号，处理准入状态、责任书、角色权限与账号安全。"
           />
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-            type="button"
-          >
-            <UsersRound className="h-4 w-4" />
-            导入用户
-          </button>
         </div>
 
-        {actionDone && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
-            {actionDone}
-          </div>
-        )}
+        <div className="mt-6 grid gap-3 md:grid-cols-4">
+          {summary.map((item) => (
+            <SurfacePanel className="p-4" key={item.label}>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold">{item.value}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+            </SurfacePanel>
+          ))}
+        </div>
+
+        {message && <SuccessMessage message={message} />}
+        {error && <ErrorMessage message={error} />}
 
         <SurfacePanel className="relative z-30 mt-6 p-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_150px_150px_170px_220px_auto] xl:items-end">
-            <SearchInput
-              label="搜索用户"
-              onChange={setKeyword}
-              placeholder="姓名、统一认证码、邮箱、学院或手机号"
-              value={keyword}
-            />
+            <SearchInput label="搜索用户" onChange={setKeyword} placeholder="姓名、统一认证码、邮箱、学院或学号" value={keyword} />
             <SelectInput label="用户角色" onChange={setRole} options={roleOptions} value={role} />
             <SelectInput label="账号状态" onChange={setAccountStatus} options={accountStatusOptions} value={accountStatus} />
             <SelectInput label="准入状态" onChange={setAccessStatus} options={accessStatusOptions} value={accessStatus} />
@@ -515,117 +426,116 @@ export function AdminUserManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-5 grid gap-3">
-          {filteredUsers.map((item) => (
-            <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
-                <div className="flex gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600 text-base font-semibold text-white">
-                    {item.name.slice(0, 1)}
+        {loading && <SurfacePanel className="mt-6 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载用户列表...</SurfacePanel>}
+
+        {!loading && (
+          <div className="mt-5 grid gap-3">
+            {filteredUsers.map((item) => (
+              <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
+                  <div className="flex gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600 text-base font-semibold text-white">
+                      {item.name.slice(0, 1)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold tracking-tight">{item.name}</h2>
+                        <RoleBadge user={item} />
+                        <SimpleBadge className={statusClassMap[item.accountStatus]}>{item.accountStatus}</SimpleBadge>
+                        <SimpleBadge className={accessClassMap[item.accessStatus]}>{item.accessStatus}</SimpleBadge>
+                      </div>
+                      <div className="mt-2 grid gap-x-5 gap-y-1 text-sm text-slate-500 sm:grid-cols-2 xl:grid-cols-4 dark:text-slate-400">
+                        <p>统一认证码：{item.unifiedCode}</p>
+                        <p>邮箱：{item.email}</p>
+                        <p>学院 / 单位：{item.college || '未填写'}</p>
+                        <p>学号：{item.studentNo || '未填写'}</p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                        <span>提交 {item.submissions}</span>
+                        <span>有效 {item.validReports}</span>
+                        <span>积分 {item.points}</span>
+                        <span>证书 {item.certificates}</span>
+                        <span>最近登录 {formatDateTime(item.lastLogin)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold tracking-tight">{item.name}</h2>
-                      <RoleBadge role={item.role} />
-                      <AccountStatusBadge status={item.accountStatus} />
-                      <AccessStatusBadge status={item.accessStatus} />
-                    </div>
-                    <div className="mt-2 grid gap-x-5 gap-y-1 text-sm text-slate-500 sm:grid-cols-2 xl:grid-cols-4 dark:text-slate-400">
-                      <p>统一认证码：{item.unifiedCode}</p>
-                      <p>邮箱：{item.email}</p>
-                      <p>学院 / 单位：{item.college}</p>
-                      <p>注册来源：{item.source}</p>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                      <span>提交 {item.submissions}</span>
-                      <span>有效 {item.validReports}</span>
-                      <span>积分 {item.points}</span>
-                      <span>证书 {item.certificates}</span>
-                      <span>最近登录 {item.lastLogin}</span>
+                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+                    <div className="grid gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                      <p>邮箱：{item.emailVerified ? '已验证' : '未验证'}</p>
+                      <p>责任书：{item.responsibilitySigned ? '已签署' : '未签署'}</p>
+                      <p>最近 IP：{item.lastIp || '暂无记录'}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
-                  <div className="grid gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                    <p>邮箱：{item.emailVerified ? '已验证' : '未验证'}</p>
-                    <p>责任书：{item.responsibilitySigned ? '已签署' : '未签署'}</p>
-                    <p>最近 IP：{item.lastIp}</p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-3 dark:border-white/10">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <ShieldCheck className="h-4 w-4" />
+                    角色、状态、密码重置操作会写入审计日志
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                      onClick={() => setRoleUser(item)}
+                      type="button"
+                    >
+                      调整角色
+                    </button>
+                    <button
+                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                      onClick={() =>
+                        setConfirmAction({
+                          description: `将为 ${item.name} 发起密码重置流程，并使旧登录态失效。`,
+                          onConfirm: () => runPasswordReset(item.id),
+                          title: '确认重置密码？',
+                        })
+                      }
+                      type="button"
+                    >
+                      重置密码
+                    </button>
+                    <button className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700" onClick={() => void loadDetail(item.id)} type="button">
+                      查看详情
+                    </button>
                   </div>
                 </div>
-              </div>
+              </SurfacePanel>
+            ))}
+          </div>
+        )}
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-3 dark:border-white/10">
-                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <ShieldCheck className="h-4 w-4" />
-                  用户角色、禁用、解锁、重置密码等操作将写入审计日志
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                    onClick={() => setRoleUser(item)}
-                    type="button"
-                  >
-                    调整角色
-                  </button>
-                  <button
-                    className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                    onClick={() =>
-                      setConfirmAction({
-                        title: '确认重置密码？',
-                        description: `将为 ${item.name} 发起密码重置流程。该操作会写入审计日志。`,
-                        onConfirm: () => completeAction('密码重置已记录'),
-                      })
-                    }
-                    type="button"
-                  >
-                    重置密码
-                  </button>
-                  <button
-                    className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-                    onClick={() => setSelectedId(item.id)}
-                    type="button"
-                  >
-                    查看详情
-                  </button>
-                </div>
-              </div>
-            </SurfacePanel>
-          ))}
-
-          {filteredUsers.length === 0 && (
-            <SurfacePanel className="p-10 text-center">
-              <AlertTriangle className="mx-auto h-10 w-10 text-slate-400" />
-              <h2 className="mt-4 text-xl font-semibold">没有匹配的用户</h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词、角色、状态或学院后再试一次。</p>
-            </SurfacePanel>
-          )}
-        </div>
+        {!loading && filteredUsers.length === 0 && (
+          <EmptyState icon={<AlertTriangle className="h-10 w-10" />} title="没有匹配的用户" description="调整关键词、角色、状态或学院后再试一次。" />
+        )}
       </section>
 
-      <RoleModal user={roleUser} onClose={() => setRoleUser(null)} onConfirm={() => completeAction('角色调整已记录到审计日志')} />
-      <ConfirmDialog
-        state={confirmAction}
-        onCancel={() => setConfirmAction(null)}
-        onConfirm={() => {
-          confirmAction?.onConfirm()
-          setConfirmAction(null)
+      <RoleModal
+        options={options}
+        user={roleUser}
+        onClose={() => setRoleUser(null)}
+        onConfirm={async (target, nextRole, reason) => {
+          const updated = await updateManagedUserRole(target.id, nextRole, reason)
+          mergeUpdatedUser(updated)
+          flashMessage('角色已调整')
         }}
       />
+      <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
     </>
   )
+
+  function confirmAndClose() {
+    const action = confirmAction?.onConfirm
+    setConfirmAction(null)
+    if (action) void action()
+  }
 }
 
-function RoleBadge({ role }: { role: UserRole }) {
-  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${roleClassMap[role]}`}>{role}</span>
+function RoleBadge({ user }: { user: ManagedUserItem | ManagedUserDetail }) {
+  return <SimpleBadge className={roleClassMap[user.role]}>{user.roleLabel}</SimpleBadge>
 }
 
-function AccountStatusBadge({ status }: { status: AccountStatus }) {
-  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${accountStatusClassMap[status]}`}>{status}</span>
-}
-
-function AccessStatusBadge({ status }: { status: AccessStatus }) {
-  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${accessStatusClassMap[status]}`}>{status}</span>
+function SimpleBadge({ children, className }: { children: ReactNode; className: string }) {
+  return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${className}`}>{children}</span>
 }
 
 function ActionButton({ danger = false, label, onClick }: { danger?: boolean; label: string; onClick: () => void }) {
@@ -672,15 +582,36 @@ function InfoGrid({ rows }: { rows: Array<[string, string]> }) {
 function RoleModal({
   onClose,
   onConfirm,
+  options,
   user,
 }: {
   onClose: () => void
-  onConfirm: () => void
-  user: AdminUser | null
+  onConfirm: (user: ManagedUserItem | ManagedUserDetail, nextRole: RoleCode, reason: string) => Promise<void>
+  options: UserManagementOptions | null
+  user: ManagedUserItem | ManagedUserDetail | null
 }) {
-  const [nextRole, setNextRole] = useState<UserRole>('学生')
+  const [nextRole, setNextRole] = useState<RoleCode>('STUDENT')
+  const [reason, setReason] = useState('管理员调整用户角色')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (user) setNextRole(user.role)
+  }, [user])
 
   if (!user) return null
+
+  async function submit() {
+    setSaving(true)
+    try {
+      await onConfirm(user, nextRole, reason)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const roleSelectOptions = options?.roles.map((item) => item.label) ?? ['学生用户', '审核员', '管理员']
+  const roleByLabel = new Map((options?.roles ?? []).map((item) => [item.label, item.code]))
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
@@ -693,52 +624,38 @@ function RoleModal({
             </div>
             <h2 className="mt-2 text-2xl font-semibold">调整用户角色</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              当前用户为 {user.name}，现有角色是「{user.role}」。角色变更会影响菜单、权限和可访问数据范围。
+              当前用户为 {user.name}，现有角色是「{user.roleLabel}」。用户只能拥有一个角色。
             </p>
           </div>
-          <button
-            aria-label="关闭角色调整弹窗"
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
-            onClick={onClose}
-            type="button"
-          >
+          <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="mt-6 grid gap-4">
-          <SelectInput label="新角色" onChange={(value) => setNextRole(value as UserRole)} options={['学生', '审核员', '管理员']} value={nextRole} />
-          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
-            <p>学生：提交漏洞、学习中心、积分商城、证书查看。</p>
-            <p>审核员：漏洞审核、复测归档、证书建议。</p>
-            <p>管理员：平台配置、用户管理、系统审计和全局运营。</p>
-          </div>
+          <SelectInput
+            label="新角色"
+            onChange={(value) => setNextRole(roleByLabel.get(value) ?? 'STUDENT')}
+            options={roleSelectOptions}
+            value={(options?.roles.find((item) => item.code === nextRole)?.label ?? user.roleLabel)}
+          />
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">管理员备注</span>
             <textarea
               className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(event) => setReason(event.target.value)}
               placeholder="填写角色调整原因，便于审计追踪"
+              value={reason}
             />
           </label>
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
-            onClick={onClose}
-            type="button"
-          >
+          <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onClose} type="button">
             取消
           </button>
-          <button
-            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700"
-            onClick={() => {
-              onConfirm()
-              onClose()
-            }}
-            type="button"
-          >
-            确认调整
+          <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={saving} onClick={() => void submit()} type="button">
+            {saving ? '保存中...' : '确认调整'}
           </button>
         </div>
       </div>
@@ -746,15 +663,7 @@ function RoleModal({
   )
 }
 
-function ConfirmDialog({
-  onCancel,
-  onConfirm,
-  state,
-}: {
-  onCancel: () => void
-  onConfirm: () => void
-  state: ConfirmAction
-}) {
+function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; onConfirm: () => void; state: ConfirmAction }) {
   if (!state) return null
 
   return (
@@ -768,32 +677,39 @@ function ConfirmDialog({
             <h2 className="text-xl font-semibold">{state.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{state.description}</p>
           </div>
-          <button
-            aria-label="关闭确认弹窗"
-            className="h-9 rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
-            onClick={onCancel}
-            type="button"
-          >
+          <button className="h-9 rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onCancel} type="button">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
-            onClick={onCancel}
-            type="button"
-          >
+          <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onCancel} type="button">
             取消
           </button>
-          <button
-            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white transition ${state.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'}`}
-            onClick={onConfirm}
-            type="button"
-          >
+          <button className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white transition ${state.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'}`} onClick={onConfirm} type="button">
             {state.confirmLabel ?? '确认'}
           </button>
         </div>
       </div>
     </div>
   )
+}
+
+function SuccessMessage({ message }: { message: string }) {
+  return (
+    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+      <CheckCircle2 className="h-4 w-4" />
+      {message}
+    </div>
+  )
+}
+
+function ErrorMessage({ message }: { message: string }) {
+  return <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{message}</div>
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return '暂无记录'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
