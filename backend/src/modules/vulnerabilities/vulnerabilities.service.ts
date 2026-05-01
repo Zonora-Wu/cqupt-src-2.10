@@ -14,7 +14,10 @@ import {
   AdminVulnerabilityListResponse,
   MyVulnerabilityListResponse,
   NormalizedCreateVulnerabilityInput,
+  NormalizedRetestInput,
   NormalizedReviewVulnerabilityInput,
+  RetestQueueResponse,
+  RetestResponse,
   ReviewQueueResponse,
 } from './vulnerability.types'
 
@@ -301,6 +304,227 @@ export class VulnerabilitiesService {
     }
   }
 
+  async listRetestQueue(): Promise<RetestQueueResponse> {
+    const statuses = [
+      VulnerabilityStatus.FIXING,
+      VulnerabilityStatus.PENDING_RETEST,
+      VulnerabilityStatus.ARCHIVED,
+    ]
+
+    const reports = await this.prisma.vulnerabilityReport.findMany({
+      where: {
+        deletedAt: null,
+        status: { in: statuses },
+      },
+      include: {
+        submitter: { select: { name: true, email: true } },
+        events: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { action: true, note: true },
+        },
+        retests: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { result: true, note: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+
+    const items = reports.map((r) => {
+      const lastRetest = r.retests[0]
+      return {
+        archivedAt: r.archivedAt,
+        assetName: r.assetName,
+        assetUrl: r.assetUrl,
+        finalSeverity: r.finalSeverity ? formatSeverity(r.finalSeverity) : null,
+        id: r.id,
+        lastFixNote: r.events[0]?.note ?? null,
+        lastRetestNote: lastRetest?.note ?? null,
+        ownerUnit: r.ownerUnit,
+        reportNo: r.reportNo,
+        status: formatAdminStatus(r.status, true),
+        submitter: { email: r.submitter.email, name: r.submitter.name },
+        title: r.title,
+        updatedAt: r.updatedAt,
+      }
+    })
+
+    return {
+      items,
+      stats: {
+        archived: reports.filter(
+          (r) => r.status === VulnerabilityStatus.ARCHIVED,
+        ).length,
+        pendingRetest: reports.filter(
+          (r) =>
+            r.status === VulnerabilityStatus.FIXING ||
+            r.status === VulnerabilityStatus.PENDING_RETEST,
+        ).length,
+      },
+    }
+  }
+
+  async retestReport(
+    reportId: string,
+    input: NormalizedRetestInput,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<RetestResponse> {
+    const allowedStatuses = [
+      VulnerabilityStatus.FIXING,
+      VulnerabilityStatus.PENDING_RETEST,
+      VulnerabilityStatus.CONFIRMED,
+    ]
+
+    const report = await this.prisma.vulnerabilityReport.findFirst({
+      where: { deletedAt: null, id: reportId },
+    })
+
+    if (!report) {
+      throw new NotFoundException('漏洞报告不存在')
+    }
+
+    if (!allowedStatuses.includes(report.status as typeof allowedStatuses[number])) {
+      throw new BadRequestException(
+        `当前状态（${formatAdminStatus(report.status, true)}）不允许执行复测操作`,
+      )
+    }
+
+    const nextStatus = getRetestNextStatus(input.decision, report.status)
+    const now = new Date()
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.vulnerabilityReport.update({
+        where: { id: report.id },
+        data: {
+          status: nextStatus,
+          archivedAt: nextStatus === VulnerabilityStatus.ARCHIVED ? now : report.archivedAt,
+        },
+      })
+
+      await tx.retestRecord.create({
+        data: {
+          reportId: report.id,
+          testerId: user.id,
+          result:
+            input.decision === 'RETEST_PASS'
+              ? ReviewDecision.RETEST_PASS
+              : input.decision === 'RETURN_TO_FIX'
+                ? ReviewDecision.RETURN_TO_FIX
+                : ReviewDecision.ARCHIVE,
+          note: input.note,
+        },
+      })
+
+      await tx.vulnerabilityEvent.create({
+        data: {
+          action: input.decision,
+          actorId: user.id,
+          fromStatus: report.status,
+          ipAddress: meta.ipAddress,
+          note: input.note,
+          reportId: report.id,
+          toStatus: nextStatus,
+          userAgent: meta.userAgent,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.REVIEW_VULNERABILITY,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { decision: input.decision, reportNo: report.reportNo },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: report.id,
+          targetType: 'VulnerabilityReport',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return next
+    })
+
+    return {
+      id: updated.id,
+      reportNo: updated.reportNo,
+      status: formatAdminStatus(updated.status, true),
+      updatedAt: updated.updatedAt,
+    }
+  }
+
+  async markFixing(
+    reportId: string,
+    note: string,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<RetestResponse> {
+    const report = await this.prisma.vulnerabilityReport.findFirst({
+      where: { deletedAt: null, id: reportId },
+    })
+
+    if (!report) {
+      throw new NotFoundException('漏洞报告不存在')
+    }
+
+    const allowedForFixing = [
+      VulnerabilityStatus.CONFIRMED,
+      VulnerabilityStatus.FIXING,
+    ]
+
+    if (!allowedForFixing.includes(report.status as typeof allowedForFixing[number])) {
+      throw new BadRequestException(
+        `当前状态（${formatAdminStatus(report.status, true)}）不可推入修复中`,
+      )
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.vulnerabilityReport.update({
+        where: { id: report.id },
+        data: { status: VulnerabilityStatus.PENDING_RETEST },
+      })
+
+      await tx.vulnerabilityEvent.create({
+        data: {
+          action: 'MARK_PENDING_RETEST',
+          actorId: user.id,
+          fromStatus: report.status,
+          ipAddress: meta.ipAddress,
+          note,
+          reportId: report.id,
+          toStatus: VulnerabilityStatus.PENDING_RETEST,
+          userAgent: meta.userAgent,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.REVIEW_VULNERABILITY,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { decision: 'MARK_PENDING_RETEST', reportNo: report.reportNo },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: report.id,
+          targetType: 'VulnerabilityReport',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return next
+    })
+
+    return {
+      id: updated.id,
+      reportNo: updated.reportNo,
+      status: formatAdminStatus(updated.status, true),
+      updatedAt: updated.updatedAt,
+    }
+  }
+
   async createSubmittedReport(
     user: AuthenticatedRequestUser,
     input: NormalizedCreateVulnerabilityInput,
@@ -550,6 +774,16 @@ function getNextStatus(decision: ReviewDecision) {
   if (decision === ReviewDecision.NEEDS_SUPPLEMENT) return VulnerabilityStatus.NEEDS_SUPPLEMENT
   if (decision === ReviewDecision.REJECT) return VulnerabilityStatus.REJECTED
   throw new BadRequestException('暂不支持该审核结论')
+}
+
+function getRetestNextStatus(decision: NormalizedRetestInput['decision'], currentStatus: VulnerabilityStatus) {
+  if (decision === 'ARCHIVE') return VulnerabilityStatus.ARCHIVED
+  if (decision === 'RETEST_PASS') return VulnerabilityStatus.ARCHIVED
+  if (decision === 'RETURN_TO_FIX') return VulnerabilityStatus.FIXING
+  throw new BadRequestException('不支持的复测结论')
+
+  // suppress TS unreachable warning
+  void currentStatus
 }
 
 function defaultPoints(severity: VulnerabilitySeverity | undefined) {

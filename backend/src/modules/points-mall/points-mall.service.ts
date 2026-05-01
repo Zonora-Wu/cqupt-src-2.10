@@ -7,6 +7,9 @@ import {
   MallRedemptionStatus,
   PointDirection,
   Prisma,
+  RoleCode,
+  UserStatus,
+  VulnerabilityStatus,
 } from '@prisma/client'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -471,6 +474,90 @@ export class PointsMallService {
 
     return product
   }
+
+  async getLeaderboard(scope: 'all' | 'month' | 'week', currentUserId: string) {
+    const now = new Date()
+    let rangeStart: Date | undefined
+
+    if (scope === 'month') {
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    } else if (scope === 'week') {
+      const dayOfWeek = now.getDay()
+      // 周一为本周起始
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday)
+      rangeStart.setHours(0, 0, 0, 0)
+    }
+
+    // 取所有启用学生用户及其积分入账条目和有效漏洞数
+    const users = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        role: { code: RoleCode.STUDENT },
+        status: UserStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        name: true,
+        pointEntries: {
+          where: {
+            direction: PointDirection.IN,
+            ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
+          },
+          select: { balanceAfter: true, points: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
+        submittedReports: {
+          where: {
+            status: {
+              in: [
+                VulnerabilityStatus.CONFIRMED,
+                VulnerabilityStatus.FIXING,
+                VulnerabilityStatus.PENDING_RETEST,
+                VulnerabilityStatus.ARCHIVED,
+                VulnerabilityStatus.CERTIFIED,
+              ],
+            },
+          },
+          select: { id: true },
+        },
+      },
+    })
+
+    // 计算各用户分数：总榜用最新余额，周/月榜用该时段累计积入
+    const scored = users
+      .map((user) => {
+        const score =
+          scope === 'all'
+            ? (user.pointEntries[0]?.balanceAfter ?? 0)
+            : user.pointEntries.reduce((sum, entry) => sum + entry.points, 0)
+        return {
+          id: user.id,
+          isCurrent: user.id === currentUserId,
+          name: maskName(user.name),
+          reports: user.submittedReports.length,
+          score,
+        }
+      })
+      .filter((user) => user.score > 0 || user.isCurrent)
+      .sort((a, b) => b.score - a.score || b.reports - a.reports)
+
+    // 给排名
+    const ranked = scored.map((user, index) => ({
+      ...user,
+      rank: index + 1,
+    }))
+
+    const currentUserEntry = ranked.find((user) => user.isCurrent)
+    const top50 = ranked.slice(0, 50)
+
+    // 若当前用户不在 top50，追加到末尾
+    if (currentUserEntry && !top50.find((user) => user.isCurrent)) {
+      top50.push(currentUserEntry)
+    }
+
+    return { items: top50 }
+  }
 }
 
 function summarizeProduct(product: MallProduct, userBalance?: number) {
@@ -592,4 +679,10 @@ function formatPointDirection(direction: PointDirection) {
   if (direction === PointDirection.IN) return '收入'
   if (direction === PointDirection.OUT) return '支出'
   return '调整'
+}
+
+/** 展示脱敏后的用户名：保留首字+「同学」，防止隐私泄露 */
+function maskName(name: string) {
+  if (!name) return '同学'
+  return `${name.charAt(0)}同学`
 }

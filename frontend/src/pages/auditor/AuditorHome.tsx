@@ -33,12 +33,16 @@ import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
+import { getAuditorDashboard } from '../../services/dashboard'
 import {
+  listRetestQueue,
   listReviewQueue,
+  markFixing,
   openAttachmentPreview,
+  retestVulnerability,
   reviewVulnerability,
 } from '../../services/vulnerabilities'
-import type { ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
+import type { RetestPayload, RetestQueueItem, ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
 
 const AdminAnnouncementManagement = lazy(() =>
   import('../admin/AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
@@ -54,7 +58,7 @@ type AuditorHomeProps = {
 
 type ReviewLevel = '严重' | '高危' | '中危' | '低危' | '信息'
 type ReviewStatus = '待初审' | '审核中' | '待补充' | '已确认' | '已驳回'
-type RetestStatus = '待复测' | '复测中' | '复测通过' | '退回修复'
+type RetestStatus = '待复测' | '复测中' | '复测通过' | '退回修复' | '修复中' | '已归档'
 type AnnouncementStatus = '草稿' | '已发布' | '已下架'
 
 type ReviewReport = {
@@ -281,6 +285,8 @@ const retestStatusStyles: Record<RetestStatus, string> = {
   复测中: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
   复测通过: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   退回修复: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+  修复中: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  已归档: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
 }
 
 const announcementStatusStyles: Record<AnnouncementStatus, string> = {
@@ -374,11 +380,19 @@ function AuditorPageLoading() {
 }
 
 function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }) {
+  const [stats, setStats] = useState({ pendingInitReview: 0, pendingRetest: 0, pendingCerts: 0, pendingArchive: 0 })
+
+  useEffect(() => {
+    getAuditorDashboard()
+      .then((data) => setStats(data))
+      .catch(() => { /* 静默失败 */ })
+  }, [])
+
   const overview = [
-    { label: '待初审', value: '7', hint: '高危 2 个', icon: FileSearch, menu: '漏洞审核' },
-    { label: '待复测', value: '3', hint: '可推动归档', icon: RotateCcw, menu: '复测归档' },
-    { label: '待签发证书', value: '1', hint: '高价值贡献', icon: FileCheck2, menu: '证书管理' },
-    { label: 'AI 待确认', value: '5', hint: '初评结果', icon: Sparkles, menu: 'AI 辅助' },
+    { label: '待初审', value: String(stats.pendingInitReview), hint: '提交/审核中', icon: FileSearch, menu: '漏洞审核' },
+    { label: '待复测', value: String(stats.pendingRetest), hint: '可推动归档', icon: RotateCcw, menu: '复测归档' },
+    { label: '待签发证书', value: String(stats.pendingCerts), hint: '已归档未签发', icon: FileCheck2, menu: '证书管理' },
+    { label: '待推入复测', value: String(stats.pendingArchive), hint: '已确认/修复中', icon: Sparkles, menu: '复测归档' },
   ]
 
   return (
@@ -453,6 +467,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
     </section>
   )
 }
+
 
 function AuditorReviewQueue() {
   const [keyword, setKeyword] = useState('')
@@ -764,12 +779,99 @@ function AuditorReviewQueue() {
 }
 
 function AuditorRetestArchive() {
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
-  const [done, setDone] = useState('')
+  const [tab, setTab] = useState<'pending' | 'archived'>('pending')
+  const [items, setItems] = useState<RetestQueueItem[]>([])
+  const [stats, setStats] = useState({ pendingRetest: 0, archived: 0 })
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [actionDialog, setActionDialog] = useState<{
+    item: RetestQueueItem
+    decision: RetestPayload['decision'] | 'MARK_FIXING'
+  } | null>(null)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState('')
 
-  const complete = (message: string) => {
-    setDone(message)
-    window.setTimeout(() => setDone(''), 2200)
+  const load = () => {
+    setLoading(true)
+    setLoadError('')
+    listRetestQueue()
+      .then((res) => {
+        setItems(res.items)
+        setStats(res.stats)
+      })
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : '加载失败'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    window.setTimeout(() => setToast(''), 2800)
+  }
+
+  const openAction = (item: RetestQueueItem, decision: RetestPayload['decision'] | 'MARK_FIXING') => {
+    setNote('')
+    setActionDialog({ item, decision })
+  }
+
+  const handleConfirm = async () => {
+    if (!actionDialog) return
+    if (!note.trim() || note.trim().length < 4) return
+    setSubmitting(true)
+    try {
+      if (actionDialog.decision === 'MARK_FIXING') {
+        await markFixing(actionDialog.item.id, note.trim())
+        showToast('已标记为待复测')
+      } else {
+        await retestVulnerability(actionDialog.item.id, {
+          decision: actionDialog.decision,
+          note: note.trim(),
+        })
+        const labels: Record<RetestPayload['decision'], string> = {
+          RETEST_PASS: '复测通过，已归档',
+          RETURN_TO_FIX: '已退回责任单位继续修复',
+          ARCHIVE: '已直接归档',
+        }
+        showToast(labels[actionDialog.decision])
+      }
+      setActionDialog(null)
+      load()
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : '操作失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const pendingItems = items.filter((i) => i.status === '修复中' || i.status === '待复测')
+  const archivedItems = items.filter((i) => i.status === '已归档')
+  const displayed = tab === 'pending' ? pendingItems : archivedItems
+
+  const actionMeta: Record<RetestPayload['decision'] | 'MARK_FIXING', { title: string; desc: string; label: string; danger?: boolean }> = {
+    MARK_FIXING: {
+      title: '确认标记为待复测？',
+      desc: '将当前漏洞状态设置为"待复测"，请填写通知责任单位的说明。',
+      label: '确认标记',
+    },
+    RETEST_PASS: {
+      title: '确认复测通过？',
+      desc: '通过后漏洞将进入已归档状态，可后续进入证书签发流程。',
+      label: '确认通过',
+    },
+    RETURN_TO_FIX: {
+      title: '确认退回修复？',
+      desc: '退回后漏洞修复状态将重置为"修复中"，请填写不通过原因。',
+      label: '确认退回',
+      danger: true,
+    },
+    ARCHIVE: {
+      title: '确认直接归档？',
+      desc: '直接归档后将关闭该漏洞生命周期，请确认不需要复测。',
+      label: '确认归档',
+      danger: true,
+    },
   }
 
   return (
@@ -781,58 +883,138 @@ function AuditorRetestArchive() {
           title="复测归档"
           description="核验资产责任单位提交的修复结果，完成复测通过、退回修复、归档记录和证书签发衔接。"
         />
-        {done && <SuccessNotice>{done}</SuccessNotice>}
-        <div className="mt-6 grid gap-3">
-          {retestItems.map((item) => (
-            <SurfacePanel className="p-4" key={item.id}>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
-                    <LevelBadge level={item.level} />
-                    <RetestStatusBadge status={item.status} />
-                  </div>
-                  <h2 className="mt-2 text-lg font-semibold">{item.title}</h2>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-                    <span>{item.asset}</span>
-                    <span>{item.owner}</span>
-                    <span>修复提交：{item.fixedAt}</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.note}</p>
-                </div>
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-                  <ReviewActionButton
-                    label="复测通过"
-                    onClick={() =>
-                      setConfirmAction({
-                        title: '确认复测通过？',
-                        description: '通过后可进入归档，并可根据贡献价值进入证书签发流程。',
-                        onConfirm: () => complete('复测通过，已进入证书签发待办'),
-                      })
-                    }
-                  />
-                  <ReviewActionButton
-                    danger
-                    label="退回修复"
-                    onClick={() =>
-                      setConfirmAction({
-                        title: '确认退回修复？',
-                        description: '退回后将通知资产责任单位继续修复，并保留复测不通过原因。',
-                        danger: true,
-                        onConfirm: () => complete('已退回责任单位继续修复'),
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </SurfacePanel>
-          ))}
+        {toast && <SuccessNotice>{toast}</SuccessNotice>}
+
+        {/* 分页 tab */}
+        <div className="mt-6 flex items-center gap-1 rounded-xl border border-black/10 bg-black/[0.025] p-1 w-fit dark:border-white/10 dark:bg-white/[0.03]">
+          <button
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              tab === 'pending'
+                ? 'bg-white shadow-sm dark:bg-white/10'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+            onClick={() => setTab('pending')}
+            type="button"
+          >
+            待复测
+            {stats.pendingRetest > 0 && (
+              <span className="ml-2 rounded-full bg-brand-600/15 px-1.5 py-0.5 text-xs font-semibold text-brand-700 dark:text-green-300">
+                {stats.pendingRetest}
+              </span>
+            )}
+          </button>
+          <button
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              tab === 'archived'
+                ? 'bg-white shadow-sm dark:bg-white/10'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+            onClick={() => setTab('archived')}
+            type="button"
+          >
+            已归档
+            {stats.archived > 0 && (
+              <span className="ml-2 rounded-full bg-slate-500/10 px-1.5 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                {stats.archived}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* 内容区 */}
+        {loading ? (
+          <SurfacePanel className="mt-4 p-10 text-center text-sm text-slate-500">正在加载复测队列...</SurfacePanel>
+        ) : loadError ? (
+          <SurfacePanel className="mt-4 p-10 text-center">
+            <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
+            <button className="mt-4 text-sm text-brand-700 dark:text-green-300 underline" onClick={load} type="button">重试</button>
+          </SurfacePanel>
+        ) : displayed.length === 0 ? (
+          <SurfacePanel className="mt-4 p-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            {tab === 'pending' ? '暂无待复测的漏洞' : '暂无已归档的漏洞'}
+          </SurfacePanel>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {displayed.map((item) => (
+              <SurfacePanel className="p-5" key={item.id}>
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-slate-400">{item.reportNo}</span>
+                      {item.finalSeverity && (
+                        <LevelBadge level={item.finalSeverity as ReviewLevel} />
+                      )}
+                      <RetestStatusBadge status={item.status as RetestStatus} />
+                    </div>
+                    <h2 className="mt-2 text-base font-semibold leading-snug">{item.title}</h2>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{item.assetName}</span>
+                      {item.ownerUnit && <span>{item.ownerUnit}</span>}
+                      <span>提交人：{item.submitter.name}</span>
+                      <span>更新：{new Date(item.updatedAt).toLocaleDateString('zh-CN')}</span>
+                    </div>
+                    {item.lastFixNote && (
+                      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400 line-clamp-2">
+                        <span className="font-medium">最近备注：</span>{item.lastFixNote}
+                      </p>
+                    )}
+                  </div>
+                  {tab === 'pending' && (
+                    <div className="flex flex-wrap items-start justify-end gap-2">
+                      {item.status === '修复中' && (
+                        <ReviewActionButton
+                          label="标记待复测"
+                          onClick={() => openAction(item, 'MARK_FIXING')}
+                        />
+                      )}
+                      {item.status === '待复测' && (
+                        <>
+                          <ReviewActionButton
+                            label="复测通过"
+                            onClick={() => openAction(item, 'RETEST_PASS')}
+                          />
+                          <ReviewActionButton
+                            danger
+                            label="退回修复"
+                            onClick={() => openAction(item, 'RETURN_TO_FIX')}
+                          />
+                          <ReviewActionButton
+                            label="直接归档"
+                            onClick={() => openAction(item, 'ARCHIVE')}
+                          />
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {tab === 'archived' && item.archivedAt && (
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        归档于 {new Date(item.archivedAt).toLocaleDateString('zh-CN')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </SurfacePanel>
+            ))}
+          </div>
+        )}
       </PageShell>
-      <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={() => { confirmAction?.onConfirm(); setConfirmAction(null) }} />
+
+      {/* 复测操作对话框 */}
+      {actionDialog && (
+        <RetestActionDialog
+          meta={actionMeta[actionDialog.decision]}
+          note={note}
+          onCancel={() => setActionDialog(null)}
+          onConfirm={() => void handleConfirm()}
+          onNoteChange={setNote}
+          submitting={submitting}
+        />
+      )}
     </>
   )
 }
+
 
 function AuditorAIAssistant() {
   const [hasMessage, setHasMessage] = useState(false)
@@ -1391,6 +1573,82 @@ function EmptyState({ label }: { label: string }) {
       <h2 className="mt-4 text-xl font-semibold">{label}</h2>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词或筛选条件后再试一次。</p>
     </SurfacePanel>
+  )
+}
+
+function RetestActionDialog({
+  meta,
+  note,
+  onCancel,
+  onConfirm,
+  onNoteChange,
+  submitting,
+}: {
+  meta: { danger?: boolean; desc: string; label: string; title: string }
+  note: string
+  onCancel: () => void
+  onConfirm: () => void
+  onNoteChange: (v: string) => void
+  submitting: boolean
+}) {
+  const noteValid = note.trim().length >= 4
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div className="w-full max-w-[520px] rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
+        <div className="flex items-start gap-3">
+          <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+            <AlertTriangle className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-semibold">{meta.title}</h2>
+            <p className="mt-1.5 text-sm leading-6 text-slate-600 dark:text-slate-400">{meta.desc}</p>
+          </div>
+          <button
+            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+            onClick={onCancel}
+            type="button"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            说明 <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder="请填写复测说明（至少 4 个字）"
+            rows={3}
+            value={note}
+          />
+          {note.trim().length > 0 && !noteValid && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">至少需要 4 个字符</p>
+          )}
+        </div>
+        <div className="mt-5 flex justify-end gap-3">
+          <button
+            className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white transition disabled:opacity-50 ${meta.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'}`}
+            disabled={!noteValid || submitting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {submitting ? '提交中...' : meta.label}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

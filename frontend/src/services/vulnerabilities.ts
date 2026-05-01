@@ -316,3 +316,67 @@ export async function getVulnerabilityDetail(reportId: string) {
 
   return detail
 }
+
+// ---- 审核员复测归档 ----
+
+export type RetestQueueItem = {
+  archivedAt: string | null
+  assetName: string
+  assetUrl: string | null
+  finalSeverity: string | null
+  id: string
+  lastFixNote: string | null
+  lastRetestNote: string | null
+  ownerUnit: string | null
+  reportNo: string
+  status: string
+  submitter: { email: string; name: string }
+  title: string
+  updatedAt: string
+}
+
+export type RetestQueueResponse = {
+  items: RetestQueueItem[]
+  stats: {
+    archived: number
+    pendingRetest: number
+  }
+}
+
+export type RetestPayload = {
+  decision: 'RETEST_PASS' | 'RETURN_TO_FIX' | 'ARCHIVE'
+  note: string
+}
+
+export type RetestResponse = {
+  id: string
+  reportNo: string
+  status: string
+  updatedAt: string
+}
+
+export async function listRetestQueue() {
+  return apiRequest<RetestQueueResponse>('/vulnerabilities/retest-queue', {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录',
+  })
+}
+
+export async function retestVulnerability(reportId: string, payload: RetestPayload) {
+  return apiRequest<RetestResponse>(`/vulnerabilities/${reportId}/retest`, {
+    auth: true,
+    body: payload,
+    method: 'POST',
+    unauthenticatedMessage: '请先登录',
+  })
+}
+
+export async function markFixing(reportId: string, note: string) {
+  return apiRequest<RetestResponse>(`/vulnerabilities/${reportId}/mark-fixing`, {
+    auth: true,
+    body: { note },
+    method: 'POST',
+    unauthenticatedMessage: '请先登录',
+  })
+}

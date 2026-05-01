@@ -22,6 +22,7 @@ import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
+import { getAdminDashboard } from '../../services/dashboard'
 
 const AdminAnnouncementManagement = lazy(() =>
   import('./AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
@@ -65,12 +66,7 @@ const adminMenuItems = [
   '系统设置',
 ]
 
-const overviewStats = [
-  { label: '待审核漏洞', value: '18', hint: '高危 4 个', icon: FileSearch },
-  { label: '待签发证书', value: '5', hint: '需确认归档', icon: FileCheck2 },
-  { label: '待准入用户', value: '28', hint: '答题/责任书', icon: UsersRound },
-  { label: '待处理兑换', value: '9', hint: '线下领取确认', icon: Store },
-]
+
 
 const riskQueue = [
   { title: '统一认证入口弱口令策略绕过风险', level: '高危', owner: '信息化办公室', status: '待分派', time: '10 分钟前' },
@@ -79,12 +75,7 @@ const riskQueue = [
   { title: '在线靶场资源下载链接未鉴权', level: '高危', owner: '网络安全学院', status: '修复中', time: '昨天 18:40' },
 ]
 
-const operationItems = [
-  { title: '漏洞审核流程', value: '12 个待分派', icon: ShieldAlert },
-  { title: '用户准入与责任书', value: '28 人待完成', icon: UserCog },
-  { title: '公告与规则发布', value: '2 条草稿', icon: Megaphone },
-  { title: '证书签发管理', value: '5 张待确认', icon: FileCheck2 },
-]
+
 
 const systemHealth = [
   { label: '服务状态', value: '正常', tone: 'bg-emerald-500' },
@@ -104,6 +95,34 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     document.documentElement.classList.contains('dark') ? 'dark' : 'light',
   )
+  const [dashStats, setDashStats] = useState({
+    pendingVulnerabilities: 0,
+    pendingCerts: 0,
+    pendingAccessUsers: 0,
+    pendingRedemptions: 0,
+    totalActiveUsers: 0,
+    totalVulnerabilities: 0,
+  })
+
+  useEffect(() => {
+    getAdminDashboard()
+      .then((data) => setDashStats(data))
+      .catch(() => {})
+  }, [])
+
+  const overviewStats = [
+    { label: '待审核漏洞', value: String(dashStats.pendingVulnerabilities), hint: '提交/审核中', icon: FileSearch },
+    { label: '待签发证书', value: String(dashStats.pendingCerts), hint: '需确认归档', icon: FileCheck2 },
+    { label: '待准入用户', value: String(dashStats.pendingAccessUsers), hint: '答题/责任书', icon: UsersRound },
+    { label: '待处理兑换', value: String(dashStats.pendingRedemptions), hint: '线下领取确认', icon: Store },
+  ]
+
+  const operationItems = [
+    { title: '漏洞审核流程', value: `${dashStats.pendingVulnerabilities} 个待处理`, icon: ShieldAlert },
+    { title: '用户准入与责任书', value: `${dashStats.pendingAccessUsers} 人待完成`, icon: UserCog },
+    { title: '公告与规则发布', value: '草稿管理', icon: Megaphone },
+    { title: '证书签发管理', value: `${dashStats.pendingCerts} 张待确认`, icon: FileCheck2 },
+  ]
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')

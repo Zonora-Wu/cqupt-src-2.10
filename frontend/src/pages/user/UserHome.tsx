@@ -29,6 +29,7 @@ import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
+import { getUserDashboard } from '../../services/dashboard'
 import {
   getUserDevicePreferences,
   resolveThemeMode,
@@ -76,15 +77,6 @@ type UserHomeProps = {
   onLogout: () => void
   user: AuthUser
 }
-
-const stats = [
-  { label: '累计提交', value: '8', hint: '漏洞报告', icon: FilePlus2 },
-  { label: '有效漏洞', value: '5', hint: '已通过审核', icon: ShieldCheck },
-  { label: '当前积分', value: '1260', hint: '可兑换资源', icon: Trophy },
-  { label: '证书数量', value: '2', hint: '高价值贡献', icon: Award },
-]
-
-const quickActions = [
   { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2 },
   { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target },
   { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen },
@@ -142,6 +134,21 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     getUserDevicePreferences(preferenceKey),
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
+  const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
+
+  // 加载仪表盘数据
+  useEffect(() => {
+    getUserDashboard()
+      .then((data) => setDashStats(data))
+      .catch(() => { /* 静默失败，福贝默认值 */ })
+  }, [])
+
+  const stats = [
+    { label: '累计提交', value: String(dashStats.submitCount), hint: '漏洞报告', icon: FilePlus2 },
+    { label: '有效漏洞', value: String(dashStats.confirmedCount), hint: '已通过审核', icon: ShieldCheck },
+    { label: '当前积分', value: String(dashStats.currentPoints), hint: '可兑换资源', icon: Trophy },
+    { label: '证书数量', value: String(dashStats.certCount), hint: '高价值贡献', icon: Award },
+  ]
 
   const notifUnread = Object.values(preferences.notifications).some(Boolean) ? 3 : 0
 

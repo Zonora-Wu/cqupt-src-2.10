@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
-import { normalizeCreateVulnerabilityBody, normalizeReviewVulnerabilityBody } from './vulnerability.validation'
-import { CreateVulnerabilityBody, ReviewVulnerabilityBody } from './vulnerability.types'
+import { normalizeCreateVulnerabilityBody, normalizeRetestBody, normalizeReviewVulnerabilityBody } from './vulnerability.validation'
+import { CreateVulnerabilityBody, RetestBody, ReviewVulnerabilityBody } from './vulnerability.types'
 import { VulnerabilitiesService } from './vulnerabilities.service'
 type RequestLike = {
   ip?: string
@@ -37,6 +37,12 @@ export class VulnerabilitiesController {
     return this.vulnerabilities.listMyReports(user)
   }
 
+  @Get('retest-queue')
+  @RequirePermissions('vulnerability:review')
+  listRetestQueue() {
+    return this.vulnerabilities.listRetestQueue()
+  }
+
   @Get('review-queue')
   @RequirePermissions('vulnerability:review')
   listReviewQueue() {
@@ -53,6 +59,32 @@ export class VulnerabilitiesController {
   @RequirePermissions('vulnerability:read_all')
   getVulnerabilityById(@Param('reportId') reportId: string) {
     return this.vulnerabilities.getVulnerabilityById(reportId)
+  }
+
+  @Post(':reportId/retest')
+  @RequirePermissions('vulnerability:review')
+  retestReport(
+    @Param('reportId') reportId: string,
+    @Body() body: RetestBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const input = normalizeRetestBody(body)
+    return this.vulnerabilities.retestReport(reportId, input, user, getRequestMeta(req))
+  }
+
+  @Post(':reportId/mark-fixing')
+  @RequirePermissions('vulnerability:review')
+  markFixing(
+    @Param('reportId') reportId: string,
+    @Body() body: { note?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    if (typeof body.note !== 'string' || body.note.trim().length < 2) {
+      throw new BadRequestException('请填写说明（至少2字）')
+    }
+    return this.vulnerabilities.markFixing(reportId, body.note.trim(), user, getRequestMeta(req))
   }
 
   @Post(':reportId/review')

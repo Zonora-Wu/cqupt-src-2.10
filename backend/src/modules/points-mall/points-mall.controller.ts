@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { MallProductStatus } from '@prisma/client'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -36,6 +36,15 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class PointsMallController {
   constructor(@Inject(PointsMallService) private readonly pointsMall: PointsMallService) {}
+
+  @Get('leaderboard')
+  getLeaderboard(
+    @Query('scope') scope: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    const validScope = scope === 'month' || scope === 'week' ? scope : 'all'
+    return this.pointsMall.getLeaderboard(validScope, user.id)
+  }
 
   @Get('points/summary')
   @RequirePermissions('point:read')
