@@ -12,6 +12,22 @@ export type CertificateTemplateSummary = {
   version: string
 }
 
+export type RegistrationMode = {
+  open: boolean
+}
+
+export type PendingRegistrationItem = {
+  id: string
+  name: string
+  email: string
+  unifiedCode: string
+  college: string
+  identityText: string | null
+  studentNo: string | null
+  grade: string | null
+  createdAt: string
+}
+
 export async function getActiveCertificateTemplate() {
   return request<CertificateTemplateSummary | null>('/system-settings/certificate-template/active', {
     method: 'GET',
@@ -32,7 +48,27 @@ export async function uploadCertificateSeal(file: File) {
   return requestForm<CertificateTemplateSummary>('/system-settings/certificate-template/seal', formData)
 }
 
-async function request<T>(path: string, options: { method: 'GET' }) {
+export async function getRegistrationMode() {
+  return apiRequest<RegistrationMode>('/system-settings/registration-mode', { method: 'GET' })
+}
+
+export async function setRegistrationMode(open: boolean) {
+  return request<RegistrationMode>('/system-settings/registration-mode', { method: 'POST', body: { open } })
+}
+
+export async function listPendingRegistrations() {
+  return request<PendingRegistrationItem[]>('/system-settings/pending-registrations', { method: 'GET' })
+}
+
+export async function approveRegistration(id: string) {
+  return request<{ success: true }>(`/system-settings/pending-registrations/${id}/approve`, { method: 'POST' })
+}
+
+export async function rejectRegistration(id: string) {
+  return request<{ success: true }>(`/system-settings/pending-registrations/${id}/reject`, { method: 'POST' })
+}
+
+async function request<T>(path: string, options: { method: 'GET' | 'POST'; body?: Record<string, unknown> }) {
   return apiRequest<T>(path, {
     ...options,
     auth: true,

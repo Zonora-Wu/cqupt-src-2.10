@@ -14,7 +14,7 @@ import {
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { SlideVerify } from '../ui/SlideVerify'
-import { registerAccount, sendRegisterEmailCode, type AuthUser } from '../../services/auth'
+import { registerAccount, sendRegisterEmailCode, type AuthUser, type RegisterResult } from '../../services/auth'
 
 type RegisterModalProps = {
   onClose: () => void
@@ -28,6 +28,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const [sliderVerified, setSliderVerified] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [pendingApproval, setPendingApproval] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -90,10 +91,15 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
     setSubmitting(true)
     try {
-      const session = await registerAccount(form)
-      onRegisterSuccess?.(session.user)
-      if (!onRegisterSuccess) {
-        onSwitchToLogin()
+      const result: RegisterResult = await registerAccount(form)
+      if (result.pending) {
+        setPendingApproval(true)
+        setMessage(result.message)
+      } else {
+        onRegisterSuccess?.(result.session.user)
+        if (!onRegisterSuccess) {
+          onSwitchToLogin()
+        }
       }
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : '注册失败，请稍后重试')
@@ -139,6 +145,24 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
           <p className="mt-1 text-sm text-slate-500 dark:text-white/50">CQUPT-SRC 校园漏洞响应平台</p>
         </header>
 
+        {pendingApproval ? (
+          <div className="flex flex-col items-center gap-5 py-4 text-center">
+            <ShieldCheck className="h-12 w-12 text-brand-600 dark:text-green-400" />
+            <div>
+              <p className="text-base font-semibold">注册申请已提交</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-white/50">
+                {message || '管理员将尽快审核你的注册信息，审核通过后即可使用统一认证码登录。'}
+              </p>
+            </div>
+            <button
+              className="w-full rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+              onClick={onSwitchToLogin}
+              type="button"
+            >
+              返回登录
+            </button>
+          </div>
+        ) : (
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input icon={<User />} onChange={(value) => updateField('name', value)} placeholder="姓名" required type="text" value={form.name} />
           <Input icon={<Badge />} onChange={(value) => updateField('unifiedCode', value)} placeholder="统一认证码" required type="text" value={form.unifiedCode} />
@@ -255,6 +279,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           注册后需完成邮箱验证、安全答题与责任书签署，才可获得漏洞提交权限。
         </div>
+        )}
       </motion.section>
     </div>
   )

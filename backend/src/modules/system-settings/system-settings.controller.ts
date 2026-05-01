@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Inject,
+  Param,
   Post,
   Req,
   UploadedFile,
@@ -67,5 +69,47 @@ export class SystemSettingsController {
     @Req() req: RequestLike,
   ) {
     return this.settings.uploadCertificateSeal(file, user, getRequestMeta(req))
+  }
+
+  @Get('registration-mode')
+  getRegistrationMode() {
+    return this.settings.getRegistrationMode()
+  }
+
+  @Post('registration-mode')
+  @RequirePermissions('system:manage')
+  setRegistrationMode(
+    @Body() body: { open?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const open = body.open === true || body.open === 'true'
+    return this.settings.setRegistrationMode(open, user, getRequestMeta(req))
+  }
+
+  @Get('pending-registrations')
+  @RequirePermissions('system:manage')
+  listPendingRegistrations() {
+    return this.settings.listPendingRegistrations()
+  }
+
+  @Post('pending-registrations/:id/approve')
+  @RequirePermissions('system:manage')
+  approveRegistration(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.approveRegistration(id, user, getRequestMeta(req))
+  }
+
+  @Post('pending-registrations/:id/reject')
+  @RequirePermissions('system:manage')
+  rejectRegistration(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.rejectRegistration(id, user, getRequestMeta(req))
   }
 }

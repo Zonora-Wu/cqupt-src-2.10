@@ -2,7 +2,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
-  Bell,
   Bot,
   CheckCircle2,
   Eye,
@@ -28,6 +27,7 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -312,16 +312,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
           <BrandLogo />
           <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={setActiveMenu} />
           <div className="flex items-center justify-end gap-2">
-            <button
-              aria-label="通知"
-              className="relative rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              type="button"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                4
-              </span>
-            </button>
+            <NotificationBell onClick={() => setActiveMenu('通知')} />
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -344,7 +335,9 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
         </div>
       </header>
 
-      {activeMenu === '首页' ? (
+      {activeMenu === '通知' ? (
+        <NotificationPanel onClose={() => setActiveMenu('首页')} />
+      ) : activeMenu === '首页' ? (
         <AuditorDashboard onNavigate={setActiveMenu} />
       ) : activeMenu === '漏洞审核' ? (
         <AuditorReviewQueue />

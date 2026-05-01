@@ -3,6 +3,7 @@ import {
   Bot,
   BrainCircuit,
   Building2,
+  CheckCircle,
   DatabaseBackup,
   FileBadge2,
   FileText,
@@ -14,6 +15,8 @@ import {
   ShieldQuestion,
   SlidersHorizontal,
   Upload,
+  UserCheck,
+  UserX,
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
@@ -21,11 +24,16 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
+  approveRegistration,
   getActiveCertificateTemplate,
+  getRegistrationMode,
+  listPendingRegistrations,
+  rejectRegistration,
+  setRegistrationMode,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
-import type { CertificateTemplateSummary } from '../../services/systemSettings'
+import type { CertificateTemplateSummary, PendingRegistrationItem } from '../../services/systemSettings'
 
 type SettingsSection =
   | '基础设置'
@@ -62,6 +70,8 @@ export function AdminSystemSettings() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [openRegister, setOpenRegister] = useState(true)
+  const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationItem[]>([])
+  const [pendingRegLoading, setPendingRegLoading] = useState(false)
   const [emailVerify, setEmailVerify] = useState(true)
   const [publicCertVerify, setPublicCertVerify] = useState(true)
   const [aiEnabled, setAiEnabled] = useState(true)
@@ -80,25 +90,54 @@ export function AdminSystemSettings() {
   useEffect(() => {
     let active = true
 
-    async function loadCertificateTemplate() {
+    async function loadInitialData() {
       try {
-        const template = await getActiveCertificateTemplate()
+        const [mode, template] = await Promise.all([
+          getRegistrationMode(),
+          getActiveCertificateTemplate(),
+        ])
         if (active) {
+          setOpenRegister(mode.open)
           setCertificateTemplate(template)
         }
       } catch (error) {
         if (active) {
-          setCertificateTemplateMessage(error instanceof Error ? error.message : '证书模板信息加载失败')
+          setCertificateTemplateMessage(error instanceof Error ? error.message : '设置信息加载失败')
         }
       }
     }
 
-    void loadCertificateTemplate()
+    void loadInitialData()
 
     return () => {
       active = false
     }
   }, [])
+
+  // Load pending registrations when entering the auth section and registration is closed
+  useEffect(() => {
+    if (activeSection !== '登录与认证') return
+
+    let active = true
+    setPendingRegLoading(true)
+
+    listPendingRegistrations()
+      .then((items) => { if (active) setPendingRegistrations(items) })
+      .catch(() => {})
+      .finally(() => { if (active) setPendingRegLoading(false) })
+
+    return () => { active = false }
+  }, [activeSection])
+
+  const handleApproveRegistration = async (id: string) => {
+    await approveRegistration(id)
+    setPendingRegistrations((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  const handleRejectRegistration = async (id: string) => {
+    await rejectRegistration(id)
+    setPendingRegistrations((prev) => prev.filter((item) => item.id !== id))
+  }
 
   const handleTemplateUpload = async (file: File | undefined) => {
     if (!file) return
@@ -240,7 +279,11 @@ export function AdminSystemSettings() {
                             description: openRegister
                               ? '关闭后，新用户将无法自行注册，只能通过管理员导入、邀请或统一认证同步进入平台。'
                               : '开启后，新用户可以进入注册流程。建议同时保留邮箱验证、滑块验证和答题准入。若当前处于正式上线阶段，请确认学校已有明确开放策略。',
-                            onConfirm: () => setOpenRegister((value) => !value),
+                            onConfirm: () => {
+                              const next = !openRegister
+                              setOpenRegister(next)
+                              void setRegistrationMode(next).catch(() => setOpenRegister(openRegister))
+                            },
                           })
                         }
                       />
@@ -300,6 +343,61 @@ export function AdminSystemSettings() {
                     description="控制新用户来源。正式上线后，如果接入学校身份源，建议使用统一认证同步或管理员导入。"
                     title="注册方式"
                   />
+                </SettingsCard>
+
+                {!openRegister && (
+                  <SettingsCard
+                    description="以下是关闭开放注册后提交注册申请的用户，审核通过后账号激活，拒绝后账号禁用。"
+                    icon={<UserCheck className="h-5 w-5" />}
+                    title={`待审核注册申请${pendingRegistrations.length > 0 ? `（${pendingRegistrations.length}）` : ''}`}
+                  >
+                    {pendingRegLoading ? (
+                      <p className="py-4 text-center text-sm text-slate-500">加载中...</p>
+                    ) : pendingRegistrations.length === 0 ? (
+                      <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                        暂无待审核注册申请
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-black/5 dark:divide-white/5">
+                        {pendingRegistrations.map((item) => (
+                          <div className="flex items-center justify-between gap-4 py-3" key={item.id}>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{item.name}</p>
+                              <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                                {item.unifiedCode} · {item.college} · {item.identityText ?? ''}{item.studentNo ? ` · ${item.studentNo}` : ''}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">{item.email}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                className="flex items-center gap-1.5 rounded-lg border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-brand-600/20 dark:border-brand-300/20 dark:text-brand-300"
+                                onClick={() => void handleApproveRegistration(item.id)}
+                                type="button"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                通过
+                              </button>
+                              <button
+                                className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-500/20 dark:border-red-400/20 dark:text-red-400"
+                                onClick={() => void handleRejectRegistration(item.id)}
+                                type="button"
+                              >
+                                <UserX className="h-3.5 w-3.5" />
+                                拒绝
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </SettingsCard>
+                )}
+
+                <SettingsCard
+                  description="管理本地账号、统一认证码、邮箱验证码和学校统一身份认证。认证策略会直接影响平台安全边界。"
+                  icon={<KeyRound className="h-5 w-5" />}
+                  title="登录验证策略"
+                >
                   <SettingRow
                     control={
                       <SettingToggle

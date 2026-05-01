@@ -4,13 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { AuditAction } from '@prisma/client'
+import { AuditAction, UserStatus } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
-import { CertificateTemplateSummary, UploadedSettingsFile } from './system-settings.types'
+import { CertificateTemplateSummary, PendingRegistrationItem, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
 
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
@@ -166,6 +166,141 @@ export class SystemSettingsService {
     })
 
     return summarizeTemplate(updated)
+  }
+
+  async getRegistrationMode(): Promise<RegistrationMode> {
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'open_registration' } })
+    const open = setting ? (setting.value as boolean) !== false : true
+    return { open }
+  }
+
+  async setRegistrationMode(
+    open: boolean,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<RegistrationMode> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        where: { key: 'open_registration' },
+        update: { value: open, updatedById: user.id },
+        create: {
+          key: 'open_registration',
+          value: open,
+          description: '是否开放自由注册',
+          updatedById: user.id,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { key: 'open_registration', value: open },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+        },
+      })
+    })
+
+    return { open }
+  }
+
+  async listPendingRegistrations(): Promise<PendingRegistrationItem[]> {
+    const users = await this.prisma.user.findMany({
+      where: { pendingRegistrationApproval: true, status: UserStatus.PENDING },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        unifiedCode: true,
+        college: true,
+        identityText: true,
+        studentNo: true,
+        grade: true,
+        createdAt: true,
+      },
+    })
+
+    return users
+  }
+
+  async approveRegistration(
+    id: string,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<{ success: true }> {
+    const target = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, status: true, pendingRegistrationApproval: true, name: true },
+    })
+
+    if (!target || !target.pendingRegistrationApproval || target.status !== UserStatus.PENDING) {
+      throw new NotFoundException('未找到待审核注册申请')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: { status: UserStatus.ACTIVE, pendingRegistrationApproval: false },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'approve_registration', targetName: target.name },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return { success: true }
+  }
+
+  async rejectRegistration(
+    id: string,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<{ success: true }> {
+    const target = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, status: true, pendingRegistrationApproval: true, name: true },
+    })
+
+    if (!target || !target.pendingRegistrationApproval || target.status !== UserStatus.PENDING) {
+      throw new NotFoundException('未找到待审核注册申请')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: { status: UserStatus.DISABLED, pendingRegistrationApproval: false },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'reject_registration', targetName: target.name },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return { success: true }
   }
 }
 

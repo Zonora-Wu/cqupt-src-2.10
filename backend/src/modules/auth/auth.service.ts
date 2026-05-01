@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { AuditAction, AuthorizationLevel, RoleCode, User, UserStatus } from '@prisma/client'
+
+export type PendingRegistrationResponse = { pending: true; message: string }
 import { randomBytes, createHash } from 'node:crypto'
 import { getJwtExpiry, signJwt } from '../../common/crypto/jwt'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
@@ -129,15 +131,16 @@ export class AuthService {
     }
   }
 
-  async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse> {
+  async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse | PendingRegistrationResponse> {
     await this.schoolPolicy.assertSchoolEmail(input.email)
     await this.assertRegisterCode(input.email, input.code)
 
-    const [existingCode, existingEmail, existingStudentNo, studentRole] = await Promise.all([
+    const [existingCode, existingEmail, existingStudentNo, studentRole, registrationSetting] = await Promise.all([
       this.prisma.user.findUnique({ where: { unifiedCode: input.unifiedCode } }),
       this.prisma.user.findUnique({ where: { email: input.email } }),
       input.studentNo ? this.prisma.user.findUnique({ where: { studentNo: input.studentNo } }) : Promise.resolve(null),
       this.prisma.role.findUnique({ where: { code: RoleCode.STUDENT } }),
+      this.prisma.systemSetting.findUnique({ where: { key: 'open_registration' } }),
     ])
 
     if (existingCode) {
@@ -156,6 +159,60 @@ export class AuthService {
       throw new BadRequestException('学生角色尚未初始化，请先执行数据库种子脚本')
     }
 
+    // Check if open registration is enabled (default: true if setting not found)
+    const openRegistration = registrationSetting ? (registrationSetting.value as boolean) !== false : true
+
+    if (!openRegistration) {
+      // Closed registration: create PENDING user awaiting admin approval
+      await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            authorizationLevel: AuthorizationLevel.BASIC,
+            college: input.college,
+            email: input.email,
+            emailVerifiedAt: new Date(),
+            grade: input.grade || null,
+            identityText: input.identityText,
+            name: input.name,
+            passwordHash: hashPassword(input.password),
+            pendingRegistrationApproval: true,
+            roleId: studentRole.id,
+            status: UserStatus.PENDING,
+            studentNo: input.studentNo || null,
+            unifiedCode: input.unifiedCode,
+          },
+        })
+
+        await tx.emailVerificationCode.updateMany({
+          where: { email: input.email, purpose: 'REGISTER', consumedAt: null },
+          data: { consumedAt: new Date() },
+        })
+
+        await tx.auditLog.create({
+          data: {
+            action: AuditAction.MANAGE_USER,
+            actorId: created.id,
+            ipAddress: meta.ipAddress,
+            metadata: {
+              action: 'pending_registration',
+              college: input.college,
+              email: input.email,
+              identityText: input.identityText,
+              name: input.name,
+              unifiedCode: input.unifiedCode,
+            },
+            requestPath: meta.requestPath,
+            result: 'success',
+            targetId: created.id,
+            targetType: 'User',
+            userAgent: meta.userAgent,
+          },
+        })
+      })
+
+      return { pending: true, message: '注册申请已提交，等待管理员审核。审核通过后即可登录。' }
+    }
+
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -167,6 +224,7 @@ export class AuthService {
           identityText: input.identityText,
           name: input.name,
           passwordHash: hashPassword(input.password),
+          pendingRegistrationApproval: false,
           roleId: studentRole.id,
           status: UserStatus.ACTIVE,
           studentNo: input.studentNo || null,
@@ -204,7 +262,7 @@ export class AuthService {
       })
 
       return created
-    })
+    }) as User & { role: { code: string } }
 
     return this.completeLogin(user, meta)
   }

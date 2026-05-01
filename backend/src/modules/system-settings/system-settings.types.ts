@@ -16,3 +16,19 @@ export type CertificateTemplateSummary = {
   updatedAt: Date
   version: string
 }
+
+export type RegistrationMode = {
+  open: boolean
+}
+
+export type PendingRegistrationItem = {
+  id: string
+  name: string
+  email: string
+  unifiedCode: string
+  college: string | null
+  identityText: string | null
+  studentNo: string | null
+  grade: string | null
+  createdAt: Date
+}

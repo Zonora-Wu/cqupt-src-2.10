@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { AnnouncementRange, AnnouncementStatus, AuditAction, PointDirection, RoleCode } from '@prisma/client'
+import { AnnouncementRange, AnnouncementStatus, AuditAction, PointDirection, RoleCode, UserStatus, VulnerabilityStatus } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 
@@ -34,6 +34,28 @@ export class NotificationsService {
       { iconType: 'megaphone', id: 'announcement', messages: announcementMessages, title: '平台公告' },
       { iconType: 'bell', id: 'system', messages: systemMessages, title: '系统通知' },
     ]
+
+    if (user.role === RoleCode.ADMIN) {
+      const [pendingRegMessages, pendingVulnMessages] = await Promise.all([
+        this.getAdminPendingRegistrationNotifications(),
+        this.getAdminPendingVulnerabilityNotifications(),
+      ])
+      channels.unshift(
+        { iconType: 'bell', id: 'pending-registration', messages: pendingRegMessages, title: '待审核注册申请' },
+        { iconType: 'shield', id: 'pending-vuln', messages: pendingVulnMessages, title: '待处理漏洞报告' },
+      )
+    }
+
+    if (user.role === RoleCode.AUDITOR) {
+      const [pendingReviewMessages, pendingRetestMessages] = await Promise.all([
+        this.getAuditorPendingReviewNotifications(),
+        this.getAuditorPendingRetestNotifications(),
+      ])
+      channels.unshift(
+        { iconType: 'shield', id: 'pending-review', messages: pendingReviewMessages, title: '待初审漏洞' },
+        { iconType: 'bell', id: 'pending-retest', messages: pendingRetestMessages, title: '待复测漏洞' },
+      )
+    }
 
     return { channels }
   }
@@ -114,6 +136,66 @@ export class NotificationsService {
       content: `【${a.category}】${a.title}：${a.summary}`,
       createdAt: (a.publishedAt ?? a.createdAt).toISOString(),
       id: a.id,
+    }))
+  }
+
+  private async getAdminPendingRegistrationNotifications() {
+    const users = await this.prisma.user.findMany({
+      where: { pendingRegistrationApproval: true, status: UserStatus.PENDING },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, name: true, college: true, identityText: true, createdAt: true },
+    })
+
+    return users.map((u) => ({
+      content: `新注册申请：${u.name}（${u.college ?? '未知学院'} · ${u.identityText ?? ''}）待审核，请前往「系统设置 → 待审核注册申请」处理。`,
+      createdAt: u.createdAt.toISOString(),
+      id: `pending-reg-${u.id}`,
+    }))
+  }
+
+  private async getAdminPendingVulnerabilityNotifications() {
+    const reports = await this.prisma.vulnerabilityReport.findMany({
+      where: { status: { in: [VulnerabilityStatus.SUBMITTED, VulnerabilityStatus.PENDING_REVIEW] } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, reportNo: true, title: true, status: true, createdAt: true },
+    })
+
+    return reports.map((r) => ({
+      content: `漏洞报告「${r.title}」（${r.reportNo}）处于${r.status === VulnerabilityStatus.SUBMITTED ? '已提交待分派' : '待初审'}状态，请及时跟进。`,
+      createdAt: r.createdAt.toISOString(),
+      id: `pending-vuln-${r.id}`,
+    }))
+  }
+
+  private async getAuditorPendingReviewNotifications() {
+    const reports = await this.prisma.vulnerabilityReport.findMany({
+      where: { status: { in: [VulnerabilityStatus.SUBMITTED, VulnerabilityStatus.PENDING_REVIEW] } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, reportNo: true, title: true, status: true, createdAt: true },
+    })
+
+    return reports.map((r) => ({
+      content: `漏洞报告「${r.title}」（${r.reportNo}）${r.status === VulnerabilityStatus.SUBMITTED ? '等待分派审核员' : '待初审'}，请及时处理。`,
+      createdAt: r.createdAt.toISOString(),
+      id: `review-${r.id}`,
+    }))
+  }
+
+  private async getAuditorPendingRetestNotifications() {
+    const reports = await this.prisma.vulnerabilityReport.findMany({
+      where: { status: VulnerabilityStatus.PENDING_RETEST },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: { id: true, reportNo: true, title: true, updatedAt: true },
+    })
+
+    return reports.map((r) => ({
+      content: `漏洞报告「${r.title}」（${r.reportNo}）已标记待复测，请前往「复测归档」完成验证。`,
+      createdAt: r.updatedAt.toISOString(),
+      id: `retest-${r.id}`,
     }))
   }
 }

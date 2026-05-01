@@ -56,6 +56,15 @@ type BackendLoginResponse = {
   user: BackendUser
 }
 
+type BackendPendingRegistrationResponse = {
+  pending: true
+  message: string
+}
+
+export type RegisterResult =
+  | { pending: false; session: AuthSession }
+  | { pending: true; message: string }
+
 type BackendEmailCodeResponse = {
   devCode?: string
   message: string
@@ -118,8 +127,8 @@ export async function sendRegisterEmailCode(email: string, captchaToken: string)
   })
 }
 
-export async function registerAccount(payload: RegisterPayload) {
-  const result = await apiRequest<BackendLoginResponse>('/auth/register', {
+export async function registerAccount(payload: RegisterPayload): Promise<RegisterResult> {
+  const result = await apiRequest<BackendLoginResponse | BackendPendingRegistrationResponse>('/auth/register', {
     body: {
       code: payload.code,
       college: payload.college.trim(),
@@ -134,7 +143,12 @@ export async function registerAccount(payload: RegisterPayload) {
     method: 'POST',
   })
 
-  return saveSession(normalizeLoginResponse(result))
+  if ('pending' in result && result.pending === true) {
+    return { pending: true, message: result.message }
+  }
+
+  const session = saveSession(normalizeLoginResponse(result as BackendLoginResponse))
+  return { pending: false, session }
 }
 
 export async function loginWithEmailCode(payload: EmailLoginPayload) {
