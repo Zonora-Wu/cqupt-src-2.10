@@ -17,6 +17,7 @@ export type UpdateUserPermissionBody = {
 }
 
 export type ResetUserPasswordBody = {
+  newPassword?: unknown
   reason?: unknown
 }
 
@@ -37,5 +38,6 @@ export type NormalizedUpdateUserPermissionInput = {
 }
 
 export type NormalizedResetUserPasswordInput = {
+  newPassword?: string
   reason: string
 }

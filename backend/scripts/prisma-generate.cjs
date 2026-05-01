@@ -46,6 +46,11 @@ function cleanupPrismaAutoInstall() {
     return
   }
 
+  // 如果是真实的 monorepo 根目录（有 workspaces 或 name 字段），不自动删除
+  if (packageJson.workspaces || (packageJson.name && packageJson.private)) {
+    return
+  }
+
   const dependencies = Object.keys(packageJson.dependencies ?? {})
   const devDependencies = Object.keys(packageJson.devDependencies ?? {})
   const allDependencies = [...dependencies, ...devDependencies].sort()

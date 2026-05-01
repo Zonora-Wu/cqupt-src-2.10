@@ -180,3 +180,139 @@ export async function openAttachmentPreview(attachmentId: string) {
 
   window.setTimeout(() => URL.revokeObjectURL(previewUrl), 60 * 1000)
 }
+
+// ---- 管理员漏洞管理 ----
+
+export type AdminVulnerabilityListItem = {
+  id: string
+  reportNo: string
+  title: string
+  selfSeverity: string
+  finalSeverity: string | null
+  status: string
+  assetName: string
+  ownerUnit: string | null
+  submitterName: string
+  reviewerName: string | null
+  points: number
+  submittedAt: string | null
+  updatedAt: string
+  attachmentCount: number
+  lastEvent: {
+    action: string
+    createdAt: string
+    note: string | null
+  } | null
+}
+
+export type AdminVulnerabilityListResponse = {
+  items: AdminVulnerabilityListItem[]
+  stats: {
+    total: number
+    submitted: number
+    pendingReview: number
+    needSupplement: number
+    confirmed: number
+    fixing: number
+    pendingRetest: number
+    rejected: number
+    archived: number
+  }
+}
+
+export type AdminVulnerabilityDetail = {
+  id: string
+  reportNo: string
+  title: string
+  selfSeverity: string
+  finalSeverity: string | null
+  status: string
+  assetName: string
+  assetUrl: string | null
+  ownerUnit: string | null
+  vulnerabilityType: string
+  reproductionSteps: string
+  impactAssessment: string
+  repairSuggestion: string
+  requestPacket: string | null
+  testBoundary: string | null
+  submitterName: string
+  submitterEmail: string
+  reviewerName: string | null
+  points: number
+  submittedAt: string | null
+  confirmedAt: string | null
+  updatedAt: string
+  attachments: Array<{
+    id: string
+    originalName: string
+    sizeBytes: number
+    uploadedAt: string
+  }>
+  events: Array<{
+    id: string
+    action: string
+    actorName: string | null
+    fromStatus: string | null
+    toStatus: string | null
+    note: string | null
+    createdAt: string
+  }>
+}
+
+export async function listAdminVulnerabilities() {
+  return apiRequest<AdminVulnerabilityListResponse>('/vulnerabilities/manage', {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录后再访问',
+  })
+}
+
+export async function getVulnerabilityDetail(reportId: string) {
+  const raw = await apiRequest<{
+    id: string
+    reportNo: string
+    title: string
+    selfSeverity: string
+    finalSeverity: string | null
+    status: string
+    assetName: string
+    assetUrl: string | null
+    ownerUnit: string | null
+    vulnerabilityType: string
+    reproductionSteps: string
+    impactAssessment: string
+    repairSuggestion: string
+    requestPacket: string | null
+    testBoundary: string | null
+    submitter: { id: string; name: string; email: string; unifiedCode: string }
+    reviewer: { id: string; name: string; email: string } | null
+    points: number
+    submittedAt: string | null
+    confirmedAt: string | null
+    updatedAt: string
+    attachments: Array<{ id: string; originalName: string; sizeBytes: number; uploadedAt: string }>
+    events: Array<{
+      id: string
+      action: string
+      actorName: string | null
+      fromStatus: string | null
+      toStatus: string | null
+      note: string | null
+      createdAt: string
+    }>
+  }>(`/vulnerabilities/${reportId}`, {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录后再访问',
+  })
+
+  const detail: AdminVulnerabilityDetail = {
+    ...raw,
+    submitterName: raw.submitter.name,
+    submitterEmail: raw.submitter.email,
+    reviewerName: raw.reviewer?.name ?? null,
+  }
+
+  return detail
+}

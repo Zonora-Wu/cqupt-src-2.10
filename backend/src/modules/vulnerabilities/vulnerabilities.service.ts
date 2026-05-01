@@ -10,6 +10,8 @@ import { AccessPolicyService } from '../access/access-policy.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import {
+  AdminVulnerabilityDetailResponse,
+  AdminVulnerabilityListResponse,
   MyVulnerabilityListResponse,
   NormalizedCreateVulnerabilityInput,
   NormalizedReviewVulnerabilityInput,
@@ -373,8 +375,132 @@ export class VulnerabilitiesService {
     }
   }
 
+  async listAllVulnerabilities(): Promise<AdminVulnerabilityListResponse> {
+    const reports = await this.prisma.vulnerabilityReport.findMany({
+      where: { deletedAt: null, status: { not: VulnerabilityStatus.DRAFT } },
+      include: {
+        attachments: { where: { deletedAt: null }, select: { id: true } },
+        events: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { action: true, createdAt: true, note: true },
+        },
+        pointEntries: { select: { direction: true, points: true } },
+        submitter: { select: { id: true, email: true, name: true, unifiedCode: true } },
+        assignment: {
+          select: { auditor: { select: { id: true, email: true, name: true } } },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+    })
+
+    const items = reports.map((report) => ({
+      id: report.id,
+      reportNo: report.reportNo,
+      title: report.title,
+      selfSeverity: formatSeverity(report.selfSeverity),
+      finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      status: formatAdminStatus(report.status, !!report.assignment),
+      assetName: report.assetName,
+      ownerUnit: report.ownerUnit,
+      submitterName: report.submitter.name,
+      reviewerName: report.assignment?.auditor.name ?? null,
+      points: sumPoints(report.pointEntries),
+      submittedAt: report.submittedAt,
+      updatedAt: report.updatedAt,
+      attachmentCount: report.attachments.length,
+      lastEvent: report.events[0] ?? null,
+    }))
+
+    return {
+      items,
+      stats: {
+        total: reports.length,
+        submitted: reports.filter((r) => r.status === VulnerabilityStatus.SUBMITTED).length,
+        pendingReview: reports.filter((r) => r.status === VulnerabilityStatus.PENDING_REVIEW).length,
+        needSupplement: reports.filter((r) => r.status === VulnerabilityStatus.NEEDS_SUPPLEMENT).length,
+        confirmed: reports.filter((r) => r.status === VulnerabilityStatus.CONFIRMED).length,
+        fixing: reports.filter((r) => r.status === VulnerabilityStatus.FIXING).length,
+        pendingRetest: reports.filter((r) => r.status === VulnerabilityStatus.PENDING_RETEST).length,
+        rejected: reports.filter((r) => r.status === VulnerabilityStatus.REJECTED).length,
+        archived: reports.filter(
+          (r) => r.status === VulnerabilityStatus.ARCHIVED || r.status === VulnerabilityStatus.CERTIFIED,
+        ).length,
+      },
+    }
+  }
+
+  async getVulnerabilityById(reportId: string): Promise<AdminVulnerabilityDetailResponse> {
+    const report = await this.prisma.vulnerabilityReport.findFirst({
+      where: { deletedAt: null, id: reportId },
+      include: {
+        attachments: {
+          where: { deletedAt: null },
+          orderBy: { uploadedAt: 'desc' },
+          select: { id: true, originalName: true, sizeBytes: true, uploadedAt: true },
+        },
+        events: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            action: true,
+            actor: { select: { id: true, name: true } },
+            fromStatus: true,
+            toStatus: true,
+            note: true,
+            createdAt: true,
+          },
+        },
+        pointEntries: { select: { direction: true, points: true } },
+        submitter: { select: { id: true, email: true, name: true, unifiedCode: true } },
+        assignment: {
+          select: { auditor: { select: { id: true, email: true, name: true } } },
+        },
+      },
+    })
+
+    if (!report) {
+      throw new NotFoundException('漏洞报告不存在')
+    }
+
+    return {
+      id: report.id,
+      reportNo: report.reportNo,
+      title: report.title,
+      selfSeverity: formatSeverity(report.selfSeverity),
+      finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      status: formatAdminStatus(report.status, !!report.assignment),
+      assetName: report.assetName,
+      assetUrl: report.assetUrl,
+      ownerUnit: report.ownerUnit,
+      vulnerabilityType: report.vulnerabilityType,
+      reproductionSteps: report.reproductionSteps,
+      impactAssessment: report.impactAssessment,
+      repairSuggestion: report.repairSuggestion,
+      requestPacket: report.requestPacket,
+      testBoundary: report.testBoundary,
+      submitter: report.submitter,
+      reviewer: report.assignment?.auditor ?? null,
+      points: sumPoints(report.pointEntries),
+      submittedAt: report.submittedAt,
+      confirmedAt: report.confirmedAt,
+      updatedAt: report.updatedAt,
+      attachments: report.attachments,
+      events: report.events.map((event) => ({
+        id: event.id,
+        action: formatEventAction(event.action),
+        actorName: event.actor?.name ?? null,
+        fromStatus: event.fromStatus ? formatAdminStatus(event.fromStatus, false) : null,
+        toStatus: event.toStatus ? formatAdminStatus(event.toStatus, false) : null,
+        note: event.note,
+        createdAt: event.createdAt,
+      })),
+    }
+  }
+
   private async generateReportNo() {
-    for (let index = 0; index < 5; index += 1) {
+    for (let i = 0; i < 5; i++) {
       const now = new Date()
       const datePart = [
         now.getFullYear(),
@@ -502,4 +628,37 @@ function isPendingStatus(status: VulnerabilityStatus) {
   ]
 
   return statuses.includes(status)
+}
+
+function formatAdminStatus(status: VulnerabilityStatus, hasAssignment: boolean): string {
+  const statusMap: Record<VulnerabilityStatus, string> = {
+    DRAFT: '草稿',
+    SUBMITTED: hasAssignment ? '待审核' : '待分派',
+    PENDING_REVIEW: '审核中',
+    NEEDS_SUPPLEMENT: '待补充',
+    CONFIRMED: '已确认',
+    FIXING: '修复中',
+    PENDING_RETEST: '待复测',
+    ARCHIVED: '已归档',
+    CERTIFIED: '已归档',
+    REJECTED: '已驳回',
+  }
+
+  return statusMap[status]
+}
+
+function formatEventAction(action: string): string {
+  const actionMap: Record<string, string> = {
+    SUBMIT_VULNERABILITY: '提交报告',
+    REVIEW_CONFIRM: '审核确认',
+    REVIEW_NEEDS_SUPPLEMENT: '要求补充材料',
+    REVIEW_REJECT: '驳回报告',
+    RETEST_PASS: '复测通过',
+    RETEST_FAIL: '复测未通过',
+    ARCHIVE: '归档',
+    ASSIGN_REVIEWER: '分派审核员',
+    CLOSE: '关闭',
+  }
+
+  return actionMap[action] ?? action
 }

@@ -2,7 +2,67 @@
 
 部署辅助脚本目录。
 
+---
+
 ## 本地一键启动 / 关闭
+
+### Linux / WSL / macOS（推荐）
+
+一键启动本地开发环境：
+
+```bash
+cd ~/projects/cqupt-src-2.10
+bash deploy/scripts/start-local.sh
+```
+
+启动后服务地址：
+
+| 服务 | 地址 |
+|---|---|
+| 前端 | http://localhost:5173 |
+| 后端 API | http://localhost:3000/api/health |
+| PostgreSQL | 127.0.0.1:15432 |
+| MinIO 控制台 | http://localhost:9001 |
+
+一键关闭本地开发环境：
+
+```bash
+bash deploy/scripts/stop-local.sh
+```
+
+只想关闭前后端，保留数据库容器：
+
+```bash
+bash deploy/scripts/stop-local.sh --keep-postgres
+```
+
+只想关闭前后端，保留数据库和 MinIO 容器：
+
+```bash
+bash deploy/scripts/stop-local.sh --keep-postgres --keep-minio
+```
+
+数据库已手动启动，只想启动前后端：
+
+```bash
+bash deploy/scripts/start-local.sh --skip-postgres
+```
+
+MinIO 已手动启动，跳过 MinIO 检查：
+
+```bash
+bash deploy/scripts/start-local.sh --skip-minio
+```
+
+数据库已初始化，跳过迁移和 seed：
+
+```bash
+bash deploy/scripts/start-local.sh --skip-db-init
+```
+
+---
+
+### Windows（PowerShell）
 
 一键启动本地开发环境：
 
@@ -54,6 +114,8 @@ powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1 -SkipMin
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1 -SkipDbInit
 ```
+
+---
 
 ## 后续可放置
 

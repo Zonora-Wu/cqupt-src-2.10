@@ -72,6 +72,7 @@ export function AdminUserManagement() {
   const [selectedUser, setSelectedUser] = useState<ManagedUserDetail | null>(null)
   const [roleUser, setRoleUser] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
@@ -162,11 +163,11 @@ export function AdminUserManagement() {
     }
   }
 
-  async function runPasswordReset(id: string) {
+  async function runPasswordReset(id: string, newPassword: string) {
     setError('')
     try {
-      const result = await resetManagedUserPassword(id, '管理员从用户管理页发起密码重置')
-      flashMessage(result.temporaryPassword ? `临时密码：${result.temporaryPassword}` : result.message)
+      const result = await resetManagedUserPassword(id, newPassword, '管理员从用户管理页发起密码重置')
+      flashMessage(result.message ?? '密码已重置')
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : '密码重置失败')
     }
@@ -225,13 +226,7 @@ export function AdminUserManagement() {
                     </button>
                     <ActionButton
                       label="重置密码"
-                      onClick={() =>
-                        setConfirmAction({
-                          description: '重置后旧登录态会失效。开发环境会返回临时密码，生产环境应改为发送重置邮件。',
-                          onConfirm: () => runPasswordReset(selectedUser.id),
-                          title: '确认重置密码？',
-                        })
-                      }
+                      onClick={() => setResetPasswordTarget(selectedUser)}
                     />
                     <ActionButton
                       label={selectedUser.status === 'LOCKED' ? '解锁账号' : '锁定账号'}
@@ -483,13 +478,7 @@ export function AdminUserManagement() {
                     </button>
                     <button
                       className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                      onClick={() =>
-                        setConfirmAction({
-                          description: `将为 ${item.name} 发起密码重置流程，并使旧登录态失效。`,
-                          onConfirm: () => runPasswordReset(item.id),
-                          title: '确认重置密码？',
-                        })
-                      }
+                      onClick={() => setResetPasswordTarget(item)}
                       type="button"
                     >
                       重置密码
@@ -509,6 +498,14 @@ export function AdminUserManagement() {
         )}
       </section>
 
+      <ResetPasswordDialog
+        onClose={() => setResetPasswordTarget(null)}
+        onConfirm={async (user, newPassword) => {
+          await runPasswordReset(user.id, newPassword)
+          setResetPasswordTarget(null)
+        }}
+        user={resetPasswordTarget}
+      />
       <RoleModal
         options={options}
         user={roleUser}
@@ -705,6 +702,94 @@ function SuccessMessage({ message }: { message: string }) {
 
 function ErrorMessage({ message }: { message: string }) {
   return <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{message}</div>
+}
+
+function ResetPasswordDialog({
+  onClose,
+  onConfirm,
+  user,
+}: {
+  onClose: () => void
+  onConfirm: (user: ManagedUserItem | ManagedUserDetail, newPassword: string) => Promise<void>
+  user: ManagedUserItem | ManagedUserDetail | null
+}) {
+  const defaultPassword = user ? `tmp${user.unifiedCode}` : ''
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [validationError, setValidationError] = useState('')
+
+  useEffect(() => {
+    if (user) {
+      setPassword(`tmp${user.unifiedCode}`)
+      setValidationError('')
+    }
+  }, [user])
+
+  if (!user) return null
+
+  function validate(value: string) {
+    if (value.length < 8) return '密码至少需要 8 个字符'
+    const categories = [/[A-Za-z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value)].filter(Boolean).length
+    if (categories < 2) return '密码需包含字母、数字、符号中至少两类'
+    return ''
+  }
+
+  async function submit() {
+    const err = validate(password)
+    if (err) { setValidationError(err); return }
+    setSaving(true)
+    try {
+      await onConfirm(user, password)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <KeyRound className="h-5 w-5" />
+              <span className="text-sm font-medium">Reset Password</span>
+            </div>
+            <h2 className="mt-2 text-2xl font-semibold">重置密码</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              为 <span className="font-medium text-slate-800 dark:text-slate-200">{user.name}</span>（{user.unifiedCode}）设置新密码。重置后旧登录态会立即失效。
+            </p>
+          </div>
+          <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-6">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">新密码</span>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">默认为 tmp + 统一码，可直接点确认或修改后再确认</p>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(e) => { setPassword(e.target.value); setValidationError('') }}
+              placeholder={defaultPassword}
+              type="text"
+              value={password}
+            />
+            {validationError && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{validationError}</p>}
+          </label>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onClose} type="button">
+            取消
+          </button>
+          <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={saving} onClick={() => void submit()} type="button">
+            {saving ? '重置中...' : '确认重置'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function formatDateTime(value: string | null) {

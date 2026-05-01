@@ -114,9 +114,9 @@ export function updateManagedUserPermission(
   )
 }
 
-export function resetManagedUserPassword(id: string, reason: string) {
+export function resetManagedUserPassword(id: string, newPassword: string, reason: string) {
   return request<{ message: string; temporaryPassword?: string }>(`/users/manage/${id}/reset-password`, {
-    body: { reason },
+    body: { newPassword, reason },
     method: 'POST',
   })
 }

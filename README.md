@@ -47,31 +47,78 @@ docs/PROJECT_STRUCTURE.md
 
 ## 本地运行
 
-### 前端
+### 方式一：一键启动（推荐）
+
+**Linux / WSL / macOS**
+
+```bash
+bash deploy/scripts/start-local.sh
+```
+
+启动后访问地址：
+
+| 服务 | 地址 |
+|---|---|
+| 前端页面 | http://localhost:5173 |
+| 后端 API 健康检查 | http://localhost:3000/api/health |
+| MinIO 控制台 | http://localhost:9001 |
+
+一键关闭：
+
+```bash
+bash deploy/scripts/stop-local.sh
+```
+
+**Windows（PowerShell）**
 
 ```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\frontend
-npm.cmd run dev
+powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
+```
+
+> 更多启动选项（跳过数据库、跳过 MinIO 等）见 [deploy/scripts/README.md](deploy/scripts/README.md)
+
+---
+
+### 方式二：手动分步启动
+
+**1. 启动基础服务（PostgreSQL + Redis + MinIO）**
+
+```bash
+docker compose -f deploy/docker/docker-compose.local.yml up -d
+```
+
+**2. 初始化数据库**
+
+```bash
+cd backend
+npm run prisma:migrate:dev
+npm run prisma:seed
+```
+
+**3. 启动后端**
+
+```bash
+# Linux / macOS / WSL
+cd backend && npm run dev
+
+# Windows
+cd backend && npm.cmd run dev
+```
+
+**4. 启动前端**
+
+```bash
+# Linux / macOS / WSL
+cd frontend && npm run dev
+
+# Windows
+cd frontend && npm.cmd run dev
 ```
 
 前端默认地址：
 
 ```text
 http://localhost:5173
-```
-
-前端构建：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\frontend
-npm.cmd run build
-```
-
-### 后端
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run dev
 ```
 
 后端健康检查：
@@ -82,11 +129,12 @@ http://localhost:3000/api/health
 
 后端验证命令：
 
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run prisma:validate
+```bash
+# Linux / macOS / WSL
+cd backend
+npm run typecheck
+npm run build
+npm run prisma:validate
 ```
 
 ## 演示账号

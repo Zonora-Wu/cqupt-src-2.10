@@ -12,6 +12,7 @@ import { CaptchaModule } from './modules/captcha/captcha.module'
 import { CertificatesModule } from './modules/certificates/certificates.module'
 import { HealthModule } from './modules/health/health.module'
 import { LearningModule } from './modules/learning/learning.module'
+import { NotificationsModule } from './modules/notifications/notifications.module'
 import { PointsMallModule } from './modules/points-mall/points-mall.module'
 import { PrismaModule } from './modules/prisma/prisma.module'
 import { SchoolPolicyModule } from './modules/school/school-policy.module'
@@ -41,6 +42,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     AuditLogsModule,
     LearningModule,
     PointsMallModule,
+    NotificationsModule,
     SystemSettingsModule,
     UsersModule,
   ],

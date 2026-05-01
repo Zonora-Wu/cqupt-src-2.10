@@ -31,8 +31,26 @@ export function normalizeUpdateUserPermissionBody(body: UpdateUserPermissionBody
 
 export function normalizeResetUserPasswordBody(body: ResetUserPasswordBody) {
   return {
+    newPassword: normalizeOptionalPassword(body.newPassword),
     reason: normalizeReason(body.reason, '管理员重置用户密码'),
   }
+}
+
+function normalizeOptionalPassword(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') {
+    throw new BadRequestException('密码格式不正确')
+  }
+  const pwd = value.trim()
+  if (pwd.length < 8) throw new BadRequestException('密码至少需要 8 个字符')
+  if (pwd.length > 128) throw new BadRequestException('密码不能超过 128 个字符')
+  const categories = [
+    /[A-Za-z]/.test(pwd),
+    /\d/.test(pwd),
+    /[^A-Za-z0-9]/.test(pwd),
+  ].filter(Boolean).length
+  if (categories < 2) throw new BadRequestException('密码需包含字母、数字、符号中至少两类')
+  return pwd
 }
 
 function normalizeRole(value: unknown) {

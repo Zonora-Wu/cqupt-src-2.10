@@ -6,7 +6,6 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { normalizeCreateVulnerabilityBody, normalizeReviewVulnerabilityBody } from './vulnerability.validation'
 import { CreateVulnerabilityBody, ReviewVulnerabilityBody } from './vulnerability.types'
 import { VulnerabilitiesService } from './vulnerabilities.service'
-
 type RequestLike = {
   ip?: string
   path?: string
@@ -42,6 +41,18 @@ export class VulnerabilitiesController {
   @RequirePermissions('vulnerability:review')
   listReviewQueue() {
     return this.vulnerabilities.listReviewQueue()
+  }
+
+  @Get('manage')
+  @RequirePermissions('vulnerability:manage')
+  listAllVulnerabilities() {
+    return this.vulnerabilities.listAllVulnerabilities()
+  }
+
+  @Get(':reportId')
+  @RequirePermissions('vulnerability:read_all')
+  getVulnerabilityById(@Param('reportId') reportId: string) {
+    return this.vulnerabilities.getVulnerabilityById(reportId)
   }
 
   @Post(':reportId/review')

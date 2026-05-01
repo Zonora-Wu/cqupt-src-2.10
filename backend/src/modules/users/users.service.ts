@@ -278,7 +278,7 @@ export class UsersService {
     meta: ClientRequestMeta,
   ) {
     await this.assertManageableUser(id, actor.id)
-    const temporaryPassword = `Temp${randomBytes(5).toString('base64url')}+-`
+    const temporaryPassword = input.newPassword ?? `Temp${randomBytes(5).toString('base64url')}+-`
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
