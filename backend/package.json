@@ -8,6 +8,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
+    "test:core-api": "node ../tests/api/core-api-smoke.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:validate": "prisma validate --schema ../database/prisma/schema.prisma",
     "prisma:generate": "node scripts/prisma-generate.cjs",

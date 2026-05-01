@@ -1,4 +1,4 @@
-import { getSavedSession } from './auth'
+import { apiBlobRequest, apiRequest } from './apiClient'
 
 export type CertificateStatusLabel = '待签发' | '已签发' | '已撤销'
 export type SeverityLabel = '严重' | '高危' | '中危' | '低危' | '信息'
@@ -73,10 +73,15 @@ export type PublicCertificateVerifyResult = {
   }
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
-
 export async function listManagedCertificates() {
   return request<ManagedCertificateListResponse>('/certificates/manage', { method: 'GET' })
+}
+
+export async function listMyCertificates() {
+  return request<{ items: IssuedCertificate[]; stats: { issued: number; revoked: number; total: number } }>(
+    '/certificates/my',
+    { method: 'GET' },
+  )
 }
 
 export async function issueCertificate(payload: {
@@ -98,33 +103,34 @@ export async function revokeCertificate(certificateId: string, reason: string) {
 }
 
 export async function openCertificatePreview(certificateId: string) {
-  const session = getSavedSession()
-  if (!session?.accessToken) {
-    throw new Error('请先登录后再预览证书')
-  }
-
-  let response: Response
-
-  try {
-    response = await fetch(`${API_BASE_URL}/certificates/${certificateId}/preview`, {
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-      },
-      method: 'GET',
-    })
-  } catch {
-    throw new Error('无法连接后端服务，请确认后端已启动')
-  }
-
-  if (!response.ok) {
-    const data = await parseResponse(response)
-    throw new Error(getApiErrorMessage(data))
-  }
-
-  const blob = await response.blob()
+  const blob = await fetchCertificatePdfBlob(certificateId)
   const previewUrl = URL.createObjectURL(blob)
   window.open(previewUrl, '_blank', 'noopener,noreferrer')
   window.setTimeout(() => URL.revokeObjectURL(previewUrl), 60 * 1000)
+}
+
+export async function createCertificatePreviewUrl(certificateId: string) {
+  const blob = await fetchCertificatePdfBlob(certificateId)
+  return URL.createObjectURL(blob)
+}
+
+export async function downloadCertificatePdf(certificateId: string, fileName: string) {
+  const blob = await fetchCertificatePdfBlob(certificateId)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = sanitizeDownloadName(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+async function fetchCertificatePdfBlob(certificateId: string) {
+  return apiBlobRequest(`/certificates/${certificateId}/preview`, {
+    auth: true,
+    unauthenticatedMessage: '请先登录后再预览证书',
+  })
 }
 
 export async function publicVerifyCertificate(certificateNo: string) {
@@ -133,22 +139,9 @@ export async function publicVerifyCertificate(certificateNo: string) {
     throw new Error('请输入证书编号')
   }
 
-  let response: Response
-
-  try {
-    response = await fetch(`${API_BASE_URL}/certificates/public/${encodeURIComponent(normalized)}`, {
-      method: 'GET',
-    })
-  } catch {
-    throw new Error('无法连接后端服务，请确认后端已启动')
-  }
-
-  const data = await parseResponse(response)
-  if (!response.ok) {
-    throw new Error(getApiErrorMessage(data))
-  }
-
-  return data as PublicCertificateVerifyResult
+  return apiRequest<PublicCertificateVerifyResult>(`/certificates/public/${encodeURIComponent(normalized)}`, {
+    method: 'GET',
+  })
 }
 
 async function request<T>(
@@ -158,57 +151,13 @@ async function request<T>(
     method: 'GET' | 'POST'
   },
 ) {
-  const session = getSavedSession()
-  if (!session?.accessToken) {
-    throw new Error('请先登录后再管理证书')
-  }
-
-  let response: Response
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      method: options.method,
-    })
-  } catch {
-    throw new Error('无法连接后端服务，请确认后端已启动')
-  }
-
-  const data = await parseResponse(response)
-  if (!response.ok) {
-    throw new Error(getApiErrorMessage(data))
-  }
-
-  return data as T
+  return apiRequest<T>(path, {
+    ...options,
+    auth: true,
+    unauthenticatedMessage: '请先登录后再管理证书',
+  })
 }
 
-async function parseResponse(response: Response) {
-  const text = await response.text()
-  if (!text) {
-    return null
-  }
-
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return text
-  }
-}
-
-function getApiErrorMessage(data: unknown) {
-  if (typeof data === 'object' && data && 'message' in data) {
-    const message = (data as { message?: unknown }).message
-    if (Array.isArray(message)) {
-      return message.join('，')
-    }
-    if (typeof message === 'string') {
-      return message
-    }
-  }
-
-  return '请求失败，请稍后重试'
+function sanitizeDownloadName(name: string) {
+  return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 160) || 'certificate.pdf'
 }

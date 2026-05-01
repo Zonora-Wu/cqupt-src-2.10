@@ -1,6 +1,6 @@
 # API Docs
 
-API 文档目录。当前已完成健康检查、认证登录、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城接口初版。
+API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城接口初版。
 
 ## 当前接口
 
@@ -65,11 +65,18 @@ POST /api/auth/email-code
 
 ```json
 {
-  "email": "student@example.edu.cn"
+  "email": "student@example.edu.cn",
+  "captchaToken": "captcha_xxx"
 }
 ```
 
-开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除该字段。
+说明：
+
+- 发送邮箱登录验证码前必须先完成滑块验证，滑块用途为 `LOGIN_EMAIL_CODE`。
+- 登录验证码有效期 10 分钟。
+- 同一邮箱 60 秒内不能重复发送，10 分钟内最多发送 5 次。
+- 发送新验证码后，旧的未使用登录验证码会自动失效。
+- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除该字段。
 
 ```text
 POST /api/auth/login/email-code
@@ -84,7 +91,125 @@ POST /api/auth/login/email-code
 }
 ```
 
-说明：当前验证码生成接口为开发版本，真实邮件发送后续接入 SMTP。
+说明：登录时只消费 `LOGIN` 用途验证码，且验证码只能使用一次。当前验证码生成接口为开发版本，真实邮件发送后续接入 SMTP。
+
+### 注册邮箱验证码
+
+注册验证码发送前需要先完成滑块验证。
+
+生成滑块挑战：
+
+```text
+POST /api/captcha/slider/challenge
+```
+
+请求示例：
+
+```json
+{
+  "purpose": "REGISTER_EMAIL_CODE"
+}
+```
+
+返回示例：
+
+```json
+{
+  "challengeId": "cap_xxx",
+  "answerHintRatio": 0.7342,
+  "purpose": "REGISTER_EMAIL_CODE",
+  "expiresIn": 120
+}
+```
+
+校验滑块轨迹：
+
+```text
+POST /api/captcha/slider/verify
+```
+
+请求示例：
+
+```json
+{
+  "challengeId": "cap_xxx",
+  "purpose": "REGISTER_EMAIL_CODE",
+  "offsetRatio": 0.734,
+  "track": [
+    { "x": 0, "y": 0, "t": 0 },
+    { "x": 0.18, "y": 0.52, "t": 120 },
+    { "x": 0.73, "y": 0.49, "t": 980 }
+  ]
+}
+```
+
+返回示例：
+
+```json
+{
+  "captchaToken": "captcha_xxx",
+  "expiresIn": 300
+}
+```
+
+说明：
+
+- challenge 有效期 2 分钟。
+- 后端校验滑动目标、耗时、轨迹点数量、轨迹变化和异常回退。
+- `captchaToken` 有效期 5 分钟，且只能使用一次。
+- 当前支持用途：`LOGIN_EMAIL_CODE`、`REGISTER_EMAIL_CODE`。
+- 一期使用数据库临时表保存挑战和 token，二期可迁移到 Redis 并升级为图片拼图。
+
+```text
+POST /api/auth/register/email-code
+```
+
+请求示例：
+
+```json
+{
+  "email": "new-student@cqupt.edu.cn",
+  "captchaToken": "captcha_xxx"
+}
+```
+
+说明：
+
+- 仅允许校内邮箱域名注册。
+- 当前允许域名来自 `SCHOOL_EMAIL_DOMAINS`、学校配置 `SchoolProfile.emailDomain`，并兼容本地开发域名。
+- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除。
+
+### 学生注册
+
+```text
+POST /api/auth/register
+```
+
+请求示例：
+
+```json
+{
+  "name": "张三",
+  "unifiedCode": "2026001",
+  "email": "new-student@cqupt.edu.cn",
+  "code": "123456",
+  "college": "网络空间安全与信息法学院",
+  "identityText": "本科生",
+  "studentNo": "2026001",
+  "grade": "2026",
+  "password": "abc123+-"
+}
+```
+
+返回：同登录接口，注册成功后自动签发 access token 和 refresh token。
+
+说明：
+
+- 新注册账号默认为学生角色 `STUDENT`。
+- 邮箱验证码验证通过后会设置 `emailVerifiedAt`。
+- 注册成功后账号状态为 `ACTIVE`，可以登录平台。
+- 漏洞提交仍需要满足责任书签署和安全答题等准入条件。
+- 注册会写入 `AuditLog`，动作为 `MANAGE_USER`，metadata.action 为 `self_register`。
 
 ### 当前用户
 
@@ -124,11 +249,174 @@ Authorization: Bearer <accessToken>
 - 前端刷新页面后会调用该接口校验登录态。
 - token 无效、过期、用户被禁用时会返回 401。
 
+### 账号中心资料
+
+```text
+GET /api/account/profile
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+返回当前用户账号资料、账号安全状态和业务统计：
+
+- 姓名、统一认证码、邮箱、学院、年级、身份、角色、授权级别。
+- 邮箱验证状态、责任书签署状态、安全答题记录。
+- 累计提交、有效漏洞、当前积分、证书数量。
+
+说明：该接口用于个人中心、提交漏洞前提示和用户首页数据展示。
+
+### 修改密码
+
+```text
+POST /api/account/password/change
+```
+
+请求示例：
+
+```json
+{
+  "oldPassword": "123456+-",
+  "newPassword": "newPass123+-"
+}
+```
+
+说明：
+
+- 需要校验原密码。
+- 新密码需满足强度要求，且不能与原密码相同。
+- 修改成功后会撤销当前账号未失效的 refresh token，其他设备需要重新登录。
+- 操作写入 `AuditLog`，动作为 `MANAGE_USER`，metadata.action 为 `self_change_password`。
+
+### 修改邮箱
+
+发送新邮箱验证码：
+
+```text
+POST /api/account/email/code
+```
+
+请求示例：
+
+```json
+{
+  "newEmail": "new-student@cqupt.edu.cn"
+}
+```
+
+确认修改邮箱：
+
+```text
+POST /api/account/email/change
+```
+
+请求示例：
+
+```json
+{
+  "newEmail": "new-student@cqupt.edu.cn",
+  "code": "123456"
+}
+```
+
+说明：
+
+- 新邮箱必须是校内邮箱，且不能被其他账号绑定。
+- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除。
+- 修改成功会更新 `emailVerifiedAt`，并写入审计日志。
+
+### 提交准入状态
+
+```text
+GET /api/access/status
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+返回示例：
+
+```json
+{
+  "canSubmitVulnerability": false,
+  "authorizationLevel": "BASIC",
+  "emailVerified": true,
+  "responsibilityAgreementRequired": true,
+  "responsibilitySigned": false,
+  "securityExamRequired": true,
+  "securityExamPassed": false,
+  "examThreshold": 80,
+  "missingRequirements": ["请先签署当前版本责任书", "请先通过安全准入考试"]
+}
+```
+
+说明：
+
+- 该接口与漏洞提交接口共用同一套后端准入策略。
+- 前端可以先展示缺失条件，但最终以 `POST /api/vulnerabilities` 的后端判断为准。
+
+### 当前责任书与签署
+
+查看当前激活责任书：
+
+```text
+GET /api/access/responsibility-agreement/current
+```
+
+签署当前责任书：
+
+```text
+POST /api/access/responsibility-agreement/sign
+```
+
+请求示例：
+
+```json
+{
+  "deviceFingerprint": "browser-device-fingerprint"
+}
+```
+
+说明：
+
+- 责任书签署会记录版本、时间、IP、User-Agent 和可选设备指纹。
+- 重复签署当前版本会更新签署时间和设备信息。
+- 操作写入 `AuditLog`，metadata.action 为 `sign_responsibility_agreement`。
+
+### 安全准入答题记录
+
+```text
+POST /api/access/security-exam/submit
+```
+
+请求示例：
+
+```json
+{
+  "score": 86
+}
+```
+
+说明：
+
+- 后端只记录分数和是否通过，不保存具体题目与答案。
+- 通过阈值默认 80，可通过系统设置 `security.exam.threshold` 调整。
+- 是否强制安全答题由系统设置 `security.exam.required` 控制。
+- 操作写入 `AuditLog`，metadata.action 为 `submit_security_exam`。
+
 ## 后续接口分组
 
 ```text
 /api/auth                  登录、刷新令牌、邮箱验证码
-/api/users                 用户资料、账号安全、准入状态
+/api/account               当前用户资料、账号安全、邮箱修改
+/api/access                责任书、安全答题、漏洞提交准入状态
+/api/users                 管理员用户管理
 /api/roles                 角色与权限
 /api/vulnerabilities       漏洞提交、列表、详情、状态流转
 /api/attachments           PDF 附件上传和受控下载

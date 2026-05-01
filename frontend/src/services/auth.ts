@@ -1,3 +1,5 @@
+import { ApiError, apiRequest } from './apiClient'
+
 export type EmailLoginPayload = {
   code: string
   email: string
@@ -6,6 +8,18 @@ export type EmailLoginPayload = {
 export type UnifiedLoginPayload = {
   code: string
   password: string
+}
+
+export type RegisterPayload = {
+  code: string
+  college: string
+  email: string
+  grade: string
+  identityText: string
+  name: string
+  password: string
+  studentNo: string
+  unifiedCode: string
 }
 
 export type AuthUser = {
@@ -48,8 +62,6 @@ type BackendEmailCodeResponse = {
 }
 
 const AUTH_SESSION_KEY = 'cqupt-src-auth-session'
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
-
 export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
   if (!payload.code.trim()) {
     throw new Error('请输入统一认证码')
@@ -59,7 +71,7 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
     throw new Error('请输入密码')
   }
 
-  const result = await request<BackendLoginResponse>('/auth/login/password', {
+  const result = await apiRequest<BackendLoginResponse>('/auth/login/password', {
     body: {
       password: payload.password,
       unifiedCode: payload.code.trim(),
@@ -70,17 +82,59 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
   return saveSession(normalizeLoginResponse(result))
 }
 
-export async function sendEmailLoginCode(email: string) {
+export async function sendEmailLoginCode(email: string, captchaToken: string) {
   if (!isValidEmail(email)) {
     throw new Error('请输入正确的邮箱地址')
   }
 
-  return request<BackendEmailCodeResponse>('/auth/email-code', {
+  if (!captchaToken) {
+    throw new Error('请先完成滑块验证')
+  }
+
+  return apiRequest<BackendEmailCodeResponse>('/auth/email-code', {
     body: {
+      captchaToken,
       email: email.trim(),
     },
     method: 'POST',
   })
+}
+
+export async function sendRegisterEmailCode(email: string, captchaToken: string) {
+  if (!isValidEmail(email)) {
+    throw new Error('请输入正确的邮箱地址')
+  }
+
+  if (!captchaToken) {
+    throw new Error('请先完成滑块验证')
+  }
+
+  return apiRequest<BackendEmailCodeResponse>('/auth/register/email-code', {
+    body: {
+      captchaToken,
+      email: email.trim(),
+    },
+    method: 'POST',
+  })
+}
+
+export async function registerAccount(payload: RegisterPayload) {
+  const result = await apiRequest<BackendLoginResponse>('/auth/register', {
+    body: {
+      code: payload.code,
+      college: payload.college.trim(),
+      email: payload.email.trim(),
+      grade: payload.grade.trim(),
+      identityText: payload.identityText.trim(),
+      name: payload.name.trim(),
+      password: payload.password,
+      studentNo: payload.studentNo.trim(),
+      unifiedCode: payload.unifiedCode.trim(),
+    },
+    method: 'POST',
+  })
+
+  return saveSession(normalizeLoginResponse(result))
 }
 
 export async function loginWithEmailCode(payload: EmailLoginPayload) {
@@ -92,7 +146,7 @@ export async function loginWithEmailCode(payload: EmailLoginPayload) {
     throw new Error('请输入 6 位邮箱验证码')
   }
 
-  const result = await request<BackendLoginResponse>('/auth/login/email-code', {
+  const result = await apiRequest<BackendLoginResponse>('/auth/login/email-code', {
     body: {
       code: payload.code,
       email: payload.email.trim(),
@@ -110,8 +164,8 @@ export async function getCurrentUser() {
   }
 
   try {
-    const user = await request<BackendUser>('/auth/me', {
-      accessToken: session.accessToken,
+    const user = await apiRequest<BackendUser>('/auth/me', {
+      auth: true,
       method: 'GET',
     })
     const nextSession = {
@@ -122,7 +176,9 @@ export async function getCurrentUser() {
     window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(nextSession))
     return nextSession.user
   } catch (error) {
-    clearSavedSession()
+    if (error instanceof ApiError && error.status === 401) {
+      clearSavedSession()
+    }
     throw error
   }
 }
@@ -178,60 +234,4 @@ function normalizeRole(role: BackendRole): AuthUser['role'] {
 function saveSession(session: AuthSession) {
   window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session))
   return session
-}
-
-async function request<T>(path: string, options: { accessToken?: string; body?: unknown; method: 'GET' | 'POST' }) {
-  let response: Response
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-
-  if (options.accessToken) {
-    headers.Authorization = `Bearer ${options.accessToken}`
-  }
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      headers,
-      method: options.method,
-    })
-  } catch {
-    throw new Error('无法连接后端服务，请确认后端已启动')
-  }
-
-  const data = await parseResponse(response)
-
-  if (!response.ok) {
-    throw new Error(getApiErrorMessage(data))
-  }
-
-  return data as T
-}
-
-async function parseResponse(response: Response) {
-  const text = await response.text()
-  if (!text) {
-    return null
-  }
-
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return text
-  }
-}
-
-function getApiErrorMessage(data: unknown) {
-  if (typeof data === 'object' && data && 'message' in data) {
-    const message = (data as { message?: unknown }).message
-    if (Array.isArray(message)) {
-      return message.join('，')
-    }
-    if (typeof message === 'string') {
-      return message
-    }
-  }
-
-  return '请求失败，请稍后重试'
 }

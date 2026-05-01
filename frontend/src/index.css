@@ -69,3 +69,37 @@ html {
 * {
   box-sizing: border-box;
 }
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+html.auth-modal-open {
+  overscroll-behavior: contain;
+}
+
+html.auth-modal-open body {
+  overflow-x: clip;
+}
+
+.user-compact-mode section {
+  padding-top: 5rem;
+  padding-bottom: 1.25rem;
+}
+
+.user-compact-mode .mt-8 {
+  margin-top: 1.25rem;
+}
+
+.user-compact-mode .mt-6 {
+  margin-top: 1rem;
+}
+
+.user-compact-mode .gap-5 {
+  gap: 1rem;
+}

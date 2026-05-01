@@ -1,7 +1,6 @@
 import {
   Activity,
   Bell,
-  Boxes,
   FileCheck2,
   FileSearch,
   Gauge,
@@ -16,21 +15,38 @@ import {
   UserCog,
   UsersRound,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
-import { AdminAnnouncementManagement } from './AdminAnnouncementManagement'
-import { AdminAuditLogManagement } from './AdminAuditLogManagement'
-import { AdminCertificateManagement } from './AdminCertificateManagement'
-import { AdminLearningManagement } from './AdminLearningManagement'
-import { AdminPointsMallManagement } from './AdminPointsMallManagement'
-import { AdminSystemSettings } from './AdminSystemSettings'
-import { AdminUserManagement } from './AdminUserManagement'
-import { AdminVulnerabilityManagement } from './AdminVulnerabilityManagement'
+
+const AdminAnnouncementManagement = lazy(() =>
+  import('./AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
+)
+const AdminAuditLogManagement = lazy(() =>
+  import('./AdminAuditLogManagement').then((module) => ({ default: module.AdminAuditLogManagement })),
+)
+const AdminCertificateManagement = lazy(() =>
+  import('./AdminCertificateManagement').then((module) => ({ default: module.AdminCertificateManagement })),
+)
+const AdminLearningManagement = lazy(() =>
+  import('./AdminLearningManagement').then((module) => ({ default: module.AdminLearningManagement })),
+)
+const AdminPointsMallManagement = lazy(() =>
+  import('./AdminPointsMallManagement').then((module) => ({ default: module.AdminPointsMallManagement })),
+)
+const AdminSystemSettings = lazy(() =>
+  import('./AdminSystemSettings').then((module) => ({ default: module.AdminSystemSettings })),
+)
+const AdminUserManagement = lazy(() =>
+  import('./AdminUserManagement').then((module) => ({ default: module.AdminUserManagement })),
+)
+const AdminVulnerabilityManagement = lazy(() =>
+  import('./AdminVulnerabilityManagement').then((module) => ({ default: module.AdminVulnerabilityManagement })),
+)
 
 type AdminHomeProps = {
   onLogout: () => void
@@ -134,23 +150,27 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         </div>
       </header>
 
-      {activeMenu === '漏洞管理' ? (
-        <AdminVulnerabilityManagement />
-      ) : activeMenu === '证书管理' ? (
-        <AdminCertificateManagement />
-      ) : activeMenu === '用户管理' ? (
-        <AdminUserManagement />
-      ) : activeMenu === '公告管理' ? (
-        <AdminAnnouncementManagement />
-      ) : activeMenu === '学习管理' ? (
-        <AdminLearningManagement />
-      ) : activeMenu === '积分商城' ? (
-        <AdminPointsMallManagement />
-      ) : activeMenu === '审计日志' ? (
-        <AdminAuditLogManagement />
-      ) : activeMenu === '系统设置' ? (
-        <AdminSystemSettings />
-      ) : activeMenu === '首页' ? (
+      {activeMenu !== '首页' ? (
+        <Suspense fallback={<AdminPageLoading />}>
+          {activeMenu === '漏洞管理' ? (
+            <AdminVulnerabilityManagement />
+          ) : activeMenu === '证书管理' ? (
+            <AdminCertificateManagement />
+          ) : activeMenu === '用户管理' ? (
+            <AdminUserManagement />
+          ) : activeMenu === '公告管理' ? (
+            <AdminAnnouncementManagement />
+          ) : activeMenu === '学习管理' ? (
+            <AdminLearningManagement />
+          ) : activeMenu === '积分商城' ? (
+            <AdminPointsMallManagement />
+          ) : activeMenu === '审计日志' ? (
+            <AdminAuditLogManagement />
+          ) : (
+            <AdminSystemSettings />
+          )}
+        </Suspense>
+      ) : (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
@@ -308,17 +328,17 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             </SurfacePanel>
           </div>
         </section>
-      ) : (
-        <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
-          <SurfacePanel className="p-8 text-center">
-            <Boxes className="mx-auto h-10 w-10 text-brand-700 dark:text-green-300" />
-            <h1 className="mt-4 text-2xl font-semibold">{activeMenu}</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              当前先完成管理端首页与菜单栏，该模块后续可继续按业务流程展开。
-            </p>
-          </SurfacePanel>
-        </section>
       )}
     </AppBackground>
+  )
+}
+
+function AdminPageLoading() {
+  return (
+    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
+      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        正在加载管理页面...
+      </SurfacePanel>
+    </section>
   )
 }

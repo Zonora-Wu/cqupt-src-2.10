@@ -12,46 +12,109 @@ import {
   X,
 } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SlideVerify } from '../ui/SlideVerify'
+import { registerAccount, sendRegisterEmailCode, type AuthUser } from '../../services/auth'
 
 type RegisterModalProps = {
   onClose: () => void
+  onRegisterSuccess?: (user: AuthUser) => void
   onSwitchToLogin: () => void
 }
 
-const identityTypes = ['本科生', '研究生', '教师', '信息化办老师', '社团/工作室成员', '校外访客']
+const identityTypes = ['本科生', '研究生', '教师', '信息化办老师', '社团/工作室成员']
 
-export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) {
+export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: RegisterModalProps) {
   const [sliderVerified, setSliderVerified] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const [form, setForm] = useState({
+    code: '',
+    college: '',
+    email: '',
+    grade: '',
+    identityText: '',
+    name: '',
+    password: '',
+    passwordConfirm: '',
+    studentNo: '',
+    unifiedCode: '',
+  })
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const updateField = (key: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  useEffect(() => {
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [])
+
+  const handleSendCode = async () => {
+    setError('')
+    setMessage('')
+    setSendingCode(true)
+    try {
+      const result = await sendRegisterEmailCode(form.email, captchaToken)
+      setMessage(result.devCode ? `${result.message}，开发验证码：${result.devCode}` : result.message)
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : '验证码发送失败')
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
+    setMessage('')
 
     if (!sliderVerified) {
       setError('请先完成滑块验证')
       return
     }
 
-    setError('注册接口待后端接入')
+    if (!form.password || form.password.length < 8) {
+      setError('密码至少需要 8 位')
+      return
+    }
+
+    if (form.password !== form.passwordConfirm) {
+      setError('两次输入的密码不一致')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const session = await registerAccount(form)
+      onRegisterSuccess?.(session.user)
+      if (!onRegisterSuccess) {
+        onSwitchToLogin()
+      }
+    } catch (registerError) {
+      setError(registerError instanceof Error ? registerError.message : '注册失败，请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center px-4 py-8">
       <button
         aria-label="关闭注册弹窗"
-        className="absolute inset-0 bg-slate-950/35 backdrop-blur-md dark:bg-black/70"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
         onClick={onClose}
         type="button"
       />
       <motion.section
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-lg border border-black/10 bg-white/90 p-8 text-slate-950 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111411]/90 dark:text-white"
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        transition={{ duration: 0.24, ease: 'easeOut' }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
       >
         <button
           aria-label="关闭注册弹窗"
@@ -77,14 +140,17 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
         </header>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input icon={<User />} placeholder="用户名" type="text" />
-          <Input icon={<Badge />} placeholder="统一认证码" type="text" />
+          <Input icon={<User />} onChange={(value) => updateField('name', value)} placeholder="姓名" required type="text" value={form.name} />
+          <Input icon={<Badge />} onChange={(value) => updateField('unifiedCode', value)} placeholder="统一认证码" required type="text" value={form.unifiedCode} />
+          <Input icon={<GraduationCap />} onChange={(value) => updateField('college', value)} placeholder="学院" required type="text" value={form.college} />
 
           <label className="relative block">
             <GraduationCap className="absolute left-3 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
             <select
               className="w-full appearance-none rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
-              defaultValue=""
+              onChange={(event) => updateField('identityText', event.target.value)}
+              required
+              value={form.identityText}
             >
               <option disabled value="">
                 身份类型
@@ -97,15 +163,22 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
             </select>
           </label>
 
-          <Input icon={<Mail />} placeholder="邮箱" type="email" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input icon={<Badge />} onChange={(value) => updateField('studentNo', value)} placeholder="学号（教师可留空）" type="text" value={form.studentNo} />
+            <Input icon={<GraduationCap />} onChange={(value) => updateField('grade', value)} placeholder="年级（教师可留空）" type="text" value={form.grade} />
+          </div>
+
+          <Input icon={<Mail />} onChange={(value) => updateField('email', value)} placeholder="校内邮箱" required type="email" value={form.email} />
 
           <div className="flex gap-3">
-            <Input className="flex-1" icon={<Mail />} placeholder="邮箱验证码" type="text" />
+            <Input className="flex-1" icon={<Mail />} onChange={(value) => updateField('code', value)} placeholder="邮箱验证码" required type="text" value={form.code} />
             <button
-              className="rounded-lg border border-black/10 bg-white/70 px-4 text-sm font-medium text-slate-800 transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              className="rounded-lg border border-black/10 bg-white/70 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              disabled={sendingCode}
+              onClick={() => void handleSendCode()}
               type="button"
             >
-              获取验证码
+              {sendingCode ? '发送中' : '获取验证码'}
             </button>
           </div>
 
@@ -114,8 +187,11 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
               <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
               <input
                 className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                onChange={(event) => updateField('password', event.target.value)}
                 placeholder="密码"
+                required
                 type={showPassword ? 'text' : 'password'}
+                value={form.password}
               />
               <button
                 aria-label={showPassword ? '隐藏密码' : '显示密码'}
@@ -131,23 +207,36 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
             </p>
           </div>
 
-          <Input icon={<LockKeyhole />} placeholder="确认密码" type="password" />
+          <Input icon={<LockKeyhole />} onChange={(value) => updateField('passwordConfirm', value)} placeholder="确认密码" required type="password" value={form.passwordConfirm} />
 
-          <SlideVerify onChange={setSliderVerified} />
+          <SlideVerify
+            mode="server"
+            onChange={setSliderVerified}
+            onError={setError}
+            onTokenChange={setCaptchaToken}
+            purpose="REGISTER_EMAIL_CODE"
+          />
 
           <div className="space-y-2 pt-1">
-            <CheckboxText text="同意用户协议" />
-            <CheckboxText text="同意隐私政策" />
-            <CheckboxText text="确认仅在授权范围内进行安全测试" />
+            <CheckboxText text="同意用户协议" required />
+            <CheckboxText text="同意隐私政策" required />
+            <CheckboxText text="确认仅在授权范围内进行安全测试" required />
           </div>
 
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-65"
+            disabled={submitting}
             type="submit"
           >
-            立即注册
+            {submitting ? '注册中...' : '立即注册'}
             <ArrowRight className="h-4 w-4" />
           </button>
+
+          {message && (
+            <div className="rounded-lg border border-brand-600/15 bg-brand-600/10 p-3 text-xs leading-5 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80">
+              {message}
+            </div>
+          )}
 
           {error && (
             <div className="rounded-lg border border-red-500/15 bg-red-500/10 p-3 text-xs leading-5 text-red-700 dark:border-red-300/15 dark:text-red-200">
@@ -174,13 +263,19 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
 function Input({
   className = '',
   icon,
+  onChange,
   placeholder,
+  required = false,
   type,
+  value,
 }: {
   className?: string
   icon: React.ReactNode
+  onChange?: (value: string) => void
   placeholder: string
+  required?: boolean
   type: string
+  value?: string
 }) {
   return (
     <label className={`relative block ${className}`}>
@@ -189,17 +284,20 @@ function Input({
       </span>
       <input
         className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+        onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder}
+        required={required}
         type={type}
+        value={value}
       />
     </label>
   )
 }
 
-function CheckboxText({ text }: { text: string }) {
+function CheckboxText({ required, text }: { required?: boolean; text: string }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600 transition hover:text-slate-900 dark:text-white/60 dark:hover:text-white/80">
-      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/70 text-brand-600 dark:border-white/10 dark:bg-white/5" type="checkbox" />
+      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/70 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
       <span>{text}</span>
     </label>
   )

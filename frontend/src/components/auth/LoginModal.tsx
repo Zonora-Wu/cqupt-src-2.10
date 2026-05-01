@@ -1,6 +1,7 @@
-import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
+import { AlertMessage } from '../ui/AlertMessage'
 import { SlideVerify } from '../ui/SlideVerify'
 import {
   type AuthUser,
@@ -17,6 +18,7 @@ type LoginModalProps = {
 }
 
 type LoginMode = 'email' | 'sso'
+type NoticeState = { text: string; type: 'error' | 'info' | 'success' | 'warning' }
 
 export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: LoginModalProps) {
   const [mode, setMode] = useState<LoginMode>('sso')
@@ -28,7 +30,18 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   const [isSendingCode, setIsSendingCode] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [sliderVerified, setSliderVerified] = useState(false)
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
+  const [message, setMessage] = useState<NoticeState | null>(null)
+  const normalizedEmail = email.trim().toLowerCase()
+  const emailCodeIsActive = mode === 'email' && normalizedEmail === emailCodeSentTo && countdown > 0
+  const shouldShowSlider = mode === 'sso' || !emailCodeIsActive
+
+  useEffect(() => {
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [])
 
   useEffect(() => {
     if (countdown <= 0) return
@@ -46,17 +59,32 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     setMessage(null)
 
     if (!isValidEmail(email)) {
-      setMessage({ text: '请输入正确的邮箱地址', type: 'error' })
+      setMessage({ text: '请输入正确的邮箱地址', type: 'warning' })
+      return
+    }
+
+    if (!captchaToken) {
+      setMessage({ text: '请先完成滑块验证，再获取邮箱验证码', type: 'warning' })
       return
     }
 
     try {
       setIsSendingCode(true)
-      const result = await sendEmailLoginCode(email)
+      const result = await sendEmailLoginCode(email, captchaToken)
       setCountdown(60)
-      setMessage({ text: result.devCode ? `${result.message}，开发验证码为 ${result.devCode}` : result.message, type: 'success' })
+      setEmailCodeSentTo(email.trim().toLowerCase())
+      setCaptchaToken('')
+      setSliderVerified(false)
+      setCaptchaResetKey((value) => value + 1)
+      setMessage({
+        text: result.devCode ? `${result.message}，开发验证码为 ${result.devCode}` : result.message,
+        type: 'success',
+      })
     } catch (error) {
       setMessage({ text: getErrorMessage(error), type: 'error' })
+      setCaptchaToken('')
+      setSliderVerified(false)
+      setCaptchaResetKey((value) => value + 1)
     } finally {
       setIsSendingCode(false)
     }
@@ -66,8 +94,18 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     event.preventDefault()
     setMessage(null)
 
-    if (!sliderVerified) {
-      setMessage({ text: '请先完成滑块验证', type: 'error' })
+    if (mode === 'sso' && !sliderVerified) {
+      setMessage({ text: '请先完成滑块验证', type: 'warning' })
+      return
+    }
+
+    if (mode === 'email' && normalizedEmail !== emailCodeSentTo) {
+      setMessage({ text: '请先获取当前邮箱的验证码', type: 'warning' })
+      return
+    }
+
+    if (mode === 'email' && !/^\d{6}$/.test(emailCode)) {
+      setMessage({ text: '请输入 6 位邮箱验证码', type: 'warning' })
       return
     }
 
@@ -89,18 +127,18 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8">
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center px-4 py-8">
       <button
         aria-label="关闭登录弹窗"
-        className="absolute inset-0 bg-slate-950/35 backdrop-blur-md dark:bg-black/70"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
         onClick={onClose}
         type="button"
       />
       <motion.section
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="relative w-full max-w-[420px] rounded-lg border border-black/10 bg-white/90 p-8 text-slate-950 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111411]/85 dark:text-white"
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        transition={{ duration: 0.24, ease: 'easeOut' }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
       >
         <button
           aria-label="关闭登录弹窗"
@@ -135,6 +173,9 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             onClick={() => {
               setMode('sso')
               setMessage(null)
+              setSliderVerified(false)
+              setCaptchaToken('')
+              setCaptchaResetKey((value) => value + 1)
             }}
             type="button"
           >
@@ -149,6 +190,9 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             onClick={() => {
               setMode('email')
               setMessage(null)
+              setSliderVerified(false)
+              setCaptchaToken('')
+              setCaptchaResetKey((value) => value + 1)
             }}
             type="button"
           >
@@ -171,12 +215,30 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
               emailCode={emailCode}
               isSendingCode={isSendingCode}
               onCodeChange={setEmailCode}
-              onEmailChange={setEmail}
+              onEmailChange={(value) => {
+                setEmail(value)
+                if (value.trim().toLowerCase() !== emailCodeSentTo) {
+                  setEmailCodeSentTo('')
+                }
+              }}
               onSendCode={handleSendEmailCode}
             />
           )}
 
-          <SlideVerify onChange={setSliderVerified} />
+          {shouldShowSlider ? (
+            <SlideVerify
+              key={`${mode}-${captchaResetKey}`}
+              mode={mode === 'email' ? 'server' : 'local'}
+              onChange={setSliderVerified}
+              onTokenChange={setCaptchaToken}
+              purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'REGISTER_EMAIL_CODE'}
+            />
+          ) : (
+            <AlertMessage
+              message={`验证码已发送。${countdown} 秒后可重新获取，重新获取前需要再次完成滑块验证。`}
+              variant="info"
+            />
+          )}
 
           <button
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -188,20 +250,12 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
         </form>
 
         {message && (
-          <div
-            className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-xs leading-5 ${
-              message.type === 'success'
-                ? 'border-brand-600/15 bg-brand-600/10 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80'
-                : 'border-red-500/15 bg-red-500/10 text-red-700 dark:border-red-300/15 dark:text-red-200'
-            }`}
-          >
-            {message.type === 'success' ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            )}
-            <span>{message.text}</span>
-          </div>
+          <AlertMessage
+            className="mt-4 text-xs"
+            message={message.text}
+            onClose={() => setMessage(null)}
+            variant={message.type}
+          />
         )}
 
         <footer className="mt-5 flex items-center justify-between border-t border-black/5 pt-5 text-sm dark:border-white/5">

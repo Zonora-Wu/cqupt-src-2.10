@@ -22,24 +22,55 @@ import {
   Trophy,
   WandSparkles,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
-import { UserAIAssistant } from './UserAIAssistant'
-import { UserAnnouncements } from './UserAnnouncements'
-import { UserCertificates } from './UserCertificates'
-import { UserLeaderboard } from './UserLeaderboard'
-import { UserLearningCenter } from './UserLearningCenter'
-import { UserMyVulnerabilities } from './UserMyVulnerabilities'
-import { UserNotifications } from './UserNotifications'
-import { UserPointsMall } from './UserPointsMall'
-import { UserProfile } from './UserProfile'
-import { UserSubmitVulnerability } from './UserSubmitVulnerability'
-import { UserSystemSettings } from './UserSystemSettings'
+import {
+  getUserDevicePreferences,
+  resolveThemeMode,
+  saveUserDevicePreferences,
+  type EffectiveTheme,
+  type ThemeMode,
+  type UserDevicePreferences,
+} from '../../services/userPreferences'
+
+const UserAIAssistant = lazy(() =>
+  import('./UserAIAssistant').then((module) => ({ default: module.UserAIAssistant })),
+)
+const UserAnnouncements = lazy(() =>
+  import('./UserAnnouncements').then((module) => ({ default: module.UserAnnouncements })),
+)
+const UserCertificates = lazy(() =>
+  import('./UserCertificates').then((module) => ({ default: module.UserCertificates })),
+)
+const UserLeaderboard = lazy(() =>
+  import('./UserLeaderboard').then((module) => ({ default: module.UserLeaderboard })),
+)
+const UserLearningCenter = lazy(() =>
+  import('./UserLearningCenter').then((module) => ({ default: module.UserLearningCenter })),
+)
+const UserMyVulnerabilities = lazy(() =>
+  import('./UserMyVulnerabilities').then((module) => ({ default: module.UserMyVulnerabilities })),
+)
+const UserNotifications = lazy(() =>
+  import('./UserNotifications').then((module) => ({ default: module.UserNotifications })),
+)
+const UserPointsMall = lazy(() =>
+  import('./UserPointsMall').then((module) => ({ default: module.UserPointsMall })),
+)
+const UserProfile = lazy(() =>
+  import('./UserProfile').then((module) => ({ default: module.UserProfile })),
+)
+const UserSubmitVulnerability = lazy(() =>
+  import('./UserSubmitVulnerability').then((module) => ({ default: module.UserSubmitVulnerability })),
+)
+const UserSystemSettings = lazy(() =>
+  import('./UserSystemSettings').then((module) => ({ default: module.UserSystemSettings })),
+)
 
 type UserHomeProps = {
   onLogout: () => void
@@ -103,20 +134,49 @@ const menuItems = [
 ]
 
 export function UserHome({ onLogout, user }: UserHomeProps) {
+  const preferenceKey = user.id ?? user.unifiedCode
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [notifUnread] = useState(3)
   const [aiFocused, setAiFocused] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
-    document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+  const [preferences, setPreferences] = useState<UserDevicePreferences>(() =>
+    getUserDevicePreferences(preferenceKey),
   )
+  const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
+
+  const notifUnread = Object.values(preferences.notifications).some(Boolean) ? 3 : 0
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-  }, [theme])
+    const nextTheme = resolveThemeMode(preferences.themeMode)
+    setTheme(nextTheme)
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+    document.documentElement.dataset.motion = preferences.reduceMotion ? 'reduced' : 'default'
+    saveUserDevicePreferences(preferenceKey, preferences)
+  }, [preferenceKey, preferences])
+
+  useEffect(() => {
+    if (preferences.themeMode !== 'system') return
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const syncSystemTheme = () => {
+      const nextTheme = resolveThemeMode('system')
+      setTheme(nextTheme)
+      document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+    }
+
+    media.addEventListener('change', syncSystemTheme)
+    return () => media.removeEventListener('change', syncSystemTheme)
+  }, [preferences.themeMode])
+
+  const updatePreferences = (nextPreferences: UserDevicePreferences) => {
+    setPreferences(nextPreferences)
+  }
+
+  const changeThemeMode = (themeMode: ThemeMode) => {
+    setPreferences((current) => ({ ...current, themeMode }))
+  }
 
   return (
-    <AppBackground>
+    <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <div className="flex min-w-0 items-center gap-4">
@@ -142,7 +202,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={() => changeThemeMode(theme === 'dark' ? 'light' : 'dark')}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
@@ -161,28 +221,37 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         </div>
       </header>
 
-      {activeMenu === '提交漏洞' ? (
-        <UserSubmitVulnerability />
-      ) : activeMenu === '我的漏洞' ? (
-        <UserMyVulnerabilities />
-      ) : activeMenu === '学习中心' ? (
-        <UserLearningCenter />
-      ) : activeMenu === 'AI 助手' ? (
-        <UserAIAssistant />
-      ) : activeMenu === '积分商城' ? (
-        <UserPointsMall />
-      ) : activeMenu === '我的证书' ? (
-        <UserCertificates />
-      ) : activeMenu === '排行榜' ? (
-        <UserLeaderboard />
-      ) : activeMenu === '平台公告' ? (
-        <UserAnnouncements />
-      ) : activeMenu === '个人中心' ? (
-        <UserProfile user={user} />
-      ) : activeMenu === '系统设置' ? (
-        <UserSystemSettings theme={theme} onThemeChange={setTheme} />
-      ) : activeMenu === '通知' ? (
-        <UserNotifications />
+      {activeMenu !== '首页' ? (
+        <Suspense fallback={<UserPageLoading />}>
+          {activeMenu === '提交漏洞' ? (
+            <UserSubmitVulnerability />
+          ) : activeMenu === '我的漏洞' ? (
+            <UserMyVulnerabilities />
+          ) : activeMenu === '学习中心' ? (
+            <UserLearningCenter />
+          ) : activeMenu === 'AI 助手' ? (
+            <UserAIAssistant />
+          ) : activeMenu === '积分商城' ? (
+            <UserPointsMall />
+          ) : activeMenu === '我的证书' ? (
+            <UserCertificates />
+          ) : activeMenu === '排行榜' ? (
+            <UserLeaderboard />
+          ) : activeMenu === '平台公告' ? (
+            <UserAnnouncements />
+          ) : activeMenu === '个人中心' ? (
+            <UserProfile user={user} />
+          ) : activeMenu === '系统设置' ? (
+            <UserSystemSettings
+              effectiveTheme={theme}
+              onPreferencesChange={updatePreferences}
+              preferences={preferences}
+              userKey={preferenceKey}
+            />
+          ) : (
+            <UserNotifications />
+          )}
+        </Suspense>
       ) : (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.45fr)_390px]">
@@ -383,5 +452,15 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         </section>
       )}
     </AppBackground>
+  )
+}
+
+function UserPageLoading() {
+  return (
+    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
+      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        正在加载页面...
+      </SurfacePanel>
+    </section>
   )
 }

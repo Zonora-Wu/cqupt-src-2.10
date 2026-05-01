@@ -23,7 +23,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
@@ -39,8 +39,13 @@ import {
   reviewVulnerability,
 } from '../../services/vulnerabilities'
 import type { ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
-import { AdminAnnouncementManagement } from '../admin/AdminAnnouncementManagement'
-import { AdminCertificateManagement } from '../admin/AdminCertificateManagement'
+
+const AdminAnnouncementManagement = lazy(() =>
+  import('../admin/AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
+)
+const AdminCertificateManagement = lazy(() =>
+  import('../admin/AdminCertificateManagement').then((module) => ({ default: module.AdminCertificateManagement })),
+)
 
 type AuditorHomeProps = {
   onLogout: () => void
@@ -340,17 +345,31 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       ) : activeMenu === '复测归档' ? (
         <AuditorRetestArchive />
       ) : activeMenu === '证书管理' ? (
-        <AdminCertificateManagement />
+        <Suspense fallback={<AuditorPageLoading />}>
+          <AdminCertificateManagement />
+        </Suspense>
       ) : activeMenu === 'AI 辅助' ? (
         <AuditorAIAssistant />
       ) : activeMenu === '审核记录' ? (
         <AuditorReviewHistory />
       ) : activeMenu === '公告管理' ? (
-        <AdminAnnouncementManagement />
+        <Suspense fallback={<AuditorPageLoading />}>
+          <AdminAnnouncementManagement />
+        </Suspense>
       ) : (
         <AuditorProfile user={user} />
       )}
     </AppBackground>
+  )
+}
+
+function AuditorPageLoading() {
+  return (
+    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
+      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        正在加载审核页面...
+      </SurfacePanel>
+    </section>
   )
 }
 

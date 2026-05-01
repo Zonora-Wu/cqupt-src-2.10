@@ -3,6 +3,8 @@ import { CurrentUser } from './auth.decorators'
 import { JwtAuthGuard } from './jwt-auth.guard'
 import { AuthService } from './auth.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from './auth.types'
+import { normalizeCaptchaToken } from '../captcha/captcha.validation'
+import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody } from './auth.validation'
 
 type RequestLike = {
   ip?: string
@@ -24,8 +26,11 @@ type EmailCodeLoginBody = {
 }
 
 type SendEmailCodeBody = {
+  captchaToken?: unknown
   email?: unknown
 }
+
+type RegisterBody = Record<string, unknown>
 
 function getString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -53,12 +58,30 @@ export class AuthController {
 
   @Post('login/email-code')
   loginWithEmailCode(@Body() body: EmailCodeLoginBody, @Req() req: RequestLike) {
-    return this.auth.loginWithEmailCode(getString(body.email), getString(body.code), getRequestMeta(req))
+    return this.auth.loginWithEmailCode(normalizeEmail(body.email), normalizeEmailCode(body.code), getRequestMeta(req))
   }
 
   @Post('email-code')
   sendEmailLoginCode(@Body() body: SendEmailCodeBody, @Req() req: RequestLike) {
-    return this.auth.sendEmailLoginCode(getString(body.email), getRequestMeta(req))
+    return this.auth.sendEmailLoginCode(
+      normalizeEmail(body.email),
+      normalizeCaptchaToken(body.captchaToken),
+      getRequestMeta(req),
+    )
+  }
+
+  @Post('register/email-code')
+  sendRegisterEmailCode(@Body() body: SendEmailCodeBody, @Req() req: RequestLike) {
+    return this.auth.sendRegisterEmailCode(
+      normalizeEmail(body.email),
+      normalizeCaptchaToken(body.captchaToken),
+      getRequestMeta(req),
+    )
+  }
+
+  @Post('register')
+  register(@Body() body: RegisterBody, @Req() req: RequestLike) {
+    return this.auth.register(normalizeRegisterBody(body), getRequestMeta(req))
   }
 
   @Get('me')

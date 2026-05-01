@@ -10,6 +10,8 @@
 认证与 RBAC 基础模块已完成初版
 本地 PostgreSQL migration 与 seed 已完成
 前端登录已切换到真实后端接口
+注册已接入真实后端接口
+滑块验证一期已接入后端挑战、轨迹校验和一次性票据
 当前用户接口与 RBAC 权限守卫已完成初版
 漏洞提交 API 与提交前准入校验已完成初版
 文件上传、MinIO 安全校验与 PDF 受控预览已完成初版
@@ -19,6 +21,7 @@
 证书签发、撤销、PDF 预览与公开核验接口已完成初版
 证书 PDF 模板叠加文字与电子印章盖章已完成初版
 管理员/审核员证书管理页已接入真实接口
+用户我的证书页已接入真实接口，支持完整 PDF 弹窗预览和电子证书下载
 未登录证书查询已接入公开核验接口
 公告管理 API 与前端真实数据接入已完成初版
 学习资源与靶场资源 API 已完成初版
@@ -26,7 +29,16 @@
 积分商城 API 与前端真实数据接入已完成初版
 用户管理 API 与管理员用户管理页真实数据接入已完成初版
 审计日志 API 与管理员审计日志页真实数据接入已完成初版
-下一步：完善证书模板在线坐标可视化配置
+账号中心 API 与准入中心 API 已完成初版
+漏洞提交前准入校验已抽取为统一 AccessPolicyService
+前端个人中心与提交漏洞页已接入账号/准入接口
+个人中心与提交漏洞页已接入统一告警组件，区分成功、错误、警告和提示状态
+邮箱验证码登录已接入服务端滑块票据、LOGIN 用途隔离和发送频率限制
+前端已完成角色工作台与菜单页面懒加载拆包，Vite 大 chunk 警告已消除
+前端 API 请求已统一封装，支持 401 登录失效自动清理、回到未登录首页和全局提示
+登录/注册弹窗已优化打开动画，降低整屏 backdrop blur 与缩放合成导致的页面抖动
+核心 API 冒烟测试脚本已完成，当前临时后端 3001 端口验证 28/28 通过
+下一步：完善系统设置中的责任书版本管理与安全答题题库管理
 ```
 
 ## 已完成
@@ -40,6 +52,7 @@
 - 主题切换
 - 统一背景、Logo、菜单、卡片、下拉框等复用组件
 - 登录已接入真实后端接口
+- 注册已接入真实后端接口，支持校内邮箱验证码、学生账号创建和注册后自动登录
 - 刷新页面会调用 `/api/auth/me` 校验登录态
 - 提交漏洞页已接入真实后端接口
 - 提交漏洞页已接入 PDF 附件上传与上传后预览
@@ -50,6 +63,7 @@
 - 管理员系统设置已支持上传证书背景模板和电子印章
 - 管理员/审核员证书管理页已接入真实后端证书队列
 - 证书管理页已支持签发、撤销和后端 PDF 预览
+- 用户我的证书页已接入 `/api/certificates/my`，支持完整 PDF iframe 预览和受控 blob 下载
 - 未登录证书查询已接入公开核验接口，仅展示脱敏信息
 - 管理员/审核员公告管理页已接入真实后端接口
 - 访客公开公告页已接入真实后端接口
@@ -61,7 +75,21 @@
 - 管理员积分商城已接入真实商品管理和线下领取处理接口
 - 管理员用户管理页已接入真实用户列表、用户详情、角色调整、状态调整和密码重置接口
 - 管理员审计日志页已接入真实审计日志接口，支持筛选、分页、统计和详情查看
-- 注册和滑块验证仍为前端占位/交互
+- 用户系统设置已落地为当前设备本地偏好，支持主题、跟随系统、语言偏好、通知开关、减少动效、紧凑显示和恢复默认
+- 注册滑块验证已接入后端真实挑战与一次性 `captchaToken`
+- 邮箱登录发码已改为需要 `LOGIN_EMAIL_CODE` 服务端滑块票据
+- 邮箱登录验证码已限制用途为 `LOGIN`，且新验证码会使旧验证码失效
+- 邮箱登录验证码已增加 60 秒重发间隔和 10 分钟发送次数限制
+- 前端入口已将用户、审核员、管理员工作台改为 lazy chunk
+- 用户端、管理员端二级业务页面已改为菜单级懒加载，生产构建主入口 chunk 从约 743KB 降至约 400KB
+- 新增统一前端 API client，集中处理 JSON、FormData、PDF blob 请求、后端错误解析和 401 会话失效
+- App 已监听会话失效事件，token 过期或后端返回 401 时会清理本地登录态、回到未登录首页并显示提示
+- 登录/注册弹窗移除整屏强 backdrop blur 和 scale 缩放动画，改为轻量淡入位移，减少弹窗打开时的页面抖动
+- 个人中心已接入 `/api/account/profile` 展示真实账号信息、责任书、积分和证书统计
+- 个人中心已接入 `/api/account/password/change`、`/api/account/email/code` 和 `/api/account/email/change`
+- 提交漏洞页已接入 `/api/access/status`，可在提交前展示缺失准入条件
+- 提交漏洞页已接入当前责任书签署与安全答题记录接口
+- 新增前端通用告警组件 `AlertMessage`，个人中心和提交漏洞页已用于接口错误、表单校验、成功反馈和准入提醒
 
 ### 数据库
 
@@ -79,6 +107,7 @@
 - 已创建并应用学习资源 migration：`20260430093000_learning_resources`
 - 已创建并应用积分商城 migration：`20260430103000_points_mall`
 - 已创建并应用用户管理 migration：`20260430111000_user_management`
+- 已创建滑块验证 migration：`20260430143000_captcha`
 - 已写入 seed：3 个角色、22 个权限、3 个演示用户、9 条授权策略、4 条演示公告、4 条演示学习资源、4 个演示商品、学生演示积分 1260
 
 ### 后端
@@ -91,6 +120,11 @@
 - 认证模块初版
 - 统一认证码 + 密码登录接口
 - 邮箱验证码开发接口
+- 注册邮箱验证码接口：`POST /api/auth/register/email-code`
+- 学生注册接口：`POST /api/auth/register`
+- 滑块验证挑战接口：`POST /api/captcha/slider/challenge`
+- 滑块验证校验接口：`POST /api/captcha/slider/verify`
+- 注册邮箱验证码接口需要携带后端签发的一次性 `captchaToken`
 - 当前用户接口：`GET /api/auth/me`
 - access token 校验守卫：`JwtAuthGuard`
 - 权限守卫：`PermissionsGuard`
@@ -185,11 +219,25 @@
 - `POST /api/vulnerabilities` 已通过真实登录 token 验证并写入数据库
 - TypeScript 类型检查通过
 - 后端构建通过
+- 校内邮箱策略已抽取为 `SchoolPolicyService`，注册和账号换邮箱共用同一套域名规则
+- 账号中心接口：`GET /api/account/profile`
+- 当前用户修改密码接口：`POST /api/account/password/change`
+- 当前用户修改邮箱验证码接口：`POST /api/account/email/code`
+- 当前用户修改邮箱接口：`POST /api/account/email/change`
+- 准入中心状态接口：`GET /api/access/status`
+- 当前责任书接口：`GET /api/access/responsibility-agreement/current`
+- 当前责任书签署接口：`POST /api/access/responsibility-agreement/sign`
+- 安全答题提交接口：`POST /api/access/security-exam/submit`
+- 漏洞提交接口已改为调用 `AccessPolicyService.assertCanSubmitVulnerability`
+- 新增核心 API 冒烟测试：`npm.cmd run test:core-api`
+- 核心 API 冒烟测试已覆盖健康检查、三类账号登录、用户/审核员/管理员核心只读接口
+- 修复 `AccessModule` 与 `AccountModule` 使用 `JwtAuthGuard` 时缺少 `RbacModule` 导入导致后端启动失败的问题
 
 ## 未完成
 
 - 真实 SMTP 邮件发送
-- 用户注册准入
+- 责任书后台版本管理与安全答题题库管理
+- 滑块验证二期图片拼图与 Redis 临时存储
 - 证书模板在线坐标可视化配置
 - 审计日志中间件
 - AI Gateway 与 Hermes Agent
@@ -198,8 +246,7 @@
 
 ## 下一步
 
-1. 完善系统设置中的证书模板坐标可视化配置。
-2. 实现前端 token 过期提示与自动退出体验优化。
+1. 完善系统设置中的责任书版本管理、安全答题题库和证书模板坐标可视化配置。
+2. 将核心 API 冒烟测试纳入本地启动脚本或 CI 流程。
 3. 规划并接入 AI Gateway 与 Hermes Agent。
-4. 补齐核心业务接口的自动化测试。
-5. 准备 Ubuntu Docker 部署联调。
+4. 准备 Ubuntu Docker 部署联调。

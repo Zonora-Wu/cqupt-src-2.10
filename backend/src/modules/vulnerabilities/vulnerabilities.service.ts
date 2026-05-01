@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import {
   AuditAction,
   PointDirection,
@@ -6,6 +6,7 @@ import {
   VulnerabilitySeverity,
   VulnerabilityStatus,
 } from '@prisma/client'
+import { AccessPolicyService } from '../access/access-policy.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import {
@@ -17,7 +18,10 @@ import {
 
 @Injectable()
 export class VulnerabilitiesService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AccessPolicyService) private readonly accessPolicy: AccessPolicyService,
+  ) {}
 
   async listReviewQueue(): Promise<ReviewQueueResponse> {
     const reports = await this.prisma.vulnerabilityReport.findMany({
@@ -300,7 +304,7 @@ export class VulnerabilitiesService {
     input: NormalizedCreateVulnerabilityInput,
     meta: ClientRequestMeta,
   ) {
-    await this.assertCanSubmit(user.id)
+    await this.accessPolicy.assertCanSubmitVulnerability(user.id)
 
     const now = new Date()
     const reportNo = await this.generateReportNo()
@@ -367,58 +371,6 @@ export class VulnerabilitiesService {
       submittedAt: report.submittedAt,
       title: report.title,
     }
-  }
-
-  private async assertCanSubmit(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        examAttempts: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-        responsibilitySigns: {
-          include: {
-            agreement: true,
-          },
-          orderBy: { signedAt: 'desc' },
-        },
-      },
-    })
-
-    if (!user) {
-      throw new ForbiddenException('用户不存在')
-    }
-
-    if (!user.emailVerifiedAt) {
-      throw new ForbiddenException('请先完成邮箱验证')
-    }
-
-    const hasActiveAgreementSignature = user.responsibilitySigns.some((signature) => signature.agreement.active)
-    if (!hasActiveAgreementSignature) {
-      throw new ForbiddenException('请先签署当前版本责任书')
-    }
-
-    const examRequired = await this.isSecurityExamRequired()
-    if (examRequired && !user.examAttempts.some((attempt) => attempt.passed)) {
-      throw new ForbiddenException('请先通过安全准入考试')
-    }
-  }
-
-  private async isSecurityExamRequired() {
-    const setting = await this.prisma.systemSetting.findUnique({
-      where: { key: 'security.exam.required' },
-    })
-
-    if (setting?.value === true) {
-      return true
-    }
-
-    if (typeof setting?.value === 'object' && setting.value && 'enabled' in setting.value) {
-      return Boolean((setting.value as { enabled?: unknown }).enabled)
-    }
-
-    return false
   }
 
   private async generateReportNo() {

@@ -1,11 +1,19 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common'
-import { AuditAction, User, UserStatus } from '@prisma/client'
+import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
+import { AuditAction, AuthorizationLevel, RoleCode, User, UserStatus } from '@prisma/client'
 import { randomBytes, createHash } from 'node:crypto'
 import { getJwtExpiry, signJwt } from '../../common/crypto/jwt'
-import { verifyPassword } from '../../common/crypto/password'
+import { hashPassword, verifyPassword } from '../../common/crypto/password'
+import { CaptchaService } from '../captcha/captcha.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { RbacService } from '../rbac/rbac.service'
+import { SchoolPolicyService } from '../school/school-policy.service'
 import { ClientRequestMeta, LoginResponse } from './auth.types'
+import { NormalizedRegisterInput } from './auth.validation'
+
+const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
+const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000
+const EMAIL_CODE_MAX_PER_WINDOW = 5
+const EMAIL_CODE_WINDOW_MS = 10 * 60 * 1000
 
 @Injectable()
 export class AuthService {
@@ -14,6 +22,10 @@ export class AuthService {
     private readonly prisma: PrismaService,
     @Inject(RbacService)
     private readonly rbac: RbacService,
+    @Inject(CaptchaService)
+    private readonly captcha: CaptchaService,
+    @Inject(SchoolPolicyService)
+    private readonly schoolPolicy: SchoolPolicyService,
   ) {}
 
   async loginWithPassword(unifiedCode: string, password: string, meta: ClientRequestMeta): Promise<LoginResponse> {
@@ -30,8 +42,10 @@ export class AuthService {
     return this.completeLogin(user, meta)
   }
 
-  async sendEmailLoginCode(email: string, meta: ClientRequestMeta) {
+  async sendEmailLoginCode(email: string, captchaToken: string, meta: ClientRequestMeta) {
     const normalizedEmail = email.trim().toLowerCase()
+    await this.captcha.consumeCaptchaToken(captchaToken, 'LOGIN_EMAIL_CODE', meta)
+
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
     })
@@ -40,15 +54,69 @@ export class AuthService {
       throw new UnauthorizedException('邮箱未注册或不可用')
     }
 
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('账号当前不可登录')
+    }
+
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedException('邮箱尚未完成绑定验证')
+    }
+
+    await this.assertEmailCodeRateLimit(normalizedEmail, 'LOGIN', meta)
+
+    const devCode = '123456'
+    const codeHash = createHash('sha256').update(devCode).digest('hex')
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.emailVerificationCode.updateMany({
+        where: {
+          consumedAt: null,
+          email: normalizedEmail,
+          purpose: 'LOGIN',
+        },
+        data: { consumedAt: new Date() },
+      })
+
+      await tx.emailVerificationCode.create({
+        data: {
+          userId: user.id,
+          email: normalizedEmail,
+          codeHash,
+          purpose: 'LOGIN',
+          expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS),
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return {
+      message: `验证码已发送至 ${normalizedEmail}`,
+      devCode: process.env.NODE_ENV === 'production' ? undefined : devCode,
+    }
+  }
+
+  async sendRegisterEmailCode(email: string, captchaToken: string, meta: ClientRequestMeta) {
+    const normalizedEmail = email.trim().toLowerCase()
+    await this.captcha.consumeCaptchaToken(captchaToken, 'REGISTER_EMAIL_CODE', meta)
+    await this.schoolPolicy.assertSchoolEmail(normalizedEmail)
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    })
+
+    if (existingUser) {
+      throw new ConflictException('该邮箱已注册，请直接登录')
+    }
+
     const devCode = '123456'
     const codeHash = createHash('sha256').update(devCode).digest('hex')
 
     await this.prisma.emailVerificationCode.create({
       data: {
-        userId: user.id,
         email: normalizedEmail,
         codeHash,
-        purpose: 'LOGIN',
+        purpose: 'REGISTER',
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
@@ -59,6 +127,86 @@ export class AuthService {
       message: `验证码已发送至 ${normalizedEmail}`,
       devCode: process.env.NODE_ENV === 'production' ? undefined : devCode,
     }
+  }
+
+  async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse> {
+    await this.schoolPolicy.assertSchoolEmail(input.email)
+    await this.assertRegisterCode(input.email, input.code)
+
+    const [existingCode, existingEmail, existingStudentNo, studentRole] = await Promise.all([
+      this.prisma.user.findUnique({ where: { unifiedCode: input.unifiedCode } }),
+      this.prisma.user.findUnique({ where: { email: input.email } }),
+      input.studentNo ? this.prisma.user.findUnique({ where: { studentNo: input.studentNo } }) : Promise.resolve(null),
+      this.prisma.role.findUnique({ where: { code: RoleCode.STUDENT } }),
+    ])
+
+    if (existingCode) {
+      throw new ConflictException('统一认证码已注册')
+    }
+
+    if (existingEmail) {
+      throw new ConflictException('邮箱已注册')
+    }
+
+    if (existingStudentNo) {
+      throw new ConflictException('学号已注册')
+    }
+
+    if (!studentRole) {
+      throw new BadRequestException('学生角色尚未初始化，请先执行数据库种子脚本')
+    }
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          authorizationLevel: AuthorizationLevel.BASIC,
+          college: input.college,
+          email: input.email,
+          emailVerifiedAt: new Date(),
+          grade: input.grade || null,
+          identityText: input.identityText,
+          name: input.name,
+          passwordHash: hashPassword(input.password),
+          roleId: studentRole.id,
+          status: UserStatus.ACTIVE,
+          studentNo: input.studentNo || null,
+          unifiedCode: input.unifiedCode,
+        },
+        include: { role: true },
+      })
+
+      await tx.emailVerificationCode.updateMany({
+        where: {
+          email: input.email,
+          purpose: 'REGISTER',
+          consumedAt: null,
+        },
+        data: { consumedAt: new Date() },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: created.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'self_register',
+            college: input.college,
+            identityText: input.identityText,
+            unifiedCode: input.unifiedCode,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: created.id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return created
+    })
+
+    return this.completeLogin(user, meta)
   }
 
   async loginWithEmailCode(email: string, code: string, meta: ClientRequestMeta): Promise<LoginResponse> {
@@ -82,6 +230,8 @@ export class AuthService {
         expiresAt: {
           gt: new Date(),
         },
+        purpose: 'LOGIN',
+        userId: user.id,
       },
       orderBy: {
         createdAt: 'desc',
@@ -178,4 +328,64 @@ export class AuthService {
       },
     })
   }
+
+  private async assertEmailCodeRateLimit(email: string, purpose: string, meta: ClientRequestMeta) {
+    const recentCode = await this.prisma.emailVerificationCode.findFirst({
+      where: {
+        createdAt: { gte: new Date(Date.now() - EMAIL_CODE_RESEND_INTERVAL_MS) },
+        email,
+        purpose,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (recentCode) {
+      throw new BadRequestException('验证码发送过于频繁，请稍后再试')
+    }
+
+    const windowStart = new Date(Date.now() - EMAIL_CODE_WINDOW_MS)
+    const [emailCount, ipCount] = await Promise.all([
+      this.prisma.emailVerificationCode.count({
+        where: {
+          createdAt: { gte: windowStart },
+          email,
+          purpose,
+        },
+      }),
+      meta.ipAddress
+        ? this.prisma.emailVerificationCode.count({
+            where: {
+              createdAt: { gte: windowStart },
+              ipAddress: meta.ipAddress,
+              purpose,
+            },
+          })
+        : Promise.resolve(0),
+    ])
+
+    if (emailCount >= EMAIL_CODE_MAX_PER_WINDOW || ipCount >= EMAIL_CODE_MAX_PER_WINDOW * 3) {
+      throw new BadRequestException('验证码请求次数过多，请稍后再试')
+    }
+  }
+
+  private async assertRegisterCode(email: string, code: string) {
+    const codeHash = createHash('sha256').update(code).digest('hex')
+    const verificationCode = await this.prisma.emailVerificationCode.findFirst({
+      where: {
+        codeHash,
+        consumedAt: null,
+        email,
+        expiresAt: {
+          gt: new Date(),
+        },
+        purpose: 'REGISTER',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!verificationCode) {
+      throw new UnauthorizedException('邮箱验证码错误或已过期')
+    }
+  }
+
 }

@@ -1,4 +1,4 @@
-import { getSavedSession } from './auth'
+import { apiRequest } from './apiClient'
 
 export type RoleCode = 'STUDENT' | 'AUDITOR' | 'ADMIN'
 export type UserStatusCode = 'ACTIVE' | 'PENDING' | 'DISABLED' | 'LOCKED'
@@ -73,8 +73,6 @@ export type ManagedUsersResponse = {
   }
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
-
 export function listManagedUsers() {
   return request<ManagedUsersResponse>('/users/manage', { method: 'GET' })
 }
@@ -130,51 +128,9 @@ async function request<T>(
     method: 'GET' | 'PATCH' | 'POST'
   },
 ) {
-  const session = getSavedSession()
-  if (!session?.accessToken) {
-    throw new Error('请先登录后再访问用户管理')
-  }
-
-  let response: Response
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      method: options.method,
-    })
-  } catch {
-    throw new Error('无法连接后端服务，请确认后端已启动')
-  }
-
-  const data = await parseResponse(response)
-  if (!response.ok) {
-    throw new Error(getApiErrorMessage(data))
-  }
-
-  return data as T
-}
-
-async function parseResponse(response: Response) {
-  const text = await response.text()
-  if (!text) return null
-
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return text
-  }
-}
-
-function getApiErrorMessage(data: unknown) {
-  if (typeof data === 'object' && data && 'message' in data) {
-    const message = (data as { message?: unknown }).message
-    if (Array.isArray(message)) return message.join('，')
-    if (typeof message === 'string') return message
-  }
-
-  return '请求失败，请稍后重试'
+  return apiRequest<T>(path, {
+    ...options,
+    auth: true,
+    unauthenticatedMessage: '请先登录后再访问用户管理',
+  })
 }

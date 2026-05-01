@@ -1,14 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { AuditAction, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import {
-  getAuditActionLabelMatches,
-  getAuditRiskLevel,
-  getModuleActionList,
-  getRiskActionList,
-  mapAuditLogDetail,
-  mapAuditLogItem,
-} from './audit-log-mapper'
+import { getAuditActionLabelMatches, getAuditRiskLevel, getModuleActionList, mapAuditLogDetail, mapAuditLogItem } from './audit-log-mapper'
 import { AuditLogQuery } from './audit-logs.types'
 
 const auditInclude = {
@@ -97,14 +90,14 @@ export class AuditLogsService {
       this.prisma.auditLog.findMany({
         include: auditInclude,
         orderBy: { createdAt: 'desc' },
-        take: 20,
+        take: 200,
         where,
       }),
     ])
 
-    const highRisk = actionGroups
-      .filter((group) => getAuditRiskLevel(group.action, 'success') === 'HIGH')
-      .reduce((sum, group) => sum + group._count._all, 0)
+    const highRisk = await this.prisma.auditLog.count({
+      where: mergeWhereWithAnd(where, buildRiskWhere('HIGH')),
+    })
 
     return {
       actionGroups: actionGroups
@@ -135,7 +128,6 @@ function buildAuditWhere(query: AuditLogQuery): Prisma.AuditLogWhereInput {
 
   if (query.action) actionFilters.push([query.action])
   if (query.module) actionFilters.push(getModuleActionList(query.module))
-  if (query.riskLevel) actionFilters.push(getRiskActionList(query.riskLevel))
 
   const actionIn = intersectActionFilters(actionFilters)
   const where: Prisma.AuditLogWhereInput = {}
@@ -188,7 +180,88 @@ function buildAuditWhere(query: AuditLogQuery): Prisma.AuditLogWhereInput {
     ]
   }
 
+  if (query.riskLevel) {
+    return mergeWhereWithAnd(where, buildRiskWhere(query.riskLevel))
+  }
+
   return where
+}
+
+function buildRiskWhere(riskLevel: AuditLogQuery['riskLevel']): Prisma.AuditLogWhereInput {
+  if (riskLevel === 'HIGH') {
+    return {
+      OR: [
+        {
+          action: {
+            in: [
+              AuditAction.CHANGE_SYSTEM_SETTING,
+              AuditAction.CHANGE_USER_PERMISSION,
+              AuditAction.ISSUE_CERTIFICATE,
+              AuditAction.MANAGE_USER,
+              AuditAction.REVIEW_VULNERABILITY,
+              AuditAction.REVOKE_CERTIFICATE,
+              AuditAction.VIEW_SENSITIVE_ATTACHMENT,
+            ],
+          },
+        },
+        {
+          action: AuditAction.LOGIN,
+          result: { not: 'success' },
+        },
+      ],
+    }
+  }
+
+  if (riskLevel === 'MEDIUM') {
+    return {
+      action: {
+        in: [
+          AuditAction.CALL_AI,
+          AuditAction.MANAGE_LEARNING_RESOURCE,
+          AuditAction.MANAGE_MALL,
+          AuditAction.PUBLISH_ANNOUNCEMENT,
+          AuditAction.SUBMIT_VULNERABILITY,
+        ],
+      },
+    }
+  }
+
+  return {
+    AND: [
+      {
+        action: {
+          notIn: [
+            AuditAction.CALL_AI,
+            AuditAction.CHANGE_SYSTEM_SETTING,
+            AuditAction.CHANGE_USER_PERMISSION,
+            AuditAction.ISSUE_CERTIFICATE,
+            AuditAction.MANAGE_LEARNING_RESOURCE,
+            AuditAction.MANAGE_MALL,
+            AuditAction.MANAGE_USER,
+            AuditAction.PUBLISH_ANNOUNCEMENT,
+            AuditAction.REVIEW_VULNERABILITY,
+            AuditAction.REVOKE_CERTIFICATE,
+            AuditAction.SUBMIT_VULNERABILITY,
+            AuditAction.VIEW_SENSITIVE_ATTACHMENT,
+          ],
+        },
+      },
+      {
+        OR: [
+          { action: { not: AuditAction.LOGIN } },
+          { result: 'success' },
+        ],
+      },
+    ],
+  }
+}
+
+function mergeWhereWithAnd(left: Prisma.AuditLogWhereInput, right: Prisma.AuditLogWhereInput): Prisma.AuditLogWhereInput {
+  if (Object.keys(left).length === 0) return right
+  if (Object.keys(right).length === 0) return left
+  return {
+    AND: [left, right],
+  }
 }
 
 function buildActorKeywordWhere(keyword: string): Prisma.UserWhereInput {
