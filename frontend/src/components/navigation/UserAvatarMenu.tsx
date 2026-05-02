@@ -2,6 +2,7 @@ import { CircleUserRound, LogOut, Settings2, ShieldCheck } from 'lucide-react'
 import { useRef, useState } from 'react'
 
 type UserAvatarMenuProps = {
+  avatarUrl?: string | null
   name: string
   onAccountSecurity: () => void
   onLogout: () => void
@@ -10,6 +11,7 @@ type UserAvatarMenuProps = {
 }
 
 export function UserAvatarMenu({
+  avatarUrl,
   name,
   onAccountSecurity,
   onLogout,
@@ -45,11 +47,15 @@ export function UserAvatarMenu({
     >
       <button
         aria-label="打开用户菜单"
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-base font-semibold text-white shadow-[0_0_18px_rgba(42,100,56,0.35)] transition hover:bg-brand-700"
+        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-base font-semibold text-white shadow-[0_0_18px_rgba(42,100,56,0.35)] transition hover:bg-brand-700"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
-        {name.slice(0, 1)}
+        {avatarUrl ? (
+          <img alt={name} className="h-full w-full object-cover" src={avatarUrl} />
+        ) : (
+          name.slice(0, 1)
+        )}
       </button>
 
       {open && (

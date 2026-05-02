@@ -1,15 +1,19 @@
 import { BadRequestException } from '@nestjs/common'
-import { ChangeEmailInput, ChangePasswordInput, SendChangeEmailCodeInput } from './account.types'
+import { ChangeEmailInput, ChangePasswordInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput } from './account.types'
 
 export function normalizeChangePasswordBody(body: Record<string, unknown>): ChangePasswordInput {
-  const oldPassword = requireText(body.oldPassword, '原密码', 1, 128)
+  const code = normalizeEmailCode(body.code)
   const newPassword = validatePassword(requireText(body.newPassword, '新密码', 8, 128))
 
-  if (oldPassword === newPassword) {
-    throw new BadRequestException('新密码不能与原密码相同')
-  }
+  return { code, newPassword }
+}
 
-  return { oldPassword, newPassword }
+export function normalizeSendCurrentEmailCodeBody(body: Record<string, unknown>): SendCurrentEmailCodeInput {
+  const purpose = body.purpose
+  if (purpose !== 'CHANGE_EMAIL' && purpose !== 'CHANGE_PASSWORD') {
+    throw new BadRequestException('purpose 参数无效')
+  }
+  return { purpose }
 }
 
 export function normalizeSendChangeEmailCodeBody(body: Record<string, unknown>): SendChangeEmailCodeInput {

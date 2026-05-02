@@ -30,6 +30,7 @@ import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard } from '../../services/dashboard'
+import { getAccountProfile } from '../../services/account'
 import {
   getUserDevicePreferences,
   resolveThemeMode,
@@ -60,6 +61,9 @@ const UserMyVulnerabilities = lazy(() =>
 const UserNotifications = lazy(() =>
   import('./UserNotifications').then((module) => ({ default: module.UserNotifications })),
 )
+const UserAccountSecurity = lazy(() =>
+  import('./UserAccountSecurity').then((module) => ({ default: module.UserAccountSecurity })),
+)
 const UserPointsMall = lazy(() =>
   import('./UserPointsMall').then((module) => ({ default: module.UserPointsMall })),
 )
@@ -77,6 +81,8 @@ type UserHomeProps = {
   onLogout: () => void
   user: AuthUser
 }
+
+const quickActions = [
   { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2 },
   { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target },
   { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen },
@@ -135,6 +141,14 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
   const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
+  const [navAvatarUrl, setNavAvatarUrl] = useState<string | null>(null)
+
+  // 加载头像用于导航栏
+  useEffect(() => {
+    getAccountProfile()
+      .then((data) => setNavAvatarUrl(data.account.avatarUrl ?? null))
+      .catch(() => { /* 静默失败 */ })
+  }, [])
 
   // 加载仪表盘数据
   useEffect(() => {
@@ -158,6 +172,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark')
     document.documentElement.dataset.motion = preferences.reduceMotion ? 'reduced' : 'default'
     saveUserDevicePreferences(preferenceKey, preferences)
+    try { localStorage.setItem('cqupt-theme', nextTheme) } catch {}
   }, [preferenceKey, preferences])
 
   useEffect(() => {
@@ -215,6 +230,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
             </button>
             <UserAvatarMenu
+              avatarUrl={navAvatarUrl}
               name={user.name}
               onAccountSecurity={() => setActiveMenu('账号安全')}
               onLogout={onLogout}
@@ -247,7 +263,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           ) : activeMenu === '平台公告' ? (
             <UserAnnouncements />
           ) : activeMenu === '个人中心' ? (
-            <UserProfile user={user} />
+            <UserProfile onAvatarChange={setNavAvatarUrl} user={user} />
+          ) : activeMenu === '账号安全' ? (
+            <UserAccountSecurity />
           ) : activeMenu === '系统设置' ? (
             <UserSystemSettings
               effectiveTheme={theme}

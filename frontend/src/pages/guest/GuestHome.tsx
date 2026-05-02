@@ -106,11 +106,14 @@ const navPageMap: Record<string, GuestPage> = {
 
 export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
+  })
   const [activePage, setActivePage] = useState<GuestPage>('home')
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+    try { localStorage.setItem('cqupt-theme', theme) } catch {}
   }, [theme])
 
   const openPage = (page: GuestPage) => {

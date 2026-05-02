@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Inject, Post, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -6,8 +7,15 @@ import { AccountService } from './account.service'
 import {
   normalizeChangeEmailBody,
   normalizeChangePasswordBody,
-  normalizeSendChangeEmailCodeBody,
+  normalizeSendCurrentEmailCodeBody,
 } from './account.validation'
+
+type UploadedImageFile = {
+  buffer?: Buffer
+  mimetype?: string
+  originalname?: string
+  size?: number
+}
 
 type RequestLike = {
   ip?: string
@@ -44,13 +52,28 @@ export class AccountController {
     return this.account.changePassword(user, normalizeChangePasswordBody(body), getRequestMeta(req))
   }
 
-  @Post('email/code')
-  sendChangeEmailCode(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
-    return this.account.sendChangeEmailCode(user, normalizeSendChangeEmailCodeBody(body), getRequestMeta(req))
+  @Post('email/identity-code')
+  sendCurrentEmailCode(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.account.sendCurrentEmailCode(user, normalizeSendCurrentEmailCodeBody(body), getRequestMeta(req))
   }
 
   @Post('email/change')
   changeEmail(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.account.changeEmail(user, normalizeChangeEmailBody(body), getRequestMeta(req))
+  }
+
+  @Get('audit-logs')
+  getMyAuditLogs(@CurrentUser() user: AuthenticatedRequestUser, @Query() query: Record<string, unknown>) {
+    return this.account.getMyAuditLogs(user.id, query)
+  }
+
+  @Post('avatar')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }))
+  uploadAvatar(
+    @UploadedFile() file: UploadedImageFile | undefined,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    if (!file) throw new BadRequestException('请选择图片文件')
+    return this.account.uploadAvatar(user.id, file)
   }
 }

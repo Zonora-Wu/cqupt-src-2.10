@@ -37,6 +37,29 @@ export class VulnerabilitiesController {
     return this.vulnerabilities.listMyReports(user)
   }
 
+  @Get('my/:reportId')
+  @RequirePermissions('vulnerability:read_own')
+  getMyVulnerabilityDetail(
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.vulnerabilities.getMyVulnerabilityDetail(reportId, user)
+  }
+
+  @Post('my/:reportId/supplement')
+  @RequirePermissions('vulnerability:read_own')
+  supplementVulnerability(
+    @Param('reportId') reportId: string,
+    @Body() body: { note?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    if (typeof body.note !== 'string' || body.note.trim().length < 5) {
+      throw new BadRequestException('请填写补充说明（至少5字）')
+    }
+    return this.vulnerabilities.supplementVulnerability(reportId, body.note.trim(), user, getRequestMeta(req))
+  }
+
   @Get('retest-queue')
   @RequirePermissions('vulnerability:review')
   listRetestQueue() {
@@ -81,8 +104,8 @@ export class VulnerabilitiesController {
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
-    if (typeof body.note !== 'string' || body.note.trim().length < 2) {
-      throw new BadRequestException('请填写说明（至少2字）')
+    if (typeof body.note !== 'string') {
+      throw new BadRequestException('note 字段格式错误')
     }
     return this.vulnerabilities.markFixing(reportId, body.note.trim(), user, getRequestMeta(req))
   }

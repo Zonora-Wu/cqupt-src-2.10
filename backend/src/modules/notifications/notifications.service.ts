@@ -163,7 +163,7 @@ export class NotificationsService {
     })
 
     return reports.map((r) => ({
-      content: `漏洞报告「${r.title}」（${r.reportNo}）处于${r.status === VulnerabilityStatus.SUBMITTED ? '已提交待分派' : '待初审'}状态，请及时跟进。`,
+      content: `漏洞报告「${r.title}」（${r.reportNo}）已提交，请及时跟进审核。`,
       createdAt: r.createdAt.toISOString(),
       id: `pending-vuln-${r.id}`,
     }))
@@ -178,7 +178,7 @@ export class NotificationsService {
     })
 
     return reports.map((r) => ({
-      content: `漏洞报告「${r.title}」（${r.reportNo}）${r.status === VulnerabilityStatus.SUBMITTED ? '等待分派审核员' : '待初审'}，请及时处理。`,
+      content: `漏洞报告「${r.title}」（${r.reportNo}）待审核，请及时处理。`,
       createdAt: r.createdAt.toISOString(),
       id: `review-${r.id}`,
     }))

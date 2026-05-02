@@ -92,9 +92,9 @@ const auditLogs = [
 
 export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
-    document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-  )
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
+  })
   const [dashStats, setDashStats] = useState({
     pendingVulnerabilities: 0,
     pendingCerts: 0,
@@ -126,6 +126,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+    try { localStorage.setItem('cqupt-theme', theme) } catch {}
   }, [theme])
 
   return (

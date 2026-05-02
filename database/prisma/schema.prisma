@@ -171,6 +171,7 @@ model User {
   college               String?
   grade                 String?
   identityText          String?
+  avatarUrl             String?
   authorizationLevel    AuthorizationLevel  @default(BASIC)
   authorizationSourceId String?
   status                UserStatus          @default(PENDING)

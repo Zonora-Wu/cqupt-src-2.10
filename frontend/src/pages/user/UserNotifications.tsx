@@ -1,4 +1,4 @@
-]633;E;head -n 12 /home/cocking/projects/cqupt-src-2.10/frontend/src/pages/user/UserNotifications.tsx;a24e542e-5673-4170-a15d-24f0843f3f9c]633;Cimport {
+import {
   Award,
   Bell,
   CheckCircle2,

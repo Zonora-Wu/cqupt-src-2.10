@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import {
   AuditAction,
   PointDirection,
@@ -12,6 +12,7 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import {
   AdminVulnerabilityDetailResponse,
   AdminVulnerabilityListResponse,
+  MyVulnerabilityDetailResponse,
   MyVulnerabilityListResponse,
   NormalizedCreateVulnerabilityInput,
   NormalizedRetestInput,
@@ -19,6 +20,7 @@ import {
   RetestQueueResponse,
   RetestResponse,
   ReviewQueueResponse,
+  SupplementVulnerabilityResponse,
 } from './vulnerability.types'
 
 @Injectable()
@@ -215,7 +217,7 @@ export class VulnerabilitiesService {
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
         data: {
-          confirmedAt: nextStatus === VulnerabilityStatus.CONFIRMED ? now : report.confirmedAt,
+          confirmedAt: nextStatus === VulnerabilityStatus.PENDING_RETEST ? now : report.confirmedAt,
           finalSeverity,
           status: nextStatus,
         },
@@ -225,12 +227,12 @@ export class VulnerabilitiesService {
         where: { reportId: report.id },
         create: {
           auditorId: user.id,
-          closedAt: nextStatus === VulnerabilityStatus.CONFIRMED || nextStatus === VulnerabilityStatus.REJECTED ? now : null,
+          closedAt: nextStatus === VulnerabilityStatus.PENDING_RETEST || nextStatus === VulnerabilityStatus.REJECTED ? now : null,
           reportId: report.id,
         },
         update: {
           auditorId: user.id,
-          closedAt: nextStatus === VulnerabilityStatus.CONFIRMED || nextStatus === VulnerabilityStatus.REJECTED ? now : null,
+          closedAt: nextStatus === VulnerabilityStatus.PENDING_RETEST || nextStatus === VulnerabilityStatus.REJECTED ? now : null,
         },
       })
 
@@ -344,7 +346,7 @@ export class VulnerabilitiesService {
         lastRetestNote: lastRetest?.note ?? null,
         ownerUnit: r.ownerUnit,
         reportNo: r.reportNo,
-        status: formatAdminStatus(r.status, true),
+        status: formatAdminStatus(r.status),
         submitter: { email: r.submitter.email, name: r.submitter.name },
         title: r.title,
         updatedAt: r.updatedAt,
@@ -388,7 +390,7 @@ export class VulnerabilitiesService {
 
     if (!allowedStatuses.includes(report.status as typeof allowedStatuses[number])) {
       throw new BadRequestException(
-        `当前状态（${formatAdminStatus(report.status, true)}）不允许执行复测操作`,
+        `当前状态（${formatAdminStatus(report.status)}）不允许执行复测操作`,
       )
     }
 
@@ -451,7 +453,7 @@ export class VulnerabilitiesService {
     return {
       id: updated.id,
       reportNo: updated.reportNo,
-      status: formatAdminStatus(updated.status, true),
+      status: formatAdminStatus(updated.status),
       updatedAt: updated.updatedAt,
     }
   }
@@ -477,7 +479,7 @@ export class VulnerabilitiesService {
 
     if (!allowedForFixing.includes(report.status as typeof allowedForFixing[number])) {
       throw new BadRequestException(
-        `当前状态（${formatAdminStatus(report.status, true)}）不可推入修复中`,
+        `当前状态（${formatAdminStatus(report.status)}）不可推入修复中`,
       )
     }
 
@@ -520,7 +522,7 @@ export class VulnerabilitiesService {
     return {
       id: updated.id,
       reportNo: updated.reportNo,
-      status: formatAdminStatus(updated.status, true),
+      status: formatAdminStatus(updated.status),
       updatedAt: updated.updatedAt,
     }
   }
@@ -625,7 +627,7 @@ export class VulnerabilitiesService {
       title: report.title,
       selfSeverity: formatSeverity(report.selfSeverity),
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
-      status: formatAdminStatus(report.status, !!report.assignment),
+      status: formatAdminStatus(report.status),
       assetName: report.assetName,
       ownerUnit: report.ownerUnit,
       submitterName: report.submitter.name,
@@ -652,6 +654,134 @@ export class VulnerabilitiesService {
           (r) => r.status === VulnerabilityStatus.ARCHIVED || r.status === VulnerabilityStatus.CERTIFIED,
         ).length,
       },
+    }
+  }
+
+  async getMyVulnerabilityDetail(reportId: string, user: AuthenticatedRequestUser): Promise<MyVulnerabilityDetailResponse> {
+    const report = await this.prisma.vulnerabilityReport.findFirst({
+      where: { deletedAt: null, id: reportId },
+      include: {
+        attachments: {
+          where: { deletedAt: null },
+          orderBy: { uploadedAt: 'desc' },
+          select: { id: true, originalName: true, sizeBytes: true, uploadedAt: true },
+        },
+        events: {
+          orderBy: { createdAt: 'asc' },
+          include: { actor: { select: { name: true } } },
+        },
+        pointEntries: { select: { direction: true, points: true } },
+        assignment: {
+          select: { auditor: { select: { name: true } } },
+        },
+      },
+    })
+
+    if (!report) {
+      throw new NotFoundException('漏洞报告不存在')
+    }
+
+    if (report.submitterId !== user.id) {
+      throw new ForbiddenException('只能查看自己提交的漏洞报告')
+    }
+
+    return {
+      id: report.id,
+      reportNo: report.reportNo,
+      title: report.title,
+      selfSeverity: formatSeverity(report.selfSeverity),
+      finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      status: formatStatus(report.status),
+      assetName: report.assetName,
+      assetUrl: report.assetUrl,
+      ownerUnit: report.ownerUnit,
+      vulnerabilityType: report.vulnerabilityType,
+      reproductionSteps: report.reproductionSteps,
+      impactAssessment: report.impactAssessment,
+      repairSuggestion: report.repairSuggestion,
+      requestPacket: report.requestPacket,
+      testBoundary: report.testBoundary,
+      reviewerName: report.assignment?.auditor.name ?? null,
+      points: sumPoints(report.pointEntries),
+      submittedAt: report.submittedAt,
+      confirmedAt: report.confirmedAt,
+      updatedAt: report.updatedAt,
+      attachments: report.attachments,
+      events: report.events.map((e) => ({
+        id: e.id,
+        action: e.action,
+        actorName: e.actor?.name ?? null,
+        fromStatus: e.fromStatus ? formatStatus(e.fromStatus) : null,
+        toStatus: e.toStatus ? formatStatus(e.toStatus) : null,
+        note: e.note,
+        createdAt: e.createdAt,
+      })),
+    }
+  }
+
+  async supplementVulnerability(
+    reportId: string,
+    note: string,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<SupplementVulnerabilityResponse> {
+    const report = await this.prisma.vulnerabilityReport.findFirst({
+      where: { deletedAt: null, id: reportId },
+    })
+
+    if (!report) {
+      throw new NotFoundException('漏洞报告不存在')
+    }
+
+    if (report.submitterId !== user.id) {
+      throw new ForbiddenException('只能操作自己提交的漏洞报告')
+    }
+
+    if (report.status !== VulnerabilityStatus.NEEDS_SUPPLEMENT) {
+      throw new BadRequestException('当前状态不需要补充材料，无需操作')
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.vulnerabilityReport.update({
+        where: { id: report.id },
+        data: { status: VulnerabilityStatus.SUBMITTED },
+      })
+
+      await tx.vulnerabilityEvent.create({
+        data: {
+          action: 'SUPPLEMENT_MATERIALS',
+          actorId: user.id,
+          fromStatus: report.status,
+          toStatus: VulnerabilityStatus.SUBMITTED,
+          note,
+          reportId: report.id,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.SUBMIT_VULNERABILITY,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { decision: 'SUPPLEMENT_MATERIALS', reportNo: report.reportNo },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: report.id,
+          targetType: 'VulnerabilityReport',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return next
+    })
+
+    return {
+      id: updated.id,
+      reportNo: updated.reportNo,
+      status: formatStatus(updated.status),
+      updatedAt: updated.updatedAt,
     }
   }
 
@@ -694,7 +824,7 @@ export class VulnerabilitiesService {
       title: report.title,
       selfSeverity: formatSeverity(report.selfSeverity),
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
-      status: formatAdminStatus(report.status, !!report.assignment),
+      status: formatAdminStatus(report.status),
       assetName: report.assetName,
       assetUrl: report.assetUrl,
       ownerUnit: report.ownerUnit,
@@ -715,8 +845,8 @@ export class VulnerabilitiesService {
         id: event.id,
         action: formatEventAction(event.action),
         actorName: event.actor?.name ?? null,
-        fromStatus: event.fromStatus ? formatAdminStatus(event.fromStatus, false) : null,
-        toStatus: event.toStatus ? formatAdminStatus(event.toStatus, false) : null,
+        fromStatus: event.fromStatus ? formatAdminStatus(event.fromStatus) : null,
+        toStatus: event.toStatus ? formatAdminStatus(event.toStatus) : null,
         note: event.note,
         createdAt: event.createdAt,
       })),
@@ -770,7 +900,7 @@ async function getCurrentPointBalance(
 }
 
 function getNextStatus(decision: ReviewDecision) {
-  if (decision === ReviewDecision.CONFIRM) return VulnerabilityStatus.CONFIRMED
+  if (decision === ReviewDecision.CONFIRM) return VulnerabilityStatus.PENDING_RETEST
   if (decision === ReviewDecision.NEEDS_SUPPLEMENT) return VulnerabilityStatus.NEEDS_SUPPLEMENT
   if (decision === ReviewDecision.REJECT) return VulnerabilityStatus.REJECTED
   throw new BadRequestException('暂不支持该审核结论')
@@ -864,10 +994,10 @@ function isPendingStatus(status: VulnerabilityStatus) {
   return statuses.includes(status)
 }
 
-function formatAdminStatus(status: VulnerabilityStatus, hasAssignment: boolean): string {
+function formatAdminStatus(status: VulnerabilityStatus): string {
   const statusMap: Record<VulnerabilityStatus, string> = {
     DRAFT: '草稿',
-    SUBMITTED: hasAssignment ? '待审核' : '待分派',
+    SUBMITTED: '待审核',
     PENDING_REVIEW: '审核中',
     NEEDS_SUPPLEMENT: '待补充',
     CONFIRMED: '已确认',

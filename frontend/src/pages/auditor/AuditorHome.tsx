@@ -50,6 +50,9 @@ const AdminAnnouncementManagement = lazy(() =>
 const AdminCertificateManagement = lazy(() =>
   import('../admin/AdminCertificateManagement').then((module) => ({ default: module.AdminCertificateManagement })),
 )
+const AdminVulnerabilityManagement = lazy(() =>
+  import('../admin/AdminVulnerabilityManagement').then((module) => ({ default: module.AdminVulnerabilityManagement })),
+)
 
 type AuditorHomeProps = {
   onLogout: () => void
@@ -297,12 +300,13 @@ const announcementStatusStyles: Record<AnnouncementStatus, string> = {
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
-    document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-  )
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
+  })
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+    try { localStorage.setItem('cqupt-theme', theme) } catch {}
   }, [theme])
 
   return (
@@ -340,7 +344,9 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       ) : activeMenu === '首页' ? (
         <AuditorDashboard onNavigate={setActiveMenu} />
       ) : activeMenu === '漏洞审核' ? (
-        <AuditorReviewQueue />
+        <Suspense fallback={<AuditorPageLoading />}>
+          <AdminVulnerabilityManagement />
+        </Suspense>
       ) : activeMenu === '复测归档' ? (
         <AuditorRetestArchive />
       ) : activeMenu === '证书管理' ? (

@@ -66,6 +66,48 @@ export type MyVulnerabilityListResponse = {
   }
 }
 
+export type VulnerabilityEventRecord = {
+  id: string
+  action: string
+  actorName: string | null
+  fromStatus: string | null
+  toStatus: string | null
+  note: string | null
+  createdAt: string
+}
+
+export type MyVulnerabilityDetail = {
+  id: string
+  reportNo: string
+  title: string
+  selfSeverity: string
+  finalSeverity: string | null
+  status: string
+  assetName: string
+  assetUrl: string | null
+  ownerUnit: string | null
+  vulnerabilityType: string
+  reproductionSteps: string
+  impactAssessment: string
+  repairSuggestion: string
+  requestPacket: string | null
+  testBoundary: string | null
+  reviewerName: string | null
+  points: number
+  submittedAt: string | null
+  confirmedAt: string | null
+  updatedAt: string
+  attachments: MyVulnerabilityAttachment[]
+  events: VulnerabilityEventRecord[]
+}
+
+export type SupplementVulnerabilityResponse = {
+  id: string
+  reportNo: string
+  status: string
+  updatedAt: string
+}
+
 export type ReviewQueueItem = {
   assetName: string
   assetUrl: string | null
@@ -139,6 +181,23 @@ export async function listMyVulnerabilities() {
     auth: true,
     method: 'GET',
     unauthenticatedMessage: '请先登录后再查看漏洞',
+  })
+}
+
+export async function getMyVulnerabilityDetail(reportId: string) {
+  return apiRequest<MyVulnerabilityDetail>(`/vulnerabilities/my/${reportId}`, {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录后再查看漏洞',
+  })
+}
+
+export async function supplementVulnerability(reportId: string, note: string) {
+  return apiRequest<SupplementVulnerabilityResponse>(`/vulnerabilities/my/${reportId}/supplement`, {
+    auth: true,
+    body: { note },
+    method: 'POST',
+    unauthenticatedMessage: '请先登录后再操作',
   })
 }
 
