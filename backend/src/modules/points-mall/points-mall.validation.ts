@@ -10,10 +10,10 @@ import {
 export function normalizeMallProductBody(body: MallProductBody): NormalizedMallProductInput {
   return {
     category: requireText(body.category, '商品分类', 2, 40),
-    description: requireText(body.description, '商品说明', 5, 1000),
+    description: normalizeOptionalText(body.description, 1000),
     imageUrl: normalizeOptionalUrl(body.imageUrl),
     name: requireText(body.name, '商品名称', 2, 80),
-    perUserLimit: normalizeInteger(body.perUserLimit, '每人限兑数量', 1, 99, 1),
+    perUserLimit: normalizeInteger(body.perUserLimit, '每人限兑数量', 0, 99, 1),
     pickupInstructions: normalizeOptionalText(body.pickupInstructions, 1000),
     pickupLocation: normalizeOptionalText(body.pickupLocation, 120) || '蓝山工作室',
     pointsCost: normalizeInteger(body.pointsCost, '兑换积分', 1, 100000, undefined),
@@ -105,16 +105,29 @@ function normalizeProductStatus(value: unknown) {
 }
 
 function normalizeOptionalUrl(value: unknown) {
-  const text = normalizeOptionalText(value, 1000)
-  if (!text) return null
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string') {
+    throw new BadRequestException('图片 URL 格式不正确')
+  }
+
+  const text = value.trim()
+
+  // base64 图片 data URL（来自上传），不限制长度
+  if (text.startsWith('data:image/')) {
+    return text
+  }
+
+  if (text.length > 2000) {
+    throw new BadRequestException('图片 URL 不能超过 2000 个字符')
+  }
 
   try {
     const parsed = new URL(text)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('invalid protocol')
+      throw new BadRequestException('商品图片 URL 必须是 http:// 或 https:// 开头的有效地址')
     }
     return parsed.toString()
   } catch {
-    throw new BadRequestException('商品图片 URL 必须是 http:// 或 https:// 开头的有效地址')
+    throw new BadRequestException('商品图片 URL 格式无效')
   }
 }

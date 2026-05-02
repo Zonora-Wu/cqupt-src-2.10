@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { MallProductStatus } from '@prisma/client'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -11,6 +12,13 @@ import {
   normalizeRedemptionBody,
 } from './points-mall.validation'
 import { PointsMallService } from './points-mall.service'
+
+type UploadedImageFile = {
+  buffer?: Buffer
+  mimetype?: string
+  originalname?: string
+  size?: number
+}
 
 type RequestLike = {
   ip?: string
@@ -133,6 +141,14 @@ export class PointsMallController {
     @Req() req: RequestLike,
   ) {
     return this.pointsMall.deleteProduct(id, user, getRequestMeta(req))
+  }
+
+  @Post('mall/manage/products/upload-image')
+  @RequirePermissions('mall:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }))
+  uploadProductImage(@UploadedFile() file: UploadedImageFile | undefined) {
+    if (!file) throw new BadRequestException('请选择图片文件')
+    return this.pointsMall.uploadProductImage(file)
   }
 
   @Get('mall/manage/redemptions')

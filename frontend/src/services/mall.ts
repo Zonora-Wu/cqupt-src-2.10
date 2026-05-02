@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient'
+import { apiFormRequest, apiRequest } from './apiClient'
 
 export type MallProductStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE'
 export type MallRedemptionStatus = 'PENDING_PICKUP' | 'COMPLETED' | 'CANCELED' | 'EXPIRED'
@@ -149,6 +149,16 @@ export function cancelRedemption(id: string, note = '') {
   return request<MallRedemptionItem>(`/mall/manage/redemptions/${id}/cancel`, {
     body: { note },
     method: 'POST',
+  })
+}
+
+export function uploadProductImage(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return apiFormRequest<{ imageUrl: string }>('/mall/manage/products/upload-image', {
+    auth: true,
+    formData: form,
+    unauthenticatedMessage: '请先登录后再访问积分商城',
   })
 }
 

@@ -5,14 +5,17 @@ import {
   Filter,
   Gift,
   History,
+  Loader2,
   Plus,
   Power,
   ShoppingBag,
   TicketCheck,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { motion } from 'motion/react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -28,6 +31,7 @@ import {
   listManagedMallProducts,
   listManagedRedemptions,
   updateMallProduct,
+  uploadProductImage,
 } from '../../services/mall'
 import type { MallProductItem, MallProductPayload, MallRedemptionItem, ManagedMallRedemptionItem } from '../../services/mall'
 
@@ -422,7 +426,7 @@ function ProductRow({
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
             <span>积分：{item.pointsCost}</span>
             <span>库存：{item.stock}</span>
-            <span>限兑：{item.perUserLimit}</span>
+            <span>限兑：{item.perUserLimit === 0 ? '无限制' : item.perUserLimit}</span>
             <span>领取：{item.pickupLocation}</span>
             <span>排序：{item.sortOrder}</span>
           </div>
@@ -511,9 +515,20 @@ function ProductModal({
   saving: boolean
 }) {
   const [form, setForm] = useState<FormState>(emptyForm)
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageNotice, setImageNotice] = useState('')
+  const [showCustomLimit, setShowCustomLimit] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (initialValue) setForm(initialValue)
+  }, [initialValue])
+
+  useEffect(() => {
+    if (initialValue) {
+      document.documentElement.classList.add('auth-modal-open')
+      return () => document.documentElement.classList.remove('auth-modal-open')
+    }
   }, [initialValue])
 
   if (!initialValue) return null
@@ -527,25 +542,140 @@ function ProductModal({
     onSave(form)
   }
 
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <form
-        className="max-h-[88vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95"
-        onSubmit={submit}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-brand-700 dark:text-green-300">Product Editor</p>
-            <h2 className="mt-2 text-2xl font-semibold">{form.id ? '编辑商品' : '新增商品'}</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">兑换默认在蓝山工作室线下领取，库存和积分会由后端事务校验。</p>
-          </div>
-          <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (event.target) event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setImageNotice('请选择图片文件')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImageNotice('图片大小不能超过 2MB')
+      return
+    }
+    setImageUploading(true)
+    setImageNotice('')
+    try {
+      const result = await uploadProductImage(file)
+      updateField('imageUrl', result.imageUrl)
+      setImageNotice('图片已上传')
+      setTimeout(() => setImageNotice(''), 2000)
+    } catch (err) {
+      setImageNotice(err instanceof Error ? err.message : '上传失败')
+    } finally {
+      setImageUploading(false)
+    }
+  }
 
-        <div className="mt-6 grid gap-4">
-          <Field label="商品名称" onChange={(value) => updateField('name', value)} placeholder="请输入商品名称" value={form.name} />
+  return (
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">
+      <button
+        aria-label="关闭弹窗"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+        onClick={onClose}
+        type="button"
+      />
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="relative max-h-[90vh] w-full max-w-[660px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+      >
+        <button
+          aria-label="关闭弹窗"
+          className="absolute right-4 top-4 rounded-md p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <h3 className="mb-6 text-center text-lg font-semibold">
+          {form.id ? '编辑商品' : '新增商品'}
+        </h3>
+
+        <form className="space-y-5" onSubmit={submit}>
+          {/* ── 图片上传区 ── */}
+          <div>
+            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              商品图片 <span className="font-normal text-slate-400">（可选）</span>
+            </span>
+            {form.imageUrl ? (
+              <div className="relative inline-block">
+                <img
+                  alt="商品图片预览"
+                  className="h-32 w-32 rounded-lg border border-black/10 object-cover dark:border-white/10"
+                  src={form.imageUrl}
+                />
+                <button
+                  className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600"
+                  onClick={() => updateField('imageUrl', '')}
+                  type="button"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-black/10 px-6 py-8 text-slate-500 transition hover:border-brand-600/40 hover:text-brand-700 dark:border-white/10 dark:hover:border-brand-200/40 dark:hover:text-brand-200"
+                  disabled={imageUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                >
+                  {imageUploading ? (
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  ) : (
+                    <Upload className="h-8 w-8" />
+                  )}
+                  <span className="text-sm">
+                    {imageUploading ? '上传中...' : '点击上传图片'}
+                  </span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    支持 JPG、PNG、WebP、GIF，最大 2MB
+                  </span>
+                </button>
+                <input
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  ref={fileInputRef}
+                  type="file"
+                />
+                {imageNotice && (
+                  <p className={`mt-2 text-xs ${imageNotice === '图片已上传' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                    {imageNotice}
+                  </p>
+                )}
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+                  <span className="text-xs text-slate-400 dark:text-slate-500">或输入图片 URL</span>
+                  <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+                </div>
+                <input
+                  className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                  onChange={(e) => updateField('imageUrl', e.target.value)}
+                  placeholder="https://example.com/image.png"
+                  value={form.imageUrl === '' ? '' : form.imageUrl}
+                />
+              </>
+            )}
+          </div>
+
+          {/* ── 基本信息 ── */}
+          <div>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">商品名称</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                onChange={(e) => updateField('name', e.target.value)}
+                placeholder="请输入商品名称"
+                value={form.name}
+              />
+            </label>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             <SelectInput label="商品类型" onChange={(value) => updateField('category', value)} options={['实体奖励', '学习权益', '证书周边']} value={form.category} />
             <SelectInput
@@ -554,56 +684,147 @@ function ProductModal({
               options={['草稿', '已上架', '已下架']}
               value={form.status === 'ACTIVE' ? '已上架' : form.status === 'INACTIVE' ? '已下架' : '草稿'}
             />
-            <Field label="图片 URL" onChange={(value) => updateField('imageUrl', value)} placeholder="可为空" value={form.imageUrl} />
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">兑换积分</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                min={0}
+                onChange={(e) => updateField('pointsCost', Number(e.target.value))}
+                type="number"
+                value={form.pointsCost}
+              />
+            </label>
           </div>
-          <div className="grid gap-4 md:grid-cols-4">
-            <NumberField label="兑换积分" onChange={(value) => updateField('pointsCost', value)} value={form.pointsCost} />
-            <NumberField label="库存数量" onChange={(value) => updateField('stock', value)} value={form.stock} />
-            <NumberField label="每人限兑" onChange={(value) => updateField('perUserLimit', value)} value={form.perUserLimit} />
-            <NumberField label="排序权重" onChange={(value) => updateField('sortOrder', value)} value={form.sortOrder} />
-          </div>
-          <Field label="领取地点" onChange={(value) => updateField('pickupLocation', value)} value={form.pickupLocation} />
-          <TextArea label="商品说明" onChange={(value) => updateField('description', value)} value={form.description} />
-          <TextArea label="领取说明" onChange={(value) => updateField('pickupInstructions', value)} value={form.pickupInstructions} />
-        </div>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onClose} type="button">
-            取消
-          </button>
-          <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} type="submit">
-            {saving ? '保存中...' : '保存'}
-          </button>
-        </div>
-      </form>
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">库存数量</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                min={0}
+                onChange={(e) => updateField('stock', Number(e.target.value))}
+                type="number"
+                value={form.stock}
+              />
+            </label>
+            <SelectInput
+              label="每人限兑"
+              onChange={(value) => {
+                if (value === '无限制') {
+                  updateField('perUserLimit', 0)
+                } else {
+                  setShowCustomLimit(true)
+                }
+              }}
+              options={['无限制', '自定义']}
+              value={form.perUserLimit === 0 ? '无限制' : `自定义 (${form.perUserLimit}次)`}
+            />
+            {showCustomLimit && (
+              <div className="fixed inset-0 z-[150] isolate flex items-center justify-center p-4">
+                <button
+                  aria-label="关闭"
+                  className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+                  onClick={() => {
+                    if (form.perUserLimit <= 0) updateField('perUserLimit', 1)
+                    setShowCustomLimit(false)
+                  }}
+                  type="button"
+                />
+                <motion.section
+                  animate={{ opacity: 1, y: 0 }}
+                  className="relative w-full max-w-[320px] rounded-lg border border-black/10 bg-white/95 p-6 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+                  initial={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                >
+                  <button
+                    aria-label="关闭"
+                    className="absolute right-3 top-3 rounded-md p-1.5 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+                    onClick={() => {
+                      if (form.perUserLimit <= 0) updateField('perUserLimit', 1)
+                      setShowCustomLimit(false)
+                    }}
+                    type="button"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <h4 className="mb-4 text-center text-sm font-semibold">自定义每人限兑数量</h4>
+                  <input
+                    autoFocus
+                    className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                    min={1}
+                    onChange={(e) => updateField('perUserLimit', Math.max(1, Number(e.target.value)))}
+                    onKeyDown={(e) => e.key === 'Enter' && setShowCustomLimit(false)}
+                    type="number"
+                    value={form.perUserLimit}
+                  />
+                  <button
+                    className="mt-4 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+                    onClick={() => setShowCustomLimit(false)}
+                    type="button"
+                  >
+                    确定
+                  </button>
+                </motion.section>
+              </div>
+            )}
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">排序权重</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                onChange={(e) => updateField('sortOrder', Number(e.target.value))}
+                type="number"
+                value={form.sortOrder}
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">领取地点</span>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              onChange={(e) => updateField('pickupLocation', e.target.value)}
+              value={form.pickupLocation}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">商品说明 <span className="font-normal text-slate-400">（可选）</span></span>
+            <textarea
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              onChange={(e) => updateField('description', e.target.value)}
+              value={form.description}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">领取说明</span>
+            <textarea
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              onChange={(e) => updateField('pickupInstructions', e.target.value)}
+              value={form.pickupInstructions}
+            />
+          </label>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+              onClick={onClose}
+              type="button"
+            >
+              取消
+            </button>
+            <button
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={saving}
+              type="submit"
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
+      </motion.section>
     </div>
-  )
-}
-
-function Field({ label, onChange, placeholder, value }: { label: string; onChange: (value: string) => void; placeholder?: string; value: string }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-      <input className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
-    </label>
-  )
-}
-
-function NumberField({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-      <input className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => onChange(Number(event.target.value))} type="number" value={value} />
-    </label>
-  )
-}
-
-function TextArea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-      <textarea className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => onChange(event.target.value)} value={value} />
-    </label>
   )
 }
 

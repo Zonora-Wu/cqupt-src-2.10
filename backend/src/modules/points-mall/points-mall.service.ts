@@ -19,6 +19,13 @@ import {
   redemptionStatusLabelMap,
 } from './points-mall.types'
 
+type UploadedImageFile = {
+  buffer?: Buffer
+  mimetype?: string
+  originalname?: string
+  size?: number
+}
+
 @Injectable()
 export class PointsMallService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -133,7 +140,7 @@ export class PointsMallService {
           },
         })
 
-        if (redeemedCount >= product.perUserLimit) {
+        if (product.perUserLimit > 0 && redeemedCount >= product.perUserLimit) {
           throw new BadRequestException('已达到该商品每人限兑数量')
         }
 
@@ -276,6 +283,26 @@ export class PointsMallService {
     })
 
     return summarizeProduct(product)
+  }
+
+  uploadProductImage(file: UploadedImageFile) {
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!file.mimetype || !allowedMime.includes(file.mimetype)) {
+      throw new BadRequestException('仅支持 JPG、PNG、WebP、GIF 格式的图片')
+    }
+
+    if (!file.buffer || !file.size) {
+      throw new BadRequestException('文件内容为空')
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      throw new BadRequestException('图片大小不能超过 2MB')
+    }
+
+    const base64 = file.buffer.toString('base64')
+    const imageUrl = `data:${file.mimetype};base64,${base64}`
+
+    return { imageUrl }
   }
 
   async deleteProduct(id: string, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {

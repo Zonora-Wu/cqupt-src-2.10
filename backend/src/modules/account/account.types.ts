@@ -3,6 +3,11 @@ export type ChangePasswordInput = {
   newPassword: string
 }
 
+export type ChangePasswordWithOldInput = {
+  oldPassword: string
+  newPassword: string
+}
+
 export type SendChangeEmailCodeInput = {
   newEmail: string
 }

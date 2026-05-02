@@ -3,8 +3,11 @@ import {
   CalendarClock,
   Camera,
   CheckCircle2,
+  Eye,
+  EyeOff,
   KeyRound,
   Loader2,
+  Lock,
   Mail,
   Pencil,
   Send,
@@ -15,12 +18,14 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   changeEmail,
   changePassword,
+  changePasswordWithOld,
   getAccountProfile,
   sendCurrentEmailCode,
   uploadAvatar,
@@ -424,21 +429,23 @@ function ChangeEmailModal({
           </>
         ) : (
           <>
-            <ModalField label="邮箱验证码（发至当前邮箱）">
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码（发至当前邮箱）</span>
               <input
                 autoFocus
-                className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+                className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
                 maxLength={6}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="请输入 6 位验证码"
                 value={code}
               />
-            </ModalField>
-            <ModalField label="新邮箱地址">
-              <div className="flex items-center gap-2 rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm transition focus-within:border-brand-600/60 focus-within:ring-1 focus-within:ring-brand-600/40 dark:border-white/10 dark:bg-white/5">
-                <AtSign className="h-4 w-4 shrink-0 text-slate-400" />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">新邮箱地址</span>
+              <div className="group relative">
+                <AtSign className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
                 <input
-                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-400"
+                  className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                   onChange={(e) => setNewEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && confirmChange()}
                   placeholder="name@example.edu.cn"
@@ -446,7 +453,7 @@ function ChangeEmailModal({
                   value={newEmail}
                 />
               </div>
-            </ModalField>
+            </label>
             {notice && <NoticeBar notice={notice} />}
             <div className="flex justify-end gap-3 pt-1">
               <button
@@ -473,7 +480,7 @@ function ChangeEmailModal({
 }
 
 // ── 修改密码弹窗
-// 流程：发送验证码到当前邮箱 → 填入验证码 + 新密码 + 确认密码 → 点击确定修改
+// 两种方式：旧密码验证 / 邮箱验证码验证
 function ChangePasswordModal({
   currentEmail,
   onClose,
@@ -481,10 +488,14 @@ function ChangePasswordModal({
   currentEmail: string
   onClose: () => void
 }) {
+  const [method, setMethod] = useState<'old-password' | 'email-code'>('old-password')
   const [codeSent, setCodeSent] = useState(false)
   const [sending, setSending] = useState(false)
   const [code, setCode] = useState('')
+  const [oldPassword, setOldPassword] = useState('')
+  const [showOldPassword, setShowOldPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [confirmPassword, setConfirmPassword] = useState('')
   const [notice, setNotice] = useState<Notice | null>(null)
   const [saving, setSaving] = useState(false)
@@ -508,9 +519,16 @@ function ChangePasswordModal({
   }
 
   const handleSubmit = async () => {
-    if (!/^\d{6}$/.test(code)) {
-      setNotice({ text: '请输入 6 位验证码', type: 'warning' })
-      return
+    if (method === 'old-password') {
+      if (!oldPassword) {
+        setNotice({ text: '请输入旧密码', type: 'warning' })
+        return
+      }
+    } else {
+      if (!/^\d{6}$/.test(code)) {
+        setNotice({ text: '请输入 6 位验证码', type: 'warning' })
+        return
+      }
     }
     if (newPassword.length < 8) {
       setNotice({ text: '新密码至少需要 8 位', type: 'warning' })
@@ -520,10 +538,16 @@ function ChangePasswordModal({
       setNotice({ text: '两次输入的新密码不一致', type: 'warning' })
       return
     }
+    if (method === 'old-password' && oldPassword === newPassword) {
+      setNotice({ text: '新密码不能与旧密码相同', type: 'warning' })
+      return
+    }
     setSaving(true)
     setNotice(null)
     try {
-      const result = await changePassword({ code, newPassword })
+      const result = method === 'old-password'
+        ? await changePasswordWithOld({ oldPassword, newPassword })
+        : await changePassword({ code, newPassword })
       setNotice({ text: result.message, type: 'success' })
       setSuccess(true)
     } catch (error) {
@@ -536,10 +560,10 @@ function ChangePasswordModal({
   if (success) {
     return (
       <Modal onClose={onClose} title="修改密码">
-        <div className="flex flex-col items-center gap-4 py-4">
+        <div className="flex flex-col items-center gap-4">
           <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-          <p className="text-sm text-slate-600 dark:text-slate-400">密码已成功更新。其他设备将在下次请求时退出登录。</p>
-          <button className="rounded-lg bg-brand-600 px-8 py-2.5 text-sm font-medium text-white hover:bg-brand-700" onClick={onClose} type="button">完成</button>
+          <p className="text-center text-sm text-slate-600 dark:text-slate-400">密码已成功更新。其他设备将在下次请求时退出登录。</p>
+          <button className="w-full rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700" onClick={onClose} type="button">完成</button>
         </div>
       </Modal>
     )
@@ -548,60 +572,129 @@ function ChangePasswordModal({
   return (
     <Modal onClose={onClose} title="修改密码">
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-white/5">
-          <p className="text-xs text-slate-400 dark:text-slate-500">验证邮箱</p>
-          <p className="mt-0.5 font-mono text-sm font-medium text-slate-950 dark:text-white">{currentEmail || '未绑定'}</p>
+        {/* 验证方式切换 */}
+        <div className="grid grid-cols-2 border-b border-black/10 text-sm font-medium dark:border-white/10">
+          <button
+            className={`border-b-2 pb-3 transition ${
+              method === 'old-password'
+                ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
+                : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
+            }`}
+            onClick={() => { setMethod('old-password'); setNotice(null) }}
+            type="button"
+          >
+            旧密码验证
+          </button>
+          <button
+            className={`border-b-2 pb-3 transition ${
+              method === 'email-code'
+                ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
+                : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
+            }`}
+            onClick={() => { setMethod('email-code'); setNotice(null) }}
+            type="button"
+          >
+            邮箱验证
+          </button>
         </div>
 
-        {/* 邮箱验证区域 */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码</label>
-          <div className="flex gap-2">
+        {method === 'old-password' ? (
+          <div className="group relative">
+            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
             <input
-              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 disabled:opacity-50"
-              disabled={!codeSent}
-              maxLength={6}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder={codeSent ? '请输入 6 位验证码' : '请先点击发送验证码'}
-              value={code}
+              autoFocus
+              className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              onChange={(e) => setOldPassword(e.target.value)}
+              placeholder="输入当前密码"
+              type={showOldPassword ? 'text' : 'password'}
+              value={oldPassword}
             />
             <button
-              className="shrink-0 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-              disabled={sending || codeSent}
-              onClick={sendCode}
+              aria-label={showOldPassword ? '隐藏密码' : '显示密码'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/30 dark:hover:text-white/60"
+              onClick={() => setShowOldPassword((v) => !v)}
               type="button"
             >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : codeSent ? '已发送' : '发送验证码'}
+              {showOldPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-white/5">
+              <p className="text-xs text-slate-400 dark:text-slate-500">验证邮箱</p>
+              <p className="mt-0.5 font-mono text-sm font-medium text-slate-950 dark:text-white">{currentEmail || '未绑定'}</p>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码</label>
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 disabled:opacity-50"
+                  disabled={!codeSent}
+                  maxLength={6}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder={codeSent ? '请输入 6 位验证码' : '请先点击发送验证码'}
+                  value={code}
+                />
+                <button
+                  className="shrink-0 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                  disabled={sending || codeSent}
+                  onClick={sendCode}
+                  type="button"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : codeSent ? '已发送' : '发送验证码'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
-        <ModalField label="新密码">
+        <div className="group relative">
+          <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="至少 8 位，包含字母+数字"
-            type="password"
+            placeholder="新密码（至少 8 位，字母+数字）"
+            type={showNewPassword ? 'text' : 'password'}
             value={newPassword}
           />
-        </ModalField>
-        <ModalField label="再次输入新密码">
+          <button
+            aria-label={showNewPassword ? '隐藏密码' : '显示密码'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/30 dark:hover:text-white/60"
+            onClick={() => setShowNewPassword((v) => !v)}
+            type="button"
+          >
+            {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        </div>
+
+        <div className="group relative">
+          <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setConfirmPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            placeholder="与新密码保持一致"
+            placeholder="确认新密码"
             type="password"
             value={confirmPassword}
           />
-        </ModalField>
+        </div>
+
         <p className="text-xs text-slate-400 dark:text-slate-500">密码修改操作将记录至安全审计日志。</p>
-        {notice && <NoticeBar notice={notice} />}
+        {notice && (
+          <div className={`rounded-lg border px-3 py-2.5 text-sm ${
+            notice.type === 'error' ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300' :
+            notice.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' :
+            'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+          }`}>
+            {notice.text}
+          </div>
+        )}
         <div className="flex justify-end gap-3 pt-1">
           <button className="rounded-lg px-4 py-2.5 text-sm text-slate-600 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10" onClick={onClose} type="button">取消</button>
           <button
             className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-55"
-            disabled={saving || !codeSent}
+            disabled={saving || (method === 'email-code' && !codeSent)}
             onClick={handleSubmit}
             type="button"
           >
@@ -614,31 +707,37 @@ function ChangePasswordModal({
 }
 
 function Modal({ children, onClose, title }: { children: ReactNode; onClose: () => void; title: string }) {
-  return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-xl border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-black/10 px-6 py-4 dark:border-white/10">
-          <h3 className="text-base font-semibold text-slate-950 dark:text-white">{title}</h3>
-          <button className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white" onClick={onClose} type="button">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  )
-}
+  useEffect(() => {
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [])
 
-function ModalField({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-      {children}
-    </label>
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">
+      <button
+        aria-label="关闭弹窗"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+        onClick={onClose}
+        type="button"
+      />
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+      >
+        <button
+          aria-label="关闭弹窗"
+          className="absolute right-4 top-4 rounded-md p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <h3 className="mb-6 text-center text-lg font-semibold">{title}</h3>
+        {children}
+      </motion.section>
+    </div>
   )
 }
 

@@ -3,9 +3,11 @@ import {
   BookOpen,
   CheckCircle2,
   Clock3,
+  Expand,
   Filter,
   Gift,
   History,
+  MapPin,
   PackageCheck,
   Printer,
   ShoppingBag,
@@ -13,6 +15,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -55,6 +58,7 @@ export function UserPointsMall() {
   const [message, setMessage] = useState('')
   const [recordsOpen, setRecordsOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<MallProductItem | null>(null)
+  const [detailProduct, setDetailProduct] = useState<MallProductItem | null>(null)
 
   async function loadMall() {
     setError('')
@@ -188,7 +192,7 @@ export function UserPointsMall() {
       {loading && <SurfacePanel className="mt-6 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载积分商城...</SurfacePanel>}
 
       {!loading && (
-        <div className="mt-6 columns-1 gap-5 md:columns-2 xl:columns-3">
+        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredProducts.map((item) => {
             const Icon = productIcons[item.category] ?? Gift
             const canExchange = item.stock > 0 && item.canRedeem
@@ -196,12 +200,13 @@ export function UserPointsMall() {
 
             return (
               <SurfacePanel
-                className="mb-5 inline-block w-full break-inside-avoid overflow-hidden p-0 transition hover:-translate-y-0.5 hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]"
+                className="cursor-pointer overflow-hidden p-0 transition hover:-translate-y-0.5 hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]"
                 key={item.id}
+                onClick={() => setDetailProduct(item)}
               >
                 <div className="relative h-52 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
                   {item.imageUrl ? (
-                    <img alt={item.name} className="h-full w-full object-cover" src={item.imageUrl} />
+                    <img alt={item.name} className="h-full w-full object-contain" src={item.imageUrl} />
                   ) : (
                     <>
                       <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
@@ -212,18 +217,17 @@ export function UserPointsMall() {
                       </div>
                     </>
                   )}
-                  <span className={`absolute left-4 top-4 rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.实体奖励}`}>
-                    {item.category}
-                  </span>
                 </div>
 
                 <div className="p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id.slice(0, 12)}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.实体奖励}`}>
+                      {item.category}
+                    </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">库存 {item.stock}</span>
                   </div>
                   <h2 className="mt-3 text-lg font-semibold tracking-tight">{item.name}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
 
                   <div className="mt-5 flex items-end justify-between gap-4 border-t border-black/10 pt-4 dark:border-white/10">
                     <div>
@@ -233,7 +237,7 @@ export function UserPointsMall() {
                     <button
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
                       disabled={!canExchange}
-                      onClick={() => setConfirmProduct(item)}
+                      onClick={(e) => { e.stopPropagation(); setConfirmProduct(item) }}
                       type="button"
                     >
                       {canExchange ? (
@@ -249,7 +253,7 @@ export function UserPointsMall() {
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
                     <span>领取地点：{item.pickupLocation}</span>
-                    <span>限兑 {item.perUserLimit} 次</span>
+                    <span>{item.perUserLimit === 0 ? '无限制' : `限兑 ${item.perUserLimit} 次`}</span>
                   </div>
                 </div>
               </SurfacePanel>
@@ -276,6 +280,14 @@ export function UserPointsMall() {
         product={confirmProduct}
         onCancel={() => setConfirmProduct(null)}
         onConfirm={(product) => void redeemProduct(product)}
+      />
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onRedeem={(product) => {
+          setDetailProduct(null)
+          setConfirmProduct(product)
+        }}
       />
     </PageSection>
   )
@@ -355,6 +367,159 @@ function ConfirmRedeemModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ProductDetailModal({
+  onClose,
+  onRedeem,
+  product,
+}: {
+  onClose: () => void
+  onRedeem: (product: MallProductItem) => void
+  product: MallProductItem | null
+}) {
+  if (!product) return null
+
+  const Icon = productIcons[product.category] ?? Gift
+  const canExchange = product.stock > 0 && product.canRedeem
+  const disabledReason = product.stock <= 0 ? '库存不足' : '积分不足'
+  const [lightbox, setLightbox] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">
+      <button
+        aria-label="关闭弹窗"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+        onClick={onClose}
+        type="button"
+      />
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+      >
+        <button
+          aria-label="关闭弹窗"
+          className="absolute right-4 top-4 rounded-md p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* 商品图片 */}
+        <div className="group relative mb-6 -mx-8 -mt-8 h-44 overflow-hidden rounded-t-lg bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+          {product.imageUrl ? (
+            <>
+              <img alt={product.name} className="h-full w-full object-contain" src={product.imageUrl} />
+              <button
+                className="absolute inset-0 flex items-center justify-center bg-black/0 transition hover:bg-black/20"
+                onClick={() => setLightbox(true)}
+                type="button"
+              >
+                <Expand className="h-8 w-8 text-white opacity-0 transition group-hover:opacity-100" />
+              </button>
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+                <Icon className="h-8 w-8" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 图片灯箱 */}
+        {lightbox && product.imageUrl && (
+          <div className="fixed inset-0 z-[200] isolate flex items-center justify-center p-4">
+            <button
+              aria-label="关闭"
+              className="absolute inset-0 bg-black/85"
+              onClick={() => setLightbox(false)}
+              type="button"
+            />
+            <button
+              aria-label="关闭"
+              className="absolute right-4 top-4 rounded-md p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
+              onClick={() => setLightbox(false)}
+              type="button"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              alt={product.name}
+              className="relative max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+              src={product.imageUrl}
+            />
+          </div>
+        )}
+
+        {/* 商品信息 */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[product.category] ?? categoryStyles.实体奖励}`}>
+            {product.category}
+          </span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">库存 {product.stock}</span>
+        </div>
+
+        <h2 className="text-xl font-semibold tracking-tight">{product.name}</h2>
+
+        {product.description && (
+          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{product.description}</p>
+        )}
+
+        {/* 积分醒目显示 */}
+        <div className="mt-5 flex items-baseline gap-2">
+          <span className="text-3xl font-bold text-brand-700 dark:text-green-300">{product.pointsCost}</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">积分</span>
+        </div>
+
+        {/* 详情列表 */}
+        <div className="mt-5 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+          <div className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">每人限兑</span>
+            <span className="font-medium">{product.perUserLimit === 0 ? '无限制' : `${product.perUserLimit} 次`}</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">领取地点</span>
+            <span className="flex items-center gap-1 font-medium">
+              <MapPin className="h-3.5 w-3.5 text-slate-400" />
+              {product.pickupLocation}
+            </span>
+          </div>
+          {product.pickupInstructions && (
+            <div className="px-4 py-3 text-sm">
+              <span className="text-slate-500 dark:text-slate-400">领取说明</span>
+              <p className="mt-1 leading-6 text-slate-700 dark:text-slate-300">{product.pickupInstructions}</p>
+            </div>
+          )}
+        </div>
+
+        {/* 兑换按钮 */}
+        <button
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+          disabled={!canExchange}
+          onClick={() => onRedeem(product)}
+          type="button"
+        >
+          {canExchange ? (
+            <>
+              <TicketCheck className="h-4 w-4" />
+              兑换
+            </>
+          ) : (
+            disabledReason
+          )}
+        </button>
+      </motion.section>
     </div>
   )
 }

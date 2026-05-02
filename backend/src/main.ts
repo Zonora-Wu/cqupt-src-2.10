@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
+import { json } from 'express'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
@@ -9,6 +10,7 @@ async function bootstrap() {
   const frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173'
   const port = Number(process.env.PORT ?? 3000)
 
+  app.use(json({ limit: '5mb' }))
   app.setGlobalPrefix(apiPrefix)
   app.enableCors({
     credentials: true,

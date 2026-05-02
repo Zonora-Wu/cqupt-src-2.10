@@ -7,6 +7,7 @@ import { AccountService } from './account.service'
 import {
   normalizeChangeEmailBody,
   normalizeChangePasswordBody,
+  normalizeChangePasswordWithOldBody,
   normalizeSendCurrentEmailCodeBody,
 } from './account.validation'
 
@@ -50,6 +51,11 @@ export class AccountController {
   @Post('password/change')
   changePassword(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.account.changePassword(user, normalizeChangePasswordBody(body), getRequestMeta(req))
+  }
+
+  @Post('password/change-with-old')
+  changePasswordWithOld(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.account.changePasswordWithOld(user, normalizeChangePasswordWithOldBody(body), getRequestMeta(req))
   }
 
   @Post('email/identity-code')

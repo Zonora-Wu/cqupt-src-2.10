@@ -58,6 +58,13 @@ export function changePassword(payload: { code: string; newPassword: string }) {
   })
 }
 
+export function changePasswordWithOld(payload: { oldPassword: string; newPassword: string }) {
+  return request<{ message: string }>('/account/password/change-with-old', {
+    body: payload,
+    method: 'POST',
+  })
+}
+
 export function sendCurrentEmailCode(purpose: 'CHANGE_EMAIL' | 'CHANGE_PASSWORD') {
   return request<ChangeEmailCodeResponse>('/account/email/identity-code', {
     body: { purpose },

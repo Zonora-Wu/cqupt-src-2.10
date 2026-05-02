@@ -60,6 +60,18 @@ bash deploy/scripts/start-local.sh --skip-minio
 bash deploy/scripts/start-local.sh --skip-db-init
 ```
 
+所有容器已手动启动，只启动前后端：
+
+```bash
+bash deploy/scripts/start-local.sh --skip-postgres --skip-minio --skip-redis --skip-db-init
+```
+
+关闭但保留全部容器（仅停止前后端进程）：
+
+```bash
+bash deploy/scripts/stop-local.sh --keep-postgres --keep-minio --keep-redis
+```
+
 ---
 
 ### Windows（PowerShell）

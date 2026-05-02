@@ -1,11 +1,18 @@
 import { BadRequestException } from '@nestjs/common'
-import { ChangeEmailInput, ChangePasswordInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput } from './account.types'
+import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput } from './account.types'
 
 export function normalizeChangePasswordBody(body: Record<string, unknown>): ChangePasswordInput {
   const code = normalizeEmailCode(body.code)
   const newPassword = validatePassword(requireText(body.newPassword, '新密码', 8, 128))
 
   return { code, newPassword }
+}
+
+export function normalizeChangePasswordWithOldBody(body: Record<string, unknown>): ChangePasswordWithOldInput {
+  const oldPassword = requireText(body.oldPassword, '旧密码', 8, 128)
+  const newPassword = validatePassword(requireText(body.newPassword, '新密码', 8, 128))
+
+  return { oldPassword, newPassword }
 }
 
 export function normalizeSendCurrentEmailCodeBody(body: Record<string, unknown>): SendCurrentEmailCodeInput {

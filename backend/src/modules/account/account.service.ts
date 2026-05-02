@@ -5,7 +5,7 @@ import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { SchoolPolicyService } from '../school/school-policy.service'
-import { ChangeEmailInput, ChangePasswordInput, SendCurrentEmailCodeInput } from './account.types'
+import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
 
 type UploadedImageFile = { buffer?: Buffer; mimetype?: string; size?: number }
 
@@ -157,6 +157,65 @@ export class AccountService {
           ipAddress: meta.ipAddress,
           metadata: {
             action: 'self_change_password',
+            refreshTokensRevoked: true,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: user.id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return {
+      message: '密码已更新，请在其他设备上重新登录。',
+    }
+  }
+
+  async changePasswordWithOld(user: AuthenticatedRequestUser, input: ChangePasswordWithOldInput, meta: ClientRequestMeta) {
+    const currentUser = await this.prisma.user.findFirst({
+      where: { deletedAt: null, id: user.id },
+      select: { passwordHash: true },
+    })
+
+    if (!currentUser || !currentUser.passwordHash) {
+      throw new UnauthorizedException('账号状态异常，无法修改密码')
+    }
+
+    if (!verifyPassword(input.oldPassword, currentUser.passwordHash)) {
+      throw new UnauthorizedException('旧密码错误')
+    }
+
+    if (input.oldPassword === input.newPassword) {
+      throw new BadRequestException('新密码不能与旧密码相同')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: hashPassword(input.newPassword),
+        },
+      })
+
+      await tx.refreshToken.updateMany({
+        where: {
+          revokedAt: null,
+          userId: user.id,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'self_change_password_with_old',
             refreshTokensRevoked: true,
           },
           requestPath: meta.requestPath,

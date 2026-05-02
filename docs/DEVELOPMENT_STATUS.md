@@ -3,42 +3,16 @@
 ## 当前阶段
 
 ```text
-前端原型完成度较高
-正式项目结构已整理
-数据库模型 v0.1 已完成
-后端 NestJS 基础骨架已完成
-认证与 RBAC 基础模块已完成初版
-本地 PostgreSQL migration 与 seed 已完成
-前端登录已切换到真实后端接口
-注册已接入真实后端接口
-滑块验证一期已接入后端挑战、轨迹校验和一次性票据
-当前用户接口与 RBAC 权限守卫已完成初版
-漏洞提交 API 与提交前准入校验已完成初版
-文件上传、MinIO 安全校验与 PDF 受控预览已完成初版
-我的漏洞列表 API 与前端真实数据接入已完成初版
-审核员漏洞审核 API 与前端真实数据接入已完成初版
-证书模板模型与管理员系统设置上传接口已完成初版
-证书签发、撤销、PDF 预览与公开核验接口已完成初版
-证书 PDF 模板叠加文字与电子印章盖章已完成初版
-管理员/审核员证书管理页已接入真实接口
-用户我的证书页已接入真实接口，支持完整 PDF 弹窗预览和电子证书下载
-未登录证书查询已接入公开核验接口
-公告管理 API 与前端真实数据接入已完成初版
-学习资源与靶场资源 API 已完成初版
-用户学习中心与管理员学习管理页已接入真实接口
-积分商城 API 与前端真实数据接入已完成初版
-用户管理 API 与管理员用户管理页真实数据接入已完成初版
-审计日志 API 与管理员审计日志页真实数据接入已完成初版
-账号中心 API 与准入中心 API 已完成初版
-漏洞提交前准入校验已抽取为统一 AccessPolicyService
-前端个人中心与提交漏洞页已接入账号/准入接口
-个人中心与提交漏洞页已接入统一告警组件，区分成功、错误、警告和提示状态
-邮箱验证码登录已接入服务端滑块票据、LOGIN 用途隔离和发送频率限制
-前端已完成角色工作台与菜单页面懒加载拆包，Vite 大 chunk 警告已消除
-前端 API 请求已统一封装，支持 401 登录失效自动清理、回到未登录首页和全局提示
-登录/注册弹窗已优化打开动画，降低整屏 backdrop blur 与缩放合成导致的页面抖动
-核心 API 冒烟测试脚本已完成，当前临时后端 3001 端口验证 28/28 通过
-下一步：完善系统设置中的责任书版本管理与安全答题题库管理
+已完成：认证/RBAC、漏洞全流程、PDF 附件上传、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心
+已完成：个人中心头像上传（POST /account/avatar，base64 存储）
+已完成：头像上传后导航栏头像同步
+已完成：用户系统设置页面样式统一（参照管理员端）
+已完成：账号安全页（登录记录 + 操作日志，GET /account/audit-logs）
+已完成：修改邮箱改为先验证当前邮箱（POST /account/email/identity-code），再填新邮箱
+已完成：修改密码改为邮箱验证码方式，无需旧密码，修改后其他设备 refresh token 失效
+已完成：数据库迁移 20260502090000_user_avatar（User 表添加 avatarUrl 字段）
+进行中：系统设置完善（责任书版本管理、安全答题题库、证书模板坐标可视化）
+下一步：AI Gateway 接入 / Ubuntu 部署
 ```
 
 ## 已完成
@@ -89,8 +63,12 @@
 - 个人中心已接入 `/api/account/password/change`、`/api/account/email/code` 和 `/api/account/email/change`
 - 提交漏洞页已接入 `/api/access/status`，可在提交前展示缺失准入条件
 - 提交漏洞页已接入当前责任书签署与安全答题记录接口
-- 新增前端通用告警组件 `AlertMessage`，个人中心和提交漏洞页已用于接口错误、表单校验、成功反馈和准入提醒
-
+- 新增前端通用告警组件 `AlertMessage`，个人中心和提交漏洞页已用于接口错误、表单校验、成功反馈和准入提醒- 用户系统设置页面样式已统一，参照管理员端 AdminSystemSettings 风格（bg-brand-600 活跃侧边栏、SettingsCard + SettingRow 布局、较大切换按钮）
+- 新增账号安全页 `UserAccountSecurity`，支持安全概览、登录记录（AUTH 类型审计日志）和操作日志（全模块、结果筛选、分页）
+- 个人中心已接入真实头像上传（`POST /api/account/avatar`），上传后同步更新页面和导航栏头像
+- 个人中心修改邮箱弹窗改为两步流程：先向当前邮箱发送验证码，验证通过后填写新邮箱
+- 个人中心修改密码改为邮箱验证码方式，弹窗内先发送验证码再填写新密码，无需旧密码
+- 导航栏头像（`UserAvatarMenu`）已支持展示用户上传的头像图片，有图片时替换默认姓名首字
 ### 数据库
 
 - PostgreSQL + Prisma 设计
@@ -108,6 +86,7 @@
 - 已创建并应用积分商城 migration：`20260430103000_points_mall`
 - 已创建并应用用户管理 migration：`20260430111000_user_management`
 - 已创建滑块验证 migration：`20260430143000_captcha`
+- 已创建并应用用户头像 migration：`20260502090000_user_avatar`（User 表添加 `avatarUrl TEXT` 字段）
 - 已写入 seed：3 个角色、22 个权限、3 个演示用户、9 条授权策略、4 条演示公告、4 条演示学习资源、4 个演示商品、学生演示积分 1260
 
 ### 后端
@@ -232,13 +211,18 @@
 - 新增核心 API 冒烟测试：`npm.cmd run test:core-api`
 - 核心 API 冒烟测试已覆盖健康检查、三类账号登录、用户/审核员/管理员核心只读接口
 - 修复 `AccessModule` 与 `AccountModule` 使用 `JwtAuthGuard` 时缺少 `RbacModule` 导入导致后端启动失败的问题
+- 头像上传接口：`POST /api/account/avatar`（multipart/form-data，2MB 限制，MIME 校验，base64 存储于 User.avatarUrl）
+- 个人用户审计日志接口：`GET /api/account/audit-logs`（JWT 鉴权，仅返回当前用户自身操作记录）
+- 发送当前邮箱验证码接口：`POST /api/account/email/identity-code`（purpose: CHANGE_EMAIL | CHANGE_PASSWORD，向已绑定邮箱发送）
+- 修改邮箱接口（`POST /api/account/email/change`）改为验证当前邮箱验证码，而非新邮箱验证码
+- 修改密码接口（`POST /api/account/password/change`）改为邮箱验证码校验，移除旧密码字段，密码修改后撤销所有 refresh token
 
 ## 未完成
 
 - 真实 SMTP 邮件发送
 - 责任书后台版本管理与安全答题题库管理
-- 滑块验证二期图片拼图与 Redis 临时存储
 - 证书模板在线坐标可视化配置
+- 滑块验证二期图片拼图与 Redis 临时存储
 - 审计日志中间件
 - AI Gateway 与 Hermes Agent
 - Docker Compose 本地依赖联调
@@ -247,6 +231,5 @@
 ## 下一步
 
 1. 完善系统设置中的责任书版本管理、安全答题题库和证书模板坐标可视化配置。
-2. 将核心 API 冒烟测试纳入本地启动脚本或 CI 流程。
-3. 规划并接入 AI Gateway 与 Hermes Agent。
-4. 准备 Ubuntu Docker 部署联调。
+2. 接入 AI Gateway 与 Hermes Agent。
+3. 准备 Ubuntu Docker 部署联调。
