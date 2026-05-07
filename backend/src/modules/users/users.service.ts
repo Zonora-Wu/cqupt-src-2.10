@@ -102,6 +102,10 @@ export class UsersService {
     meta: ClientRequestMeta,
   ) {
     const target = await this.assertManageableUser(id, actor.id)
+
+    if (target.role.code === RoleCode.ADMIN) {
+      throw new ForbiddenException('管理员账号的角色不能修改')
+    }
     const role = await this.prisma.role.findUnique({
       where: { code: input.role },
     })
@@ -150,18 +154,7 @@ export class UsersService {
     const target = await this.assertManageableUser(id, actor.id)
 
     if (target.role.code === RoleCode.ADMIN && input.status !== UserStatus.ACTIVE) {
-      const activeAdminCount = await this.prisma.user.count({
-        where: {
-          deletedAt: null,
-          id: { not: id },
-          role: { code: RoleCode.ADMIN },
-          status: UserStatus.ACTIVE,
-        },
-      })
-
-      if (activeAdminCount <= 0) {
-        throw new ForbiddenException('至少需要保留一个正常管理员账号')
-      }
+      throw new ForbiddenException('管理员账号不能被锁定或禁用')
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {

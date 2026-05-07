@@ -1,7 +1,5 @@
 import {
   AlertTriangle,
-  Bot,
-  BrainCircuit,
   Building2,
   CheckCircle,
   DatabaseBackup,
@@ -10,6 +8,7 @@ import {
   KeyRound,
   Mail,
   Paintbrush,
+  Save,
   ServerCog,
   ShieldCheck,
   ShieldQuestion,
@@ -26,10 +25,13 @@ import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   approveRegistration,
   getActiveCertificateTemplate,
+  getPlatformSettings,
   getRegistrationMode,
   listPendingRegistrations,
+  previewCertificateTemplate,
   rejectRegistration,
   setRegistrationMode,
+  updatePlatformSettings,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
@@ -38,7 +40,6 @@ import type { CertificateTemplateSummary, PendingRegistrationItem } from '../../
 type SettingsSection =
   | '基础设置'
   | '登录与认证'
-  | 'AI 设置'
   | '邮箱与通知'
   | '漏洞流程'
   | '证书模板'
@@ -56,7 +57,6 @@ type ConfirmState = {
 const settingSections: Array<{ label: SettingsSection; icon: ReactNode; description: string }> = [
   { label: '基础设置', icon: <Building2 className="h-4 w-4" />, description: '品牌、组织、交付方式' },
   { label: '登录与认证', icon: <KeyRound className="h-4 w-4" />, description: '注册、认证、账号安全' },
-  { label: 'AI 设置', icon: <BrainCircuit className="h-4 w-4" />, description: '模型、知识库、安全边界' },
   { label: '邮箱与通知', icon: <Mail className="h-4 w-4" />, description: 'SMTP、站内信、模板' },
   { label: '漏洞流程', icon: <ShieldQuestion className="h-4 w-4" />, description: '审核流、时限、规则' },
   { label: '证书模板', icon: <FileBadge2 className="h-4 w-4" />, description: 'PDF、签章、公开核验' },
@@ -69,19 +69,22 @@ export function AdminSystemSettings() {
   const sealInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
+  const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
+  const [schoolName, setSchoolName] = useState('重庆邮电大学')
+  const [orgName, setOrgName] = useState('信息化办公室')
+  const [platformDomain, setPlatformDomain] = useState('https://src.cqupt.edu.cn')
+  const [themeColor, setThemeColor] = useState('#2A6438')
+  const [isSavingPlatform, setIsSavingPlatform] = useState(false)
+  const [platformMessage, setPlatformMessage] = useState('')
   const [openRegister, setOpenRegister] = useState(true)
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationItem[]>([])
   const [pendingRegLoading, setPendingRegLoading] = useState(false)
   const [emailVerify, setEmailVerify] = useState(true)
   const [publicCertVerify, setPublicCertVerify] = useState(true)
-  const [aiEnabled, setAiEnabled] = useState(true)
-  const [aiProvider, setAiProvider] = useState('OpenAI 兼容接口')
-  const [defaultLogin, setDefaultLogin] = useState('统一认证码 + 密码')
-  const [pdfMode, setPdfMode] = useState('后端生成 PDF')
-  const [backendAccess, setBackendAccess] = useState('校园网访问')
   const [certificateTemplate, setCertificateTemplate] = useState<CertificateTemplateSummary | null>(null)
   const [certificateTemplateMessage, setCertificateTemplateMessage] = useState('')
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
+  const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
 
   const confirmChange = (nextState: Exclude<ConfirmState, null>) => {
     setConfirmState(nextState)
@@ -92,13 +95,19 @@ export function AdminSystemSettings() {
 
     async function loadInitialData() {
       try {
-        const [mode, template] = await Promise.all([
+        const [mode, template, platform] = await Promise.all([
           getRegistrationMode(),
           getActiveCertificateTemplate(),
+          getPlatformSettings(),
         ])
         if (active) {
           setOpenRegister(mode.open)
           setCertificateTemplate(template)
+          setPlatformName(platform.platformName)
+          setSchoolName(platform.schoolName)
+          setOrgName(platform.orgName)
+          setPlatformDomain(platform.platformDomain)
+          setPublicCertVerify(platform.publicCertVerify)
         }
       } catch (error) {
         if (active) {
@@ -175,6 +184,31 @@ export function AdminSystemSettings() {
     }
   }
 
+  const handlePreviewPdf = async () => {
+    setCertificateTemplateMessage('')
+    setIsPreviewingPdf(true)
+    try {
+      await previewCertificateTemplate()
+    } catch (error) {
+      setCertificateTemplateMessage(error instanceof Error ? error.message : '预览 PDF 生成失败')
+    } finally {
+      setIsPreviewingPdf(false)
+    }
+  }
+
+  const handleSavePlatform = async () => {
+    setPlatformMessage('')
+    setIsSavingPlatform(true)
+    try {
+      await updatePlatformSettings({ platformName, schoolName, orgName, platformDomain })
+      setPlatformMessage('基础设置已保存')
+    } catch (error) {
+      setPlatformMessage(error instanceof Error ? error.message : '保存失败，请重试')
+    } finally {
+      setIsSavingPlatform(false)
+    }
+  }
+
   return (
     <>
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
@@ -228,47 +262,63 @@ export function AdminSystemSettings() {
                   title="平台与组织"
                 >
                   <SettingRow
-                    control={<TextField value="CQUPT-SRC 校园漏洞响应平台" />}
+                    control={<TextField onChange={setPlatformName} value={platformName} />}
                     description="显示在登录页、管理端标题和系统通知中，建议使用学校或组织认可的正式名称。"
                     title="平台名称"
                   />
                   <SettingRow
-                    control={<TextField value="重庆邮电大学" />}
+                    control={<TextField onChange={setSchoolName} value={schoolName} />}
                     description="用于证书、责任书、通知模板和公开核验页面。多学校部署时应配置为当前租户名称。"
                     title="学校名称"
                   />
                   <SettingRow
-                    control={<TextField value="信息化办公室" />}
+                    control={<TextField onChange={setOrgName} value={orgName} />}
                     description="平台主管部门名称，会出现在漏洞响应流程、证书签发单位和公告落款中。"
                     title="主管单位"
                   />
                   <SettingRow
-                    control={<TextField value="https://src.cqupt.edu.cn" />}
+                    control={<TextField onChange={setPlatformDomain} value={platformDomain} />}
                     description="用于生成通知链接、证书核验地址和对外访问入口。生产环境应配置为 HTTPS 域名。"
                     title="平台访问域名"
                   />
+                  <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
+                    {platformMessage ? (
+                      <p className={`text-sm ${platformMessage.includes('失败') || platformMessage.includes('错误') ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {platformMessage}
+                      </p>
+                    ) : (
+                      <span />
+                    )}
+                    <ActionButton
+                      disabled={isSavingPlatform}
+                      icon={<Save className="h-4 w-4" />}
+                      label={isSavingPlatform ? '保存中...' : '保存基础设置'}
+                      onClick={() => void handleSavePlatform()}
+                    />
+                  </div>
                 </SettingsCard>
 
                 <SettingsCard
-                  description="控制平台默认视觉、访客能力和不同部署形态下的开放范围。"
+                  description="配置系统主题色。"
                   icon={<Paintbrush className="h-5 w-5" />}
-                  title="外观与开放能力"
+                  title="外观"
                 >
                   <SettingRow
-                    control={<TextField value="#2A6438" />}
+                    control={<TextField onChange={setThemeColor} value={themeColor} />}
                     description="系统主色将用于按钮、当前菜单、重点状态和部分图标。修改后应检查深色和浅色模式可读性。"
                     title="主题色"
                   />
-                  <SettingRow
-                    control={<SelectInput label="" options={['跟随系统', '浅色模式', '深色模式']} value="跟随系统" />}
-                    description="新用户首次进入平台时使用的主题策略，用户仍可在个人设置中覆盖。"
-                    title="默认主题"
-                  />
-                  <SettingRow
-                    control={<SelectInput label="" options={['学校服务器', 'Docker 私有化', '本地演示']} value="学校服务器" />}
-                    description="仅用于管理端展示和后续部署检查，不直接改变运行环境。"
-                    title="交付模式"
-                  />
+                </SettingsCard>
+              </>
+            )}
+
+            {activeSection === '登录与认证' && (
+              <>
+                <SettingsCard
+                  description="控制平台准入策略。关闭开放注册后，可在下方审核待注册用户。"
+                  icon={<KeyRound className="h-5 w-5" />}
+                  title="准入控制"
+                >
                   <SettingRow
                     control={
                       <SettingToggle
@@ -290,58 +340,6 @@ export function AdminSystemSettings() {
                     }
                     description="控制访客是否可以进入注册流程。该项会影响平台准入边界，变更前建议确认运营策略。"
                     title="开放注册"
-                  />
-                  <SettingRow
-                    control={
-                      <SettingToggle
-                        enabled={publicCertVerify}
-                        onChange={() =>
-                          confirmChange({
-                            title: publicCertVerify ? '确认关闭公开证书查询？' : '确认开启公开证书查询？',
-                            description: publicCertVerify
-                              ? '关闭后，访客将无法通过证书编号或核验码公开查询证书有效性。已签发证书仍会保留在系统内。'
-                              : '开启后，访客可通过证书编号或核验码验证电子证书。请确认核验页面不会展示过多个人信息。敏感字段应保持脱敏。',
-                            onConfirm: () => setPublicCertVerify((value) => !value),
-                          })
-                        }
-                      />
-                    }
-                    description="控制访客是否可以公开核验证书。建议只展示证书状态、贡献类型和脱敏后的获得者信息。"
-                    title="公开证书查询"
-                  />
-                </SettingsCard>
-              </>
-            )}
-
-            {activeSection === '登录与认证' && (
-              <>
-                <SettingsCard
-                  description="管理本地账号、统一认证码、邮箱验证码和学校统一身份认证。认证策略会直接影响平台安全边界。"
-                  icon={<KeyRound className="h-5 w-5" />}
-                  title="登录与注册"
-                >
-                  <SettingRow
-                    control={
-                      <SelectInput
-                        label=""
-                        onChange={(nextValue) =>
-                          confirmChange({
-                            title: '确认修改默认登录方式？',
-                            description: `默认登录方式将从「${defaultLogin}」调整为「${nextValue}」。这可能影响现有用户登录路径，建议在公告中提前说明。`,
-                            onConfirm: () => setDefaultLogin(nextValue),
-                          })
-                        }
-                        options={['统一认证码 + 密码', '邮箱验证码', '学校统一身份认证 SSO', '本地账号']}
-                        value={defaultLogin}
-                      />
-                    }
-                    description="决定登录页默认展示的登录方式。学校统一身份认证上线前，建议保留本地账号或统一认证码作为兜底方案。"
-                    title="默认登录方式"
-                  />
-                  <SettingRow
-                    control={<SelectInput label="" options={['开放注册', '邀请注册', '管理员导入', '统一认证同步']} value="开放注册" />}
-                    description="控制新用户来源。正式上线后，如果接入学校身份源，建议使用统一认证同步或管理员导入。"
-                    title="注册方式"
                   />
                 </SettingsCard>
 
@@ -429,116 +427,6 @@ export function AdminSystemSettings() {
                   />
                 </SettingsCard>
 
-                <SettingsCard
-                  description="当平台接入学校身份源时，需要把学校字段映射到平台用户模型。"
-                  icon={<FileText className="h-5 w-5" />}
-                  title="统一认证字段映射"
-                >
-                  <SettingRow control={<TextField value="uid" />} description="学校统一认证系统中的唯一身份标识，不等同于学号时应明确备注。" title="统一认证码字段" />
-                  <SettingRow control={<TextField value="name" />} description="用于个人中心、证书、排行榜和审核通知。" title="姓名字段" />
-                  <SettingRow control={<TextField value="college" />} description="用于学院统计、排行榜筛选和人才培养数据分析。" title="学院字段" />
-                  <SettingRow control={<TextField value="email" />} description="用于注册验证、状态通知和安全提醒。" title="邮箱字段" />
-                </SettingsCard>
-              </>
-            )}
-
-            {activeSection === 'AI 设置' && (
-              <>
-                <SettingsCard
-                  description="AI 将参与漏洞报告解析、审核辅助、学习推荐和平台知识库问答。服务配置错误会影响多个业务页面。"
-                  icon={<Bot className="h-5 w-5" />}
-                  title="AI 服务接入"
-                >
-                  <SettingRow
-                    control={
-                      <SettingToggle
-                        enabled={aiEnabled}
-                        onChange={() =>
-                          confirmChange({
-                            title: aiEnabled ? '确认停用 AI 能力？' : '确认启用 AI 能力？',
-                            description: aiEnabled
-                              ? '停用后，漏洞报告智能解析、审核员价值预判、学习路线推荐和知识库问答都将不可用。'
-                              : '启用后，平台会调用配置的模型服务。请确认 API Key、数据脱敏和调用日志策略已经配置完成。',
-                            danger: aiEnabled,
-                            onConfirm: () => setAiEnabled((value) => !value),
-                          })
-                        }
-                      />
-                    }
-                    description="总开关。关闭后所有 AI 入口会隐藏或进入不可用状态。"
-                    title="启用 AI 能力"
-                  />
-                  <SettingRow
-                    control={
-                      <SelectInput
-                        label=""
-                        onChange={(nextValue) =>
-                          confirmChange({
-                            title: '确认切换 AI 服务商？',
-                            description: `AI 服务商将从「${aiProvider}」切换为「${nextValue}」。切换后需要重新验证 API 地址、密钥、模型名称和数据合规策略。`,
-                            onConfirm: () => setAiProvider(nextValue),
-                          })
-                        }
-                        options={['OpenAI 兼容接口', 'Azure OpenAI', '学校私有模型', '本地大模型']}
-                        value={aiProvider}
-                      />
-                    }
-                    description="决定平台调用哪类模型服务。涉及第三方服务时，必须确认敏感数据脱敏策略。"
-                    title="AI 服务商"
-                  />
-                  <SettingRow control={<TextField value="https://api.example.com/v1" />} description="OpenAI 兼容接口或私有模型网关地址。建议使用 HTTPS，并限制后台访问权限。" title="API Base URL" />
-                  <SettingRow control={<TextField value="gpt-4.1-mini" />} description="用于常规解析、摘要和问答的默认模型。正式部署时建议记录模型版本。" title="默认模型" />
-                  <SettingRow control={<TextField value="100 次 / 用户 / 日" />} description="限制普通用户调用频率，避免滥用和费用失控。管理员审核辅助可单独设置更高额度。" title="调用额度" />
-                </SettingsCard>
-
-                <SettingsCard
-                  description="这些开关决定 AI 在平台内能参与哪些业务。所有 AI 结果都应作为辅助建议，由人最终确认。"
-                  icon={<BrainCircuit className="h-5 w-5" />}
-                  title="AI 功能"
-                >
-                  {[
-                    ['漏洞报告智能解析', '用户上传报告后，AI 提取标题、影响资产、漏洞类型、复现步骤和修复建议。'],
-                    ['审核员价值预判', '给审核员提供初步价值评分、材料完整度判断和优先级建议。'],
-                    ['学习路线推荐', '根据学生能力、提交记录和学习目标推荐资源、工具和靶场。'],
-                    ['平台知识库问答', '基于平台规则、提交规范、学习资源和靶场资料进行站内问答。'],
-                  ].map(([title, description]) => (
-                    <SettingRow key={title} control={<SettingToggle enabled />} description={description} title={title} />
-                  ))}
-                </SettingsCard>
-
-                <SettingsCard
-                  description="控制 AI 能读取什么、能输出什么，以及哪些内容必须留痕。"
-                  icon={<ShieldCheck className="h-5 w-5" />}
-                  title="AI 安全边界"
-                >
-                  {[
-                    ['敏感字段脱敏后发送', 'Cookie、Token、密码、手机号、邮箱、统一认证码等字段在发送给模型前进行脱敏。'],
-                    ['AI 输出必须人工确认', 'AI 生成的漏洞等级、修复建议和证书建议不会自动生效，必须由审核员或管理员确认。'],
-                    ['记录 AI 调用日志', '记录调用时间、功能入口、模型名称、Token 消耗和操作人，用于审计与排障。'],
-                    ['禁止攻击扩展建议', '避免 AI 输出超出授权范围的扩展利用、持久化、批量扫描或数据下载建议。'],
-                  ].map(([title, description]) => (
-                    <SettingRow key={title} control={<SettingToggle enabled />} description={description} title={title} />
-                  ))}
-                </SettingsCard>
-
-                <SettingsCard
-                  description="知识库用于站内搜索、AI 问答、规则解释、学习资源推荐和靶场推荐。"
-                  icon={<Upload className="h-5 w-5" />}
-                  title="AI 知识库"
-                >
-                  {['平台规则知识库', '漏洞提交规范知识库', '学习资源知识库', '靶场资源知识库'].map((title) => (
-                    <SettingRow
-                      control={<span className="text-sm text-slate-500 dark:text-slate-400">2026-04-27 18:30</span>}
-                      description="最近索引时间。上传新文档后需要重建索引，AI 才能读取最新内容。"
-                      key={title}
-                      title={title}
-                    />
-                  ))}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <ActionButton icon={<Upload className="h-4 w-4" />} label="上传知识库文档" />
-                    <ActionButton icon={<DatabaseBackup className="h-4 w-4" />} label="重建索引" />
-                  </div>
-                </SettingsCard>
               </>
             )}
 
@@ -552,9 +440,12 @@ export function AdminSystemSettings() {
                   <SettingRow control={<TextField value="smtp.example.edu.cn" />} description="学校或组织提供的 SMTP 服务地址。生产环境建议使用专用发件账号。" title="SMTP 地址" />
                   <SettingRow control={<TextField value="465" />} description="SSL 常用 465，TLS 常用 587，具体取决于学校邮件服务配置。" title="SMTP 端口" />
                   <SettingRow control={<TextField value="security@example.edu.cn" />} description="平台验证码和通知邮件的发件邮箱。" title="发件邮箱" />
+                  <SettingRow control={<TextField value="" />} description="SMTP 认证用户名，通常与发件邮箱相同。" title="SMTP 用户名" />
+                  <SettingRow control={<TextField type="password" value="" />} description="SMTP 认证密码或授权码。正式配置时应写入环境变量，不要硬编码。" title="SMTP 密码" />
                   <SettingRow control={<SelectInput label="" options={['SSL', 'TLS', '无']} value="SSL" />} description="建议使用 SSL 或 TLS，不建议明文发送认证信息。" title="加密方式" />
-                  <div className="mt-4">
-                    <ActionButton icon={<Mail className="h-4 w-4" />} label="发送测试邮件" />
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <ActionButton disabled icon={<Mail className="h-4 w-4" />} label="发送测试邮件" />
+                    <span className="text-xs text-slate-400 dark:text-slate-500">本地测试阶段暂不启用邮件服务</span>
                   </div>
                 </SettingsCard>
 
@@ -582,11 +473,8 @@ export function AdminSystemSettings() {
                 title="漏洞响应流程"
               >
                 <SettingRow control={<TextField value="SRC" />} description="用于生成漏洞编号，例如 SRC-2026-0008。多学校部署时可配置学校简称。" title="漏洞编号前缀" />
-                <SettingRow control={<SelectInput label="" options={['标准 SRC 流程', '简化审核流程', '活动专项流程']} value="标准 SRC 流程" />} description="标准流程包含提交、初审、补充、确认、修复、复测和归档。" title="默认流程" />
-                <SettingRow control={<SelectInput label="" options={['允许合并', '直接驳回', '人工确认']} value="允许合并" />} description="重复漏洞建议进入合并流程，保留首报人和补充贡献记录。" title="重复漏洞处理" />
                 <SettingRow control={<TextField value="24 小时" />} description="超过时间未初审时提醒审核员和管理员。" title="初审超时提醒" />
                 <SettingRow control={<TextField value="7 天" />} description="责任单位超过修复时限后自动提醒，并在管理端待办中标记。" title="修复超时提醒" />
-                <SettingRow control={<SettingToggle enabled />} description="提交时必须填写授权测试范围、账号来源、测试时间和不影响业务承诺。" title="要求测试边界说明" />
                 <SettingRow control={<SettingToggle enabled />} description="高危及以上漏洞进入队列后自动通知管理员和对应审核员。" title="高危自动通知" />
               </SettingsCard>
             )}
@@ -599,27 +487,28 @@ export function AdminSystemSettings() {
               >
                 <SettingRow control={<SettingToggle enabled />} description="关闭后，证书管理页仍可查看历史证书，但不会进入新的签发流程。" title="启用证书功能" />
                 <SettingRow control={<SelectInput label="" options={['CERT-年份-流水号', '学校简称-年份-流水号', '自定义规则']} value="CERT-年份-流水号" />} description="影响新签发证书编号，不会修改历史证书编号。" title="证书编号规则" />
-                <SettingRow control={<TextField value="重庆邮电大学信息化办公室" />} description="显示在 PDF 证书落款、公开核验页面和签发记录中。" title="签发单位" />
                 <SettingRow
                   control={
-                    <SelectInput
-                      label=""
-                      onChange={(nextValue) =>
+                    <SettingToggle
+                      enabled={publicCertVerify}
+                      onChange={() =>
                         confirmChange({
-                          title: '确认修改 PDF 生成方式？',
-                          description: `PDF 生成方式将从「${pdfMode}」调整为「${nextValue}」。这会影响证书下载、存档和防篡改策略。正式上线建议使用后端生成并留存文件指纹。`,
-                          onConfirm: () => setPdfMode(nextValue),
+                          title: publicCertVerify ? '确认关闭公开证书查询？' : '确认开启公开证书查询？',
+                          description: publicCertVerify
+                            ? '关闭后，访客将无法通过证书编号或核验码公开查询证书有效性。已签发证书仍会保留在系统内。'
+                            : '开启后，访客可通过证书编号或核验码验证电子证书。请确认核验页面不会展示过多个人信息。敏感字段应保持脱敏。',
+                          onConfirm: () => {
+                            const next = !publicCertVerify
+                            setPublicCertVerify(next)
+                            void updatePlatformSettings({ publicCertVerify: next }).catch(() => setPublicCertVerify(publicCertVerify))
+                          },
                         })
                       }
-                      options={['前端生成 PDF', '后端生成 PDF', '人工上传 PDF']}
-                      value={pdfMode}
                     />
                   }
-                  description="前端生成适合演示，后端生成更适合正式签发、防篡改、归档和审计。"
-                  title="PDF 生成方式"
+                  description="控制访客是否可以公开核验证书。建议只展示证书状态、贡献类型和脱敏后的获得者信息。"
+                  title="公开证书查询"
                 />
-                <SettingRow control={<SelectInput label="" options={['默认开启', '默认关闭', '签发时选择']} value="默认开启" />} description="决定新证书是否默认支持公开核验。公开页面必须避免展示敏感个人信息。" title="公开核验策略" />
-                <SettingRow control={<TextField value="https://src.cqupt.edu.cn/cert" />} description="用于生成证书二维码和公开核验链接。" title="核验二维码域名" />
                 <SettingRow
                   control={
                     <div className="rounded-lg border border-black/10 bg-white/60 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
@@ -651,7 +540,12 @@ export function AdminSystemSettings() {
                     label="上传电子签章"
                     onClick={() => sealInputRef.current?.click()}
                   />
-                  <ActionButton icon={<FileBadge2 className="h-4 w-4" />} label="测试生成 PDF" />
+                  <ActionButton
+                    disabled={isPreviewingPdf || !certificateTemplate}
+                    icon={<FileBadge2 className="h-4 w-4" />}
+                    label={isPreviewingPdf ? '生成中...' : '测试生成 PDF'}
+                    onClick={() => void handlePreviewPdf()}
+                  />
                   <input
                     accept="application/pdf,image/png"
                     className="hidden"
@@ -688,31 +582,12 @@ export function AdminSystemSettings() {
                 </SettingsCard>
 
                 <SettingsCard
-                  description="后台访问、会话超时和日志保留策略会影响平台运维安全。"
+                  description="会话超时和日志保留策略会影响平台运维安全。"
                   icon={<DatabaseBackup className="h-5 w-5" />}
                   title="后台安全"
                 >
                   <SettingRow control={<TextField value="180 天" />} description="审计日志用于追踪敏感操作，建议生产环境保留至少 180 天。" title="审计日志保留" />
                   <SettingRow control={<TextField value="120 分钟" />} description="管理员长时间无操作后自动退出，降低共享设备风险。" title="会话超时" />
-                  <SettingRow
-                    control={
-                      <SelectInput
-                        label=""
-                        onChange={(nextValue) =>
-                          confirmChange({
-                            title: '确认修改后台访问限制？',
-                            description: `后台访问限制将从「${backendAccess}」调整为「${nextValue}」。如果配置过严，可能导致管理员无法进入后台；如果配置过松，会增加后台暴露风险。`,
-                            onConfirm: () => setBackendAccess(nextValue),
-                          })
-                        }
-                        options={['不限 IP', '白名单访问', '校园网访问']}
-                        value={backendAccess}
-                      />
-                    }
-                    description="建议正式部署时限制为校园网访问或白名单访问。"
-                    title="后台访问限制"
-                  />
-                  <SettingRow control={<SelectInput label="" options={['允许多端', '仅保留最新会话', '管理员可配置']} value="允许多端" />} description="如平台处理较多敏感数据，可考虑限制多端同时登录。" title="多端登录策略" />
                 </SettingsCard>
               </>
             )}
@@ -811,11 +686,15 @@ function SettingRow({
   )
 }
 
-function TextField({ value }: { value: string }) {
+function TextField({ value, onChange, type = 'text' }: { value: string; onChange?: (v: string) => void; type?: string }) {
+  const controlled = onChange !== undefined
   return (
     <input
       className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-      defaultValue={value}
+      defaultValue={controlled ? undefined : value}
+      onChange={controlled ? (e) => onChange(e.target.value) : undefined}
+      type={type}
+      value={controlled ? value : undefined}
     />
   )
 }

@@ -9,6 +9,7 @@ export type CertificateTemplateSummary = {
   active: boolean
   createdAt: Date
   id: string
+  layoutJson: unknown
   name: string
   sealConfigured: boolean
   templateMimeType: string
@@ -31,4 +32,12 @@ export type PendingRegistrationItem = {
   studentNo: string | null
   grade: string | null
   createdAt: Date
+}
+
+export type PlatformSettings = {
+  platformName: string
+  schoolName: string
+  orgName: string
+  platformDomain: string
+  publicCertVerify: boolean
 }

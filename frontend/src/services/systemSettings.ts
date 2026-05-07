@@ -1,15 +1,24 @@
-import { apiFormRequest, apiRequest } from './apiClient'
+import { apiFormRequest, apiBlobRequest, apiRequest } from './apiClient'
 
 export type CertificateTemplateSummary = {
   active: boolean
   createdAt: string
   id: string
+  layoutJson: unknown
   name: string
   sealConfigured: boolean
   templateMimeType: string
   templateSizeBytes: number
   updatedAt: string
   version: string
+}
+
+export type PlatformSettings = {
+  platformName: string
+  schoolName: string
+  orgName: string
+  platformDomain: string
+  publicCertVerify: boolean
 }
 
 export type RegistrationMode = {
@@ -48,6 +57,32 @@ export async function uploadCertificateSeal(file: File) {
   return requestForm<CertificateTemplateSummary>('/system-settings/certificate-template/seal', formData)
 }
 
+export async function updateCertificateTemplateLayout(layoutJson: unknown) {
+  return request<CertificateTemplateSummary>('/system-settings/certificate-template/layout', {
+    method: 'PUT',
+    body: { layoutJson },
+  })
+}
+
+export async function previewCertificateTemplate() {
+  const blob = await apiBlobRequest('/system-settings/certificate-template/preview', {
+    auth: true,
+    method: 'POST',
+    unauthenticatedMessage: '请先登录后再预览证书模板',
+  })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener,noreferrer')
+  window.setTimeout(() => URL.revokeObjectURL(url), 60 * 1000)
+}
+
+export async function getPlatformSettings() {
+  return request<PlatformSettings>('/system-settings/platform', { method: 'GET' })
+}
+
+export async function updatePlatformSettings(data: Partial<PlatformSettings>) {
+  return request<PlatformSettings>('/system-settings/platform', { method: 'POST', body: data as Record<string, unknown> })
+}
+
 export async function getRegistrationMode() {
   return apiRequest<RegistrationMode>('/system-settings/registration-mode', { method: 'GET' })
 }
@@ -68,7 +103,7 @@ export async function rejectRegistration(id: string) {
   return request<{ success: true }>(`/system-settings/pending-registrations/${id}/reject`, { method: 'POST' })
 }
 
-async function request<T>(path: string, options: { method: 'GET' | 'POST'; body?: Record<string, unknown> }) {
+async function request<T>(path: string, options: { method: 'GET' | 'POST' | 'PUT'; body?: Record<string, unknown> }) {
   return apiRequest<T>(path, {
     ...options,
     auth: true,

@@ -1,5 +1,6 @@
 import * as fontkit from '@pdf-lib/fontkit'
 import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from 'pdf-lib'
 
 type LayoutPoint = {
@@ -62,8 +63,12 @@ const DEFAULT_LAYOUT: CertificateLayout = {
   verifyCode: { fontSize: 10, x: 86, y: 94 },
 }
 
+const BUNDLED_FONT_DIR = join(__dirname, '..', '..', '..', 'assets', 'fonts')
+
 const FONT_PATH_CANDIDATES = [
   process.env.CERTIFICATE_FONT_PATH,
+  // 项目内置单体字体（fonttools 从 TTC 中提取，fontkit 兼容）
+  `${BUNDLED_FONT_DIR}/NotoSansCJKsc-Regular.otf`,
   'C:\\Windows\\Fonts\\simhei.ttf',
   'C:\\Windows\\Fonts\\msyh.ttc',
   '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
@@ -122,7 +127,9 @@ async function embedPreferredFont(pdfDoc: PDFDocument, bold: boolean) {
 
   if (fontPath) {
     pdfDoc.registerFontkit(fontkit)
-    return pdfDoc.embedFont(readFileSync(fontPath), { subset: true })
+    // TTC 是字体集合，fontkit 不支持对其做 subset；单体 OTF/TTF 可以安全开启
+    const useSubset = /\.(otf|ttf)$/i.test(fontPath)
+    return pdfDoc.embedFont(readFileSync(fontPath), { subset: useSubset })
   }
 
   return pdfDoc.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica)
@@ -136,6 +143,7 @@ function resolveFontPath(bold: boolean) {
 
   const preferred = bold
     ? [
+        `${BUNDLED_FONT_DIR}/NotoSansCJKsc-Bold.otf`,
         'C:\\Windows\\Fonts\\simhei.ttf',
         'C:\\Windows\\Fonts\\msyhbd.ttc',
         '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',

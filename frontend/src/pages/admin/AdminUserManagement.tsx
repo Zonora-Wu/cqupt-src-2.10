@@ -217,57 +217,66 @@ export function AdminUserManagement() {
 
                 <SurfacePanel className="p-4">
                   <div className="grid gap-2">
-                    <button
-                      className="rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-                      onClick={() => setRoleUser(selectedUser)}
-                      type="button"
-                    >
-                      调整角色
-                    </button>
+                    {selectedUser.role !== 'ADMIN' && (
+                      <button
+                        className="rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+                        onClick={() => setRoleUser(selectedUser)}
+                        type="button"
+                      >
+                        调整角色
+                      </button>
+                    )}
                     <ActionButton
                       label="重置密码"
                       onClick={() => setResetPasswordTarget(selectedUser)}
                     />
-                    <ActionButton
-                      label={selectedUser.status === 'LOCKED' ? '解锁账号' : '锁定账号'}
-                      onClick={() =>
-                        setConfirmAction({
-                          description:
-                            selectedUser.status === 'LOCKED'
-                              ? '解锁后用户可以重新登录平台。'
-                              : '锁定后用户暂时无法登录，适合处理异常登录或疑似盗号。',
-                          onConfirm: () =>
-                            runStatusAction(
-                              selectedUser.id,
-                              selectedUser.status === 'LOCKED' ? 'ACTIVE' : 'LOCKED',
-                              selectedUser.status === 'LOCKED' ? '管理员解锁账号' : '管理员锁定账号',
-                              selectedUser.status === 'LOCKED' ? '账号已解锁' : '账号已锁定',
-                            ),
-                          title: selectedUser.status === 'LOCKED' ? '确认解锁账号？' : '确认锁定账号？',
-                        })
-                      }
-                    />
-                    <ActionButton
-                      danger
-                      label={selectedUser.status === 'DISABLED' ? '启用账号' : '禁用账号'}
-                      onClick={() =>
-                        setConfirmAction({
-                          danger: selectedUser.status !== 'DISABLED',
-                          description:
-                            selectedUser.status === 'DISABLED'
-                              ? '启用后用户可以恢复登录和使用对应角色权限。'
-                              : '禁用后用户无法登录，未完成流程不会删除。',
-                          onConfirm: () =>
-                            runStatusAction(
-                              selectedUser.id,
-                              selectedUser.status === 'DISABLED' ? 'ACTIVE' : 'DISABLED',
-                              selectedUser.status === 'DISABLED' ? '管理员启用账号' : '管理员禁用账号',
-                              selectedUser.status === 'DISABLED' ? '账号已启用' : '账号已禁用',
-                            ),
-                          title: selectedUser.status === 'DISABLED' ? '确认启用账号？' : '确认禁用账号？',
-                        })
-                      }
-                    />
+                    {selectedUser.role !== 'ADMIN' && (
+                      <ActionButton
+                        label={selectedUser.status === 'LOCKED' ? '解锁账号' : '锁定账号'}
+                        onClick={() =>
+                          setConfirmAction({
+                            description:
+                              selectedUser.status === 'LOCKED'
+                                ? '解锁后用户可以重新登录平台。'
+                                : '锁定后用户暂时无法登录，适合处理异常登录或疑似盗号。',
+                            onConfirm: () =>
+                              runStatusAction(
+                                selectedUser.id,
+                                selectedUser.status === 'LOCKED' ? 'ACTIVE' : 'LOCKED',
+                                selectedUser.status === 'LOCKED' ? '管理员解锁账号' : '管理员锁定账号',
+                                selectedUser.status === 'LOCKED' ? '账号已解锁' : '账号已锁定',
+                              ),
+                            title: selectedUser.status === 'LOCKED' ? '确认解锁账号？' : '确认锁定账号？',
+                          })
+                        }
+                      />
+                    )}
+                    {selectedUser.role !== 'ADMIN' && (
+                      <ActionButton
+                        danger
+                        label={selectedUser.status === 'DISABLED' ? '启用账号' : '禁用账号'}
+                        onClick={() =>
+                          setConfirmAction({
+                            danger: selectedUser.status !== 'DISABLED',
+                            description:
+                              selectedUser.status === 'DISABLED'
+                                ? '启用后用户可以恢复登录和使用对应角色权限。'
+                                : '禁用后用户无法登录，未完成流程不会删除。',
+                            onConfirm: () =>
+                              runStatusAction(
+                                selectedUser.id,
+                                selectedUser.status === 'DISABLED' ? 'ACTIVE' : 'DISABLED',
+                                selectedUser.status === 'DISABLED' ? '管理员启用账号' : '管理员禁用账号',
+                                selectedUser.status === 'DISABLED' ? '账号已启用' : '账号已禁用',
+                              ),
+                            title: selectedUser.status === 'DISABLED' ? '确认启用账号？' : '确认禁用账号？',
+                          })
+                        }
+                      />
+                    )}
+                    {selectedUser.role === 'ADMIN' && (
+                      <p className="px-1 text-xs text-slate-400 dark:text-slate-500">管理员账号不可调整角色、锁定或禁用</p>
+                    )}
                   </div>
                 </SurfacePanel>
               </div>
@@ -469,13 +478,15 @@ export function AdminUserManagement() {
                     角色、状态、密码重置操作会写入审计日志
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                      onClick={() => setRoleUser(item)}
-                      type="button"
-                    >
-                      调整角色
-                    </button>
+                    {item.role !== 'ADMIN' && (
+                      <button
+                        className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        onClick={() => setRoleUser(item)}
+                        type="button"
+                      >
+                        调整角色
+                      </button>
+                    )}
                     <button
                       className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
                       onClick={() => setResetPasswordTarget(item)}

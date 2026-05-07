@@ -9,8 +9,9 @@ import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { generateCertificatePdf } from '../certificates/certificate-pdf.generator'
 import { PrismaService } from '../prisma/prisma.service'
-import { CertificateTemplateSummary, PendingRegistrationItem, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
+import { CertificateTemplateSummary, PendingRegistrationItem, PlatformSettings, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
 
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
@@ -168,6 +169,106 @@ export class SystemSettingsService {
     return summarizeTemplate(updated)
   }
 
+  async updateCertificateTemplateLayout(
+    layoutJson: unknown,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ) {
+    if (!layoutJson || typeof layoutJson !== 'object' || Array.isArray(layoutJson)) {
+      throw new BadRequestException('layoutJson 必须是对象')
+    }
+
+    const template = await this.prisma.certificateTemplate.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!template) {
+      throw new NotFoundException('当前无启用的证书模板')
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.certificateTemplate.update({
+        where: { id: template.id },
+        data: { layoutJson: layoutJson as import('@prisma/client').Prisma.InputJsonValue },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { layoutJson, templateId: template.id, version: template.version },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: template.id,
+          targetType: 'CertificateTemplate',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return next
+    })
+
+    return summarizeTemplate(updated)
+  }
+
+  async previewCertificateTemplate(user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    const template = await this.prisma.certificateTemplate.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!template) {
+      throw new NotFoundException('当前无启用的证书模板，请先上传背景图')
+    }
+
+    if (!template.sealStorageKey) {
+      throw new BadRequestException('请先上传电子印章后再预览')
+    }
+
+    const [templateObject, sealObject] = await Promise.all([
+      this.storage.getObject(template.templateStorageKey),
+      this.storage.getObject(template.sealStorageKey),
+    ])
+
+    const pdfBuffer = await generateCertificatePdf({
+      assetName: '重庆邮电大学学生工作系统',
+      certificateNo: 'CERT-PREVIEW-20260507',
+      contribution: '发现了一处存储型跨站脚本漏洞（XSS），攻击者可通过该漏洞向其他用户注入恶意脚本，对用户数据安全构成威胁。提交报告详细描述了漏洞成因和修复建议。',
+      issuedAt: new Date(),
+      recipientName: '张三（预览模式）',
+      reportNo: 'RPT-20260507-PREVIEW',
+      sealBuffer: sealObject.body,
+      severity: '高危',
+      template: {
+        layoutJson: template.layoutJson,
+        sealMimeType: template.sealMimeType,
+        sealStorageKey: template.sealStorageKey,
+        templateMimeType: template.templateMimeType,
+      },
+      templateBuffer: templateObject.body,
+      title: '【预览】存储型跨站脚本漏洞（XSS）',
+      verifyCode: 'PREVIEW-ONLY',
+    })
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: AuditAction.CHANGE_SYSTEM_SETTING,
+        actorId: user.id,
+        ipAddress: meta.ipAddress,
+        metadata: { previewOnly: true, templateId: template.id, version: template.version },
+        requestPath: meta.requestPath,
+        result: 'success',
+        targetId: template.id,
+        targetType: 'CertificateTemplate',
+        userAgent: meta.userAgent,
+      },
+    })
+
+    return { body: pdfBuffer, contentType: 'application/pdf', fileName: 'certificate-preview.pdf' }
+  }
+
   async getRegistrationMode(): Promise<RegistrationMode> {
     const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'open_registration' } })
     const open = setting ? (setting.value as boolean) !== false : true
@@ -302,12 +403,88 @@ export class SystemSettingsService {
 
     return { success: true }
   }
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    const keys = ['platform_name', 'school_name', 'org_name', 'platform_domain', 'public_cert_verify']
+    const rows = await this.prisma.systemSetting.findMany({ where: { key: { in: keys } } })
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+    return {
+      platformName: typeof map['platform_name'] === 'string' ? map['platform_name'] : 'CQUPT-SRC 校园漏洞响应平台',
+      schoolName: typeof map['school_name'] === 'string' ? map['school_name'] : '重庆邮电大学',
+      orgName: typeof map['org_name'] === 'string' ? map['org_name'] : '信息化办公室',
+      platformDomain: typeof map['platform_domain'] === 'string' ? map['platform_domain'] : 'https://src.cqupt.edu.cn',
+      publicCertVerify: typeof map['public_cert_verify'] === 'boolean' ? map['public_cert_verify'] : true,
+    }
+  }
+
+  async updatePlatformSettings(
+    body: Partial<PlatformSettings>,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<PlatformSettings> {
+    const { platformName, schoolName, orgName, platformDomain, publicCertVerify } = body
+
+    if (platformName !== undefined && (typeof platformName !== 'string' || platformName.trim().length === 0 || platformName.length > 100)) {
+      throw new BadRequestException('平台名称不能为空且不超过 100 个字符')
+    }
+    if (schoolName !== undefined && (typeof schoolName !== 'string' || schoolName.trim().length === 0 || schoolName.length > 100)) {
+      throw new BadRequestException('学校名称不能为空且不超过 100 个字符')
+    }
+    if (orgName !== undefined && (typeof orgName !== 'string' || orgName.trim().length === 0 || orgName.length > 100)) {
+      throw new BadRequestException('主管单位不能为空且不超过 100 个字符')
+    }
+    if (platformDomain !== undefined) {
+      try {
+        const url = new URL(platformDomain as string)
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error()
+      } catch {
+        throw new BadRequestException('平台访问域名必须是有效的 URL（以 http:// 或 https:// 开头）')
+      }
+    }
+
+    type UpsertEntry = { key: string; value: import('@prisma/client').Prisma.InputJsonValue; description: string }
+    const updates: UpsertEntry[] = []
+    if (platformName !== undefined) updates.push({ key: 'platform_name', value: platformName.trim(), description: '平台名称' })
+    if (schoolName !== undefined) updates.push({ key: 'school_name', value: schoolName.trim(), description: '学校名称' })
+    if (orgName !== undefined) updates.push({ key: 'org_name', value: orgName.trim(), description: '主管单位' })
+    if (platformDomain !== undefined) updates.push({ key: 'platform_domain', value: (platformDomain as string).trim(), description: '平台访问域名' })
+    if (publicCertVerify !== undefined) updates.push({ key: 'public_cert_verify', value: Boolean(publicCertVerify), description: '公开证书查询' })
+
+    if (updates.length > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        await Promise.all(
+          updates.map((u) =>
+            tx.systemSetting.upsert({
+              where: { key: u.key },
+              update: { value: u.value, updatedById: user.id },
+              create: { key: u.key, value: u.value, description: u.description, updatedById: user.id },
+            }),
+          ),
+        )
+
+        await tx.auditLog.create({
+          data: {
+            action: AuditAction.CHANGE_SYSTEM_SETTING,
+            actorId: user.id,
+            ipAddress: meta.ipAddress,
+            metadata: { keys: updates.map((u) => u.key) },
+            requestPath: meta.requestPath,
+            result: 'success',
+            targetType: 'SystemSetting',
+          },
+        })
+      })
+    }
+
+    return this.getPlatformSettings()
+  }
 }
 
 function summarizeTemplate(template: {
   active: boolean
   createdAt: Date
   id: string
+  layoutJson: unknown
   name: string
   sealStorageKey: string | null
   templateMimeType: string
@@ -319,6 +496,7 @@ function summarizeTemplate(template: {
     active: template.active,
     createdAt: template.createdAt,
     id: template.id,
+    layoutJson: template.layoutJson,
     name: template.name,
     sealConfigured: Boolean(template.sealStorageKey),
     templateMimeType: template.templateMimeType,

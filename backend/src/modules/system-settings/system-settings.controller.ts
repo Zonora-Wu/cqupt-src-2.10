@@ -5,11 +5,14 @@ import {
   Inject,
   Param,
   Post,
+  Put,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
+import { Response } from 'express'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -69,6 +72,56 @@ export class SystemSettingsController {
     @Req() req: RequestLike,
   ) {
     return this.settings.uploadCertificateSeal(file, user, getRequestMeta(req))
+  }
+
+  @Put('certificate-template/layout')
+  @RequirePermissions('system:manage')
+  updateCertificateTemplateLayout(
+    @Body() body: { layoutJson?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.updateCertificateTemplateLayout(body.layoutJson, user, getRequestMeta(req))
+  }
+
+  @Post('certificate-template/preview')
+  @RequirePermissions('system:manage')
+  async previewCertificateTemplate(
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+    @Res() res: Response,
+  ) {
+    const preview = await this.settings.previewCertificateTemplate(user, getRequestMeta(req))
+    res.setHeader('Content-Type', preview.contentType)
+    res.setHeader('Content-Length', preview.body.length)
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
+    res.send(preview.body)
+  }
+
+  @Get('platform')
+  @RequirePermissions('system:manage')
+  getPlatformSettings() {
+    return this.settings.getPlatformSettings()
+  }
+
+  @Post('platform')
+  @RequirePermissions('system:manage')
+  updatePlatformSettings(
+    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.updatePlatformSettings(
+      {
+        platformName: typeof body.platformName === 'string' ? body.platformName : undefined,
+        schoolName: typeof body.schoolName === 'string' ? body.schoolName : undefined,
+        orgName: typeof body.orgName === 'string' ? body.orgName : undefined,
+        platformDomain: typeof body.platformDomain === 'string' ? body.platformDomain : undefined,
+        publicCertVerify: body.publicCertVerify !== undefined ? body.publicCertVerify === true || body.publicCertVerify === 'true' : undefined,
+      },
+      user,
+      getRequestMeta(req),
+    )
   }
 
   @Get('registration-mode')
