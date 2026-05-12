@@ -18,6 +18,32 @@ CQUPT-SRC 是一个面向校园网络安全建设的漏洞响应与安全学习�
 
 项目需要保留多种交付形式，后续可能用于单校部署、多校部署、本地部署、Docker 部署和学校服务器部署。
 
+## 1.1 当前项目快照
+
+截至 2026-05-11，项目已经不是纯前端原型，而是一个可本地联调的全栈应用：
+
+- 前端：React 19 + TypeScript + Vite 6 + Tailwind CSS 4，访客端、学生端、审核员端、管理员端主要页面已落地，业务页面大多接入真实 API。
+- 后端：NestJS 11 + Prisma，已实现认证/RBAC、账号中心、准入中心、漏洞流程、附件预览、证书、公告、学习资源、积分商城、用户管理、审计日志、通知与数据看板等模块。
+- 数据库：PostgreSQL + Prisma，已有多轮 migration 和 seed 演示数据。
+- 文件：PDF 附件、证书模板、电子印章、证书 PDF 走后端受控接口与 MinIO 服务设计；本地联调脚本会启动依赖服务。
+- 认证：统一认证码+密码登录、邮箱验证码登录、注册、当前用户校验已接入真实后端。
+- 滑块验证：`SlideVerify` 已抽成可复用组件，支持本地模式和服务端一次性 `captchaToken` 模式；邮箱登录和注册发码共用服务端模式。
+- Hermes Agent：已部署在独立 Docker 容器中，配置目录为 `/home/cocking/cqupt-src-hermes-linux`；宿主机健康检查为 `curl http://localhost:5000/health`。后端按 OpenAI-compatible API 接入，使用 `OPENAI_BASE_URL=http://localhost:5000/v1`、`OPENAI_MODEL=hermes-agent`；若后端也在 Docker 内运行，`OPENAI_BASE_URL` 应使用 Docker 服务名，例如 `http://hermes-agent:5000/v1`。
+- 当前主要未完成：真实 SMTP、责任书/安全答题后台管理、证书模板坐标可视化、AI Gateway 二期、完整 Docker/Ubuntu 部署联调。
+
+接手时优先看：
+
+```text
+README.md
+PROJECT_HANDOFF.md
+docs/DEVELOPMENT_STATUS.md
+docs/api/README.md
+frontend/src/App.tsx
+backend/src/app.module.ts
+database/prisma/schema.prisma
+backend/src/database/seed.ts
+```
+
 ## 2. 用户角色
 
 当前规划角色：
@@ -122,6 +148,11 @@ docs/architecture/DATABASE_MODEL.md
 20260429125156_certificate_templates
 20260430093000_learning_resources
 20260430103000_points_mall
+20260430111000_user_management
+20260430143000_captcha
+20260501090120_cqupt_text
+20260501120000_open_registration
+20260502090000_user_avatar
 ```
 
 ## 3.3 后端初始化
@@ -135,19 +166,39 @@ backend/
 ├── package.json
 ├── package-lock.json
 ├── scripts/
-│   └── prisma-generate.cjs
+│   ├── prisma-generate.cjs
+│   ├── prisma-migrate-deploy.cjs
+│   └── prisma-migrate-dev.cjs
 ├── tsconfig.json
 ├── tsconfig.build.json
 ├── .env.example
+├── assets/
 └── src/
     ├── main.ts
     ├── app.module.ts
     ├── common/crypto/
     ├── config/env.ts
     ├── database/seed.ts
-    └── modules/health/
-        ├── health.module.ts
-        └── health.controller.ts
+    └── modules/
+        ├── access/
+        ├── account/
+        ├── announcements/
+        ├── attachments/
+        ├── audit-logs/
+        ├── auth/
+        ├── captcha/
+        ├── certificates/
+        ├── dashboard/
+        ├── health/
+        ├── learning/
+        ├── notifications/
+        ├── points-mall/
+        ├── prisma/
+        ├── rbac/
+        ├── school/
+        ├── system-settings/
+        ├── users/
+        └── vulnerabilities/
 ```
 
 当前后端能力：
@@ -169,7 +220,11 @@ backend/
 POST /api/auth/login/password
 POST /api/auth/login/email-code
 POST /api/auth/email-code
+POST /api/auth/register/email-code
+POST /api/auth/register
 GET /api/auth/me
+POST /api/captcha/slider/challenge
+POST /api/captcha/slider/verify
 ```
 
 当前认证与权限基础：
@@ -324,27 +379,31 @@ POST /api/mall/manage/redemptions/:id/cancel
 
 后端本地命令：
 
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run prisma:generate
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run prisma:validate
-npm.cmd run dev
+```bash
+cd backend
+npm run prisma:generate
+npm run prisma:validate
+npm run prisma:migrate:dev
+npm run db:seed
+npm run typecheck
+npm run build
+npm run dev
 ```
 
 已验证：
 
-- `npm.cmd run prisma:generate` 通过。
-- `npm.cmd run typecheck` 通过。
-- `npm.cmd run build` 通过。
-- `npm.cmd run prisma:validate` 通过。
+- `npm run prisma:generate` 通过。
+- `npm run typecheck` 通过。
+- `npm run build` 通过。
+- `npm run prisma:validate` 通过。
+- `npm run test:core-api` 可用于核心 API 冒烟测试，需要本地服务和依赖先启动。
 
 Windows PowerShell 下运行命令推荐使用：
 
 ```powershell
 npm.cmd run dev
 npm.cmd run build
+npm.cmd run db:seed
 ```
 
 ## 4. 本地运行命令
@@ -391,27 +450,30 @@ http://localhost:3000/api/health
 学生账号：
 
 ```text
-邮箱：2025001@stu.cqupt.edu.cn
+统一认证码：2025001
+邮箱：student@example.edu.cn
 密码：123456+-
 ```
 
 审核员账号：
 
 ```text
-邮箱：0000001@cqupt.edu.cn
+统一认证码：0000001
+邮箱：auditor@example.edu.cn
 密码：auditor123456+-
 ```
 
 管理员账号：
 
 ```text
-邮箱：0000000@cqupt.edu.cn
+统一认证码：0000000
+邮箱：admin@example.edu.cn
 密码：admin123456+-
 ```
 
-登录前需要完成滑块验证。
+统一认证码登录需要完成本地滑块验证；邮箱验证码登录和注册发码需要完成服务端滑块验证并消耗一次性 `captchaToken`。
 
-开发环境邮箱验证码（登录/修改邮箱/修改密码）固定为：
+开发环境邮箱验证码（登录/注册/修改邮箱/修改密码）固定为：
 
 ```text
 123456
@@ -458,6 +520,16 @@ http://localhost:3000/api/health
 - 用户首页
 - 提交漏洞页
 - 个人中心
+- 我的漏洞
+- 学习中心
+- AI 助手
+- 积分商城
+- 我的证书
+- 排行榜
+- 平台公告
+- 通知中心
+- 账号安全
+- 外观/系统设置
 
 用户端菜单：
 
@@ -536,6 +608,15 @@ frontend/src/pages/user/UserSubmitVulnerability.tsx
 - 当前提交按钮已接入真实后端接口。
 
 ## 8. 已抽取的可复用组件
+
+当前前端复用组件集中在：
+
+```text
+frontend/src/components/layout/
+frontend/src/components/navigation/
+frontend/src/components/ui/
+frontend/src/utils/
+```
 
 ### 8.1 页面背景
 
@@ -635,9 +716,29 @@ frontend/src/components/ui/SlideVerify.tsx
 
 作用：
 
-- 登录/注册弹窗滑块验证
+- 可复用滑块验证组件
 - 支持鼠标和触摸拖动
-- 未完成滑块不能提交登录/注册
+- 支持 `local` 本地模式和 `server` 服务端挑战模式
+- 服务端模式会通过 `/api/captcha/slider/challenge` 和 `/api/captcha/slider/verify` 换取一次性 `captchaToken`
+- 支持 `className`、`disabled`、`labels`、`completeThreshold`、`resetKey`、`onChange`、`onVerify`、`onTokenChange`、`onError`
+- 登录弹窗、注册弹窗已使用该组件
+
+示例：
+
+```tsx
+<SlideVerify
+  mode="server"
+  purpose="LOGIN_EMAIL_CODE"
+  resetKey={captchaResetKey}
+  onTokenChange={setCaptchaToken}
+/>
+```
+
+注意：
+
+- 不再建议通过 React `key` 强制重建滑块，优先使用 `resetKey`。
+- 邮箱登录/注册发码成功后要清空旧 token 并递增 `resetKey`，因为后端 token 一次性消费。
+- 后端轨迹校验已放宽，只保留基础耗时、距离、目标位置和异常回退判断，避免正常用户频繁遇到“滑动过快/轨迹异常”。
 
 ### 8.8 首页文字交互
 
@@ -666,23 +767,22 @@ frontend/src/pages/user/UserProfile.tsx
 
 左侧用户信息卡片（`lg:grid-cols-[360px_minmax(0,1fr)]`）：
 
-- 圆形头像，点击可更换（本地预览，限制 2MB 图片）
+- 圆形头像，点击可更换，已接入 `POST /api/account/avatar`，限制 2MB 图片并同步导航栏头像
 - 用户名 + 角色标签
 - 基础信息：统一认证码、绑定邮箱、账号角色、账号状态
-- 个人积分区块：总积分 + 漏洞提交数
-- 责任书签署情况：平台使用责任书、漏洞披露保密协议、网络安全承诺书（带已签署/未签署状态）
+- 个人积分区块：总积分、漏洞提交数、证书统计等真实接口数据
+- 责任书签署情况：展示当前准入与责任书状态
 
 右侧设置区：
 
-- 修改邮箱（前端模拟）
-- 修改密码（前端模拟）
-- 操作审计说明
+- 修改邮箱：两步流程，先验证当前邮箱验证码，再提交新邮箱
+- 修改密码：通过当前邮箱验证码验证，无需旧密码，修改后其他设备 refresh token 失效
+- 操作审计说明与反馈提示
 
 注意：
 
-- 头像上传目前仅前端本地预览，后端需实现 multipart 上传接口，并校验 MIME 类型和文件大小。
-- 积分数据和责任书签署状态目前为静态占位，后续需接后端接口。
-- 邮箱变更和密码修改目前为前端模拟，后端必须实现二次验证和操作审计。
+- 账号安全页 `UserAccountSecurity.tsx` 已接入 `GET /api/account/audit-logs`，展示登录记录与操作日志。
+- 头像当前以 base64 存入 `User.avatarUrl`，适合演示；生产环境可考虑迁移到对象存储。
 
 ---
 
@@ -757,6 +857,21 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 平台计划接入 AI 智能体，不只是普通聊天机器人。
 
+当前 Agent 约定：
+
+```text
+部署方式：独立 Docker 容器
+配置目录：/home/cocking/cqupt-src-hermes-linux
+宿主机地址：http://localhost:5000
+健康检查：curl http://localhost:5000/health
+后端本机运行：OPENAI_BASE_URL=http://localhost:5000/v1
+后端容器运行：OPENAI_BASE_URL=http://hermes-agent:5000/v1
+API Key：OPENAI_API_KEY=API_SERVER_KEY
+模型：OPENAI_MODEL=hermes-agent
+```
+
+注意：前端不能直接请求 Hermes Agent，必须通过后端 AI Gateway 做鉴权、脱敏、限流和审计。
+
 学生侧建议能力：
 
 - 漏洞报告自动整理
@@ -811,31 +926,31 @@ public/assets/logos/CQUPT_01_logo_1024px.png
 
 前端待做：
 
-- 将 mock 数据逐步替换为真实后端 API。
-- 补齐 API loading / error / empty 状态。
+- 继续减少残余静态/演示数据，尤其 AI 助手、排行榜、部分通知体验。
+- 补齐复杂表单的 loading / error / empty / permission denied 状态。
 - 根据真实权限隐藏或禁用操作按钮。
+- 修复当前 TypeScript 全量构建中的未使用变量：`AuditorHome.tsx`、`UserAccountSecurity.tsx`、`UserSystemSettings.tsx`。
 
 后端待做：
 
 - 真实 SMTP 邮件发送
-- 用户注册准入
 - 统一认证真实对接
-- 积分系统
+- 责任书版本管理与安全答题题库后台
 - 证书模板在线坐标配置
-- 通知系统
-- 审计日志查询页 API
-- AI 智能体接口
-- Docker 部署
+- 通知系统二期
+- AI Gateway 二期：补齐限流、提示词模板、更多场景接口
+- Docker Compose 完整联调与 Ubuntu 部署
+- 滑块验证二期：图片拼图、Redis 临时存储、风控策略配置
 
 ## 13. 推荐后续开发顺序
 
 建议继续按以下顺序：
 
-1. 完善证书模板在线坐标配置，让管理员可以调整文字与印章位置。
-2. 实现审计日志查询 API，替换管理员审计日志 mock。
-3. 接入 AI Gateway 与 Hermes Agent。
-4. Docker Compose 完整应用联调。
-5. Ubuntu 云服务器部署。
+1. 先清理前端 TypeScript 未使用变量，让 `npm run build` 全量恢复绿色。
+2. 接入真实 SMTP，并统一注册、登录、修改邮箱、修改密码的发信配置和限流策略。
+3. 完善系统设置：责任书版本管理、安全答题题库、证书模板坐标可视化。
+4. 配置 OPENAI_API_KEY 并联调 Hermes OpenAI-compatible API，完善 AI Gateway 二期能力。
+5. Docker Compose 完整应用联调，再推进 Ubuntu 云服务器部署。
 
 ## 14. 给下一个 Agent 的注意事项
 

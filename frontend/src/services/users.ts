@@ -6,6 +6,15 @@ export type UserStatusCode = 'ACTIVE' | 'PENDING' | 'DISABLED' | 'LOCKED'
 export type ManagedUserItem = {
   accessStatus: '未答题' | '答题通过' | '已签责任书' | '未通过'
   accountStatus: '正常' | '待准入' | '已禁用' | '已锁定'
+  aiQuota: {
+    enabled: boolean
+    monthlyLimit: number
+    overridden: boolean
+    remaining: number
+    resetAt: string
+    usedPercent: number
+    usedThisMonth: number
+  }
   authorizationLevel: string
   certificates: number
   college: string
@@ -118,6 +127,13 @@ export function resetManagedUserPassword(id: string, newPassword: string, reason
   return request<{ message: string; temporaryPassword?: string }>(`/users/manage/${id}/reset-password`, {
     body: { newPassword, reason },
     method: 'POST',
+  })
+}
+
+export function updateManagedUserAiQuota(id: string, monthlyLimit: number, enabled: boolean, reason: string) {
+  return request<ManagedUserItem>(`/users/manage/${id}/ai-quota`, {
+    body: { enabled, monthlyLimit, reason },
+    method: 'PATCH',
   })
 }
 

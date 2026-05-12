@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  Bot,
   CheckCircle2,
   FileSignature,
   Filter,
@@ -23,6 +24,7 @@ import {
   getUserManagementOptions,
   listManagedUsers,
   resetManagedUserPassword,
+  updateManagedUserAiQuota,
   updateManagedUserRole,
   updateManagedUserStatus,
 } from '../../services/users'
@@ -73,6 +75,7 @@ export function AdminUserManagement() {
   const [roleUser, setRoleUser] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [resetPasswordTarget, setResetPasswordTarget] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
+  const [aiQuotaTarget, setAiQuotaTarget] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
@@ -173,6 +176,17 @@ export function AdminUserManagement() {
     }
   }
 
+  async function runAiQuotaUpdate(id: string, monthlyLimit: number, enabled: boolean) {
+    setError('')
+    try {
+      const updated = await updateManagedUserAiQuota(id, monthlyLimit, enabled, '管理员从用户管理页调整 AI token 额度')
+      mergeUpdatedUser(updated)
+      flashMessage('AI token 额度已更新')
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'AI token 额度更新失败')
+    }
+  }
+
   if (selectedId) {
     return (
       <>
@@ -229,6 +243,10 @@ export function AdminUserManagement() {
                     <ActionButton
                       label="重置密码"
                       onClick={() => setResetPasswordTarget(selectedUser)}
+                    />
+                    <ActionButton
+                      label="设置 AI 额度"
+                      onClick={() => setAiQuotaTarget(selectedUser)}
                     />
                     {selectedUser.role !== 'ADMIN' && (
                       <ActionButton
@@ -328,6 +346,35 @@ export function AdminUserManagement() {
                   </div>
                 </DetailPanel>
 
+                <DetailPanel title="AI token 额度" icon={<Bot className="h-5 w-5" />}>
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {[
+                      ['月度额度', formatNumber(selectedUser.aiQuota.monthlyLimit)],
+                      ['本月已用', formatNumber(selectedUser.aiQuota.usedThisMonth)],
+                      ['剩余额度', formatNumber(selectedUser.aiQuota.remaining)],
+                      ['状态', selectedUser.aiQuota.enabled ? '已启用' : '已停用'],
+                    ].map(([label, value]) => (
+                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                        <p className="mt-2 text-xl font-semibold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm dark:border-white/10 dark:bg-white/[0.035]">
+                    <p className="text-slate-500 dark:text-slate-400">
+                      {selectedUser.aiQuota.overridden ? '该用户使用单独配置额度。' : '该用户使用系统默认额度。'}
+                      下次重置：{formatDateTime(selectedUser.aiQuota.resetAt)}
+                    </p>
+                    <button
+                      className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+                      onClick={() => setAiQuotaTarget(selectedUser)}
+                      type="button"
+                    >
+                      调整额度
+                    </button>
+                  </div>
+                </DetailPanel>
+
                 <DetailPanel title="权限覆盖" icon={<KeyRound className="h-5 w-5" />}>
                   <div className="space-y-3">
                     {selectedUser.permissionOverrides.map((item) => (
@@ -377,6 +424,14 @@ export function AdminUserManagement() {
           }}
         />
         <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
+        <AiQuotaDialog
+          onClose={() => setAiQuotaTarget(null)}
+          onConfirm={async (target, monthlyLimit, enabled) => {
+            await runAiQuotaUpdate(target.id, monthlyLimit, enabled)
+            setAiQuotaTarget(null)
+          }}
+          user={aiQuotaTarget}
+        />
       </>
     )
   }
@@ -458,6 +513,7 @@ export function AdminUserManagement() {
                         <span>提交 {item.submissions}</span>
                         <span>有效 {item.validReports}</span>
                         <span>积分 {item.points}</span>
+                        <span>AI 剩余 {formatNumber(item.aiQuota.remaining)}</span>
                         <span>证书 {item.certificates}</span>
                         <span>最近登录 {formatDateTime(item.lastLogin)}</span>
                       </div>
@@ -494,6 +550,13 @@ export function AdminUserManagement() {
                     >
                       重置密码
                     </button>
+                    <button
+                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                      onClick={() => setAiQuotaTarget(item)}
+                      type="button"
+                    >
+                      AI 额度
+                    </button>
                     <button className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700" onClick={() => void loadDetail(item.id)} type="button">
                       查看详情
                     </button>
@@ -528,6 +591,14 @@ export function AdminUserManagement() {
         }}
       />
       <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
+      <AiQuotaDialog
+        onClose={() => setAiQuotaTarget(null)}
+        onConfirm={async (target, monthlyLimit, enabled) => {
+          await runAiQuotaUpdate(target.id, monthlyLimit, enabled)
+          setAiQuotaTarget(null)
+        }}
+        user={aiQuotaTarget}
+      />
     </>
   )
 

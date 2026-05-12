@@ -11,8 +11,11 @@
 已完成：修改邮箱改为先验证当前邮箱（POST /account/email/identity-code），再填新邮箱
 已完成：修改密码改为邮箱验证码方式，无需旧密码，修改后其他设备 refresh token 失效
 已完成：数据库迁移 20260502090000_user_avatar（User 表添加 avatarUrl 字段）
+已完成：滑块验证体验统一，服务端滑块改为向右滑动完成，并抽象为可复用 SlideVerify 组件
+已配置：Hermes Agent 独立 Docker 容器，配置目录 `/home/cocking/cqupt-src-hermes-linux`，宿主机地址 `http://localhost:5000`
+已完成：后端 AI Gateway 初版（GET /api/ai/health、POST /api/ai/chat），用户 AI 助手页已接入后端代理
 进行中：系统设置完善（责任书版本管理、安全答题题库、证书模板坐标可视化）
-下一步：AI Gateway 接入 / Ubuntu 部署
+下一步：配置 OPENAI_API_KEY 并联调 Hermes OpenAI-compatible API / Ubuntu 部署
 ```
 
 ## 已完成
@@ -52,6 +55,8 @@
 - 用户系统设置已落地为当前设备本地偏好，支持主题、跟随系统、语言偏好、通知开关、减少动效、紧凑显示和恢复默认
 - 注册滑块验证已接入后端真实挑战与一次性 `captchaToken`
 - 邮箱登录发码已改为需要 `LOGIN_EMAIL_CODE` 服务端滑块票据
+- 邮箱登录和注册发码滑块体验已统一为“向右滑动完成验证”
+- `SlideVerify` 已抽象为可复用组件，支持 `local/server` 模式、`resetKey`、自定义文案、禁用状态和完成回调
 - 邮箱登录验证码已限制用途为 `LOGIN`，且新验证码会使旧验证码失效
 - 邮箱登录验证码已增加 60 秒重发间隔和 10 分钟发送次数限制
 - 前端入口已将用户、审核员、管理员工作台改为 lazy chunk
@@ -69,6 +74,8 @@
 - 个人中心修改邮箱弹窗改为两步流程：先向当前邮箱发送验证码，验证通过后填写新邮箱
 - 个人中心修改密码改为邮箱验证码方式，弹窗内先发送验证码再填写新密码，无需旧密码
 - 导航栏头像（`UserAvatarMenu`）已支持展示用户上传的头像图片，有图片时替换默认姓名首字
+- 新增后端 AI Gateway 模块 `backend/src/modules/ai`，提供 Agent 健康检查代理和 Chat 代理
+- 用户 AI 助手页已从前端演示回复改为调用 `/api/ai/chat`
 ### 数据库
 
 - PostgreSQL + Prisma 设计
@@ -104,6 +111,7 @@
 - 滑块验证挑战接口：`POST /api/captcha/slider/challenge`
 - 滑块验证校验接口：`POST /api/captcha/slider/verify`
 - 注册邮箱验证码接口需要携带后端签发的一次性 `captchaToken`
+- 滑块轨迹校验已放宽，保留基础耗时、距离、目标位置和异常回退判断，降低正常用户误判
 - 当前用户接口：`GET /api/auth/me`
 - access token 校验守卫：`JwtAuthGuard`
 - 权限守卫：`PermissionsGuard`
@@ -224,12 +232,12 @@
 - 证书模板在线坐标可视化配置
 - 滑块验证二期图片拼图与 Redis 临时存储
 - 审计日志中间件
-- AI Gateway 与 Hermes Agent
+- AI Gateway 二期：补齐限流、提示词模板、更多场景接口
 - Docker Compose 本地依赖联调
 - Ubuntu 云服务器部署
 
 ## 下一步
 
 1. 完善系统设置中的责任书版本管理、安全答题题库和证书模板坐标可视化配置。
-2. 接入 AI Gateway 与 Hermes Agent。
+2. 配置 OPENAI_API_KEY 并联调 Hermes OpenAI-compatible API，完善 AI Gateway 二期能力。
 3. 准备 Ubuntu Docker 部署联调。

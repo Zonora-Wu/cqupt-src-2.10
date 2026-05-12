@@ -8,6 +8,8 @@ import { SchoolPolicyService } from '../school/school-policy.service'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
 
 type UploadedImageFile = { buffer?: Buffer; mimetype?: string; size?: number }
+const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 
 @Injectable()
 export class AccountService {
@@ -45,6 +47,7 @@ export class AccountService {
           take: 1,
         },
         role: true,
+        aiQuota: true,
         submittedReports: {
           select: { status: true },
         },
@@ -58,6 +61,7 @@ export class AccountService {
     const latestExam = profile.examAttempts[0] ?? null
     const latestSignature = profile.responsibilitySigns[0] ?? null
     const latestPoints = profile.pointEntries[0] ?? null
+    const aiQuota = await this.getAiQuotaSummary(profile.id, profile.aiQuota)
     const validStatuses: VulnerabilityStatus[] = [
       VulnerabilityStatus.CONFIRMED,
       VulnerabilityStatus.FIXING,
@@ -106,6 +110,33 @@ export class AccountService {
         submittedReports: profile._count.submittedReports,
         validReports: profile.submittedReports.filter((report) => validStatuses.includes(report.status)).length,
       },
+      aiQuota,
+    }
+  }
+
+  private async getAiQuotaSummary(userId: string, quotaOverride: { enabled: boolean; monthlyLimit: number } | null) {
+    const [defaultSetting, usage] = await Promise.all([
+      this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } }),
+      this.prisma.aiCallLog.aggregate({
+        _sum: { tokensUsed: true },
+        where: {
+          createdAt: { gte: getMonthStart() },
+          userId,
+        },
+      }),
+    ])
+    const defaultMonthlyTokens = normalizeStoredTokenLimit(defaultSetting?.value, DEFAULT_AI_MONTHLY_TOKENS)
+    const monthlyLimit = quotaOverride?.monthlyLimit ?? defaultMonthlyTokens
+    const usedThisMonth = usage._sum.tokensUsed ?? 0
+
+    return {
+      enabled: quotaOverride?.enabled ?? true,
+      monthlyLimit,
+      overridden: Boolean(quotaOverride),
+      remaining: Math.max(0, monthlyLimit - usedThisMonth),
+      resetAt: getNextMonthStart(),
+      usedPercent: monthlyLimit > 0 ? Math.min(100, Math.round((usedThisMonth / monthlyLimit) * 100)) : 100,
+      usedThisMonth,
     }
   }
 
@@ -436,6 +467,21 @@ const moduleActionMap: Record<string, string[]> = {
 
 function getModuleActions(module: string): AuditAction[] {
   return ((moduleActionMap[module] ?? []) as AuditAction[])
+}
+
+function getMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+function getNextMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
+}
+
+function normalizeStoredTokenLimit(value: unknown, fallback: number) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
 }
 
 function getActionModule(action: string): string {

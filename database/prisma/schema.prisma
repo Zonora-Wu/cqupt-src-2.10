@@ -204,6 +204,7 @@ model User {
   createdMallProducts   MallProduct[]               @relation("MallProductCreator")
   announcements         Announcement[]             @relation("AnnouncementAuthor")
   aiCallLogs            AiCallLog[]                 @relation("AiCallUser")
+  aiQuota               AiUserQuota?                @relation("UserAiQuota")
   aiSkills              AiSkill[]                   @relation("AiSkillCreator")
   aiFaqEntries          AiFaqEntry[]                @relation("AiFaqCreator")
   aiActionProposals     AiActionProposal[]          @relation("AiProposalRequester")
@@ -734,6 +735,20 @@ model AiCallLog {
 
   @@index([aiSpace, purpose])
   @@index([userId, createdAt])
+}
+
+model AiUserQuota {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  monthlyLimit Int
+  enabled      Boolean  @default(true)
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation("UserAiQuota", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
+  @@index([updatedAt])
 }
 
 model AiSkill {

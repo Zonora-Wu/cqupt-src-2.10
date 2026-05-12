@@ -21,6 +21,12 @@ export type ResetUserPasswordBody = {
   reason?: unknown
 }
 
+export type UpdateUserAiQuotaBody = {
+  enabled?: unknown
+  monthlyLimit?: unknown
+  reason?: unknown
+}
+
 export type NormalizedUpdateUserRoleInput = {
   reason: string
   role: RoleCode
@@ -39,5 +45,11 @@ export type NormalizedUpdateUserPermissionInput = {
 
 export type NormalizedResetUserPasswordInput = {
   newPassword?: string
+  reason: string
+}
+
+export type NormalizedUpdateUserAiQuotaInput = {
+  enabled: boolean
+  monthlyLimit: number
   reason: string
 }

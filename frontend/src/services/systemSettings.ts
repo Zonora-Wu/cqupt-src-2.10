@@ -21,6 +21,14 @@ export type PlatformSettings = {
   publicCertVerify: boolean
 }
 
+export type AiAssistantAppearance = {
+  avatarUrl: string | null
+}
+
+export type AiQuotaSettings = {
+  defaultMonthlyTokens: number
+}
+
 export type RegistrationMode = {
   open: boolean
 }
@@ -81,6 +89,28 @@ export async function getPlatformSettings() {
 
 export async function updatePlatformSettings(data: Partial<PlatformSettings>) {
   return request<PlatformSettings>('/system-settings/platform', { method: 'POST', body: data as Record<string, unknown> })
+}
+
+export async function getAiAssistantAppearance() {
+  return request<AiAssistantAppearance>('/system-settings/ai-appearance', { method: 'GET' })
+}
+
+export async function uploadAiAssistantAvatar(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return requestForm<AiAssistantAppearance>('/system-settings/ai-appearance/avatar', formData)
+}
+
+export async function getAiQuotaSettings() {
+  return request<AiQuotaSettings>('/system-settings/ai-quota', { method: 'GET' })
+}
+
+export async function updateAiQuotaSettings(defaultMonthlyTokens: number) {
+  return request<AiQuotaSettings>('/system-settings/ai-quota', {
+    body: { defaultMonthlyTokens },
+    method: 'POST',
+  })
 }
 
 export async function getRegistrationMode() {

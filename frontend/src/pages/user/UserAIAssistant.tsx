@@ -1,32 +1,119 @@
-import { ArrowUp, Bot, Paperclip, Sparkles, User } from 'lucide-react'
+import { ArrowUp, Bot, Paperclip, Sparkles } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getAccountProfile } from '../../services/account'
+import { getSavedSession } from '../../services/auth'
+import { getAiAppearance, sendAiChat } from '../../services/ai'
 
-export function UserAIAssistant() {
-  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([])
+type ChatMessage = {
+  content: string
+  role: 'assistant' | 'user'
+}
+
+type UserAIAssistantProps = {
+  initialPrompt?: string | null
+  onInitialPromptConsumed?: () => void
+}
+
+const MAX_STORED_MESSAGES = 80
+
+export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
+  const storageKeyRef = useRef(getConversationStorageKey())
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredMessages(storageKeyRef.current))
   const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
+  const [userName, setUserName] = useState('我')
+  const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null)
+  const dockedInputRef = useRef<HTMLDivElement | null>(null)
+  const consumedInitialPromptRef = useRef<string | null>(null)
+  const [bottomInset, setBottomInset] = useState(156)
   const hasStarted = messages.length > 0
 
-  const sendMessage = () => {
-    const content = input.trim()
-    if (!content) return
+  useEffect(() => {
+    let active = true
 
-    setMessages((current) => [
-      ...current,
-      { role: 'user', content },
-      {
-        role: 'assistant',
-        content: '这是前端演示回复。后续接入后端智能体后，我会基于漏洞报告、学习资源和平台规则给出更具体的分析。',
-      },
-    ])
+    Promise.allSettled([getAccountProfile(), getAiAppearance()]).then(([profileResult, appearanceResult]) => {
+      if (!active) return
+
+      if (profileResult.status === 'fulfilled') {
+        setUserAvatarUrl(profileResult.value.account.avatarUrl ?? null)
+        setUserName(profileResult.value.account.name || '我')
+      }
+
+      if (appearanceResult.status === 'fulfilled') {
+        setAiAvatarUrl(appearanceResult.value.avatarUrl ?? null)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, sending])
+
+  useEffect(() => {
+    saveStoredMessages(storageKeyRef.current, messages)
+  }, [messages])
+
+  useEffect(() => {
+    const content = initialPrompt?.trim()
+    if (!content || consumedInitialPromptRef.current === content) return
+
+    consumedInitialPromptRef.current = content
     setInput('')
+    onInitialPromptConsumed?.()
+    void sendMessage(content)
+  }, [initialPrompt])
+
+  useEffect(() => {
+    if (!hasStarted || !dockedInputRef.current) return
+
+    const updateBottomInset = () => {
+      const height = dockedInputRef.current?.getBoundingClientRect().height ?? 132
+      setBottomInset(Math.ceil(height + 28))
+    }
+
+    updateBottomInset()
+    const observer = new ResizeObserver(updateBottomInset)
+    observer.observe(dockedInputRef.current)
+
+    return () => observer.disconnect()
+  }, [hasStarted])
+
+  const sendMessage = async (overrideContent?: string) => {
+    const content = (overrideContent ?? input).trim()
+    if (!content || sending) return
+
+    setMessages((current) => [...current, { role: 'user', content }])
+    setInput('')
+    setSending(true)
+
+    try {
+      const result = await sendAiChat(content)
+      setMessages((current) => [...current, { role: 'assistant', content: result.content || formatAiResponse(result.response) }])
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: error instanceof Error ? error.message : 'AI 助手暂时不可用，请稍后再试。',
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
   }
 
   const inputBox = (
     <motion.div
-      className="mx-auto w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90"
+      className="mx-auto w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
       layoutId="ai-assistant-input"
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="flex items-center gap-2">
         <button
@@ -42,7 +129,7 @@ export function UserAIAssistant() {
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
-              sendMessage()
+              void sendMessage()
             }
           }}
           placeholder="询问漏洞报告、复现步骤、修复建议或学习路径"
@@ -52,8 +139,8 @@ export function UserAIAssistant() {
         <button
           aria-label="发送"
           className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-          disabled={!input.trim()}
-          onClick={sendMessage}
+          disabled={!input.trim() || sending}
+          onClick={() => void sendMessage()}
           type="button"
         >
           <ArrowUp className="h-5 w-5" />
@@ -97,9 +184,10 @@ export function UserAIAssistant() {
           <>
           <motion.div
             animate={{ opacity: 1, y: 0 }}
-            className="flex-1 space-y-5 overflow-y-auto pb-32"
+            className="flex-1 space-y-5 overflow-y-auto"
             initial={{ opacity: 0, y: 18 }}
             key="ai-chat"
+            style={{ paddingBottom: bottomInset }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
             {messages.map((message, index) => {
@@ -110,15 +198,11 @@ export function UserAIAssistant() {
                   className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
                   initial={{ opacity: 0, y: 12 }}
                   key={`${message.role}-${index}`}
-                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  {!isUser && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                  )}
+                  {!isUser && <AssistantAvatar avatarUrl={aiAvatarUrl} />}
                   <div
-                    className={`max-w-[760px] rounded-lg px-4 py-3 text-sm leading-7 ${
+                    className={`max-w-[760px] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-7 shadow-sm ${
                       isUser
                         ? 'bg-brand-600 text-white'
                         : 'border border-black/10 bg-white/70 text-slate-700 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200'
@@ -126,14 +210,24 @@ export function UserAIAssistant() {
                   >
                     {message.content}
                   </div>
-                  {isUser && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white/70 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
-                      <User className="h-4 w-4" />
-                    </div>
-                  )}
+                  {isUser && <UserChatAvatar avatarUrl={userAvatarUrl} name={userName} />}
                 </motion.div>
               )
             })}
+            {sending && (
+              <motion.div
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-3 justify-start"
+                initial={{ opacity: 0, y: 12 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+              >
+                <AssistantAvatar avatarUrl={aiAvatarUrl} thinking />
+                <div className="rounded-lg border border-black/10 bg-white/70 px-4 py-3 text-sm leading-7 text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+                  <TypingIndicator />
+                </div>
+              </motion.div>
+            )}
+            <div ref={scrollAnchorRef} style={{ scrollMarginBottom: bottomInset }} />
           </motion.div>
 
           <motion.div
@@ -141,6 +235,7 @@ export function UserAIAssistant() {
             className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[980px] px-5 pb-6 md:px-8"
             initial={{ opacity: 0, y: 28 }}
             key="ai-docked-input"
+            ref={dockedInputRef}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
             {inputBox}
@@ -151,4 +246,98 @@ export function UserAIAssistant() {
       </AnimatePresence>
     </section>
   )
+}
+
+function AssistantAvatar({ avatarUrl, thinking = false }: { avatarUrl: string | null; thinking?: boolean }) {
+  return (
+    <motion.div
+      animate={thinking ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-white shadow-sm ring-1 ring-brand-600/20"
+      transition={thinking ? { duration: 1.2, ease: 'easeInOut', repeat: Infinity } : undefined}
+    >
+      {avatarUrl ? (
+        <img alt="AI 助手头像" className="h-full w-full object-cover" src={avatarUrl} />
+      ) : (
+        <Bot className="h-5 w-5" />
+      )}
+    </motion.div>
+  )
+}
+
+function UserChatAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-white/80 text-base font-semibold text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300">
+      {avatarUrl ? (
+        <img alt={`${name}的头像`} className="h-full w-full object-cover" src={avatarUrl} />
+      ) : (
+        <span>{name.trim().slice(0, 1).toUpperCase() || '我'}</span>
+      )}
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5 align-middle" aria-label="正在思考">
+      {[0, 1, 2].map((index) => (
+        <motion.span
+          animate={{ opacity: [0.35, 1, 0.35], y: [0, -3, 0] }}
+          className="h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-300"
+          key={index}
+          transition={{ delay: index * 0.14, duration: 0.8, ease: 'easeInOut', repeat: Infinity }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function getConversationStorageKey() {
+  const session = getSavedSession()
+  const userKey = session?.user.id ?? session?.user.unifiedCode ?? 'anonymous'
+  return `cqupt-src-ai-conversation:${userKey}`
+}
+
+function loadStoredMessages(storageKey: string): ChatMessage[] {
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter((item): item is ChatMessage => {
+        if (!item || typeof item !== 'object') return false
+        const message = item as Partial<ChatMessage>
+        return (message.role === 'assistant' || message.role === 'user') && typeof message.content === 'string'
+      })
+      .slice(-MAX_STORED_MESSAGES)
+  } catch {
+    return []
+  }
+}
+
+function saveStoredMessages(storageKey: string, messages: ChatMessage[]) {
+  try {
+    if (messages.length === 0) {
+      window.localStorage.removeItem(storageKey)
+      return
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)))
+  } catch {
+    // localStorage may be unavailable or full; chat still works for the current page session.
+  }
+}
+
+function formatAiResponse(response: unknown) {
+  if (typeof response === 'string') return response
+
+  if (response && typeof response === 'object') {
+    const object = response as Record<string, unknown>
+    const text = object.content ?? object.message ?? object.answer ?? object.response ?? object.text
+    if (typeof text === 'string') return text
+  }
+
+  return JSON.stringify(response, null, 2) ?? 'AI 助手已返回空响应。'
 }

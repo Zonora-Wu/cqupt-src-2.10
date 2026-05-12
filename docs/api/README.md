@@ -1,6 +1,6 @@
 # API Docs
 
-API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城接口初版。
+API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway 与 AI 助手外观配置接口初版。
 
 ## 当前接口
 
@@ -155,7 +155,7 @@ POST /api/captcha/slider/verify
 说明：
 
 - challenge 有效期 2 分钟。
-- 后端校验滑动目标、耗时、轨迹点数量、轨迹变化和异常回退。
+- 后端校验滑动目标、基础耗时、轨迹距离和明显异常回退；前端交互统一为“向右滑动完成验证”。
 - `captchaToken` 有效期 5 分钟，且只能使用一次。
 - 当前支持用途：`LOGIN_EMAIL_CODE`、`REGISTER_EMAIL_CODE`。
 - 一期使用数据库临时表保存挑战和 token，二期可迁移到 Redis 并升级为图片拼图。
@@ -430,6 +430,127 @@ POST /api/access/security-exam/submit
 /api/system-settings       系统设置
 ```
 
+### AI Gateway
+
+AI 接口只允许前端调用后端 `/api/ai/*`，后端再代理 Hermes Agent。前端不能直连 `http://localhost:5000`。
+
+当前 Agent 部署约定：
+
+```text
+Agent 容器：hermes-agent
+宿主机健康检查：http://localhost:5000/health
+OpenAI-compatible Base URL：http://localhost:5000/v1
+模型：hermes-agent
+后端环境变量：OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
+```
+
+检查后端到 Hermes Agent 的连通性：
+
+```text
+GET /api/ai/health
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+返回示例：
+
+```json
+{
+  "ok": true,
+  "latencyMs": 42,
+  "models": {
+    "object": "list",
+    "data": [
+      {
+        "id": "hermes-agent",
+        "object": "model",
+        "owned_by": "hermes"
+      }
+    ]
+  }
+}
+```
+
+读取用户端 AI 助手外观：
+
+```text
+GET /api/ai/appearance
+```
+
+请求头：
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+返回示例：
+
+```json
+{
+  "avatarUrl": "data:image/png;base64,..."
+}
+```
+
+说明：
+
+- 用户端 AI 助手页使用该接口读取管理员配置的助手头像。
+- 未配置头像时返回 `avatarUrl: null`，前端显示默认 Bot 图标。
+- 头像展示统一为圆形。
+- 该接口只返回展示配置，不暴露上游 Agent 地址或 API Key。
+
+发送学生 AI 对话：
+
+```text
+POST /api/ai/chat
+```
+
+请求示例：
+
+```json
+{
+  "mode": "student",
+  "message": "帮我检查这份漏洞报告还缺什么材料",
+  "context": {
+    "source": "user-ai-assistant"
+  }
+}
+```
+
+返回示例：
+
+```json
+{
+  "mode": "student",
+  "content": "这份报告建议补充影响范围、复现截图和修复建议。",
+  "response": {
+    "id": "chatcmpl_xxx",
+    "object": "chat.completion",
+    "choices": []
+  }
+}
+```
+
+权限要求：
+
+```text
+student: ai:use_student
+auditor: ai:use_auditor
+admin: ai:use_admin
+```
+
+说明：
+
+- 后端按 OpenAI-compatible API 调用 Hermes Agent，读取 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL`。
+- 后端本机运行默认使用 `OPENAI_BASE_URL=http://localhost:5000/v1`。
+- 若后端也运行在 Docker 容器中，应使用 Docker 网络服务名，例如 `OPENAI_BASE_URL=http://hermes-agent:5000/v1`。
+- 默认模型为 `hermes-agent`，对应 `OPENAI_MODEL=hermes-agent`。
+- 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 `CALL_AI` 审计日志。
+- 前端会按当前登录用户在浏览器本地保存最近 80 条 AI 对话，用于刷新页面或切换菜单后恢复展示；该历史记录当前不上传后端。
+
 ### 提交漏洞
 
 ```text
@@ -651,6 +772,62 @@ Authorization: Bearer <accessToken>
 Content-Type: application/pdf
 Content-Disposition: inline
 ```
+
+### AI 助手外观配置
+
+管理员读取当前 AI 助手外观：
+
+```text
+GET /api/system-settings/ai-appearance
+```
+
+权限要求：
+
+```text
+system:manage
+```
+
+返回示例：
+
+```json
+{
+  "avatarUrl": "data:image/png;base64,..."
+}
+```
+
+上传 AI 助手头像：
+
+```text
+POST /api/system-settings/ai-appearance/avatar
+```
+
+权限要求：
+
+```text
+system:manage
+```
+
+表单字段：
+
+```text
+file: JPG、PNG、WebP 或 GIF 图片
+```
+
+返回示例：
+
+```json
+{
+  "avatarUrl": "data:image/png;base64,..."
+}
+```
+
+说明：
+
+- 文件最大 2MB。
+- 后端会校验文件 MIME 类型和扩展名。
+- 头像以 data URL 形式保存到 `SystemSetting`，key 为 `ai_assistant_avatar_url`。
+- 上传成功后写入 `AuditLog`，动作为 `CHANGE_SYSTEM_SETTING`。
+- 用户端通过 `GET /api/ai/appearance` 读取该配置。
 
 ### 当前启用证书模板
 

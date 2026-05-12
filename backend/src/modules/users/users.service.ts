@@ -6,10 +6,14 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import {
   NormalizedResetUserPasswordInput,
+  NormalizedUpdateUserAiQuotaInput,
   NormalizedUpdateUserPermissionInput,
   NormalizedUpdateUserRoleInput,
   NormalizedUpdateUserStatusInput,
 } from './users.types'
+
+const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 
 @Injectable()
 export class UsersService {
@@ -22,9 +26,10 @@ export class UsersService {
       orderBy: [{ role: { code: 'asc' } }, { createdAt: 'desc' }],
       take: 500,
     })
+    const quotaContext = await this.getQuotaContext(users.map((user) => user.id))
 
     return {
-      items: users.map(summarizeManagedUser),
+      items: users.map((user) => summarizeManagedUser(user, quotaContext)),
       stats: summarizeUserStats(users),
     }
   }
@@ -57,7 +62,8 @@ export class UsersService {
       throw new NotFoundException('用户不存在')
     }
 
-    return summarizeManagedUserDetail(user)
+    const quotaContext = await this.getQuotaContext([user.id])
+    return summarizeManagedUserDetail(user, quotaContext)
   }
 
   async listUserManagementOptions() {
@@ -309,6 +315,83 @@ export class UsersService {
     }
   }
 
+  async updateUserAiQuota(
+    id: string,
+    input: NormalizedUpdateUserAiQuotaInput,
+    actor: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ) {
+    await this.assertManageableUser(id, actor.id)
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.aiUserQuota.upsert({
+        where: { userId: id },
+        create: {
+          enabled: input.enabled,
+          monthlyLimit: input.monthlyLimit,
+          updatedById: actor.id,
+          userId: id,
+        },
+        update: {
+          enabled: input.enabled,
+          monthlyLimit: input.monthlyLimit,
+          updatedById: actor.id,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_USER_PERMISSION,
+          actorId: actor.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'update_ai_quota',
+            enabled: input.enabled,
+            monthlyLimit: input.monthlyLimit,
+            reason: input.reason,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'AiUserQuota',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return tx.user.findFirstOrThrow({
+        where: { deletedAt: null, id },
+        include: managedUserInclude,
+      })
+    })
+
+    const quotaContext = await this.getQuotaContext([id])
+    return summarizeManagedUser(updated, quotaContext)
+  }
+
+  private async getQuotaContext(userIds: string[]) {
+    const [defaultSetting, usageRows] = await Promise.all([
+      this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } }),
+      userIds.length
+        ? this.prisma.aiCallLog.groupBy({
+            _sum: { tokensUsed: true },
+            by: ['userId'],
+            where: {
+              createdAt: { gte: getMonthStart() },
+              userId: { in: userIds },
+            },
+          })
+        : Promise.resolve([]),
+    ])
+    const defaultMonthlyTokens = normalizeStoredTokenLimit(defaultSetting?.value, DEFAULT_AI_MONTHLY_TOKENS)
+    const usageByUser = new Map(usageRows.map((row) => [row.userId ?? '', row._sum.tokensUsed ?? 0]))
+
+    return {
+      defaultMonthlyTokens,
+      resetAt: getNextMonthStart(),
+      usageByUser,
+    }
+  }
+
   private async assertManageableUser(id: string, actorId: string) {
     if (id === actorId) {
       throw new ForbiddenException('不能在用户管理中操作自己的账号')
@@ -344,6 +427,7 @@ const managedUserInclude = {
     },
     take: 8,
   },
+  aiQuota: true,
   examAttempts: {
     orderBy: { createdAt: 'desc' },
     take: 1,
@@ -371,7 +455,13 @@ const managedUserInclude = {
 
 type ManagedUser = Prisma.UserGetPayload<{ include: typeof managedUserInclude }>
 
-function summarizeManagedUser(user: ManagedUser) {
+type QuotaContext = {
+  defaultMonthlyTokens: number
+  resetAt: Date
+  usageByUser: Map<string, number>
+}
+
+function summarizeManagedUser(user: ManagedUser, quotaContext: QuotaContext) {
   const latestExam = user.examAttempts[0] ?? null
   const latestSignature = user.responsibilitySigns[0] ?? null
   const latestRefreshToken = user.refreshTokens[0] ?? null
@@ -393,6 +483,7 @@ function summarizeManagedUser(user: ManagedUser) {
     grade: user.grade ?? '',
     id: user.id,
     identityText: user.identityText ?? '',
+    aiQuota: summarizeAiQuota(user, quotaContext),
     lastIp: latestLoginAudit?.ipAddress ?? latestRefreshToken?.ipAddress ?? '',
     lastLogin: user.lastLoginAt,
     name: user.name,
@@ -426,6 +517,7 @@ function summarizeManagedUserDetail(
       updatedAt: Date
     }>
   },
+  quotaContext: QuotaContext,
 ) {
   const detailAuditLogs = user.auditLogs as unknown as Array<{
     action: AuditAction
@@ -436,7 +528,7 @@ function summarizeManagedUserDetail(
   }>
 
   return {
-    ...summarizeManagedUser(user),
+    ...summarizeManagedUser(user, quotaContext),
     auditEvents: detailAuditLogs.map((log) => ({
       action: log.action,
       createdAt: log.createdAt,
@@ -451,6 +543,20 @@ function summarizeManagedUserDetail(
       reason: override.reason ?? '',
       updatedAt: override.updatedAt,
     })),
+  }
+}
+
+function summarizeAiQuota(user: ManagedUser, quotaContext: QuotaContext) {
+  const monthlyLimit = user.aiQuota?.monthlyLimit ?? quotaContext.defaultMonthlyTokens
+  const usedThisMonth = quotaContext.usageByUser.get(user.id) ?? 0
+  return {
+    enabled: user.aiQuota?.enabled ?? true,
+    monthlyLimit,
+    overridden: Boolean(user.aiQuota),
+    remaining: Math.max(0, monthlyLimit - usedThisMonth),
+    resetAt: quotaContext.resetAt,
+    usedPercent: monthlyLimit > 0 ? Math.min(100, Math.round((usedThisMonth / monthlyLimit) * 100)) : 100,
+    usedThisMonth,
   }
 }
 
@@ -486,4 +592,19 @@ function formatUserStatus(status: UserStatus) {
   }
 
   return map[status]
+}
+
+function getMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+function getNextMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
+}
+
+function normalizeStoredTokenLimit(value: unknown, fallback: number) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
 }

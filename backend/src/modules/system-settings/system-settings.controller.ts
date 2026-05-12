@@ -104,6 +104,43 @@ export class SystemSettingsController {
     return this.settings.getPlatformSettings()
   }
 
+  @Get('ai-appearance')
+  @RequirePermissions('system:manage')
+  getAiAssistantAppearance() {
+    return this.settings.getAiAssistantAppearance()
+  }
+
+  @Post('ai-appearance/avatar')
+  @RequirePermissions('system:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  uploadAiAssistantAvatar(
+    @UploadedFile() file: UploadedSettingsFile | undefined,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.uploadAiAssistantAvatar(file, user, getRequestMeta(req))
+  }
+
+  @Get('ai-quota')
+  @RequirePermissions('system:manage')
+  getAiQuotaSettings() {
+    return this.settings.getAiQuotaSettings()
+  }
+
+  @Post('ai-quota')
+  @RequirePermissions('system:manage')
+  updateAiQuotaSettings(
+    @Body() body: { defaultMonthlyTokens?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.updateAiQuotaSettings(
+      { defaultMonthlyTokens: body.defaultMonthlyTokens as number },
+      user,
+      getRequestMeta(req),
+    )
+  }
+
   @Post('platform')
   @RequirePermissions('system:manage')
   updatePlatformSettings(

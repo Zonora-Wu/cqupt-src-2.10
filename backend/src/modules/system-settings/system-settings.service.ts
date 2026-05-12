@@ -11,10 +11,13 @@ import { S3StorageService } from '../../integrations/object-storage/s3-storage.s
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { generateCertificatePdf } from '../certificates/certificate-pdf.generator'
 import { PrismaService } from '../prisma/prisma.service'
-import { CertificateTemplateSummary, PendingRegistrationItem, PlatformSettings, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
+import { AiAssistantAppearance, AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem, PlatformSettings, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
 
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
+const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
+const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 
 const DEFAULT_LAYOUT = {
   certificateNo: { x: 90, y: 74, fontSize: 12 },
@@ -417,6 +420,97 @@ export class SystemSettingsService {
     }
   }
 
+  async getAiAssistantAppearance(): Promise<AiAssistantAppearance> {
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'ai_assistant_avatar_url' } })
+    return {
+      avatarUrl: typeof setting?.value === 'string' ? setting.value : null,
+    }
+  }
+
+  async uploadAiAssistantAvatar(
+    file: UploadedSettingsFile | undefined,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<AiAssistantAppearance> {
+    const validatedFile = validateImageFile(file, MAX_AI_AVATAR_SIZE_BYTES)
+    const avatarUrl = `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        where: { key: 'ai_assistant_avatar_url' },
+        update: { value: avatarUrl, updatedById: user.id },
+        create: {
+          key: 'ai_assistant_avatar_url',
+          value: avatarUrl,
+          description: 'AI 助手头像',
+          updatedById: user.id,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            key: 'ai_assistant_avatar_url',
+            mimeType: validatedFile.mimeType,
+            size: validatedFile.buffer.length,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return { avatarUrl }
+  }
+
+  async getAiQuotaSettings(): Promise<AiQuotaSettings> {
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } })
+    return {
+      defaultMonthlyTokens: normalizeStoredTokenLimit(setting?.value, DEFAULT_AI_MONTHLY_TOKENS),
+    }
+  }
+
+  async updateAiQuotaSettings(
+    body: Partial<AiQuotaSettings>,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<AiQuotaSettings> {
+    const defaultMonthlyTokens = validateTokenLimit(body.defaultMonthlyTokens)
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY },
+        update: { value: defaultMonthlyTokens, updatedById: user.id },
+        create: {
+          key: AI_DEFAULT_MONTHLY_TOKENS_KEY,
+          value: defaultMonthlyTokens,
+          description: '新用户默认 AI 月度 token 额度',
+          updatedById: user.id,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY, value: defaultMonthlyTokens },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return { defaultMonthlyTokens }
+  }
+
   async updatePlatformSettings(
     body: Partial<PlatformSettings>,
     user: AuthenticatedRequestUser,
@@ -530,6 +624,19 @@ function validateSealFile(file: UploadedSettingsFile | undefined) {
   return validated
 }
 
+function validateImageFile(file: UploadedSettingsFile | undefined, maxBytes: number) {
+  const validated = validateUploadedFile(file, maxBytes)
+  const extension = extname(validated.originalname).toLowerCase()
+  const validMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(validated.mimeType)
+  const validExtension = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension)
+
+  if (!validMime || !validExtension) {
+    throw new BadRequestException('头像仅支持 JPG、PNG、WebP、GIF 格式')
+  }
+
+  return validated
+}
+
 function validateUploadedFile(file: UploadedSettingsFile | undefined, maxBytes: number) {
   if (!file?.buffer || file.buffer.length === 0) {
     throw new BadRequestException('请上传文件')
@@ -562,6 +669,20 @@ function createTemplateVersion() {
   ].join('')
 
   return `cert-tpl-${datePart}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+}
+
+function validateTokenLimit(value: unknown) {
+  const numberValue = Number(value)
+  if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100_000_000) {
+    throw new BadRequestException('默认 AI token 额度必须是 0 到 100000000 之间的整数')
+  }
+
+  return numberValue
+}
+
+function normalizeStoredTokenLimit(value: unknown, fallback: number) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
 }
 
 function hasPdfMagicBytes(buffer: Buffer) {

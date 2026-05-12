@@ -227,11 +227,11 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
 
           {shouldShowSlider ? (
             <SlideVerify
-              key={`${mode}-${captchaResetKey}`}
               mode={mode === 'email' ? 'server' : 'local'}
               onChange={setSliderVerified}
               onTokenChange={setCaptchaToken}
               purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'REGISTER_EMAIL_CODE'}
+              resetKey={`${mode}-${captchaResetKey}`}
             />
           ) : (
             <AlertMessage

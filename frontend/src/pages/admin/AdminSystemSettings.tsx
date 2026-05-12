@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Bot,
   Building2,
   CheckCircle,
   DatabaseBackup,
@@ -25,6 +26,8 @@ import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   approveRegistration,
   getActiveCertificateTemplate,
+  getAiAssistantAppearance,
+  getAiQuotaSettings,
   getPlatformSettings,
   getRegistrationMode,
   listPendingRegistrations,
@@ -32,6 +35,8 @@ import {
   rejectRegistration,
   setRegistrationMode,
   updatePlatformSettings,
+  uploadAiAssistantAvatar,
+  updateAiQuotaSettings,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
@@ -39,6 +44,7 @@ import type { CertificateTemplateSummary, PendingRegistrationItem } from '../../
 
 type SettingsSection =
   | '基础设置'
+  | 'AI 助手'
   | '登录与认证'
   | '邮箱与通知'
   | '漏洞流程'
@@ -56,6 +62,7 @@ type ConfirmState = {
 
 const settingSections: Array<{ label: SettingsSection; icon: ReactNode; description: string }> = [
   { label: '基础设置', icon: <Building2 className="h-4 w-4" />, description: '品牌、组织、交付方式' },
+  { label: 'AI 助手', icon: <Bot className="h-4 w-4" />, description: '助手形象、模型入口' },
   { label: '登录与认证', icon: <KeyRound className="h-4 w-4" />, description: '注册、认证、账号安全' },
   { label: '邮箱与通知', icon: <Mail className="h-4 w-4" />, description: 'SMTP、站内信、模板' },
   { label: '漏洞流程', icon: <ShieldQuestion className="h-4 w-4" />, description: '审核流、时限、规则' },
@@ -67,6 +74,7 @@ const settingSections: Array<{ label: SettingsSection; icon: ReactNode; descript
 export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
   const sealInputRef = useRef<HTMLInputElement | null>(null)
+  const aiAvatarInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
@@ -85,6 +93,12 @@ export function AdminSystemSettings() {
   const [certificateTemplateMessage, setCertificateTemplateMessage] = useState('')
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
   const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
+  const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
+  const [aiAvatarMessage, setAiAvatarMessage] = useState('')
+  const [isUploadingAiAvatar, setIsUploadingAiAvatar] = useState(false)
+  const [defaultAiTokens, setDefaultAiTokens] = useState('100000')
+  const [aiQuotaMessage, setAiQuotaMessage] = useState('')
+  const [isSavingAiQuota, setIsSavingAiQuota] = useState(false)
 
   const confirmChange = (nextState: Exclude<ConfirmState, null>) => {
     setConfirmState(nextState)
@@ -95,10 +109,12 @@ export function AdminSystemSettings() {
 
     async function loadInitialData() {
       try {
-        const [mode, template, platform] = await Promise.all([
+        const [mode, template, platform, aiAppearance, aiQuota] = await Promise.all([
           getRegistrationMode(),
           getActiveCertificateTemplate(),
           getPlatformSettings(),
+          getAiAssistantAppearance(),
+          getAiQuotaSettings(),
         ])
         if (active) {
           setOpenRegister(mode.open)
@@ -108,6 +124,8 @@ export function AdminSystemSettings() {
           setOrgName(platform.orgName)
           setPlatformDomain(platform.platformDomain)
           setPublicCertVerify(platform.publicCertVerify)
+          setAiAvatarUrl(aiAppearance.avatarUrl)
+          setDefaultAiTokens(String(aiQuota.defaultMonthlyTokens))
         }
       } catch (error) {
         if (active) {
@@ -196,6 +214,24 @@ export function AdminSystemSettings() {
     }
   }
 
+  const handleAiAvatarUpload = async (file: File | undefined) => {
+    if (!file) return
+
+    setAiAvatarMessage('')
+    setIsUploadingAiAvatar(true)
+
+    try {
+      const appearance = await uploadAiAssistantAvatar(file)
+      setAiAvatarUrl(appearance.avatarUrl)
+      setAiAvatarMessage('AI 助手头像已保存。')
+    } catch (error) {
+      setAiAvatarMessage(error instanceof Error ? error.message : 'AI 助手头像上传失败')
+    } finally {
+      setIsUploadingAiAvatar(false)
+      if (aiAvatarInputRef.current) aiAvatarInputRef.current.value = ''
+    }
+  }
+
   const handleSavePlatform = async () => {
     setPlatformMessage('')
     setIsSavingPlatform(true)
@@ -206,6 +242,26 @@ export function AdminSystemSettings() {
       setPlatformMessage(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
       setIsSavingPlatform(false)
+    }
+  }
+
+  const handleSaveAiQuota = async () => {
+    const tokens = Number(defaultAiTokens)
+    if (!Number.isInteger(tokens) || tokens < 0) {
+      setAiQuotaMessage('请输入有效的非负整数额度')
+      return
+    }
+
+    setAiQuotaMessage('')
+    setIsSavingAiQuota(true)
+    try {
+      const result = await updateAiQuotaSettings(tokens)
+      setDefaultAiTokens(String(result.defaultMonthlyTokens))
+      setAiQuotaMessage('新用户默认 AI token 额度已保存')
+    } catch (error) {
+      setAiQuotaMessage(error instanceof Error ? error.message : '保存失败，请重试')
+    } finally {
+      setIsSavingAiQuota(false)
     }
   }
 
@@ -427,6 +483,77 @@ export function AdminSystemSettings() {
                   />
                 </SettingsCard>
 
+              </>
+            )}
+
+            {activeSection === 'AI 助手' && (
+              <>
+                <SettingsCard
+                  description="配置用户端 AI 助手的展示形象。头像会在 AI 助手对话页以圆形展示，建议使用清晰的正方形 PNG、JPG、WebP 或 GIF。"
+                  icon={<Bot className="h-5 w-5" />}
+                  title="AI 助手形象"
+                >
+                  <SettingRow
+                    control={
+                      <div className="flex items-center justify-end gap-3">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-brand-600 text-white dark:border-white/10">
+                          {aiAvatarUrl ? (
+                            <img alt="AI 助手头像" className="h-full w-full object-cover" src={aiAvatarUrl} />
+                          ) : (
+                            <Bot className="h-6 w-6" />
+                          )}
+                        </div>
+                        <ActionButton
+                          disabled={isUploadingAiAvatar}
+                          icon={<Upload className="h-4 w-4" />}
+                          label={isUploadingAiAvatar ? '上传中...' : '上传头像'}
+                          onClick={() => aiAvatarInputRef.current?.click()}
+                        />
+                        <input
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(event) => void handleAiAvatarUpload(event.target.files?.[0])}
+                          ref={aiAvatarInputRef}
+                          type="file"
+                        />
+                      </div>
+                    }
+                    description="用于学生端 AI 助手消息头像和思考状态头像，上传后立即对新打开的助手页生效。"
+                    title="助手头像"
+                  />
+                  {aiAvatarMessage && (
+                    <p className={`px-6 pb-4 pt-2 text-sm ${aiAvatarMessage.includes('失败') ? 'text-red-600 dark:text-red-400' : 'text-brand-700 dark:text-green-300'}`}>
+                      {aiAvatarMessage}
+                    </p>
+                  )}
+                </SettingsCard>
+
+                <SettingsCard
+                  description="设置新用户默认 AI 月度 token 额度。单个用户可以在用户管理详情页单独覆盖该额度。"
+                  icon={<SlidersHorizontal className="h-5 w-5" />}
+                  title="AI token 额度"
+                >
+                  <SettingRow
+                    control={<TextField onChange={setDefaultAiTokens} value={defaultAiTokens} />}
+                    description="新注册或未单独设置的用户会使用该默认月度额度。填 0 表示默认不允许调用 AI。"
+                    title="新用户默认月度额度"
+                  />
+                  <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
+                    {aiQuotaMessage ? (
+                      <p className={`text-sm ${aiQuotaMessage.includes('失败') || aiQuotaMessage.includes('有效') ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {aiQuotaMessage}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">当前默认：{Number(defaultAiTokens).toLocaleString()} tokens / 月</p>
+                    )}
+                    <ActionButton
+                      disabled={isSavingAiQuota}
+                      icon={<Save className="h-4 w-4" />}
+                      label={isSavingAiQuota ? '保存中...' : '保存默认额度'}
+                      onClick={() => void handleSaveAiQuota()}
+                    />
+                  </div>
+                </SettingsCard>
               </>
             )}
 

@@ -141,39 +141,29 @@ export class CaptchaService {
 }
 
 function judgeTrack(track: CaptchaTrackPoint[], offsetRatio: number, answerRatio: number) {
+  if (track.length < 2) return { ok: false, reason: '滑动轨迹异常，请重试' }
+
   const duration = track[track.length - 1].t - track[0].t
-  if (duration < 500) return { ok: false, reason: '滑动过快，请重新验证' }
+  if (duration < 120) return { ok: false, reason: '滑动过快，请重新验证' }
   if (duration > 8000) return { ok: false, reason: '滑动超时，请重新验证' }
   if (Math.abs(offsetRatio - answerRatio) > RATIO_TOLERANCE) {
     return { ok: false, reason: '滑块位置不正确，请重试' }
   }
 
   const xs = track.map((point) => point.x)
-  const ys = track.map((point) => point.y)
   const maxX = Math.max(...xs)
   const minX = Math.min(...xs)
-  if (maxX - minX < 0.45) {
+  if (maxX - minX < 0.35) {
     return { ok: false, reason: '滑动轨迹异常，请重试' }
   }
 
-  const uniqueDeltas = new Set<string>()
   let backwards = 0
   for (let index = 1; index < xs.length; index += 1) {
     const delta = xs[index] - xs[index - 1]
-    if (delta < -0.006) backwards += 1
-    uniqueDeltas.add(delta.toFixed(3))
+    if (delta < -0.03) backwards += 1
   }
 
-  if (uniqueDeltas.size < 5) {
-    return { ok: false, reason: '滑动轨迹过于机械，请重试' }
-  }
-
-  const yRange = Math.max(...ys) - Math.min(...ys)
-  if (yRange > 0.45) {
-    return { ok: false, reason: '滑动轨迹异常，请重试' }
-  }
-
-  if (backwards > Math.max(8, track.length * 0.35)) {
+  if (backwards > Math.max(10, track.length * 0.6)) {
     return { ok: false, reason: '滑动轨迹异常，请重试' }
   }
 

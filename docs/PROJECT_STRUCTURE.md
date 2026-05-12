@@ -21,6 +21,7 @@ cqupt-src-2.10/
 │   ├── docker/               # Dockerfile 与容器构建文件
 │   └── scripts/              # 部署、备份、运维脚本
 ├── docs/
+│   ├── AI.md                 # AI 目标效果、当前进度、部署和接口链路
 │   ├── DEVELOPMENT_STATUS.md # 当前开发状态
 │   ├── TECH_STACK.md         # 技术栈说明
 │   ├── api/                  # API 契约文档
@@ -55,6 +56,7 @@ README.md
 PROJECT_HANDOFF.md
 docs/DEVELOPMENT_STATUS.md
 docs/TECH_STACK.md
+docs/AI.md
 database/DATABASE_DESIGN.md
 文档/总体建议.md
 ```

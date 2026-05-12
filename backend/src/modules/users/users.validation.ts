@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common'
 import { RoleCode, UserStatus } from '@prisma/client'
 import {
   ResetUserPasswordBody,
+  UpdateUserAiQuotaBody,
   UpdateUserPermissionBody,
   UpdateUserRoleBody,
   UpdateUserStatusBody,
@@ -33,6 +34,14 @@ export function normalizeResetUserPasswordBody(body: ResetUserPasswordBody) {
   return {
     newPassword: normalizeOptionalPassword(body.newPassword),
     reason: normalizeReason(body.reason, '管理员重置用户密码'),
+  }
+}
+
+export function normalizeUpdateUserAiQuotaBody(body: UpdateUserAiQuotaBody) {
+  return {
+    enabled: body.enabled === undefined ? true : normalizeBoolean(body.enabled),
+    monthlyLimit: normalizeTokenLimit(body.monthlyLimit),
+    reason: normalizeReason(body.reason, '管理员调整用户 AI token 额度'),
   }
 }
 
@@ -86,6 +95,15 @@ function normalizeBoolean(value: unknown) {
   }
 
   return value
+}
+
+function normalizeTokenLimit(value: unknown) {
+  const numberValue = Number(value)
+  if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100_000_000) {
+    throw new BadRequestException('AI token 额度必须是 0 到 100000000 之间的整数')
+  }
+
+  return numberValue
 }
 
 function normalizeReason(value: unknown, defaultValue: string) {

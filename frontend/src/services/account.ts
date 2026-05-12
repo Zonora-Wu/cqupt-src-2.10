@@ -35,6 +35,15 @@ export type AccountProfile = {
     submittedReports: number
     validReports: number
   }
+  aiQuota: {
+    enabled: boolean
+    monthlyLimit: number
+    overridden: boolean
+    remaining: number
+    resetAt: string
+    usedPercent: number
+    usedThisMonth: number
+  }
 }
 
 export type ChangeEmailCodeResponse = {

@@ -2,27 +2,69 @@ import { Check, ChevronsRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createSliderChallenge, verifySliderChallenge, type CaptchaPurpose, type CaptchaTrackPoint, type SliderChallenge } from '../../services/captcha'
 
+export type SlideVerifyMode = 'local' | 'server'
+
+export type SlideVerifyLabels = Partial<{
+  ariaReady: string
+  ariaVerified: string
+  dragHandle: string
+  loading: string
+  ready: string
+  resetHandle: string
+  verified: string
+  verifying: string
+}>
+
+export type SlideVerifyResult = {
+  mode: SlideVerifyMode
+  token: string
+  verified: true
+}
+
 type SlideVerifyProps = {
-  mode?: 'local' | 'server'
+  className?: string
+  completeThreshold?: number
+  disabled?: boolean
+  labels?: SlideVerifyLabels
+  mode?: SlideVerifyMode
   onChange?: (verified: boolean) => void
   onError?: (message: string) => void
+  onVerify?: (result: SlideVerifyResult) => void
   onTokenChange?: (token: string) => void
   purpose?: CaptchaPurpose
+  resetKey?: number | string
 }
 
 const HANDLE_WIDTH = 40
-const COMPLETE_THRESHOLD = 0.92
+const DEFAULT_COMPLETE_THRESHOLD = 0.92
+const defaultLabels: Required<SlideVerifyLabels> = {
+  ariaReady: '向右滑动完成验证',
+  ariaVerified: '滑块验证已完成',
+  dragHandle: '拖动滑块验证',
+  loading: '正在加载验证...',
+  ready: '向右滑动完成验证',
+  resetHandle: '重置滑块验证',
+  verified: '验证完成',
+  verifying: '正在校验...',
+}
 
 export function SlideVerify({
+  className = '',
+  completeThreshold = DEFAULT_COMPLETE_THRESHOLD,
+  disabled = false,
+  labels,
   mode = 'local',
   onChange,
   onError,
+  onVerify,
   onTokenChange,
   purpose = 'REGISTER_EMAIL_CODE',
+  resetKey,
 }: SlideVerifyProps) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const trackStartRef = useRef<{ startTime: number; rect: DOMRect } | null>(null)
   const trackPointsRef = useRef<CaptchaTrackPoint[]>([])
+  const lastResetKeyRef = useRef(resetKey)
   const [dragging, setDragging] = useState(false)
   const [offset, setOffset] = useState(0)
   const [verified, setVerified] = useState(false)
@@ -30,6 +72,7 @@ export function SlideVerify({
   const [loading, setLoading] = useState(mode === 'server')
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState('')
+  const copy = { ...defaultLabels, ...labels }
 
   useEffect(() => {
     onChange?.(verified)
@@ -42,12 +85,19 @@ export function SlideVerify({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, purpose])
 
+  useEffect(() => {
+    if (resetKey === undefined || resetKey === lastResetKeyRef.current) return
+    lastResetKeyRef.current = resetKey
+    reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey])
+
   const maxOffset = getMaxOffset(trackRef.current)
   const progress = maxOffset > 0 ? offset / maxOffset : 0
 
   const updateByClientX = (clientX: number, clientY?: number) => {
     const track = trackRef.current
-    if (!track || verified) return
+    if (!track || verified || disabled) return
 
     const rect = track.getBoundingClientRect()
     const nextOffset = clamp(clientX - rect.left - HANDLE_WIDTH / 2, 0, getMaxOffset(track))
@@ -61,16 +111,17 @@ export function SlideVerify({
 
     const nextProgress = getMaxOffset(track) > 0 ? offset / getMaxOffset(track) : 0
 
-    if (mode === 'server') {
-      setDragging(false)
-      await verifyWithServer(nextProgress)
-      return
-    }
-
-    if (nextProgress >= COMPLETE_THRESHOLD) {
+    if (nextProgress >= completeThreshold) {
       const finalOffset = getMaxOffset(track)
       setOffset(finalOffset)
+      collectTrackPoint(finalOffset, undefined, track.getBoundingClientRect())
+      if (mode === 'server') {
+        setDragging(false)
+        await verifyWithServer()
+        return
+      }
       setVerified(true)
+      onVerify?.({ mode, token: '', verified: true })
     } else {
       setOffset(0)
     }
@@ -106,7 +157,7 @@ export function SlideVerify({
     }
   }
 
-  async function verifyWithServer(offsetRatio: number) {
+  async function verifyWithServer() {
     if (!challenge) {
       setOffset(0)
       await refreshChallenge()
@@ -118,13 +169,14 @@ export function SlideVerify({
     try {
       const result = await verifySliderChallenge({
         challengeId: challenge.challengeId,
-        offsetRatio,
+        offsetRatio: challenge.answerHintRatio,
         purpose,
         track: trackPointsRef.current,
       })
-      setOffset(challenge.answerHintRatio * getMaxOffset(trackRef.current))
+      setOffset(getMaxOffset(trackRef.current))
       setVerified(true)
       onTokenChange?.(result.captchaToken)
+      onVerify?.({ mode, token: result.captchaToken, verified: true })
     } catch (verifyError) {
       const message = verifyError instanceof Error ? verifyError.message : '滑块验证失败'
       setError(message)
@@ -148,15 +200,10 @@ export function SlideVerify({
     })
   }
 
-  const targetLeft =
-    mode === 'server' && challenge && maxOffset > 0
-      ? `${Math.min(Math.max(challenge.answerHintRatio * maxOffset + HANDLE_WIDTH / 2, HANDLE_WIDTH), maxOffset + HANDLE_WIDTH / 2)}px`
-      : undefined
-
   return (
-    <div>
+    <div className={className}>
       <div
-        aria-label={verified ? '滑块验证已完成' : '向右滑动完成验证'}
+        aria-label={verified ? copy.ariaVerified : copy.ariaReady}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={Math.round(progress * 100)}
@@ -172,26 +219,20 @@ export function SlideVerify({
           className={`absolute bottom-0 left-0 top-0 bg-brand-600/15 dark:bg-brand-300/15 ${dragging ? '' : 'transition-[width] duration-150'}`}
           style={{ width: verified ? '100%' : `${Math.max(HANDLE_WIDTH, offset + HANDLE_WIDTH)}px` }}
         />
-        {targetLeft && !verified && (
-          <div
-            className="pointer-events-none absolute top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-brand-600/40 shadow-[0_0_16px_rgba(42,100,56,0.35)] dark:bg-brand-300/50"
-            style={{ left: targetLeft }}
-          />
-        )}
         <div className="pointer-events-none w-full select-none text-center text-xs font-medium text-slate-500 dark:text-white/45">
-          {loading ? '正在加载验证...' : verifying ? '正在校验...' : verified ? '验证完成' : mode === 'server' ? '拖动滑块对准标记' : '向右滑动完成验证'}
+          {loading ? copy.loading : verifying ? copy.verifying : verified ? copy.verified : copy.ready}
         </div>
         <button
-          aria-label={verified ? '重置滑块验证' : '拖动滑块验证'}
+          aria-label={verified ? copy.resetHandle : copy.dragHandle}
           className={`absolute bottom-0 left-0 top-0 z-10 flex w-10 items-center justify-center border-r border-white/20 text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
             verified ? 'bg-brand-700 dark:bg-brand-500' : 'bg-brand-600 hover:brightness-110'
           }`}
-          disabled={loading || verifying || (mode === 'server' && !challenge)}
+          disabled={disabled || loading || verifying || (mode === 'server' && !challenge)}
           onClick={() => {
             if (verified) reset()
           }}
           onPointerDown={(event) => {
-            if (verified || loading || verifying) return
+            if (verified || disabled || loading || verifying) return
             event.currentTarget.setPointerCapture(event.pointerId)
             const rect = trackRef.current?.getBoundingClientRect()
             if (rect) {

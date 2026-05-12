@@ -4,6 +4,7 @@ import { validateEnv } from './config/env'
 import { ObjectStorageModule } from './integrations/object-storage/object-storage.module'
 import { AccessModule } from './modules/access/access.module'
 import { AccountModule } from './modules/account/account.module'
+import { AiModule } from './modules/ai/ai.module'
 import { AnnouncementsModule } from './modules/announcements/announcements.module'
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module'
 import { AttachmentsModule } from './modules/attachments/attachments.module'
@@ -34,6 +35,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     SchoolPolicyModule,
     AuthModule,
     AccountModule,
+    AiModule,
     AccessModule,
     VulnerabilitiesModule,
     AttachmentsModule,

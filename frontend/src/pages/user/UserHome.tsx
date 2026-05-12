@@ -136,6 +136,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
   const [aiFocused, setAiFocused] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
+  const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null)
   const [preferences, setPreferences] = useState<UserDevicePreferences>(() =>
     getUserDevicePreferences(preferenceKey),
   )
@@ -197,6 +198,19 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setPreferences((current) => ({ ...current, themeMode }))
   }
 
+  const submitHomeAiPrompt = () => {
+    const content = aiPrompt.trim()
+    if (!content) {
+      setAiFocused(true)
+      return
+    }
+
+    setPendingAiPrompt(content)
+    setAiPrompt('')
+    setAiFocused(false)
+    setActiveMenu('AI 助手')
+  }
+
   return (
     <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
@@ -253,7 +267,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           ) : activeMenu === '学习中心' ? (
             <UserLearningCenter />
           ) : activeMenu === 'AI 助手' ? (
-            <UserAIAssistant />
+            <UserAIAssistant
+              initialPrompt={pendingAiPrompt}
+              onInitialPromptConsumed={() => setPendingAiPrompt(null)}
+            />
           ) : activeMenu === '积分商城' ? (
             <UserPointsMall />
           ) : activeMenu === '我的证书' ? (
@@ -317,12 +334,18 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                       }`}
                       onClick={() => setAiFocused(true)}
                     >
-                      <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex-1 min-w-0 flex items-center gap-3">
                         <Bot className="h-5 w-5 shrink-0 text-brand-700 dark:text-green-300" />
                         <input
-                          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-400"
+                          className="w-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-400"
                           onChange={(event) => setAiPrompt(event.target.value)}
                           onFocus={() => setAiFocused(true)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              submitHomeAiPrompt()
+                            }
+                          }}
                           placeholder="让 AI 帮我分析报告、补全漏洞信息或规划学习路径"
                           type="text"
                           value={aiPrompt}
@@ -332,7 +355,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                         className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-green-300 dark:hover:bg-green-300/10"
                         onClick={(event) => {
                           event.stopPropagation()
-                          setAiFocused(true)
+                          submitHomeAiPrompt()
                         }}
                         type="button"
                       >

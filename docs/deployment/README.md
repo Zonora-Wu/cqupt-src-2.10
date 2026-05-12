@@ -127,4 +127,16 @@ cd /opt/cqupt-src
 docker compose up -d
 ```
 
-注意：Hermes Agent 建议作为独立服务接入，不和业务后端写在同一个容器里。
+注意：Hermes Agent 已按独立 Docker 容器接入，不和业务后端写在同一个容器里。
+
+本地 Hermes Agent 当前约定：
+
+```text
+配置目录：/home/cocking/cqupt-src-hermes-linux
+宿主机地址：http://localhost:5000
+健康检查：curl http://localhost:5000/health
+后端本机运行：OPENAI_BASE_URL=http://localhost:5000/v1
+后端容器运行：OPENAI_BASE_URL=http://hermes-agent:5000/v1
+API Key：OPENAI_API_KEY=API_SERVER_KEY
+模型：OPENAI_MODEL=hermes-agent
+```

@@ -5,12 +5,14 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import {
   ResetUserPasswordBody,
+  UpdateUserAiQuotaBody,
   UpdateUserPermissionBody,
   UpdateUserRoleBody,
   UpdateUserStatusBody,
 } from './users.types'
 import {
   normalizeResetUserPasswordBody,
+  normalizeUpdateUserAiQuotaBody,
   normalizeUpdateUserPermissionBody,
   normalizeUpdateUserRoleBody,
   normalizeUpdateUserStatusBody,
@@ -89,6 +91,17 @@ export class UsersController {
   ) {
     const input = normalizeUpdateUserPermissionBody(body)
     return this.users.updateUserPermissionOverride(id, input, user, getRequestMeta(req))
+  }
+
+  @Patch(':id/ai-quota')
+  updateUserAiQuota(
+    @Param('id') id: string,
+    @Body() body: UpdateUserAiQuotaBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const input = normalizeUpdateUserAiQuotaBody(body)
+    return this.users.updateUserAiQuota(id, input, user, getRequestMeta(req))
   }
 
   @Post(':id/reset-password')

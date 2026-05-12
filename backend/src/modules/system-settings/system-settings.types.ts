@@ -41,3 +41,11 @@ export type PlatformSettings = {
   platformDomain: string
   publicCertVerify: boolean
 }
+
+export type AiAssistantAppearance = {
+  avatarUrl: string | null
+}
+
+export type AiQuotaSettings = {
+  defaultMonthlyTokens: number
+}

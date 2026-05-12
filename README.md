@@ -7,8 +7,9 @@
 ```text
 已完成：认证/RBAC、漏洞全流程、附件上传、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心
 已完成：个人中心头像上传、邮箱修改、密码修改（邮箱验证码）、账号安全日志页
+已完成：AI Gateway 初版，用户 AI 助手页已通过后端代理调用 Hermes Agent
 进行中：系统设置完善（责任书版本管理、安全答题题库）
-下一步：AI Gateway 接入 / Ubuntu 部署
+下一步：配置 OPENAI_API_KEY 并联调 Hermes OpenAI-compatible API / Ubuntu 部署
 ```
 
 ## 技术栈
@@ -22,6 +23,46 @@
 | 文件存储 | MinIO，后续接入 |
 | AI | Hermes Agent，通过后端 AI Gateway 代理 |
 | 部署 | Docker Compose + Nginx，目标环境 Ubuntu 服务器 |
+
+## Hermes Agent
+
+AI 目标效果、当前进度、部署链路和后续规划详见：
+
+```text
+docs/AI.md
+```
+
+Hermes Agent 部署在独立 Docker 容器中，配置目录为：
+
+```text
+/home/cocking/cqupt-src-hermes-linux
+```
+
+宿主机访问 Agent 的地址：
+
+```env
+http://localhost:5000
+```
+
+健康检查：
+
+```bash
+curl http://localhost:5000/health
+```
+
+后端按 OpenAI-compatible API 访问 Agent，不允许前端直连：
+
+```env
+OPENAI_BASE_URL=http://localhost:5000/v1
+OPENAI_API_KEY=API_SERVER_KEY
+OPENAI_MODEL=hermes-agent
+```
+
+若后端也运行在 Docker 容器内，`OPENAI_BASE_URL` 应改为 Docker 网络内的服务名：
+
+```env
+OPENAI_BASE_URL=http://hermes-agent:5000/v1
+```
 
 ## 项目结构
 
@@ -93,7 +134,7 @@ docker compose -f deploy/docker/docker-compose.local.yml up -d
 ```bash
 cd backend
 npm run prisma:migrate:dev
-npm run prisma:seed
+npm run db:seed
 ```
 
 **3. 启动后端**
@@ -184,6 +225,6 @@ docs/architecture/DATABASE_MODEL.md
 ## 下一步
 
 1. 完善责任书版本管理与安全答题题库后台。
-2. 接入 AI Gateway 与 Hermes Agent。
+2. 配置 OPENAI_API_KEY 并联调 Hermes OpenAI-compatible API，完善 AI Gateway 的提示词、限流和审计字段。
 3. Docker Compose 本地全服务联调。
 4. Ubuntu 云服务器部署。
