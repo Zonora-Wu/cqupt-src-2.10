@@ -740,6 +740,8 @@ model AiCallLog {
 model AiUserQuota {
   id           String   @id @default(cuid())
   userId       String   @unique
+  dailyLimit   Int?
+  weeklyLimit  Int?
   monthlyLimit Int
   enabled      Boolean  @default(true)
   updatedById  String?

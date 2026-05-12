@@ -38,10 +38,13 @@ export function normalizeResetUserPasswordBody(body: ResetUserPasswordBody) {
 }
 
 export function normalizeUpdateUserAiQuotaBody(body: UpdateUserAiQuotaBody) {
+  const monthlyLimit = normalizeTokenLimit(body.monthlyLimit)
   return {
+    dailyLimit: body.dailyLimit === undefined ? monthlyLimit : normalizeTokenLimit(body.dailyLimit),
     enabled: body.enabled === undefined ? true : normalizeBoolean(body.enabled),
-    monthlyLimit: normalizeTokenLimit(body.monthlyLimit),
+    monthlyLimit,
     reason: normalizeReason(body.reason, '管理员调整用户 AI token 额度'),
+    weeklyLimit: body.weeklyLimit === undefined ? monthlyLimit : normalizeTokenLimit(body.weeklyLimit),
   }
 }
 

@@ -3,7 +3,6 @@ import {
   Check,
   Globe,
   Languages,
-  LayoutList,
   Monitor,
   Moon,
   RotateCcw,
@@ -11,7 +10,8 @@ import {
   Sun,
   SunMoon,
 } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -48,8 +48,13 @@ export function UserSystemSettings({
   const updatePreferences = (nextPreferences: UserDevicePreferences, nextMessage = '已在当前设备实时生效') => {
     onPreferencesChange(nextPreferences)
     setMessage(nextMessage)
-    window.setTimeout(() => setMessage(''), 1800)
   }
+
+  useEffect(() => {
+    if (!message) return undefined
+    const timer = window.setTimeout(() => setMessage(''), 2400)
+    return () => window.clearTimeout(timer)
+  }, [message])
 
   const setThemeMode = (themeMode: ThemeMode) => {
     updatePreferences({ ...preferences, themeMode })
@@ -68,6 +73,7 @@ export function UserSystemSettings({
 
   return (
     <>
+      <FloatingNotice message={message} variant="success" onClose={() => setMessage('')} />
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
@@ -77,12 +83,6 @@ export function UserSystemSettings({
             description="配置平台外观、语言和通知偏好。所有设置实时生效，只保存在当前浏览器和当前设备，不会同步到服务器或其他设备。"
           />
         </div>
-
-        {message && (
-          <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-            {message}
-          </div>
-        )}
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="xl:sticky xl:top-24 xl:self-start">

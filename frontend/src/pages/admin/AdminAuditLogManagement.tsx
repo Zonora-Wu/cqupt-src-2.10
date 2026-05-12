@@ -13,6 +13,7 @@ import {
   UserCog,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -264,11 +265,7 @@ export function AdminAuditLogManagement() {
         </div>
       </SurfacePanel>
 
-      {error && (
-        <div className="mt-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <AlertMessage className="mt-5" message={error} onClose={() => setError('')} variant="error" />}
 
       <SurfacePanel className="mt-5 overflow-hidden p-0">
         <div className="hidden grid-cols-[170px_minmax(0,1fr)_120px_130px_150px_100px] gap-4 border-b border-black/10 px-4 py-3 text-xs font-medium text-slate-500 md:grid dark:border-white/10 dark:text-slate-400">

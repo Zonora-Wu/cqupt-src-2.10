@@ -14,6 +14,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -181,8 +182,8 @@ export function UserLearningCenter() {
         </div>
       </SurfacePanel>
 
-      {message && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{message}</div>}
-      {error && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {message && <AlertMessage className="mt-4" message={message} onClose={() => setMessage('')} variant="error" />}
+      {error && <AlertMessage className="mt-4" message={error} onClose={() => setError('')} variant="error" />}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400 lg:col-span-2">正在加载学习资源...</SurfacePanel>}
@@ -245,4 +246,3 @@ function formatDate(value: string) {
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString('zh-CN')
 }
-

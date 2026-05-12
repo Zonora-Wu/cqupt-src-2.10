@@ -13,7 +13,13 @@ import {
 } from './users.types'
 
 const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const DEFAULT_AI_DAILY_TOKENS = 20_000
+const DEFAULT_AI_WEEKLY_TOKENS = 60_000
+const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
+const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
+const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
+type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 @Injectable()
 export class UsersService {
@@ -323,20 +329,24 @@ export class UsersService {
     actor: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ) {
-    await this.assertManageableUser(id, actor.id)
+    await this.assertExistingUser(id)
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.aiUserQuota.upsert({
         where: { userId: id },
         create: {
           enabled: input.enabled,
+          dailyLimit: input.dailyLimit,
           monthlyLimit: input.monthlyLimit,
+          weeklyLimit: input.weeklyLimit,
           updatedById: actor.id,
           userId: id,
         },
         update: {
           enabled: input.enabled,
+          dailyLimit: input.dailyLimit,
           monthlyLimit: input.monthlyLimit,
+          weeklyLimit: input.weeklyLimit,
           updatedById: actor.id,
         },
       })
@@ -349,7 +359,9 @@ export class UsersService {
           metadata: {
             action: 'update_ai_quota',
             enabled: input.enabled,
+            dailyLimit: input.dailyLimit,
             monthlyLimit: input.monthlyLimit,
+            weeklyLimit: input.weeklyLimit,
             reason: input.reason,
           },
           requestPath: meta.requestPath,
@@ -371,25 +383,38 @@ export class UsersService {
   }
 
   private async getQuotaContext(userIds: string[]) {
-    const [defaultSetting, usageRows] = await Promise.all([
-      this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } }),
-      userIds.length
-        ? this.prisma.aiCallLog.groupBy({
-            _sum: { tokensUsed: true },
-            by: ['userId'],
-            where: {
-              createdAt: { gte: getMonthStart() },
-              userId: { in: userIds },
-            },
-          })
-        : Promise.resolve([]),
-    ])
-    const defaultMonthlyTokens = normalizeStoredTokenLimit(defaultSetting?.value, DEFAULT_AI_MONTHLY_TOKENS)
+    const settingsRows = await this.prisma.systemSetting.findMany({
+      where: {
+        key: {
+          in: [
+            AI_DEFAULT_DAILY_TOKENS_KEY,
+            AI_DEFAULT_WEEKLY_TOKENS_KEY,
+            AI_DEFAULT_MONTHLY_TOKENS_KEY,
+            AI_QUOTA_PERIOD_KEY,
+          ],
+        },
+      },
+    })
+    const settingsMap = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]))
+    const quotaPeriod = normalizeQuotaPeriod(settingsMap[AI_QUOTA_PERIOD_KEY])
+    const usageRows = userIds.length
+      ? await this.prisma.aiCallLog.groupBy({
+          _sum: { tokensUsed: true },
+          by: ['userId'],
+          where: {
+            createdAt: { gte: getPeriodStart(quotaPeriod) },
+            userId: { in: userIds },
+          },
+        })
+      : []
     const usageByUser = new Map(usageRows.map((row) => [row.userId ?? '', row._sum.tokensUsed ?? 0]))
 
     return {
-      defaultMonthlyTokens,
-      resetAt: getNextMonthStart(),
+      defaultDailyTokens: normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_DAILY_TOKENS_KEY], DEFAULT_AI_DAILY_TOKENS),
+      defaultMonthlyTokens: normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS),
+      defaultWeeklyTokens: normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
+      quotaPeriod,
+      resetAt: getNextPeriodStart(quotaPeriod),
       usageByUser,
     }
   }
@@ -402,6 +427,19 @@ export class UsersService {
     const user = await this.prisma.user.findFirst({
       where: { deletedAt: null, id },
       include: { role: true },
+    })
+
+    if (!user) {
+      throw new NotFoundException('用户不存在')
+    }
+
+    return user
+  }
+
+  private async assertExistingUser(id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { deletedAt: null, id },
+      select: { id: true },
     })
 
     if (!user) {
@@ -458,7 +496,10 @@ const managedUserInclude = {
 type ManagedUser = Prisma.UserGetPayload<{ include: typeof managedUserInclude }>
 
 type QuotaContext = {
+  defaultDailyTokens: number
   defaultMonthlyTokens: number
+  defaultWeeklyTokens: number
+  quotaPeriod: AiQuotaPeriod
   resetAt: Date
   usageByUser: Map<string, number>
 }
@@ -549,16 +590,24 @@ function summarizeManagedUserDetail(
 }
 
 function summarizeAiQuota(user: ManagedUser, quotaContext: QuotaContext) {
+  const dailyLimit = user.aiQuota?.dailyLimit ?? user.aiQuota?.monthlyLimit ?? quotaContext.defaultDailyTokens
+  const weeklyLimit = user.aiQuota?.weeklyLimit ?? user.aiQuota?.monthlyLimit ?? quotaContext.defaultWeeklyTokens
   const monthlyLimit = user.aiQuota?.monthlyLimit ?? quotaContext.defaultMonthlyTokens
-  const usedThisMonth = quotaContext.usageByUser.get(user.id) ?? 0
+  const activeLimit = getActiveLimit({ daily: dailyLimit, monthly: monthlyLimit, weekly: weeklyLimit }, quotaContext.quotaPeriod)
+  const usedThisPeriod = quotaContext.usageByUser.get(user.id) ?? 0
   return {
+    activeLimit,
+    dailyLimit,
     enabled: user.aiQuota?.enabled ?? true,
     monthlyLimit,
     overridden: Boolean(user.aiQuota),
-    remaining: Math.max(0, monthlyLimit - usedThisMonth),
+    quotaPeriod: quotaContext.quotaPeriod,
+    remaining: Math.max(0, activeLimit - usedThisPeriod),
     resetAt: quotaContext.resetAt,
-    usedPercent: monthlyLimit > 0 ? Math.min(100, Math.round((usedThisMonth / monthlyLimit) * 100)) : 100,
-    usedThisMonth,
+    usedPercent: activeLimit > 0 ? Math.min(100, Math.round((usedThisPeriod / activeLimit) * 100)) : 100,
+    usedThisMonth: usedThisPeriod,
+    usedThisPeriod,
+    weeklyLimit,
   }
 }
 
@@ -596,6 +645,45 @@ function formatUserStatus(status: UserStatus) {
   return map[status]
 }
 
+function getActiveLimit(limits: { daily: number; monthly: number; weekly: number }, period: AiQuotaPeriod) {
+  if (period === 'DAY') return limits.daily
+  if (period === 'WEEK') return limits.weekly
+  return limits.monthly
+}
+
+function getPeriodStart(period: AiQuotaPeriod) {
+  if (period === 'DAY') return getDayStart()
+  if (period === 'WEEK') return getWeekStart()
+  return getMonthStart()
+}
+
+function getNextPeriodStart(period: AiQuotaPeriod) {
+  if (period === 'DAY') return getNextDayStart()
+  if (period === 'WEEK') return getNextWeekStart()
+  return getNextMonthStart()
+}
+
+function getDayStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
+function getNextDayStart() {
+  const start = getDayStart()
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
+}
+
+function getWeekStart() {
+  const now = new Date()
+  const day = now.getDay() || 7
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1)
+}
+
+function getNextWeekStart() {
+  const start = getWeekStart()
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+}
+
 function getMonthStart() {
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -609,4 +697,8 @@ function getNextMonthStart() {
 function normalizeStoredTokenLimit(value: unknown, fallback: number) {
   const numberValue = Number(value)
   return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
+}
+
+function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
+  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }

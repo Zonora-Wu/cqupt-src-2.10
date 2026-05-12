@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  CheckCircle2,
   Edit3,
   Filter,
   Gift,
@@ -17,6 +16,7 @@ import {
 import { motion } from 'motion/react'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -141,9 +141,18 @@ export function AdminPointsMallManagement() {
   }, [category, keyword, redemptions, status])
 
   function flashMessage(nextMessage: string) {
+    setError('')
     setMessage(nextMessage)
-    window.setTimeout(() => setMessage(''), 2200)
   }
+
+  useEffect(() => {
+    if (!message && !error) return undefined
+    const timer = window.setTimeout(() => {
+      setMessage('')
+      setError('')
+    }, 3200)
+    return () => window.clearTimeout(timer)
+  }, [error, message])
 
   function openEditModal(product: MallProductItem) {
     setEditing({
@@ -218,6 +227,14 @@ export function AdminPointsMallManagement() {
 
   return (
     <>
+      <FloatingNotice
+        message={message || error}
+        variant={error ? 'error' : 'success'}
+        onClose={() => {
+          setMessage('')
+          setError('')
+        }}
+      />
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
@@ -305,14 +322,6 @@ export function AdminPointsMallManagement() {
             </button>
           </div>
         </SurfacePanel>
-
-        {message && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
-            {message}
-          </div>
-        )}
-        {error && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
         <div className="mt-5 grid gap-3">
           {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载积分商城...</SurfacePanel>}

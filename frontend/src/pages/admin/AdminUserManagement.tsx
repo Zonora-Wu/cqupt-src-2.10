@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
-  CheckCircle2,
   FileSignature,
   Filter,
   KeyRound,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -60,6 +60,12 @@ const accessClassMap: Record<string, string> = {
   未答题: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   未通过: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   答题通过: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+}
+
+const aiQuotaPeriodLabels: Record<'DAY' | 'WEEK' | 'MONTH', string> = {
+  DAY: '日额度',
+  MONTH: '月额度',
+  WEEK: '周额度',
 }
 
 export function AdminUserManagement() {
@@ -144,9 +150,20 @@ export function AdminUserManagement() {
   }, [accountStatus, accessStatus, college, keyword, role, users])
 
   function flashMessage(nextMessage: string) {
+    setError('')
     setMessage(nextMessage)
-    window.setTimeout(() => setMessage(''), 2600)
   }
+
+  useEffect(() => {
+    if (!message && !error) return undefined
+
+    const timer = window.setTimeout(() => {
+      setMessage('')
+      setError('')
+    }, 3200)
+
+    return () => window.clearTimeout(timer)
+  }, [error, message])
 
   function mergeUpdatedUser(updated: ManagedUserItem) {
     setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)))
@@ -176,10 +193,10 @@ export function AdminUserManagement() {
     }
   }
 
-  async function runAiQuotaUpdate(id: string, monthlyLimit: number, enabled: boolean) {
+  async function runAiQuotaUpdate(id: string, quota: { dailyLimit: number; monthlyLimit: number; weeklyLimit: number }, enabled: boolean) {
     setError('')
     try {
-      const updated = await updateManagedUserAiQuota(id, monthlyLimit, enabled, '管理员从用户管理页调整 AI token 额度')
+      const updated = await updateManagedUserAiQuota(id, quota, enabled, '管理员从用户管理页调整 AI token 额度')
       mergeUpdatedUser(updated)
       flashMessage('AI token 额度已更新')
     } catch (actionError) {
@@ -190,6 +207,14 @@ export function AdminUserManagement() {
   if (selectedId) {
     return (
       <>
+        <FloatingNotice
+          message={message || error}
+          variant={error ? 'error' : 'success'}
+          onClose={() => {
+            setMessage('')
+            setError('')
+          }}
+        />
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
@@ -203,8 +228,6 @@ export function AdminUserManagement() {
             返回用户列表
           </button>
 
-          {message && <SuccessMessage message={message} />}
-          {error && <ErrorMessage message={error} />}
           {detailLoading && <SurfacePanel className="mt-5 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载用户详情...</SurfacePanel>}
 
           {selectedUser && (
@@ -349,8 +372,8 @@ export function AdminUserManagement() {
                 <DetailPanel title="AI token 额度" icon={<Bot className="h-5 w-5" />}>
                   <div className="grid gap-3 md:grid-cols-4">
                     {[
-                      ['月度额度', formatNumber(selectedUser.aiQuota.monthlyLimit)],
-                      ['本月已用', formatNumber(selectedUser.aiQuota.usedThisMonth)],
+                      [aiQuotaPeriodLabels[selectedUser.aiQuota.quotaPeriod], formatNumber(selectedUser.aiQuota.activeLimit)],
+                      ['本周期已用', formatNumber(selectedUser.aiQuota.usedThisPeriod)],
                       ['剩余额度', formatNumber(selectedUser.aiQuota.remaining)],
                       ['状态', selectedUser.aiQuota.enabled ? '已启用' : '已停用'],
                     ].map(([label, value]) => (
@@ -363,6 +386,7 @@ export function AdminUserManagement() {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm dark:border-white/10 dark:bg-white/[0.035]">
                     <p className="text-slate-500 dark:text-slate-400">
                       {selectedUser.aiQuota.overridden ? '该用户使用单独配置额度。' : '该用户使用系统默认额度。'}
+                      日/周/月额度：{formatNumber(selectedUser.aiQuota.dailyLimit)} / {formatNumber(selectedUser.aiQuota.weeklyLimit)} / {formatNumber(selectedUser.aiQuota.monthlyLimit)}。
                       下次重置：{formatDateTime(selectedUser.aiQuota.resetAt)}
                     </p>
                     <button
@@ -426,8 +450,8 @@ export function AdminUserManagement() {
         <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
         <AiQuotaDialog
           onClose={() => setAiQuotaTarget(null)}
-          onConfirm={async (target, monthlyLimit, enabled) => {
-            await runAiQuotaUpdate(target.id, monthlyLimit, enabled)
+          onConfirm={async (target, quota, enabled) => {
+            await runAiQuotaUpdate(target.id, quota, enabled)
             setAiQuotaTarget(null)
           }}
           user={aiQuotaTarget}
@@ -438,6 +462,14 @@ export function AdminUserManagement() {
 
   return (
     <>
+      <FloatingNotice
+        message={message || error}
+        variant={error ? 'error' : 'success'}
+        onClose={() => {
+          setMessage('')
+          setError('')
+        }}
+      />
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
@@ -457,9 +489,6 @@ export function AdminUserManagement() {
             </SurfacePanel>
           ))}
         </div>
-
-        {message && <SuccessMessage message={message} />}
-        {error && <ErrorMessage message={error} />}
 
         <SurfacePanel className="relative z-30 mt-6 p-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_150px_150px_170px_220px_auto] xl:items-end">
@@ -593,8 +622,8 @@ export function AdminUserManagement() {
       <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={confirmAndClose} />
       <AiQuotaDialog
         onClose={() => setAiQuotaTarget(null)}
-        onConfirm={async (target, monthlyLimit, enabled) => {
-          await runAiQuotaUpdate(target.id, monthlyLimit, enabled)
+        onConfirm={async (target, quota, enabled) => {
+          await runAiQuotaUpdate(target.id, quota, enabled)
           setAiQuotaTarget(null)
         }}
         user={aiQuotaTarget}
@@ -773,19 +802,6 @@ function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; o
   )
 }
 
-function SuccessMessage({ message }: { message: string }) {
-  return (
-    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-      <CheckCircle2 className="h-4 w-4" />
-      {message}
-    </div>
-  )
-}
-
-function ErrorMessage({ message }: { message: string }) {
-  return <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{message}</div>
-}
-
 function ResetPasswordDialog({
   onClose,
   onConfirm,
@@ -880,9 +896,11 @@ function AiQuotaDialog({
   user,
 }: {
   onClose: () => void
-  onConfirm: (user: ManagedUserItem | ManagedUserDetail, monthlyLimit: number, enabled: boolean) => Promise<void>
+  onConfirm: (user: ManagedUserItem | ManagedUserDetail, quota: { dailyLimit: number; monthlyLimit: number; weeklyLimit: number }, enabled: boolean) => Promise<void>
   user: ManagedUserItem | ManagedUserDetail | null
 }) {
+  const [dailyLimit, setDailyLimit] = useState('')
+  const [weeklyLimit, setWeeklyLimit] = useState('')
   const [monthlyLimit, setMonthlyLimit] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -890,7 +908,10 @@ function AiQuotaDialog({
 
   useEffect(() => {
     if (user) {
-      setMonthlyLimit(String(user.aiQuota.monthlyLimit))
+      const monthly = normalizeQuotaInputValue(user.aiQuota.monthlyLimit)
+      setDailyLimit(normalizeQuotaInputValue(user.aiQuota.dailyLimit, monthly))
+      setWeeklyLimit(normalizeQuotaInputValue(user.aiQuota.weeklyLimit, monthly))
+      setMonthlyLimit(monthly)
       setEnabled(user.aiQuota.enabled)
       setValidationError('')
     }
@@ -899,15 +920,17 @@ function AiQuotaDialog({
   if (!user) return null
 
   async function submit() {
-    const nextLimit = Number(monthlyLimit)
-    if (!Number.isInteger(nextLimit) || nextLimit < 0) {
+    const nextDailyLimit = Number(dailyLimit)
+    const nextWeeklyLimit = Number(weeklyLimit)
+    const nextMonthlyLimit = Number(monthlyLimit)
+    if (![nextDailyLimit, nextWeeklyLimit, nextMonthlyLimit].every((value) => Number.isInteger(value) && value >= 0)) {
       setValidationError('请输入有效的非负整数额度')
       return
     }
 
     setSaving(true)
     try {
-      await onConfirm(user, nextLimit, enabled)
+      await onConfirm(user, { dailyLimit: nextDailyLimit, monthlyLimit: nextMonthlyLimit, weeklyLimit: nextWeeklyLimit }, enabled)
     } finally {
       setSaving(false)
     }
@@ -924,7 +947,7 @@ function AiQuotaDialog({
             </div>
             <h2 className="mt-2 text-2xl font-semibold">设置 AI token 额度</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              为 {user.name}（{user.unifiedCode}）设置独立月度额度。保存后该用户不再使用系统默认额度。
+              为 {user.name}（{user.unifiedCode}）设置独立日、周、月额度。保存后该用户不再使用系统默认额度。
             </p>
           </div>
           <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
@@ -934,15 +957,33 @@ function AiQuotaDialog({
 
         <div className="mt-6 grid gap-4">
           <label className="block">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月度 token 额度</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">日 token 额度</span>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(e) => { setDailyLimit(e.target.value); setValidationError('') }}
+              type="number"
+              value={dailyLimit}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">周 token 额度</span>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(e) => { setWeeklyLimit(e.target.value); setValidationError('') }}
+              type="number"
+              value={weeklyLimit}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月 token 额度</span>
             <input
               className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(e) => { setMonthlyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={monthlyLimit}
             />
-            {validationError && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{validationError}</p>}
           </label>
+          {validationError && <p className="-mt-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>}
           <button
             aria-pressed={enabled}
             className="flex items-center justify-between rounded-lg border border-black/10 bg-white/60 px-4 py-3 text-sm transition hover:bg-white/90 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
@@ -958,7 +999,7 @@ function AiQuotaDialog({
             </span>
           </button>
           <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
-            本月已用 {formatNumber(user.aiQuota.usedThisMonth)}，当前剩余 {formatNumber(user.aiQuota.remaining)}，下次重置 {formatDateTime(user.aiQuota.resetAt)}。
+            当前按{aiQuotaPeriodLabels[user.aiQuota.quotaPeriod]}统计，已用 {formatNumber(user.aiQuota.usedThisPeriod)}，剩余 {formatNumber(user.aiQuota.remaining)}，下次重置 {formatDateTime(user.aiQuota.resetAt)}。
           </div>
         </div>
 
@@ -980,6 +1021,11 @@ function formatDateTime(value: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function normalizeQuotaInputValue(value: unknown, fallback = '0') {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 0 ? String(numberValue) : fallback
 }
 
 function formatNumber(value: number) {

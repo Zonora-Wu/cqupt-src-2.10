@@ -14,13 +14,18 @@ export type AiAppearance = {
 }
 
 export type AiQuota = {
+  activeLimit: number
+  dailyLimit: number
   enabled: boolean
   monthlyLimit: number
   overridden: boolean
+  quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
   remaining: number
   resetAt: string
   usedPercent: number
   usedThisMonth: number
+  usedThisPeriod: number
+  weeklyLimit: number
 }
 
 export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>) {

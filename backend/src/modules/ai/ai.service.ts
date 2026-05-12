@@ -7,8 +7,14 @@ import { NormalizedAiChatInput, OpenAiChatPayload } from './ai.types'
 const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
 const DEFAULT_OPENAI_MODEL = 'hermes-agent'
 const REQUEST_TIMEOUT_MS = 30_000
+const DEFAULT_AI_DAILY_TOKENS = 20_000
+const DEFAULT_AI_WEEKLY_TOKENS = 60_000
 const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
+const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
+const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
+type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 @Injectable()
 export class AiService {
@@ -122,37 +128,63 @@ export class AiService {
   }
 
   private async buildQuotaSummary(userId: string) {
-    const [defaultMonthlyTokens, quotaOverride, usage] = await Promise.all([
-      this.getDefaultMonthlyTokens(),
+    const quotaSettings = await this.getQuotaSettings()
+    const [quotaOverride, usage] = await Promise.all([
       this.prisma.aiUserQuota.findUnique({ where: { userId } }),
       this.prisma.aiCallLog.aggregate({
         _sum: { tokensUsed: true },
         where: {
-          createdAt: { gte: getMonthStart() },
+          createdAt: { gte: getPeriodStart(quotaSettings.quotaPeriod) },
           userId,
         },
       }),
     ])
 
-    const monthlyLimit = quotaOverride?.monthlyLimit ?? defaultMonthlyTokens
-    const usedThisMonth = usage._sum.tokensUsed ?? 0
-    const remaining = Math.max(0, monthlyLimit - usedThisMonth)
+    const limits = {
+      daily: quotaOverride?.dailyLimit ?? quotaOverride?.monthlyLimit ?? quotaSettings.defaultDailyTokens,
+      monthly: quotaOverride?.monthlyLimit ?? quotaSettings.defaultMonthlyTokens,
+      weekly: quotaOverride?.weeklyLimit ?? quotaOverride?.monthlyLimit ?? quotaSettings.defaultWeeklyTokens,
+    }
+    const activeLimit = getActiveLimit(limits, quotaSettings.quotaPeriod)
+    const usedThisPeriod = usage._sum.tokensUsed ?? 0
+    const remaining = Math.max(0, activeLimit - usedThisPeriod)
 
     return {
+      activeLimit,
+      dailyLimit: limits.daily,
       enabled: quotaOverride?.enabled ?? true,
-      monthlyLimit,
+      monthlyLimit: limits.monthly,
       overridden: Boolean(quotaOverride),
+      quotaPeriod: quotaSettings.quotaPeriod,
       remaining,
-      resetAt: getNextMonthStart(),
-      usedPercent: monthlyLimit > 0 ? Math.min(100, Math.round((usedThisMonth / monthlyLimit) * 100)) : 100,
-      usedThisMonth,
+      resetAt: getNextPeriodStart(quotaSettings.quotaPeriod),
+      usedPercent: activeLimit > 0 ? Math.min(100, Math.round((usedThisPeriod / activeLimit) * 100)) : 100,
+      usedThisMonth: usedThisPeriod,
+      usedThisPeriod,
+      weeklyLimit: limits.weekly,
     }
   }
 
-  private async getDefaultMonthlyTokens() {
-    const setting = await this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } })
-    const numberValue = Number(setting?.value)
-    return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : DEFAULT_AI_MONTHLY_TOKENS
+  private async getQuotaSettings() {
+    const rows = await this.prisma.systemSetting.findMany({
+      where: {
+        key: {
+          in: [
+            AI_DEFAULT_DAILY_TOKENS_KEY,
+            AI_DEFAULT_WEEKLY_TOKENS_KEY,
+            AI_DEFAULT_MONTHLY_TOKENS_KEY,
+            AI_QUOTA_PERIOD_KEY,
+          ],
+        },
+      },
+    })
+    const map = Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    return {
+      defaultDailyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_DAILY_TOKENS_KEY], DEFAULT_AI_DAILY_TOKENS),
+      defaultMonthlyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS),
+      defaultWeeklyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
+      quotaPeriod: normalizeQuotaPeriod(map[AI_QUOTA_PERIOD_KEY]),
+    }
   }
 
   private assertCanUseMode(mode: NormalizedAiChatInput['mode'], user: AuthenticatedRequestUser) {
@@ -304,6 +336,45 @@ function estimateTokens(prompt: string, completion: string) {
   return Math.max(1, Math.ceil((prompt.length + completion.length) / 2))
 }
 
+function getActiveLimit(limits: { daily: number; monthly: number; weekly: number }, period: AiQuotaPeriod) {
+  if (period === 'DAY') return limits.daily
+  if (period === 'WEEK') return limits.weekly
+  return limits.monthly
+}
+
+function getPeriodStart(period: AiQuotaPeriod) {
+  if (period === 'DAY') return getDayStart()
+  if (period === 'WEEK') return getWeekStart()
+  return getMonthStart()
+}
+
+function getNextPeriodStart(period: AiQuotaPeriod) {
+  if (period === 'DAY') return getNextDayStart()
+  if (period === 'WEEK') return getNextWeekStart()
+  return getNextMonthStart()
+}
+
+function getDayStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
+function getNextDayStart() {
+  const now = getDayStart()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+}
+
+function getWeekStart() {
+  const now = new Date()
+  const day = now.getDay() || 7
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1)
+}
+
+function getNextWeekStart() {
+  const start = getWeekStart()
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+}
+
 function getMonthStart() {
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -312,4 +383,13 @@ function getMonthStart() {
 function getNextMonthStart() {
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth() + 1, 1)
+}
+
+function normalizeStoredTokenLimit(value: unknown, fallback: number) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
+}
+
+function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
+  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }

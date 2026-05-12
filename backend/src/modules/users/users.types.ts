@@ -22,9 +22,11 @@ export type ResetUserPasswordBody = {
 }
 
 export type UpdateUserAiQuotaBody = {
+  dailyLimit?: unknown
   enabled?: unknown
   monthlyLimit?: unknown
   reason?: unknown
+  weeklyLimit?: unknown
 }
 
 export type NormalizedUpdateUserRoleInput = {
@@ -49,7 +51,9 @@ export type NormalizedResetUserPasswordInput = {
 }
 
 export type NormalizedUpdateUserAiQuotaInput = {
+  dailyLimit: number
   enabled: boolean
   monthlyLimit: number
   reason: string
+  weeklyLimit: number
 }

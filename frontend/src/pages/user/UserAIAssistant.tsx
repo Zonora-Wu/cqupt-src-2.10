@@ -314,16 +314,16 @@ function QuotaWarning({
   onDismiss: (level: '20' | '5') => void
   quota: AiQuota | null
 }) {
-  if (!quota || quota.monthlyLimit <= 0) return null
+  if (!quota || quota.activeLimit <= 0) return null
 
-  const remainingPercent = (quota.remaining / quota.monthlyLimit) * 100
+  const remainingPercent = (quota.remaining / quota.activeLimit) * 100
   const level: '20' | '5' | null = remainingPercent <= 5 ? '5' : remainingPercent <= 20 ? '20' : null
   if (!level || dismissed === level) return null
   if (level === '20' && dismissed === '5') return null
 
   const danger = level === '5'
   return (
-    <div className={`mb-3 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm ${
+    <div className={`mb-3 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm ${
       danger
         ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300'
         : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
@@ -331,12 +331,12 @@ function QuotaWarning({
       <div>
         <p className="font-medium">{danger ? 'AI token 额度即将用尽' : 'AI token 额度低于 20%'}</p>
         <p className="mt-1 text-xs opacity-80">
-          本月剩余 {formatNumber(quota.remaining)} / {formatNumber(quota.monthlyLimit)} tokens，额度不足时将无法继续对话。
+          {getQuotaPeriodLabel(quota.quotaPeriod)}剩余 {formatNumber(quota.remaining)} / {formatNumber(quota.activeLimit)} tokens，额度不足时将无法继续对话。
         </p>
       </div>
       <button
         aria-label="关闭额度提醒"
-        className="rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+        className="shrink-0 rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
         onClick={() => onDismiss(level)}
         type="button"
       >
@@ -344,6 +344,12 @@ function QuotaWarning({
       </button>
     </div>
   )
+}
+
+function getQuotaPeriodLabel(period: 'DAY' | 'WEEK' | 'MONTH') {
+  if (period === 'DAY') return '今日'
+  if (period === 'WEEK') return '本周'
+  return '本月'
 }
 
 function getConversationStorageKey() {

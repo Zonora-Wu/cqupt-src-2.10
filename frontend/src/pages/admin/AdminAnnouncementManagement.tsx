@@ -10,10 +10,11 @@ import {
   Plus,
   RefreshCw,
   Send,
-  ShieldAlert,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -94,6 +95,15 @@ export function AdminAnnouncementManagement() {
     void loadAnnouncements()
   }, [])
 
+  useEffect(() => {
+    if (!message && !error) return undefined
+    const timer = window.setTimeout(() => {
+      setMessage('')
+      setError('')
+    }, 3200)
+    return () => window.clearTimeout(timer)
+  }, [error, message])
+
   const filteredAnnouncements = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
 
@@ -139,6 +149,14 @@ export function AdminAnnouncementManagement() {
   if (selectedAnnouncement) {
     return (
       <>
+        <FloatingNotice
+          message={message || error}
+          variant={error ? 'error' : 'success'}
+          onClose={() => {
+            setMessage('')
+            setError('')
+          }}
+        />
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
@@ -149,7 +167,6 @@ export function AdminAnnouncementManagement() {
             返回公告列表
           </button>
 
-          <Feedback error={error} message={message} />
 
           <article className="mt-5 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
             <SurfacePanel className="p-5 lg:sticky lg:top-24">
@@ -244,6 +261,14 @@ export function AdminAnnouncementManagement() {
 
   return (
     <>
+      <FloatingNotice
+        message={message || error}
+        variant={error ? 'error' : 'success'}
+        onClose={() => {
+          setMessage('')
+          setError('')
+        }}
+      />
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
@@ -262,7 +287,6 @@ export function AdminAnnouncementManagement() {
           </button>
         </div>
 
-        <Feedback error={error} message={message} />
 
         <SurfacePanel className="relative z-30 mt-6 p-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_160px_160px_160px_auto_auto] xl:items-end">
@@ -474,15 +498,10 @@ function EditAnnouncementModal({
             <textarea className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} placeholder="请输入公告正文，支持分段" value={form.content} />
           </label>
 
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-              <p>公告中如涉及漏洞细节、测试边界或敏感数据，请确认内容已脱敏且符合平台公开规则。</p>
-            </div>
-          </div>
+          <AlertMessage message="公告中如涉及漏洞细节、测试边界或敏感数据，请确认内容已脱敏且符合平台公开规则。" variant="warning" />
         </div>
 
-        {error && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+        {error && <AlertMessage className="mt-4" message={error} variant="error" />}
 
         <div className="mt-6 flex justify-end gap-3">
           <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onClose} type="button">
@@ -550,16 +569,6 @@ function PinnedBadge() {
       <Pin className="h-3.5 w-3.5" />
       置顶
     </span>
-  )
-}
-
-function Feedback({ error, message }: { error: string; message: string }) {
-  if (!error && !message) return null
-
-  return (
-    <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}>
-      {error || message}
-    </div>
   )
 }
 

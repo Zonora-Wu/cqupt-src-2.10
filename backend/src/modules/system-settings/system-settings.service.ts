@@ -16,8 +16,13 @@ import { AiAssistantAppearance, AiQuotaSettings, CertificateTemplateSummary, Pen
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
+const DEFAULT_AI_DAILY_TOKENS = 20_000
+const DEFAULT_AI_WEEKLY_TOKENS = 60_000
 const DEFAULT_AI_MONTHLY_TOKENS = 100_000
+const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
+const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
+const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
 
 const DEFAULT_LAYOUT = {
   certificateNo: { x: 90, y: 74, fontSize: 12 },
@@ -469,9 +474,26 @@ export class SystemSettingsService {
   }
 
   async getAiQuotaSettings(): Promise<AiQuotaSettings> {
-    const setting = await this.prisma.systemSetting.findUnique({ where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY } })
+    const rows = await this.prisma.systemSetting.findMany({
+      where: {
+        key: {
+          in: [
+            AI_DEFAULT_DAILY_TOKENS_KEY,
+            AI_DEFAULT_WEEKLY_TOKENS_KEY,
+            AI_DEFAULT_MONTHLY_TOKENS_KEY,
+            AI_QUOTA_PERIOD_KEY,
+          ],
+        },
+      },
+    })
+    const map = Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    const quotaPeriod = normalizeQuotaPeriod(map[AI_QUOTA_PERIOD_KEY])
     return {
-      defaultMonthlyTokens: normalizeStoredTokenLimit(setting?.value, DEFAULT_AI_MONTHLY_TOKENS),
+      defaultDailyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_DAILY_TOKENS_KEY], DEFAULT_AI_DAILY_TOKENS),
+      defaultMonthlyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS),
+      defaultWeeklyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
+      quotaPeriod,
+      resetAt: getNextPeriodStart(quotaPeriod),
     }
   }
 
@@ -480,26 +502,45 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<AiQuotaSettings> {
+    const defaultDailyTokens = validateTokenLimit(body.defaultDailyTokens)
+    const defaultWeeklyTokens = validateTokenLimit(body.defaultWeeklyTokens)
     const defaultMonthlyTokens = validateTokenLimit(body.defaultMonthlyTokens)
+    const quotaPeriod = validateQuotaPeriod(body.quotaPeriod)
+
+    const updates = [
+      { key: AI_DEFAULT_DAILY_TOKENS_KEY, value: defaultDailyTokens, description: '新用户默认 AI 日 token 额度' },
+      { key: AI_DEFAULT_WEEKLY_TOKENS_KEY, value: defaultWeeklyTokens, description: '新用户默认 AI 周 token 额度' },
+      { key: AI_DEFAULT_MONTHLY_TOKENS_KEY, value: defaultMonthlyTokens, description: '新用户默认 AI 月 token 额度' },
+      { key: AI_QUOTA_PERIOD_KEY, value: quotaPeriod, description: 'AI token 额度重置周期' },
+    ] satisfies Array<{ key: string; value: import('@prisma/client').Prisma.InputJsonValue; description: string }>
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.systemSetting.upsert({
-        where: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY },
-        update: { value: defaultMonthlyTokens, updatedById: user.id },
-        create: {
-          key: AI_DEFAULT_MONTHLY_TOKENS_KEY,
-          value: defaultMonthlyTokens,
-          description: '新用户默认 AI 月度 token 额度',
-          updatedById: user.id,
-        },
-      })
+      await Promise.all(
+        updates.map((item) =>
+          tx.systemSetting.upsert({
+            where: { key: item.key },
+            update: { value: item.value, updatedById: user.id },
+            create: {
+              key: item.key,
+              value: item.value,
+              description: item.description,
+              updatedById: user.id,
+            },
+          }),
+        ),
+      )
 
       await tx.auditLog.create({
         data: {
           action: AuditAction.CHANGE_SYSTEM_SETTING,
           actorId: user.id,
           ipAddress: meta.ipAddress,
-          metadata: { key: AI_DEFAULT_MONTHLY_TOKENS_KEY, value: defaultMonthlyTokens },
+          metadata: {
+            defaultDailyTokens,
+            defaultMonthlyTokens,
+            defaultWeeklyTokens,
+            quotaPeriod,
+          },
           requestPath: meta.requestPath,
           result: 'success',
           targetType: 'SystemSetting',
@@ -508,7 +549,7 @@ export class SystemSettingsService {
       })
     })
 
-    return { defaultMonthlyTokens }
+    return { defaultDailyTokens, defaultMonthlyTokens, defaultWeeklyTokens, quotaPeriod, resetAt: getNextPeriodStart(quotaPeriod) }
   }
 
   async updatePlatformSettings(
@@ -680,9 +721,46 @@ function validateTokenLimit(value: unknown) {
   return numberValue
 }
 
+function validateQuotaPeriod(value: unknown): AiQuotaSettings['quotaPeriod'] {
+  if (value === 'DAY' || value === 'WEEK' || value === 'MONTH') return value
+  throw new BadRequestException('AI token 重置周期必须是 DAY、WEEK 或 MONTH')
+}
+
 function normalizeStoredTokenLimit(value: unknown, fallback: number) {
   const numberValue = Number(value)
   return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
+}
+
+function normalizeQuotaPeriod(value: unknown): AiQuotaSettings['quotaPeriod'] {
+  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
+}
+
+function getNextPeriodStart(period: AiQuotaSettings['quotaPeriod']) {
+  if (period === 'DAY') return getNextDayStart()
+  if (period === 'WEEK') return getNextWeekStart()
+  return getNextMonthStart()
+}
+
+function getNextDayStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+}
+
+function getWeekStart() {
+  const now = new Date()
+  const day = now.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
+}
+
+function getNextWeekStart() {
+  const start = getWeekStart()
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+}
+
+function getNextMonthStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
 }
 
 function hasPdfMagicBytes(buffer: Buffer) {

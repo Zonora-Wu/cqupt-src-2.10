@@ -36,13 +36,18 @@ export type AccountProfile = {
     validReports: number
   }
   aiQuota: {
+    activeLimit: number
+    dailyLimit: number
     enabled: boolean
     monthlyLimit: number
     overridden: boolean
+    quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
     remaining: number
     resetAt: string
     usedPercent: number
     usedThisMonth: number
+    usedThisPeriod: number
+    weeklyLimit: number
   }
 }
 

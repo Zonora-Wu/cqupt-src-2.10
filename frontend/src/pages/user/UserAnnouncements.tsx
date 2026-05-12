@@ -1,6 +1,7 @@
-import { ArrowLeft, Bell, CalendarClock, Megaphone, Pin, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Bell, CalendarClock, Megaphone, Pin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -100,12 +101,11 @@ export function UserAnnouncements() {
               <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{selectedAnnouncement.summary}</p>
             </div>
 
-            <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-                <p>涉及漏洞细节、敏感信息和测试边界的内容，请以平台规则和审核员要求为准。</p>
-              </div>
-            </div>
+            <AlertMessage
+              className="mt-4"
+              message="涉及漏洞细节、敏感信息和测试边界的内容，请以平台规则和审核员要求为准。"
+              variant="warning"
+            />
           </SurfacePanel>
 
           <SurfacePanel className="p-6 md:p-8">
@@ -137,11 +137,7 @@ export function UserAnnouncements() {
         </div>
       </SurfacePanel>
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <AlertMessage className="mt-4" message={error} onClose={() => setError('')} variant="error" />}
 
       <div className="mt-6 grid gap-4">
         {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载平台公告...</SurfacePanel>}
@@ -194,4 +190,3 @@ function formatDate(value: string | null) {
 
   return date.toLocaleDateString('zh-CN')
 }
-

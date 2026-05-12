@@ -47,5 +47,9 @@ export type AiAssistantAppearance = {
 }
 
 export type AiQuotaSettings = {
+  defaultDailyTokens: number
   defaultMonthlyTokens: number
+  defaultWeeklyTokens: number
+  quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
+  resetAt: Date
 }

@@ -26,7 +26,11 @@ export type AiAssistantAppearance = {
 }
 
 export type AiQuotaSettings = {
+  defaultDailyTokens: number
   defaultMonthlyTokens: number
+  defaultWeeklyTokens: number
+  quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
+  resetAt: string
 }
 
 export type RegistrationMode = {
@@ -106,9 +110,14 @@ export async function getAiQuotaSettings() {
   return request<AiQuotaSettings>('/system-settings/ai-quota', { method: 'GET' })
 }
 
-export async function updateAiQuotaSettings(defaultMonthlyTokens: number) {
+export async function updateAiQuotaSettings(data: {
+  defaultDailyTokens: number
+  defaultMonthlyTokens: number
+  defaultWeeklyTokens: number
+  quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
+}) {
   return request<AiQuotaSettings>('/system-settings/ai-quota', {
-    body: { defaultMonthlyTokens },
+    body: data,
     method: 'POST',
   })
 }

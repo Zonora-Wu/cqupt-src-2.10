@@ -1,5 +1,6 @@
 import { Award, CheckCircle2, FileSearch, LockKeyhole, Search, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { publicVerifyCertificate } from '../../services/certificates'
 import type { PublicCertificateVerifyResult } from '../../services/certificates'
 
@@ -66,17 +67,13 @@ export function CertificateVerify() {
           </button>
         </div>
         <p className="mt-4 text-xs leading-5 text-slate-500">公开查询仅返回脱敏后的证书核验信息。</p>
-        {message && (
-          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-            {message}
-          </div>
-        )}
+        {message && <AlertMessage className="mt-4" message={message} onClose={() => setMessage('')} variant="error" />}
         {result && (
-          <div className="mt-5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-5 text-left">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-semibold">证书有效</span>
-            </div>
+          <AlertMessage
+            className="mt-5 text-left"
+            title="证书有效"
+            variant="success"
+            message={
             <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 dark:text-slate-300">
               <p>证书编号：{result.certificateNo}</p>
               <p>获得者：{result.recipientName}</p>
@@ -86,7 +83,8 @@ export function CertificateVerify() {
               <p>最终等级：{result.vulnerability.finalSeverity ?? '未公开'}</p>
               <p className="sm:col-span-2">贡献标题：{result.vulnerability.title}</p>
             </div>
-          </div>
+            }
+          />
         )}
       </section>
 

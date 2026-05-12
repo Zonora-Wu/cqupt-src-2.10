@@ -39,8 +39,8 @@ export function AlertMessage({
       className={`rounded-lg border px-4 py-3 text-sm leading-6 shadow-sm shadow-black/[0.02] ${variantStyles[variant]} ${className}`}
       role={variant === 'error' || variant === 'warning' ? 'alert' : 'status'}
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 shrink-0">{iconMap[variant]}</span>
+      <div className="flex items-center gap-3">
+        <span className="shrink-0">{iconMap[variant]}</span>
         <div className="min-w-0 flex-1">
           {title && <p className="font-semibold">{title}</p>}
           <div className={title ? 'mt-0.5' : ''}>{message}</div>
@@ -49,7 +49,7 @@ export function AlertMessage({
         {onClose && (
           <button
             aria-label="关闭提示"
-            className="-mr-1 rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+            className="-mr-1 shrink-0 rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
             onClick={onClose}
             type="button"
           >

@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -252,9 +253,7 @@ export function UserMyVulnerabilities() {
 
       <div className="mt-6 grid gap-5">
         {errorMessage && (
-          <SurfacePanel className="border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
-            {errorMessage}
-          </SurfacePanel>
+          <AlertMessage message={errorMessage} onClose={() => setErrorMessage('')} variant="error" />
         )}
 
         {isLoading && (
@@ -476,9 +475,7 @@ function VulnerabilityDetailDrawer({
             </div>
           )}
           {error && !loading && (
-            <div className="m-6 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
-              {error}
-            </div>
+            <AlertMessage className="m-6" message={error} variant="error" />
           )}
           {detail && !loading && (
             <div className="space-y-6 p-6">
@@ -720,11 +717,7 @@ function SupplementMaterialsModal({
         </div>
 
         {/* 错误提示 */}
-        {error && (
-          <p className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-300">
-            {error}
-          </p>
-        )}
+        {error && <AlertMessage className="mt-4" message={error} variant="error" />}
 
         {/* 操作按钮 */}
         <div className="mt-6 flex justify-end gap-3">

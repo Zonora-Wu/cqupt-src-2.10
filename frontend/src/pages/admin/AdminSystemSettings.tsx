@@ -40,7 +40,7 @@ import {
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
-import type { CertificateTemplateSummary, PendingRegistrationItem } from '../../services/systemSettings'
+import type { AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem } from '../../services/systemSettings'
 
 type SettingsSection =
   | '基础设置'
@@ -59,6 +59,20 @@ type ConfirmState = {
   danger?: boolean
   onConfirm: () => void
 } | null
+
+type AiQuotaPeriod = AiQuotaSettings['quotaPeriod']
+
+const aiQuotaPeriodLabels: Record<AiQuotaPeriod, string> = {
+  DAY: '每日重置',
+  MONTH: '每月重置',
+  WEEK: '每周重置',
+}
+
+const aiQuotaPeriodValues: Record<string, AiQuotaPeriod> = {
+  每日重置: 'DAY',
+  每周重置: 'WEEK',
+  每月重置: 'MONTH',
+}
 
 const settingSections: Array<{ label: SettingsSection; icon: ReactNode; description: string }> = [
   { label: '基础设置', icon: <Building2 className="h-4 w-4" />, description: '品牌、组织、交付方式' },
@@ -96,7 +110,11 @@ export function AdminSystemSettings() {
   const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
   const [aiAvatarMessage, setAiAvatarMessage] = useState('')
   const [isUploadingAiAvatar, setIsUploadingAiAvatar] = useState(false)
-  const [defaultAiTokens, setDefaultAiTokens] = useState('100000')
+  const [defaultAiDailyTokens, setDefaultAiDailyTokens] = useState('20000')
+  const [defaultAiWeeklyTokens, setDefaultAiWeeklyTokens] = useState('60000')
+  const [defaultAiMonthlyTokens, setDefaultAiMonthlyTokens] = useState('100000')
+  const [aiQuotaPeriod, setAiQuotaPeriod] = useState<AiQuotaPeriod>('MONTH')
+  const [aiQuotaResetAt, setAiQuotaResetAt] = useState<string | null>(null)
   const [aiQuotaMessage, setAiQuotaMessage] = useState('')
   const [isSavingAiQuota, setIsSavingAiQuota] = useState(false)
 
@@ -125,7 +143,11 @@ export function AdminSystemSettings() {
           setPlatformDomain(platform.platformDomain)
           setPublicCertVerify(platform.publicCertVerify)
           setAiAvatarUrl(aiAppearance.avatarUrl)
-          setDefaultAiTokens(String(aiQuota.defaultMonthlyTokens))
+          setDefaultAiDailyTokens(String(aiQuota.defaultDailyTokens))
+          setDefaultAiWeeklyTokens(String(aiQuota.defaultWeeklyTokens))
+          setDefaultAiMonthlyTokens(String(aiQuota.defaultMonthlyTokens))
+          setAiQuotaPeriod(aiQuota.quotaPeriod)
+          setAiQuotaResetAt(aiQuota.resetAt)
         }
       } catch (error) {
         if (active) {
@@ -246,8 +268,10 @@ export function AdminSystemSettings() {
   }
 
   const handleSaveAiQuota = async () => {
-    const tokens = Number(defaultAiTokens)
-    if (!Number.isInteger(tokens) || tokens < 0) {
+    const dailyTokens = Number(defaultAiDailyTokens)
+    const weeklyTokens = Number(defaultAiWeeklyTokens)
+    const monthlyTokens = Number(defaultAiMonthlyTokens)
+    if (![dailyTokens, weeklyTokens, monthlyTokens].every((value) => Number.isInteger(value) && value >= 0)) {
       setAiQuotaMessage('请输入有效的非负整数额度')
       return
     }
@@ -255,9 +279,18 @@ export function AdminSystemSettings() {
     setAiQuotaMessage('')
     setIsSavingAiQuota(true)
     try {
-      const result = await updateAiQuotaSettings(tokens)
-      setDefaultAiTokens(String(result.defaultMonthlyTokens))
-      setAiQuotaMessage('新用户默认 AI token 额度已保存')
+      const result = await updateAiQuotaSettings({
+        defaultDailyTokens: dailyTokens,
+        defaultMonthlyTokens: monthlyTokens,
+        defaultWeeklyTokens: weeklyTokens,
+        quotaPeriod: aiQuotaPeriod,
+      })
+      setDefaultAiDailyTokens(String(result.defaultDailyTokens))
+      setDefaultAiWeeklyTokens(String(result.defaultWeeklyTokens))
+      setDefaultAiMonthlyTokens(String(result.defaultMonthlyTokens))
+      setAiQuotaPeriod(result.quotaPeriod)
+      setAiQuotaResetAt(result.resetAt)
+      setAiQuotaMessage('AI token 额度与重置周期已保存')
     } catch (error) {
       setAiQuotaMessage(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
@@ -529,14 +562,36 @@ export function AdminSystemSettings() {
                 </SettingsCard>
 
                 <SettingsCard
-                  description="设置新用户默认 AI 月度 token 额度。单个用户可以在用户管理详情页单独覆盖该额度。"
+                  description="设置 AI token 的重置周期，以及新用户默认日、周、月额度。单个用户可以在用户管理详情页单独覆盖该额度。"
                   icon={<SlidersHorizontal className="h-5 w-5" />}
                   title="AI token 额度"
                 >
                   <SettingRow
-                    control={<TextField onChange={setDefaultAiTokens} value={defaultAiTokens} />}
-                    description="新注册或未单独设置的用户会使用该默认月度额度。填 0 表示默认不允许调用 AI。"
-                    title="新用户默认月度额度"
+                    control={
+                      <SelectInput
+                        label=""
+                        onChange={(value) => setAiQuotaPeriod(aiQuotaPeriodValues[value] ?? 'MONTH')}
+                        options={['每日重置', '每周重置', '每月重置']}
+                        value={aiQuotaPeriodLabels[aiQuotaPeriod]}
+                      />
+                    }
+                    description="系统会按所选周期统计用量并在下一个周期开始时恢复额度。每周重置按周一 00:00 计算。"
+                    title="额度重置周期"
+                  />
+                  <SettingRow
+                    control={<TextField onChange={setDefaultAiDailyTokens} type="number" value={defaultAiDailyTokens} />}
+                    description="当重置周期选择“每日重置”时，新注册或未单独设置的用户会使用该额度。"
+                    title="新用户默认日额度"
+                  />
+                  <SettingRow
+                    control={<TextField onChange={setDefaultAiWeeklyTokens} type="number" value={defaultAiWeeklyTokens} />}
+                    description="当重置周期选择“每周重置”时，新注册或未单独设置的用户会使用该额度。"
+                    title="新用户默认周额度"
+                  />
+                  <SettingRow
+                    control={<TextField onChange={setDefaultAiMonthlyTokens} type="number" value={defaultAiMonthlyTokens} />}
+                    description="当重置周期选择“每月重置”时，新注册或未单独设置的用户会使用该额度。填 0 表示默认不允许调用 AI。"
+                    title="新用户默认月额度"
                   />
                   <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
                     {aiQuotaMessage ? (
@@ -544,7 +599,9 @@ export function AdminSystemSettings() {
                         {aiQuotaMessage}
                       </p>
                     ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">当前默认：{Number(defaultAiTokens).toLocaleString()} tokens / 月</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        当前周期：{aiQuotaPeriodLabels[aiQuotaPeriod]}；下次重置：{formatDateTime(aiQuotaResetAt)}
+                      </p>
                     )}
                     <ActionButton
                       disabled={isSavingAiQuota}
@@ -890,6 +947,19 @@ function StatusPill({ label }: { label: string }) {
       {label}
     </span>
   )
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return '暂无记录'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '暂无记录'
+  return new Intl.DateTimeFormat('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
 }
 
 function ConfirmDialog({

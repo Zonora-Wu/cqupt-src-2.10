@@ -15,7 +15,6 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
   XCircle,
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
@@ -420,7 +419,6 @@ function OperationLogs() {
 // ─── 子组件 ────────────────────────────────────────────────────────────────────
 
 function LogRow({ compact = false, log }: { compact?: boolean; log: MyAuditLogItem }) {
-  const [expanded, setExpanded] = useState(false)
   const isLoginAction = log.action === 'LOGIN' || log.action === 'LOGOUT'
   const icon = isLoginAction
     ? log.action === 'LOGIN'

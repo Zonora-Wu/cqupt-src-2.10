@@ -130,12 +130,17 @@ export class SystemSettingsController {
   @Post('ai-quota')
   @RequirePermissions('system:manage')
   updateAiQuotaSettings(
-    @Body() body: { defaultMonthlyTokens?: unknown },
+    @Body() body: { defaultDailyTokens?: unknown; defaultMonthlyTokens?: unknown; defaultWeeklyTokens?: unknown; quotaPeriod?: unknown },
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
     return this.settings.updateAiQuotaSettings(
-      { defaultMonthlyTokens: body.defaultMonthlyTokens as number },
+      {
+        defaultDailyTokens: body.defaultDailyTokens as number,
+        defaultMonthlyTokens: body.defaultMonthlyTokens as number,
+        defaultWeeklyTokens: body.defaultWeeklyTokens as number,
+        quotaPeriod: body.quotaPeriod as 'DAY' | 'WEEK' | 'MONTH',
+      },
       user,
       getRequestMeta(req),
     )

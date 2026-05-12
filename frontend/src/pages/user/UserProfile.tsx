@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -116,12 +117,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
         />
       </div>
 
-      {profileError && (
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          <XCircle className="h-4 w-4 shrink-0" />
-          {profileError}
-        </div>
-      )}
+      {profileError && <AlertMessage className="mt-4" message={profileError} variant="error" />}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* ── 左栏：头像与基础信息 */}
@@ -199,12 +195,12 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
             <div className="px-5 py-4">
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">本月剩余</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{getQuotaPeriodLabel(aiQuota?.quotaPeriod)}剩余</p>
                   <p className="mt-1 text-2xl font-semibold">{formatNumber(aiQuota?.remaining ?? 0)}</p>
                 </div>
                 <div className="text-right text-xs text-slate-500 dark:text-slate-400">
-                  <p>总额度 {formatNumber(aiQuota?.monthlyLimit ?? 0)}</p>
-                  <p>已使用 {formatNumber(aiQuota?.usedThisMonth ?? 0)}</p>
+                  <p>总额度 {formatNumber(aiQuota?.activeLimit ?? 0)}</p>
+                  <p>已使用 {formatNumber(aiQuota?.usedThisPeriod ?? 0)}</p>
                 </div>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
@@ -774,16 +770,7 @@ function Modal({ children, onClose, title }: { children: ReactNode; onClose: () 
 }
 
 function NoticeBar({ notice }: { notice: Notice }) {
-  const colorMap = {
-    error: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
-    success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    warning: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  }
-  return (
-    <div className={`rounded-lg border px-3 py-2.5 text-sm ${colorMap[notice.type]}`}>
-      {notice.text}
-    </div>
-  )
+  return <AlertMessage message={notice.text} variant={notice.type} />
 }
 
 function StatCell({ label, value }: { label: string; value: number }) {
@@ -832,6 +819,12 @@ function formatUserStatus(status: string | undefined) {
 function formatDate(value: string | null | undefined) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function getQuotaPeriodLabel(period: 'DAY' | 'WEEK' | 'MONTH' | undefined) {
+  if (period === 'DAY') return '今日'
+  if (period === 'WEEK') return '本周'
+  return '本月'
 }
 
 function formatNumber(value: number) {

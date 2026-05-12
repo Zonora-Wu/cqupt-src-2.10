@@ -7,13 +7,18 @@ export type ManagedUserItem = {
   accessStatus: '未答题' | '答题通过' | '已签责任书' | '未通过'
   accountStatus: '正常' | '待准入' | '已禁用' | '已锁定'
   aiQuota: {
+    activeLimit: number
+    dailyLimit: number
     enabled: boolean
     monthlyLimit: number
     overridden: boolean
+    quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
     remaining: number
     resetAt: string
     usedPercent: number
     usedThisMonth: number
+    usedThisPeriod: number
+    weeklyLimit: number
   }
   authorizationLevel: string
   certificates: number
@@ -130,9 +135,14 @@ export function resetManagedUserPassword(id: string, newPassword: string, reason
   })
 }
 
-export function updateManagedUserAiQuota(id: string, monthlyLimit: number, enabled: boolean, reason: string) {
+export function updateManagedUserAiQuota(
+  id: string,
+  quota: { dailyLimit: number; monthlyLimit: number; weeklyLimit: number },
+  enabled: boolean,
+  reason: string,
+) {
   return request<ManagedUserItem>(`/users/manage/${id}/ai-quota`, {
-    body: { enabled, monthlyLimit, reason },
+    body: { ...quota, enabled, reason },
     method: 'PATCH',
   })
 }

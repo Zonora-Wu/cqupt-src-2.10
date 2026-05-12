@@ -1,5 +1,6 @@
 import { ArrowLeft, Bell, CalendarDays, ChevronRight, Megaphone, Pin } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { listPublicAnnouncements } from '../../services/announcements'
 import type { AnnouncementItem } from '../../services/announcements'
 
@@ -94,9 +95,7 @@ export function PublicAnnouncements() {
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-5 text-sm text-red-700 dark:text-red-300">
-            {error}
-          </div>
+          <AlertMessage message={error} onClose={() => setError('')} variant="error" />
         )}
 
         {!loading &&
@@ -153,4 +152,3 @@ function formatDate(value: string | null) {
 
   return date.toLocaleDateString('zh-CN')
 }
-

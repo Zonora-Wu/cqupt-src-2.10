@@ -188,7 +188,7 @@ const reviewReports: ReviewReport[] = [
   },
 ]
 
-const retestItems: RetestItem[] = [
+export const retestItems: RetestItem[] = [
   {
     id: 'SRC-2026-0006',
     title: '校园门户接口敏感信息返回过多',
@@ -468,7 +468,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
 }
 
 
-function AuditorReviewQueue() {
+export function AuditorReviewQueue() {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('全部状态')
   const [level, setLevel] = useState('全部等级')

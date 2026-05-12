@@ -1,6 +1,7 @@
 import { Medal, Trophy, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type LeaderboardEntry, type LeaderboardScope, getLeaderboard } from '../../services/leaderboard'
@@ -78,9 +79,7 @@ export function UserLeaderboard() {
       )}
 
       {!loading && error && (
-        <div className="mt-10 rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-          {error}
-        </div>
+        <AlertMessage className="mt-10" message={error} onClose={() => setError('')} variant="error" />
       )}
 
       {!loading && !error && items.length === 0 && (

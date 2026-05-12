@@ -19,6 +19,7 @@ import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -83,6 +84,15 @@ export function UserPointsMall() {
     void loadMall()
   }, [])
 
+  useEffect(() => {
+    if (!message && !error) return undefined
+    const timer = window.setTimeout(() => {
+      setMessage('')
+      setError('')
+    }, 3600)
+    return () => window.clearTimeout(timer)
+  }, [error, message])
+
   const mallStats = useMemo(
     () => [
       { label: '当前积分', value: String(summary?.balance ?? 0), hint: '可用于兑换', icon: Trophy },
@@ -129,6 +139,14 @@ export function UserPointsMall() {
 
   return (
     <PageSection>
+      <FloatingNotice
+        message={message || error}
+        variant={error ? 'error' : 'success'}
+        onClose={() => {
+          setMessage('')
+          setError('')
+        }}
+      />
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="Points Mall"
@@ -181,13 +199,6 @@ export function UserPointsMall() {
           </button>
         </div>
       </SurfacePanel>
-
-      {message && (
-        <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-          {message}
-        </div>
-      )}
-      {error && <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
       {loading && <SurfacePanel className="mt-6 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载积分商城...</SurfacePanel>}
 

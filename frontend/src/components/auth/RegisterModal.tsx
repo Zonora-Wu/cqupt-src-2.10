@@ -308,15 +308,11 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               </button>
 
               {message && (
-                <div className="rounded-lg border border-brand-600/15 bg-brand-600/10 p-3 text-xs leading-5 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80">
-                  {message}
-                </div>
+                <AlertMessage message={message} onClose={() => setMessage('')} variant="success" />
               )}
 
               {error && (
-                <div className="rounded-lg border border-red-500/15 bg-red-500/10 p-3 text-xs leading-5 text-red-700 dark:border-red-300/15 dark:text-red-200">
-                  {error}
-                </div>
+                <AlertMessage message={error} onClose={() => setError('')} variant="error" />
               )}
             </form>
 
