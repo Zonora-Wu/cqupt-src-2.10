@@ -874,9 +874,114 @@ function ResetPasswordDialog({
   )
 }
 
+function AiQuotaDialog({
+  onClose,
+  onConfirm,
+  user,
+}: {
+  onClose: () => void
+  onConfirm: (user: ManagedUserItem | ManagedUserDetail, monthlyLimit: number, enabled: boolean) => Promise<void>
+  user: ManagedUserItem | ManagedUserDetail | null
+}) {
+  const [monthlyLimit, setMonthlyLimit] = useState('')
+  const [enabled, setEnabled] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [validationError, setValidationError] = useState('')
+
+  useEffect(() => {
+    if (user) {
+      setMonthlyLimit(String(user.aiQuota.monthlyLimit))
+      setEnabled(user.aiQuota.enabled)
+      setValidationError('')
+    }
+  }, [user])
+
+  if (!user) return null
+
+  async function submit() {
+    const nextLimit = Number(monthlyLimit)
+    if (!Number.isInteger(nextLimit) || nextLimit < 0) {
+      setValidationError('请输入有效的非负整数额度')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await onConfirm(user, nextLimit, enabled)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-[560px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <Bot className="h-5 w-5" />
+              <span className="text-sm font-medium">AI Quota</span>
+            </div>
+            <h2 className="mt-2 text-2xl font-semibold">设置 AI token 额度</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              为 {user.name}（{user.unifiedCode}）设置独立月度额度。保存后该用户不再使用系统默认额度。
+            </p>
+          </div>
+          <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月度 token 额度</span>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(e) => { setMonthlyLimit(e.target.value); setValidationError('') }}
+              type="number"
+              value={monthlyLimit}
+            />
+            {validationError && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{validationError}</p>}
+          </label>
+          <button
+            aria-pressed={enabled}
+            className="flex items-center justify-between rounded-lg border border-black/10 bg-white/60 px-4 py-3 text-sm transition hover:bg-white/90 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+            onClick={() => setEnabled((value) => !value)}
+            type="button"
+          >
+            <span>
+              <span className="block font-medium">允许使用 AI 助手</span>
+              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">关闭后该用户无法发起 AI 对话</span>
+            </span>
+            <span className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition ${enabled ? 'bg-brand-600' : 'bg-slate-300 dark:bg-white/20'}`}>
+              <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </span>
+          </button>
+          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+            本月已用 {formatNumber(user.aiQuota.usedThisMonth)}，当前剩余 {formatNumber(user.aiQuota.remaining)}，下次重置 {formatDateTime(user.aiQuota.resetAt)}。
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={onClose} type="button">
+            取消
+          </button>
+          <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={saving} onClick={() => void submit()} type="button">
+            {saving ? '保存中...' : '确认保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return '暂无记录'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString('zh-CN')
 }

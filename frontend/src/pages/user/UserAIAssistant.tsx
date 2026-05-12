@@ -1,9 +1,9 @@
-import { ArrowUp, Bot, Paperclip, Sparkles } from 'lucide-react'
+import { ArrowUp, Bot, Paperclip, Sparkles, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
-import { getAiAppearance, sendAiChat } from '../../services/ai'
+import { getAiAppearance, getAiQuota, sendAiChat, type AiQuota } from '../../services/ai'
 
 type ChatMessage = {
   content: string
@@ -25,6 +25,8 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
   const [userName, setUserName] = useState('我')
   const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
+  const [aiQuota, setAiQuota] = useState<AiQuota | null>(null)
+  const [dismissedQuotaWarning, setDismissedQuotaWarning] = useState<'20' | '5' | null>(null)
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null)
   const dockedInputRef = useRef<HTMLDivElement | null>(null)
   const consumedInitialPromptRef = useRef<string | null>(null)
@@ -34,7 +36,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   useEffect(() => {
     let active = true
 
-    Promise.allSettled([getAccountProfile(), getAiAppearance()]).then(([profileResult, appearanceResult]) => {
+    Promise.allSettled([getAccountProfile(), getAiAppearance(), getAiQuota()]).then(([profileResult, appearanceResult, quotaResult]) => {
       if (!active) return
 
       if (profileResult.status === 'fulfilled') {
@@ -44,6 +46,10 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
       if (appearanceResult.status === 'fulfilled') {
         setAiAvatarUrl(appearanceResult.value.avatarUrl ?? null)
+      }
+
+      if (quotaResult.status === 'fulfilled') {
+        setAiQuota(quotaResult.value)
       }
     })
 
@@ -95,6 +101,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
     try {
       const result = await sendAiChat(content)
+      if (result.quota) setAiQuota(result.quota)
       setMessages((current) => [...current, { role: 'assistant', content: result.content || formatAiResponse(result.response) }])
     } catch (error) {
       setMessages((current) => [
@@ -110,43 +117,50 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   }
 
   const inputBox = (
-    <motion.div
-      className="mx-auto w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
-      layoutId="ai-assistant-input"
-      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <div className="flex items-center gap-2">
-        <button
-          aria-label="上传附件"
-          className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
-          type="button"
-        >
-          <Paperclip className="h-5 w-5" />
-        </button>
-        <textarea
-          className="h-12 max-h-40 min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-white/30"
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void sendMessage()
-            }
-          }}
-          placeholder="询问漏洞报告、复现步骤、修复建议或学习路径"
-          rows={1}
-          value={input}
-        />
-        <button
-          aria-label="发送"
-          className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-          disabled={!input.trim() || sending}
-          onClick={() => void sendMessage()}
-          type="button"
-        >
-          <ArrowUp className="h-5 w-5" />
-        </button>
-      </div>
-    </motion.div>
+    <div className="mx-auto w-full">
+      <QuotaWarning
+        dismissed={dismissedQuotaWarning}
+        quota={aiQuota}
+        onDismiss={setDismissedQuotaWarning}
+      />
+      <motion.div
+        className="w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
+        layoutId="ai-assistant-input"
+        transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            aria-label="上传附件"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+            type="button"
+          >
+            <Paperclip className="h-5 w-5" />
+          </button>
+          <textarea
+            className="h-12 max-h-40 min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-white/30"
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                void sendMessage()
+              }
+            }}
+            placeholder="询问漏洞报告、复现步骤、修复建议或学习路径"
+            rows={1}
+            value={input}
+          />
+          <button
+            aria-label="发送"
+            className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+            disabled={!input.trim() || sending || aiQuota?.enabled === false || aiQuota?.remaining === 0}
+            onClick={() => void sendMessage()}
+            type="button"
+          >
+            <ArrowUp className="h-5 w-5" />
+          </button>
+        </div>
+      </motion.div>
+    </div>
   )
 
   return (
@@ -291,6 +305,47 @@ function TypingIndicator() {
   )
 }
 
+function QuotaWarning({
+  dismissed,
+  onDismiss,
+  quota,
+}: {
+  dismissed: '20' | '5' | null
+  onDismiss: (level: '20' | '5') => void
+  quota: AiQuota | null
+}) {
+  if (!quota || quota.monthlyLimit <= 0) return null
+
+  const remainingPercent = (quota.remaining / quota.monthlyLimit) * 100
+  const level: '20' | '5' | null = remainingPercent <= 5 ? '5' : remainingPercent <= 20 ? '20' : null
+  if (!level || dismissed === level) return null
+  if (level === '20' && dismissed === '5') return null
+
+  const danger = level === '5'
+  return (
+    <div className={`mb-3 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm ${
+      danger
+        ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300'
+        : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+    }`}>
+      <div>
+        <p className="font-medium">{danger ? 'AI token 额度即将用尽' : 'AI token 额度低于 20%'}</p>
+        <p className="mt-1 text-xs opacity-80">
+          本月剩余 {formatNumber(quota.remaining)} / {formatNumber(quota.monthlyLimit)} tokens，额度不足时将无法继续对话。
+        </p>
+      </div>
+      <button
+        aria-label="关闭额度提醒"
+        className="rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+        onClick={() => onDismiss(level)}
+        type="button"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
 function getConversationStorageKey() {
   const session = getSavedSession()
   const userKey = session?.user.id ?? session?.user.unifiedCode ?? 'anonymous'
@@ -328,6 +383,10 @@ function saveStoredMessages(storageKey: string, messages: ChatMessage[]) {
   } catch {
     // localStorage may be unavailable or full; chat still works for the current page session.
   }
+}
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString('zh-CN')
 }
 
 function formatAiResponse(response: unknown) {

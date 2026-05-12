@@ -1,5 +1,6 @@
 import {
   AtSign,
+  Bot,
   CalendarClock,
   Camera,
   CheckCircle2,
@@ -98,6 +99,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
 
   const account = profile?.account
   const stats = profile?.stats
+  const aiQuota = profile?.aiQuota
   const responsibility = profile?.security.responsibilityAgreement
   const securityExam = profile?.security.securityExam
   const avatarUrl = account?.avatarUrl ?? null
@@ -184,6 +186,36 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
                   <span className="font-medium text-slate-900 dark:text-white">{value}</span>
                 </div>
               ))}
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel className="overflow-hidden p-0">
+            <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
+                <Bot className="h-4 w-4 text-brand-600 dark:text-green-300" />
+                AI token 额度
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">本月剩余</p>
+                  <p className="mt-1 text-2xl font-semibold">{formatNumber(aiQuota?.remaining ?? 0)}</p>
+                </div>
+                <div className="text-right text-xs text-slate-500 dark:text-slate-400">
+                  <p>总额度 {formatNumber(aiQuota?.monthlyLimit ?? 0)}</p>
+                  <p>已使用 {formatNumber(aiQuota?.usedThisMonth ?? 0)}</p>
+                </div>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                <div
+                  className="h-full rounded-full bg-brand-600 transition-all dark:bg-green-300"
+                  style={{ width: `${Math.min(100, Math.max(0, aiQuota?.usedPercent ?? 0))}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {aiQuota?.enabled === false ? 'AI 助手已停用，请联系管理员。' : `下次重置：${formatDate(aiQuota?.resetAt)}`}
+              </p>
             </div>
           </SurfacePanel>
 
@@ -800,6 +832,10 @@ function formatUserStatus(status: string | undefined) {
 function formatDate(value: string | null | undefined) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString('zh-CN')
 }
 
 function getErrorMessage(error: unknown) {

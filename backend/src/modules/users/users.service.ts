@@ -148,7 +148,8 @@ export class UsersService {
       return next
     })
 
-    return summarizeManagedUser(updated)
+    const quotaContext = await this.getQuotaContext([id])
+    return summarizeManagedUser(updated, quotaContext)
   }
 
   async updateUserStatus(
@@ -201,7 +202,8 @@ export class UsersService {
       return next
     })
 
-    return summarizeManagedUser(updated)
+    const quotaContext = await this.getQuotaContext([id])
+    return summarizeManagedUser(updated, quotaContext)
   }
 
   async updateUserPermissionOverride(
