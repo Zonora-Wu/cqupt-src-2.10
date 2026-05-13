@@ -57,12 +57,6 @@ export function UserCertificates() {
   const [downloadingId, setDownloadingId] = useState('')
   const previewUrlRef = useRef<string | null>(null)
 
-  useEffect(() => {
-    void loadCertificates()
-
-    return releasePreviewUrl
-  }, [])
-
   const filteredCertificates = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
 
@@ -167,6 +161,12 @@ export function UserCertificates() {
       previewUrlRef.current = null
     }
   }
+
+  useEffect(() => {
+    void loadCertificates()
+
+    return releasePreviewUrl
+  }, [])
 
   return (
     <PageSection>

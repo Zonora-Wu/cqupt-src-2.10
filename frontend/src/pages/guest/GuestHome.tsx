@@ -113,7 +113,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch {}
+    try { localStorage.setItem('cqupt-theme', theme) } catch { /* ignore storage access errors */ }
   }, [theme])
 
   const openPage = (page: GuestPage) => {

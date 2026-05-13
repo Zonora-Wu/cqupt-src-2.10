@@ -1,6 +1,6 @@
 import { ArrowUp, Bot, Paperclip, Sparkles, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { getAiAppearance, getAiQuota, sendAiChat, type AiQuota } from '../../services/ai'
@@ -32,6 +32,31 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const consumedInitialPromptRef = useRef<string | null>(null)
   const [bottomInset, setBottomInset] = useState(156)
   const hasStarted = messages.length > 0
+
+  const sendMessage = useCallback(async (overrideContent?: string) => {
+    const content = (overrideContent ?? input).trim()
+    if (!content || sending) return
+
+    setMessages((current) => [...current, { role: 'user', content }])
+    setInput('')
+    setSending(true)
+
+    try {
+      const result = await sendAiChat(content)
+      if (result.quota) setAiQuota(result.quota)
+      setMessages((current) => [...current, { role: 'assistant', content: result.content || formatAiResponse(result.response) }])
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: error instanceof Error ? error.message : 'AI 助手暂时不可用，请稍后再试。',
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
+  }, [input, sending])
 
   useEffect(() => {
     let active = true
@@ -74,7 +99,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     setInput('')
     onInitialPromptConsumed?.()
     void sendMessage(content)
-  }, [initialPrompt])
+  }, [initialPrompt, onInitialPromptConsumed, sendMessage])
 
   useEffect(() => {
     if (!hasStarted || !dockedInputRef.current) return
@@ -90,31 +115,6 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
     return () => observer.disconnect()
   }, [hasStarted])
-
-  const sendMessage = async (overrideContent?: string) => {
-    const content = (overrideContent ?? input).trim()
-    if (!content || sending) return
-
-    setMessages((current) => [...current, { role: 'user', content }])
-    setInput('')
-    setSending(true)
-
-    try {
-      const result = await sendAiChat(content)
-      if (result.quota) setAiQuota(result.quota)
-      setMessages((current) => [...current, { role: 'assistant', content: result.content || formatAiResponse(result.response) }])
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        {
-          role: 'assistant',
-          content: error instanceof Error ? error.message : 'AI 助手暂时不可用，请稍后再试。',
-        },
-      ])
-    } finally {
-      setSending(false)
-    }
-  }
 
   const inputBox = (
     <div className="mx-auto w-full">

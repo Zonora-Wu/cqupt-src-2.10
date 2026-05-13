@@ -173,7 +173,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark')
     document.documentElement.dataset.motion = preferences.reduceMotion ? 'reduced' : 'default'
     saveUserDevicePreferences(preferenceKey, preferences)
-    try { localStorage.setItem('cqupt-theme', nextTheme) } catch {}
+    try { localStorage.setItem('cqupt-theme', nextTheme) } catch { /* ignore storage access errors */ }
   }, [preferenceKey, preferences])
 
   useEffect(() => {

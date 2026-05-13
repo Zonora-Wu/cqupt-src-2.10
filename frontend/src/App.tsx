@@ -1,7 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { GuestHome } from './pages/guest/GuestHome'
 import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
 import { clearSavedSession, getCurrentUser, getSavedSession, type AuthUser } from './services/auth'
+
+const GuestHome = lazy(() =>
+  import('./pages/guest/GuestHome').then((module) => ({ default: module.GuestHome })),
+)
 
 const AdminHome = lazy(() =>
   import('./pages/admin/AdminHome').then((module) => ({ default: module.AdminHome })),
@@ -96,7 +99,9 @@ function App() {
           )}
         </Suspense>
       ) : (
-        <GuestHome onLogin={() => setAuthModal('login')} onRegister={() => setAuthModal('register')} />
+        <Suspense fallback={<AppLoading text="正在加载平台首页..." />}>
+          <GuestHome onLogin={() => setAuthModal('login')} onRegister={() => setAuthModal('register')} />
+        </Suspense>
       )}
       <Suspense fallback={null}>
         {authModal === 'login' && (
