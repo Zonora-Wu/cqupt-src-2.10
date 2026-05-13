@@ -461,7 +461,7 @@ function ChangeEmailModal({
               <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码（发至当前邮箱）</span>
               <input
                 autoFocus
-                className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+                className="w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
                 maxLength={6}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="请输入 6 位验证码"
@@ -473,7 +473,7 @@ function ChangeEmailModal({
               <div className="group relative">
                 <AtSign className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
                 <input
-                  className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                  className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                   onChange={(e) => setNewEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && confirmChange()}
                   placeholder="name@example.edu.cn"
@@ -631,7 +631,7 @@ function ChangePasswordModal({
             <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
             <input
               autoFocus
-              className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
               onChange={(e) => setOldPassword(e.target.value)}
               placeholder="输入当前密码"
               type={showOldPassword ? 'text' : 'password'}
@@ -657,7 +657,7 @@ function ChangePasswordModal({
               <div className="flex gap-2">
                 <input
                   autoFocus
-                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 disabled:opacity-50"
                   disabled={!codeSent}
                   maxLength={6}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -680,7 +680,7 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="新密码（至少 8 位，字母+数字）"
             type={showNewPassword ? 'text' : 'password'}
@@ -699,7 +699,7 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setConfirmPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="确认新密码"
@@ -750,7 +750,7 @@ function Modal({ children, onClose, title }: { children: ReactNode; onClose: () 
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >

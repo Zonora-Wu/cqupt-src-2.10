@@ -345,7 +345,7 @@ export function AdminCertificateManagement() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                  <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <ShieldCheck className="h-4 w-4 text-brand-700 dark:text-green-300" />
                       证书内容
@@ -466,7 +466,7 @@ function IssueCertificateModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -502,7 +502,7 @@ function IssueCertificateModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">贡献说明</span>
             <textarea
-              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(event) => setContribution(event.target.value)}
               value={contribution}
             />

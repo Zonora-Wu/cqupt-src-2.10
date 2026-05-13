@@ -96,7 +96,7 @@ export function UserAnnouncements() {
               <p>发布范围：{selectedAnnouncement.range}</p>
             </div>
 
-            <div className="mt-5 rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <div className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
               <p className="text-sm font-medium">概要</p>
               <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{selectedAnnouncement.summary}</p>
             </div>

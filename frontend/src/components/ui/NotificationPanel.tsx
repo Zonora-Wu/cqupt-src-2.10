@@ -91,7 +91,7 @@ export function NotificationPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <section className="relative z-10 mx-auto flex max-w-[1180px] gap-0 px-5 pb-8 pt-24 md:px-8">
-      <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-white/95 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
 
         {/* 左侧频道列表 */}
         <aside className="flex w-64 shrink-0 flex-col border-r border-black/10 dark:border-white/10">

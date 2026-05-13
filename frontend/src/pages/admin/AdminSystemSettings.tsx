@@ -874,7 +874,7 @@ function TextField({ value, onChange, type = 'text' }: { value: string; onChange
   const controlled = onChange !== undefined
   return (
     <input
-      className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+      className="w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
       defaultValue={controlled ? undefined : value}
       onChange={controlled ? (e) => onChange(e.target.value) : undefined}
       type={type}
@@ -975,7 +975,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">
             <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>

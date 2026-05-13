@@ -265,7 +265,7 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/95 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
           <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
             <span>内容</span>
             <span>类型</span>
@@ -432,7 +432,7 @@ function LearningResourceModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
       <form
-        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95"
+        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95"
         onSubmit={submit}
       >
         <div className="flex items-start justify-between gap-4">
@@ -483,7 +483,7 @@ function LearningResourceModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">说明</span>
             <textarea
-              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(event) => updateField('description', event.target.value)}
               placeholder="说明资源用途、适合对象、使用边界和注意事项"
               value={form.description}
@@ -527,7 +527,7 @@ function Field({
     <label className="block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <input
-        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+        className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -580,7 +580,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

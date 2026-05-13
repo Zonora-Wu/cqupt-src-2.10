@@ -222,7 +222,7 @@ export function UserPointsMall() {
                     <>
                       <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-white/70 bg-white/95 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
                           <Icon className="h-9 w-9" />
                         </div>
                       </div>
@@ -317,7 +317,7 @@ function RecordsModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-brand-700 dark:text-green-300">Redemption Records</p>
@@ -364,7 +364,7 @@ function ConfirmRedeemModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <h2 className="text-xl font-semibold">确认兑换</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
           将消耗 {product.pointsCost} 积分兑换「{product.name}」。兑换成功后，请凭领取码前往蓝山工作室线下领取。
@@ -416,7 +416,7 @@ function ProductDetailModal({
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -444,7 +444,7 @@ function ProductDetailModal({
             </>
           ) : (
             <div className="flex h-full items-center justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/95 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
                 <Icon className="h-8 w-8" />
               </div>
             </div>

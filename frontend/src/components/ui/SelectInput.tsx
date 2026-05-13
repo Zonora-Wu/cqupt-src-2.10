@@ -30,7 +30,7 @@ export function SelectInput({
     <label className="relative block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <button
-        className="mt-2 flex w-full items-center justify-between rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-left text-sm text-slate-900 outline-none transition hover:bg-white focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+        className="mt-2 flex w-full items-center justify-between rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-left text-sm text-slate-900 outline-none transition hover:bg-white focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
@@ -39,7 +39,7 @@ export function SelectInput({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[80] mt-2 overflow-hidden rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-1 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="absolute left-0 right-0 top-full z-[80] mt-2 overflow-hidden rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-1 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
           {options.map((option) => (
             <button
               className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition ${

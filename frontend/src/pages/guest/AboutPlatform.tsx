@@ -42,7 +42,7 @@ export function AboutPlatform() {
         {values.map((item) => {
           const Icon = item.icon
           return (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]" key={item.title}>
+            <article className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]" key={item.title}>
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
                 <Icon className="h-6 w-6" />
               </div>
@@ -53,7 +53,7 @@ export function AboutPlatform() {
         })}
       </section>
 
-      <section className="mt-16 rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+      <section className="mt-16 rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
         <h2 className="text-2xl font-semibold">平台愿景</h2>
         <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400 [text-indent:2em]">
           平台的核心目标不是简单收集漏洞，而是建立一个可持续的校园安全正循环：学生在真实场景中学习和成长，学校在规范流程中发现和处置风险，学院获得可观测的人才培养数据，最终形成可复制、可推广的高校网络安全产教融合案例。
@@ -64,7 +64,7 @@ export function AboutPlatform() {
         {stakeholders.map((item) => {
           const Icon = item.icon
           return (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-6 text-center backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
+            <article className="rounded-lg border border-black/10 bg-white p-6 text-center backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
               <Icon className="mx-auto mb-4 h-8 w-8 text-brand-700 dark:text-green-300" />
               <h3 className="text-lg font-semibold">{item.label}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.desc}</p>

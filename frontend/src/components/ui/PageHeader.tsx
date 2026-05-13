@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
-  eyebrowIcon: ReactNode
+  eyebrowIcon?: ReactNode
   eyebrow: string
   title: string
   description?: string
@@ -19,7 +19,7 @@ export function PageHeader({ eyebrowIcon, eyebrow, title, description, align = '
         {eyebrowIcon}
         {eyebrow}
       </p>
-      <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
       {description && (
         <p className={`mt-3 max-w-2xl leading-7 text-slate-600 dark:text-slate-400 ${descCenterClass}`}>
           {description}

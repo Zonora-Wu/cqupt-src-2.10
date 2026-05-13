@@ -60,7 +60,7 @@ export function UserAvatarMenu({
 
       {open && (
         <div className="absolute right-0 top-full z-[90] pt-3">
-        <div className="w-44 overflow-hidden rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-1 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="w-44 overflow-hidden rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-1 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
           <MenuItem icon={<CircleUserRound />} label="个人中心" onClick={() => runAndClose(onProfile, setOpen)} />
           <MenuItem icon={<ShieldCheck />} label="账号安全" onClick={() => runAndClose(onAccountSecurity, setOpen)} />
           <MenuItem icon={<Settings2 />} label="系统设置" onClick={() => runAndClose(onSystemSettings, setOpen)} />

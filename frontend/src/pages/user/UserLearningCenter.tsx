@@ -131,7 +131,7 @@ export function UserLearningCenter() {
               {overview.map((item) => {
                 const Icon = item.icon
                 return (
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
+                  <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
                     <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
                     <p className="mt-4 text-3xl font-semibold">{item.value}</p>
                     <p className="mt-1 text-sm font-medium">{item.label}</p>
@@ -155,7 +155,7 @@ export function UserLearningCenter() {
             {learningPath.map((item) => {
               const Icon = item.icon
               return (
-                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
+                <div className="rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
                   <div className="flex items-start gap-3">
                     <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
                     <div>

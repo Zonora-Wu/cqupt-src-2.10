@@ -124,7 +124,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         onDismiss={setDismissedQuotaWarning}
       />
       <motion.div
-        className="w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
+        className="w-full rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-2 shadow-xl shadow-black/5 backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
@@ -219,7 +219,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                     className={`max-w-[760px] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-7 shadow-sm ${
                       isUser
                         ? 'bg-brand-600 text-white'
-                        : 'border border-black/10 bg-white/70 text-slate-700 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200'
+                        : 'border border-black/10 bg-white/95 text-slate-700 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200'
                     }`}
                   >
                     {message.content}
@@ -236,7 +236,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                 transition={{ duration: 0.25, ease: 'easeOut' }}
               >
                 <AssistantAvatar avatarUrl={aiAvatarUrl} thinking />
-                <div className="rounded-lg border border-black/10 bg-white/70 px-4 py-3 text-sm leading-7 text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+                <div className="rounded-lg border border-black/10 bg-white/95 px-4 py-3 text-sm leading-7 text-slate-500 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
                   <TypingIndicator />
                 </div>
               </motion.div>

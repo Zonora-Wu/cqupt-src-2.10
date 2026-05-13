@@ -282,7 +282,7 @@ export function UserMyVulnerabilities() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Sparkles className="h-4 w-4 text-brand-700 dark:text-green-300" />
@@ -303,7 +303,7 @@ export function UserMyVulnerabilities() {
                 <div className="grid gap-2 md:grid-cols-2">
                   {item.attachments.map((attachment) => (
                     <div
-                      className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white/60 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.045]"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.045]"
                       key={attachment.id}
                     >
                       <div className="min-w-0">
@@ -641,7 +641,7 @@ function SupplementMaterialsModal({
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
+      <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/97">
         {/* 头部 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">

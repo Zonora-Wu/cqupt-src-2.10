@@ -548,7 +548,7 @@ export function AdminUserManagement() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+                  <div className="rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
                     <div className="grid gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                       <p>邮箱：{item.emailVerified ? '已验证' : '未验证'}</p>
                       <p>责任书：{item.responsibilitySigned ? '已签署' : '未签署'}</p>
@@ -723,7 +723,7 @@ function RoleModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -750,7 +750,7 @@ function RoleModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">管理员备注</span>
             <textarea
-              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(event) => setReason(event.target.value)}
               placeholder="填写角色调整原因，便于审计追踪"
               value={reason}
@@ -776,7 +776,7 @@ function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; o
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
@@ -845,7 +845,7 @@ function ResetPasswordDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -867,7 +867,7 @@ function ResetPasswordDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">新密码</span>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">默认为 tmp + 统一码，可直接点确认或修改后再确认</p>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(e) => { setPassword(e.target.value); setValidationError('') }}
               placeholder={defaultPassword}
               type="text"
@@ -938,7 +938,7 @@ function AiQuotaDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[560px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[560px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -959,7 +959,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">日 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(e) => { setDailyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={dailyLimit}
@@ -968,7 +968,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">周 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(e) => { setWeeklyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={weeklyLimit}
@@ -977,7 +977,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(e) => { setMonthlyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={monthlyLimit}

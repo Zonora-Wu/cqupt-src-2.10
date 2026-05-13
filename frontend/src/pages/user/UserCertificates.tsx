@@ -240,7 +240,7 @@ export function UserCertificates() {
             </div>
             <div className="mt-5 flex gap-2">
               <input
-                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
+                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
                 onChange={(event) => setQueryCode(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void searchCertificate()
@@ -258,7 +258,7 @@ export function UserCertificates() {
             </div>
 
             {queryTouched && (
-              <div className="mt-4 rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
                 {queryResult ? (
                   <>
                     <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300">
@@ -329,7 +329,7 @@ export function UserCertificates() {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
                       <p className="text-sm font-medium">证书操作</p>
                       <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                         预览会打开完整 PDF；下载会保存后端生成的电子证书文件。

@@ -10,7 +10,6 @@ import {
   Clock3,
   FilePlus2,
   FileSearch,
-  Gauge,
   Lightbulb,
   Moon,
   SearchCheck,
@@ -27,6 +26,7 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { SectionHeader } from '../../components/ui/SectionHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard } from '../../services/dashboard'
@@ -83,10 +83,10 @@ type UserHomeProps = {
 }
 
 const quickActions = [
-  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2 },
-  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target },
-  { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen },
-  { title: '积分商城', description: '查看可兑换奖励和申请记录', icon: Store },
+  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2, meta: '报告入口', cta: '开始提交' },
+  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target, meta: '训练建议', cta: '继续训练' },
+  { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen, meta: '资料库', cta: '查看路径' },
+  { title: '积分商城', description: '查看可兑换奖励和申请记录', icon: Store, meta: '权益中心', cta: '兑换权益' },
 ]
 
 const aiCapabilities = [
@@ -108,15 +108,21 @@ const aiCapabilities = [
 ]
 
 const aiTasks = [
-  { label: '待 AI 补全报告', value: '2', icon: WandSparkles },
-  { label: '建议复测漏洞', value: '1', icon: ClipboardCheck },
-  { label: '今日学习建议', value: '4', icon: Lightbulb },
+  { label: '待 AI 补全报告', value: '2', priority: '高', description: '缺少影响截图与资产边界说明', icon: WandSparkles },
+  { label: '建议复测漏洞', value: '1', priority: '中', description: '责任单位已标记修复完成', icon: ClipboardCheck },
+  { label: '今日学习建议', value: '4', priority: '低', description: '根据靶场进度生成练习清单', icon: Lightbulb },
 ]
 
 const activities = [
-  { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600' },
-  { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500' },
-  { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500' },
+  { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600', type: '报告优化' },
+  { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500', type: '学习推荐' },
+  { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500', type: '训练进度' },
+]
+
+const learningProgress = [
+  { label: '报告完整度', value: '78%', width: 'w-[78%]' },
+  { label: '靶场进度', value: '64%', width: 'w-[64%]' },
+  { label: '本周活跃', value: '5 天', width: 'w-[72%]' },
 ]
 
 const menuItems = [
@@ -213,7 +219,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
   return (
     <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/95 backdrop-blur-sm transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/95">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <div className="flex min-w-0 items-center gap-4">
             <BrandLogo />
@@ -253,7 +259,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             />
           </div>
         </div>
-        <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
+        <div className="border-t border-black/10 px-5 py-2 md:hidden dark:border-white/10">
           <ScrollableNav activeItem={activeMenu} items={menuItems} mobile onChange={setActiveMenu} />
         </div>
       </header>
@@ -296,16 +302,14 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         </Suspense>
       ) : (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-          <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.45fr)_390px]">
+          <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.3fr)_410px]">
             <SurfacePanel
               className="h-full overflow-hidden p-0"
               onMouseLeave={() => {
                 if (!aiPrompt.trim()) setAiFocused(false)
               }}
             >
-              <div className="relative flex min-h-[500px] h-full flex-col p-7 md:p-10">
-                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-brand-600/25 to-transparent dark:via-green-300/25" />
-                <div className="pointer-events-none absolute right-12 top-12 hidden h-40 w-40 rounded-full bg-brand-600/10 blur-3xl md:block dark:bg-green-300/10" />
+              <div className="relative flex min-h-[420px] h-full flex-col p-6 md:p-8">
 
                 <div className="flex h-full flex-col">
                   <div>
@@ -314,8 +318,8 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                       AI Assistant
                     </p>
 
-                    <div className="mt-12 max-w-3xl">
-                      <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
+                    <div className="mt-10 max-w-3xl">
+                      <h1 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
                         欢迎回来，{user.name}
                         <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给 AI 先整理一遍。</span>
                       </h1>
@@ -325,7 +329,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     </div>
                   </div>
 
-                  <div className="mt-auto pt-12">
+                  <div className="mt-auto pt-10">
                     <div
                       className={`group flex w-full items-center justify-between gap-4 rounded-lg border px-5 py-4 text-left shadow-sm transition-all duration-500 ease-out ${
                         aiFocused
@@ -394,53 +398,50 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             </SurfacePanel>
 
             <div className="grid h-full gap-5 xl:grid-rows-[auto_1fr]">
-              <SurfacePanel className="p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">个人数据汇总</p>
-                    <h2 className="mt-1 text-xl font-semibold">安全实践概览</h2>
-                  </div>
-                  <ShieldCheck className="h-9 w-9 text-brand-700 dark:text-green-300" />
+              <SurfacePanel className="overflow-hidden p-0">
+                <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
+                  <SectionHeader description="漏洞提交、积分、证书与训练状态" title="个人安全实践看板" />
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  {stats.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <div
-                        className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
-                        key={item.label}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                          <span className="text-2xl font-semibold">{item.value}</span>
-                        </div>
-                        <p className="mt-2 text-sm font-medium">{item.label}</p>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+                <div className="grid grid-cols-2 gap-px bg-black/10 dark:bg-white/10">
+                  {stats.map((item) => (
+                    <div className="bg-white p-4 dark:bg-[#131a15]" key={item.label}>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{item.label}</p>
+                      <p className="mt-2 text-2xl font-semibold tracking-tight">{item.value}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-500">{item.hint}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-3 p-5">
+                  {learningProgress.map((item) => (
+                    <div key={item.label}>
+                      <div className="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>{item.label}</span>
+                        <span>{item.value}</span>
                       </div>
-                    )
-                  })}
+                      <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10">
+                        <div className={`h-full rounded-full bg-brand-600 dark:bg-green-300 ${item.width}`} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </SurfacePanel>
 
-              <SurfacePanel className="flex h-full flex-col p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">AI 今日待办</p>
-                    <h2 className="mt-1 text-xl font-semibold">智能体已生成 7 条建议</h2>
-                  </div>
-                  <Gauge className="h-9 w-9 text-brand-700 dark:text-green-300" />
+              <SurfacePanel className="flex h-full flex-col overflow-hidden p-0">
+                <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
+                  <SectionHeader description="智能体已生成 7 条建议" title="AI 今日待办" />
                 </div>
-                <div className="mt-4 grid flex-1 content-start gap-3">
+                <div className="grid flex-1 content-start divide-y divide-black/10 dark:divide-white/10">
                   {aiTasks.map((item) => {
                     const Icon = item.icon
                     return (
-                      <div
-                        className="flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
-                        key={item.label}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                          <span className="text-sm">{item.label}</span>
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-5 py-4" key={item.label}>
+                        <Icon className="mt-1 h-4 w-4 text-brand-700 dark:text-green-300" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{item.label}</p>
+                            <span className="rounded-md border border-black/10 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{item.priority}</span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
                         </div>
                         <span className="text-lg font-semibold">{item.value}</span>
                       </div>
@@ -452,46 +453,62 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-            <SurfacePanel className="p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold">快捷入口</h2>
-                <Clock3 className="h-5 w-5 text-slate-400" />
+            <SurfacePanel className="overflow-hidden p-0">
+              <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
+                <div className="flex items-center justify-between gap-4">
+                  <SectionHeader description="按常用工作流组织入口" title="快捷工作流" />
+                  <Clock3 className="h-5 w-5 text-slate-400" />
+                </div>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {quickActions.map((item) => {
+              <div className="divide-y divide-black/10 dark:divide-white/10">
+                {quickActions.map((item, index) => {
                   const Icon = item.icon
                   return (
                     <button
-                      className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
+                      className="group grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 text-left transition hover:bg-brand-600/[0.04] dark:hover:bg-green-300/[0.04]"
                       key={item.title}
                       onClick={() => setActiveMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
                       type="button"
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
-                        <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
-                      </div>
-                      <p className="mt-4 font-semibold">{item.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                      <span className="flex h-10 w-10 items-center justify-center rounded-md border border-brand-600/15 bg-brand-600/[0.04] text-brand-700 dark:border-green-300/20 dark:bg-green-300/[0.05] dark:text-green-300">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-slate-400">0{index + 1}</span>
+                          <span className="font-semibold">{item.title}</span>
+                          <span className="rounded-md border border-black/10 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{item.meta}</span>
+                        </span>
+                        <span className="mt-1 block truncate text-sm text-slate-500 dark:text-slate-400">{item.description}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 dark:text-green-300">
+                        {item.cta}
+                        <ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" />
+                      </span>
                     </button>
                   )
                 })}
               </div>
             </SurfacePanel>
 
-            <SurfacePanel className="p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold">AI 动态与学习提醒</h2>
-                <Sparkles className="h-5 w-5 text-slate-400" />
+            <SurfacePanel className="overflow-hidden p-0">
+              <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
+                <div className="flex items-center justify-between gap-4">
+                  <SectionHeader description="按时间线汇总 AI 与学习系统动作" title="动态与学习提醒" />
+                  <Sparkles className="h-5 w-5 text-slate-400" />
+                </div>
               </div>
-              <div className="mt-5 space-y-4">
+              <div className="divide-y divide-black/10 dark:divide-white/10">
                 {activities.map((item) => (
-                  <div className="flex gap-4 rounded-lg border border-black/5 p-4 dark:border-white/10" key={item.title}>
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone}`} />
-                    <div>
-                      <p className="font-medium">{item.title}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.time}</p>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)_76px] gap-4 px-5 py-4 text-sm" key={item.title}>
+                    <span className="w-fit rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.type}</span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{item.title}</p>
+                      <div className="mt-2 h-1 rounded-full bg-black/10 dark:bg-white/10">
+                        <div className={`h-full w-1/2 rounded-full ${item.tone}`} />
+                      </div>
                     </div>
+                    <span className="text-right text-xs text-slate-500 dark:text-slate-400">{item.time}</span>
                   </div>
                 ))}
               </div>

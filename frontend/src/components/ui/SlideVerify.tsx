@@ -210,7 +210,7 @@ export function SlideVerify({
         className={`relative flex h-10 touch-none items-center overflow-hidden rounded-lg border transition ${
           verified
             ? 'border-brand-600/30 bg-brand-600/10 dark:border-brand-300/25 dark:bg-brand-300/10'
-            : 'border-black/10 bg-white/70 dark:border-white/10 dark:bg-white/5'
+            : 'border-black/10 bg-white/95 dark:border-white/10 dark:bg-white/5'
         }`}
         ref={trackRef}
         role="slider"

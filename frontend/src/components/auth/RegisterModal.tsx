@@ -161,7 +161,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -215,7 +215,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               <label className="relative block">
                 <GraduationCap className="absolute left-3 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
                 <select
-                  className="w-full appearance-none rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                  className="w-full appearance-none rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
                   onChange={(event) => updateField('identityText', event.target.value)}
                   required
                   value={form.identityText}
@@ -241,7 +241,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               <div className="flex gap-3">
                 <Input className="flex-1" icon={<Mail />} onChange={(value) => updateField('code', value)} placeholder="邮箱验证码" required type="text" value={form.code} />
                 <button
-                  className="rounded-lg border border-black/10 bg-white/70 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                  className="rounded-lg border border-black/10 bg-white/95 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                   disabled={countdown > 0 || sendingCode}
                   onClick={() => void handleSendCode()}
                   type="button"
@@ -254,7 +254,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 <div className="group relative">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
                   <input
-                    className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                    className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
                     onChange={(event) => updateField('password', event.target.value)}
                     placeholder="密码"
                     required
@@ -316,7 +316,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               )}
             </form>
 
-            <footer className="mt-5 border-t border-black/5 pt-5 text-center text-sm dark:border-white/5">
+            <footer className="mt-5 border-t border-black/10 pt-5 text-center text-sm dark:border-white/5">
               <button className="text-slate-500 transition hover:text-brand-800 dark:text-white/45 dark:hover:text-brand-100" onClick={onSwitchToLogin} type="button">
                 已有账号？立即登录
               </button>
@@ -356,7 +356,7 @@ function Input({
         {icon}
       </span>
       <input
-        className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+        className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
         onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder}
         required={required}
@@ -370,7 +370,7 @@ function Input({
 function CheckboxText({ required, text }: { required?: boolean; text: string }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600 transition hover:text-slate-900 dark:text-white/60 dark:hover:text-white/80">
-      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/70 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
+      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/95 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
       <span>{text}</span>
     </label>
   )

@@ -461,7 +461,7 @@ function EditAnnouncementModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -479,7 +479,7 @@ function EditAnnouncementModal({
         <div className="mt-6 grid gap-4">
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</span>
-            <input className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="请输入公告标题" value={form.title} />
+            <input className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="请输入公告标题" value={form.title} />
           </label>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -490,12 +490,12 @@ function EditAnnouncementModal({
 
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告摘要</span>
-            <textarea className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} placeholder="用于公告列表展示的简短说明" value={form.summary} />
+            <textarea className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} placeholder="用于公告列表展示的简短说明" value={form.summary} />
           </label>
 
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告正文</span>
-            <textarea className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} placeholder="请输入公告正文，支持分段" value={form.content} />
+            <textarea className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white" onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} placeholder="请输入公告正文，支持分段" value={form.content} />
           </label>
 
           <AlertMessage message="公告中如涉及漏洞细节、测试边界或敏感数据，请确认内容已脱敏且符合平台公开规则。" variant="warning" />
@@ -529,7 +529,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

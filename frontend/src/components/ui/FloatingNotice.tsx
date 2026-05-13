@@ -29,7 +29,7 @@ export function FloatingNotice({ message, onClose, variant = 'info' }: FloatingN
   return (
     <div className="pointer-events-none fixed right-5 top-24 z-[120] w-[min(360px,calc(100vw-40px))]">
       <div
-        className={`pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${variantStyles[variant]}`}
+        className={`pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-sm ${variantStyles[variant]}`}
         role={variant === 'error' || variant === 'warning' ? 'alert' : 'status'}
       >
         <span className="shrink-0">{iconMap[variant]}</span>
