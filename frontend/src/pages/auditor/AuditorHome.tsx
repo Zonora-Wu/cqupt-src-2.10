@@ -306,7 +306,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch { /* ignore storage access errors */ }
+    try { localStorage.setItem('cqupt-theme', theme) } catch {}
   }, [theme])
 
   return (

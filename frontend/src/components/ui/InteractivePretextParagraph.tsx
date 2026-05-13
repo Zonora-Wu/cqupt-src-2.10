@@ -40,10 +40,6 @@ export function InteractivePretextParagraph({
   const [isEnabled, setIsEnabled] = useState(true)
 
   const characterOffsets = useMemo(() => {
-    // The pointer-following effect must use the latest viewport rect because the
-    // intro block moves while the page scrolls. Reading the ref here keeps the
-    // hover displacement aligned with the actual on-screen text.
-    // eslint-disable-next-line react-hooks/refs
     const pointer = getLocalPointer(containerRef.current, pagePointer)
     if (!pointer) return characters.map(() => zeroOffset())
 

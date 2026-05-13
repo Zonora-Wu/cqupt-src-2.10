@@ -28,7 +28,7 @@ type StoredSession = {
 }
 
 const AUTH_SESSION_KEY = 'cqupt-src-auth-session'
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
 
 export class ApiError extends Error {
   data: unknown
