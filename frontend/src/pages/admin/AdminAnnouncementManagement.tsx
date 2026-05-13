@@ -169,7 +169,7 @@ export function AdminAnnouncementManagement() {
 
 
           <article className="mt-5 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
-            <SurfacePanel className="p-5 lg:sticky lg:top-24">
+            <SurfacePanel className="max-h-[calc(100vh-5rem)] overflow-y-auto p-5 lg:sticky lg:top-20 lg:self-start">
               <div className="flex flex-wrap items-center gap-2">
                 <CategoryBadge category={selectedAnnouncement.category} />
                 <StatusBadge status={selectedAnnouncement.status} />
@@ -227,7 +227,7 @@ export function AdminAnnouncementManagement() {
             <SurfacePanel className="p-6 md:p-8">
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">公告详情</p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight">{selectedAnnouncement.title}</h2>
-              <p className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+              <p className="mt-4 rounded-lg border border-black/10 bg-[#f7f9f7] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-[#0f1511] dark:text-slate-400">
                 {selectedAnnouncement.summary}
               </p>
               <div className="mt-6 whitespace-pre-line text-base leading-8 text-slate-700 dark:text-slate-300">
@@ -325,7 +325,7 @@ export function AdminAnnouncementManagement() {
 
           {!loading &&
             filteredAnnouncements.map((item) => (
-              <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
+              <SurfacePanel className="p-4 transition hover:border-brand-600/30 hover:bg-brand-600/[0.04] dark:hover:bg-green-300/[0.04]" key={item.id}>
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -461,7 +461,7 @@ function EditAnnouncementModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -529,7 +529,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

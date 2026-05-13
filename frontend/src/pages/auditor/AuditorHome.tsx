@@ -27,6 +27,7 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { ModalShell } from '../../components/ui/ModalShell'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -408,7 +409,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
           const Icon = item.icon
           return (
             <button
-              className="rounded-lg border border-black/10 bg-white/95 p-5 text-left shadow-sm backdrop-blur-sm transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-white/[0.035]"
+              className="rounded-lg border border-black/10 bg-white/95 p-5 text-left shadow-sm transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-[#131a15]"
               key={item.label}
               onClick={() => onNavigate(item.menu)}
               type="button"
@@ -432,7 +433,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
           </div>
           <div className="mt-5 space-y-3">
             {reviewReports.slice(0, 3).map((item) => (
-              <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.id}>
+              <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]" key={item.id}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
                   <LevelBadge level={item.level} />
@@ -453,7 +454,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
             <Bot className="h-5 w-5 text-brand-700 dark:text-green-300" />
           </div>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
               <p className="font-medium">建议优先处理统一认证相关报告</p>
               <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">该类漏洞影响面较大，应先确认授权边界、复现材料和实际风险。</p>
             </div>
@@ -578,7 +579,7 @@ export function AuditorReviewQueue() {
           </button>
           {done && <SuccessNotice>{done}</SuccessNotice>}
           <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+            <div className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
               <SurfacePanel className="p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{selectedReport.id}</span>
@@ -686,7 +687,7 @@ export function AuditorReviewQueue() {
                 </section>
                 <section className="mt-5">
                   <h3 className="text-sm font-semibold">复现步骤</h3>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-7 dark:border-white/10 dark:bg-white/[0.035]">
+                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-7 dark:border-white/10 dark:bg-[#131a15]">
                     {selectedReport.reproduce}
                   </pre>
                 </section>
@@ -700,7 +701,7 @@ export function AuditorReviewQueue() {
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {selectedReport.attachments.map((attachment) => (
                         <div
-                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.035]"
+                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-[#131a15]"
                           key={attachment.id}
                         >
                           <div className="min-w-0">
@@ -1273,9 +1274,8 @@ function EditAuditorAnnouncementModal({
   if (!announcement) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
-        <div className="flex items-start justify-between gap-4">
+    <ModalShell maxWidth="xl" onClose={onClose} scrollable>
+      <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
               <PenLine className="h-5 w-5" />
@@ -1347,8 +1347,7 @@ function EditAuditorAnnouncementModal({
             保存草稿
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   )
 }
 
@@ -1549,7 +1548,7 @@ function RetestStatusBadge({ status }: { status: RetestStatus }) {
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
@@ -1593,12 +1592,8 @@ function RetestActionDialog({
   const noteValid = note.trim().length >= 4
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
-    >
-      <div className="w-full max-w-[520px] rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/97">
-        <div className="flex items-start gap-3">
+    <ModalShell className="rounded-lg" onClose={onCancel}>
+      <div className="flex items-start gap-3">
           <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -1646,8 +1641,7 @@ function RetestActionDialog({
             {submitting ? '提交中...' : meta.label}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   )
 }
 
@@ -1663,9 +1657,8 @@ function ConfirmDialog({
   if (!state) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
-        <div className="flex gap-3">
+    <ModalShell onClose={onCancel}>
+      <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -1698,7 +1691,6 @@ function ConfirmDialog({
             {state.confirmLabel ?? '确认'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   )
 }

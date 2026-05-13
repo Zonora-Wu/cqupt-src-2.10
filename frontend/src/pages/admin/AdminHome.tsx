@@ -317,7 +317,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
               </div>
               <div className="mt-5 space-y-3">
                 {auditLogs.map((item) => (
-                  <div className="grid gap-3 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm md:grid-cols-[160px_minmax(0,1fr)_80px] dark:border-white/10 dark:bg-white/[0.035]" key={`${item.action}-${item.time}`}>
+                  <div className="grid gap-3 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm md:grid-cols-[160px_minmax(0,1fr)_80px] dark:border-white/10 dark:bg-[#131a15]" key={`${item.action}-${item.time}`}>
                     <span className="font-medium">{item.action}</span>
                     <span className="text-slate-500 dark:text-slate-400">
                       {item.actor} · {item.target}
@@ -334,7 +334,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
                 <ServerCog className="h-5 w-5 text-brand-700 dark:text-green-300" />
               </div>
               <div className="mt-5 space-y-3 text-sm">
-                <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
                   <p className="font-medium">已完成初评 23 份报告</p>
                   <p className="mt-2 text-slate-500 dark:text-slate-400">标记高价值 4 份，材料不完整 6 份，疑似重复 2 份。</p>
                 </div>

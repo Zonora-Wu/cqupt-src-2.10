@@ -40,13 +40,13 @@ export function CertificateVerify() {
         </p>
       </section>
 
-      <section className="mx-auto mt-14 max-w-3xl rounded-lg border border-black/10 bg-white p-6 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+      <section className="mx-auto mt-14 max-w-3xl rounded-lg border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#131a15]">
         <label className="mb-3 block text-sm font-medium text-slate-700 dark:text-slate-300">证书编号</label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
-              className="w-full rounded-lg border border-black/10 bg-white py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-black/20 dark:text-white dark:placeholder:text-slate-600"
+              className="w-full rounded-lg border border-black/10 bg-white py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-[#131a15] dark:text-white dark:placeholder:text-slate-600"
               onChange={(event) => setCertificateNo(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void searchCertificate()
@@ -89,7 +89,7 @@ export function CertificateVerify() {
       </section>
 
       <section className="mt-14 grid gap-6 lg:grid-cols-2">
-        <article className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
               <CheckCircle2 className="h-6 w-6" />
@@ -98,14 +98,14 @@ export function CertificateVerify() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {visibleFields.map((item) => (
-              <div className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-black/20" key={item}>
+              <div className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-[#131a15]" key={item}>
                 {item}
               </div>
             ))}
           </div>
         </article>
 
-        <article className="rounded-lg border border-red-500/20 bg-red-500/5 p-7 backdrop-blur-sm">
+        <article className="rounded-lg border border-red-500/20 bg-red-500/5 p-7">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-300">
               <LockKeyhole className="h-6 w-6" />
@@ -114,7 +114,7 @@ export function CertificateVerify() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {hiddenFields.map((item) => (
-              <div className="rounded-lg border border-red-500/15 bg-white/60 p-3 text-sm dark:bg-black/20" key={item}>
+              <div className="rounded-lg border border-red-500/15 bg-white/60 p-3 text-sm dark:bg-[#131a15]" key={item}>
                 {item}
               </div>
             ))}

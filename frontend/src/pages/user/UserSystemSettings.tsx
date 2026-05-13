@@ -74,7 +74,7 @@ export function UserSystemSettings({
   return (
     <>
       <FloatingNotice message={message} variant="success" onClose={() => setMessage('')} />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrow="Device Settings"
@@ -84,8 +84,8 @@ export function UserSystemSettings({
           />
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="xl:sticky xl:top-24 xl:self-start">
+        <div className="mt-6 flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:flex-row">
+          <aside className="shrink-0 lg:max-h-full lg:overflow-y-auto lg:w-[280px] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
             <SurfacePanel className="overflow-hidden p-0">
               <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
                 <p className="text-sm font-semibold">设置</p>
@@ -116,7 +116,7 @@ export function UserSystemSettings({
             </SurfacePanel>
           </aside>
 
-          <div className="space-y-6">
+          <div className="min-w-0 flex-1 space-y-6 lg:overflow-y-auto lg:pb-8 lg:pr-2 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
             {activeCategory === 'appearance' && (
               <SettingsCard
                 description="调整平台在当前设备上的视觉显示模式和界面行为。"

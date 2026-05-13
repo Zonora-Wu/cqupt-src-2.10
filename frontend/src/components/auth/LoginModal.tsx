@@ -136,7 +136,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl dark:border-white/10 dark:bg-[#131a15] dark:text-white"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >

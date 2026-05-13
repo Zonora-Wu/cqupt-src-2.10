@@ -59,8 +59,8 @@ export function UserAccountSecurity() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="xl:sticky xl:top-24 xl:self-start">
+      <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+        <aside className="shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:w-[280px]">
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
               <p className="text-sm font-semibold">安全中心</p>
@@ -95,7 +95,7 @@ export function UserAccountSecurity() {
           </SurfacePanel>
         </aside>
 
-        <div>
+        <div className="min-w-0 flex-1">
           {activeTab === 'overview' && <SecurityOverview onViewLogin={() => setActiveTab('login')} onViewOps={() => setActiveTab('operations')} />}
           {activeTab === 'login' && <LoginHistory />}
           {activeTab === 'operations' && <OperationLogs />}

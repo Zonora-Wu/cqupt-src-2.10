@@ -14,7 +14,6 @@ import {
   Send,
   Shield,
   SlidersHorizontal,
-  Star,
   UserRound,
   X,
   XCircle,
@@ -119,35 +118,28 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
 
       {profileError && <AlertMessage className="mt-4" message={profileError} variant="error" />}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        {/* ── 左栏：头像与基础信息 */}
-        <div className="space-y-5">
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="flex flex-col items-center gap-3 px-6 pb-5 pt-7">
-              <div className="relative">
-                <button
-                  className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full ring-2 ring-brand-600/30 transition hover:ring-brand-600 focus:outline-none focus:ring-brand-600 disabled:cursor-not-allowed"
-                  disabled={avatarUploading}
-                  onClick={() => avatarInputRef.current?.click()}
-                  title="点击更换头像"
-                  type="button"
-                >
-                  {avatarUrl ? (
-                    <img alt="用户头像" className="h-full w-full object-cover" src={avatarUrl} />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-brand-600 text-3xl font-semibold text-white">
-                      {displayName.slice(0, 1)}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
-                    {avatarUploading ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-white" />
-                    ) : (
-                      <Camera className="h-6 w-6 text-white" />
-                    )}
+      <SurfacePanel className="mt-6 overflow-hidden p-0">
+        <div className="grid gap-0 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="border-b border-black/10 bg-[#f7f9f7] p-6 dark:border-white/10 dark:bg-[#0f1511] xl:border-b-0 xl:border-r">
+            <div className="flex flex-col items-center text-center">
+              <button
+                className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full ring-2 ring-brand-600/30 transition hover:ring-brand-600 focus:outline-none focus:ring-brand-600 disabled:cursor-not-allowed"
+                disabled={avatarUploading}
+                onClick={() => avatarInputRef.current?.click()}
+                title="点击更换头像"
+                type="button"
+              >
+                {avatarUrl ? (
+                  <img alt="用户头像" className="h-full w-full object-cover" src={avatarUrl} />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-brand-600 text-3xl font-semibold text-white">
+                    {displayName.slice(0, 1)}
                   </div>
-                </button>
-              </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
+                  {avatarUploading ? <Loader2 className="h-6 w-6 animate-spin text-white" /> : <Camera className="h-6 w-6 text-white" />}
+                </div>
+              </button>
               <input
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 aria-label="上传头像"
@@ -157,19 +149,17 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
                 type="file"
               />
               {avatarNotice ? (
-                <p className={`text-xs ${avatarNotice.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                <p className={`mt-3 text-xs ${avatarNotice.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
                   {avatarNotice.text}
                 </p>
               ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500">点击头像修改，≤ 2MB</p>
+                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">点击头像修改，≤ 2MB</p>
               )}
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{displayName}</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{account?.roleLabel ?? '学生用户'}</p>
-              </div>
+              <h2 className="mt-4 text-2xl font-semibold text-slate-950 dark:text-white">{displayName}</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{account?.roleLabel ?? '学生用户'}</p>
             </div>
 
-            <div className="border-t border-black/10 dark:border-white/10">
+            <div className="mt-6 space-y-3">
               {[
                 ['统一认证码', account?.unifiedCode ?? user.unifiedCode],
                 ['所属学院', account?.college || '未填写'],
@@ -177,177 +167,137 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
                 ['授权级别', formatAuthorizationLevel(account?.authorizationLevel)],
                 ['账号状态', formatUserStatus(account?.status)],
               ].map(([label, value]) => (
-                <div className="flex items-center justify-between gap-4 px-6 py-3 text-sm odd:bg-black/[0.02] dark:odd:bg-white/[0.02]" key={label}>
-                  <span className="text-slate-500 dark:text-slate-400">{label}</span>
-                  <span className="font-medium text-slate-900 dark:text-white">{value}</span>
+                <div className="rounded-lg border border-black/10 bg-white px-4 py-3 text-sm dark:border-white/10 dark:bg-[#131a15]" key={label}>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                  <p className="mt-1 font-medium text-slate-900 dark:text-white">{value}</p>
                 </div>
               ))}
             </div>
-          </SurfacePanel>
+          </div>
 
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Bot className="h-4 w-4 text-brand-600 dark:text-green-300" />
-                AI token 额度
-              </div>
-            </div>
-            <div className="px-5 py-4">
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{getQuotaPeriodLabel(aiQuota?.quotaPeriod)}剩余</p>
-                  <p className="mt-1 text-2xl font-semibold">{formatNumber(aiQuota?.remaining ?? 0)}</p>
-                </div>
-                <div className="text-right text-xs text-slate-500 dark:text-slate-400">
-                  <p>总额度 {formatNumber(aiQuota?.activeLimit ?? 0)}</p>
-                  <p>已使用 {formatNumber(aiQuota?.usedThisPeriod ?? 0)}</p>
-                </div>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                <div
-                  className="h-full rounded-full bg-brand-600 transition-all dark:bg-green-300"
-                  style={{ width: `${Math.min(100, Math.max(0, aiQuota?.usedPercent ?? 0))}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                {aiQuota?.enabled === false ? 'AI 助手已停用，请联系管理员。' : `下次重置：${formatDate(aiQuota?.resetAt)}`}
-              </p>
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Star className="h-4 w-4 text-brand-600 dark:text-green-300" />
-                个人积分统计
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-0 divide-x divide-y divide-black/10 dark:divide-white/10">
-              <StatCell label="总积分" value={stats?.currentPoints ?? 0} />
-              <StatCell label="漏洞提交" value={stats?.submittedReports ?? 0} />
-              <StatCell label="有效漏洞" value={stats?.validReports ?? 0} />
-              <StatCell label="证书数量" value={stats?.certificates ?? 0} />
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Shield className="h-4 w-4 text-brand-600 dark:text-green-300" />
-                安全准入状态
-              </div>
-            </div>
-            <div className="divide-y divide-black/10 px-5 py-1 dark:divide-white/10">
-              <AgreementRow
-                detail={responsibility ? `${responsibility.version} · ${formatDate(responsibility.signedAt)}` : '提交漏洞前需签署当前版本'}
-                label="CQUPT-SRC 授权测试责任书"
-                signed={Boolean(responsibility)}
-              />
-              <AgreementRow
-                detail={securityExam ? `${securityExam.score ?? '--'} 分 · ${formatDate(securityExam.submittedAt)}` : '按系统设置决定是否强制'}
-                label="安全准入答题"
-                signed={securityExam?.passed ?? false}
-              />
-            </div>
-          </SurfacePanel>
-        </div>
-
-        {/* ── 右栏：账号安全设置 */}
-        <div className="space-y-5">
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
-                <Mail className="h-5 w-5" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">邮箱绑定</h2>
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                绑定邮箱用于接收系统通知和安全验证，修改时需先验证当前邮箱。
-              </p>
-            </div>
-            <div className="grid gap-4 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="p-6 md:p-7">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">当前绑定邮箱</p>
-                <p className="mt-1 font-mono text-sm font-semibold text-slate-950 dark:text-white">
-                  {isLoadingProfile ? '加载中...' : (account?.email || '未绑定')}
-                </p>
-                {account?.emailVerified && (
-                  <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    已验证
-                  </span>
-                )}
-              </div>
-              <button
-                className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                onClick={() => setShowEmailModal(true)}
-                type="button"
-              >
-                <Pencil className="h-4 w-4" />
-                修改邮箱
-              </button>
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
-                <KeyRound className="h-5 w-5" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">登录密码</h2>
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                通过邮箱验证码修改密码，无需输入当前密码。修改后其他设备将自动退出登录。
-              </p>
-            </div>
-            <div className="grid gap-4 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-              <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">上次登录</p>
-                <p className="mt-1 text-sm font-medium text-slate-950 dark:text-white">
-                  {account?.lastLoginAt ? formatDate(account.lastLoginAt) : '暂无记录'}
+                <p className="text-sm font-medium text-brand-700 dark:text-green-300">Account Console</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight">账号与安全工作台</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  将个人信息、积分、AI 额度和安全准入状态合并到一个操作台，不再用左窄右宽的碎片化卡片堆叠。
                 </p>
               </div>
-              <button
-                className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                onClick={() => setShowPasswordModal(true)}
-                type="button"
-              >
-                <Pencil className="h-4 w-4" />
-                修改密码
-              </button>
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel className="overflow-hidden p-0">
-            <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
-                <SlidersHorizontal className="h-5 w-5" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">账号详情</h2>
+              <div className="flex items-start gap-3 rounded-lg border border-black/10 bg-[#f7f9f7] px-4 py-3 text-sm text-slate-500 dark:border-white/10 dark:bg-[#0f1511] dark:text-slate-400">
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600/70 dark:text-green-300/70" />
+                {isLoadingProfile ? '正在同步账号信息...' : '邮箱变更、密码修改等敏感操作会进入安全审计。'}
               </div>
             </div>
-            <div className="divide-y divide-black/10 dark:divide-white/10">
-              {[
-                ['统一认证码', account?.unifiedCode ?? user.unifiedCode],
-                ['学号', account?.studentNo || '未填写'],
-                ['年级', account?.grade || '未填写'],
-                ['所属学院', account?.college || '未填写'],
-                ['账号角色', account?.roleLabel ?? '学生用户'],
-                ['授权级别', formatAuthorizationLevel(account?.authorizationLevel)],
-                ['注册时间', account?.createdAt ? formatDate(account.createdAt) : '—'],
-                ['上次登录', account?.lastLoginAt ? formatDate(account.lastLoginAt) : '—'],
-              ].map(([label, value]) => (
-                <div className="grid gap-4 px-6 py-3.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" key={label}>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-                  <p className="min-w-0 text-right text-sm font-medium text-slate-950 dark:text-white">{value}</p>
-                </div>
-              ))}
-            </div>
-          </SurfacePanel>
 
-          <div className="flex items-start gap-3 rounded-lg border border-black/10 px-4 py-3.5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
-            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600/70 dark:text-green-300/70" />
-            {isLoadingProfile ? '正在同步账号信息...' : '邮箱变更、密码修改等操作会记录操作时间、来源 IP、用户代理和操作结果，便于安全审计。'}
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]"><StatCell label="总积分" value={stats?.currentPoints ?? 0} /></div>
+              <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]"><StatCell label="漏洞提交" value={stats?.submittedReports ?? 0} /></div>
+              <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]"><StatCell label="有效漏洞" value={stats?.validReports ?? 0} /></div>
+              <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]"><StatCell label="证书数量" value={stats?.certificates ?? 0} /></div>
+            </div>
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-2">
+              <div className="rounded-lg border border-black/10 p-5 dark:border-white/10">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+                      <Bot className="h-4 w-4" />
+                      <h3 className="font-semibold text-slate-950 dark:text-white">AI token 额度</h3>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{getQuotaPeriodLabel(aiQuota?.quotaPeriod)}剩余</p>
+                  </div>
+                  <p className="text-2xl font-semibold">{formatNumber(aiQuota?.remaining ?? 0)}</p>
+                </div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-brand-600 transition-all dark:bg-green-300" style={{ width: `${Math.min(100, Math.max(0, aiQuota?.usedPercent ?? 0))}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  总额度 {formatNumber(aiQuota?.activeLimit ?? 0)} · 已使用 {formatNumber(aiQuota?.usedThisPeriod ?? 0)} · {aiQuota?.enabled === false ? 'AI 助手已停用' : `下次重置：${formatDate(aiQuota?.resetAt)}`}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-black/10 p-5 dark:border-white/10">
+                <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+                  <Shield className="h-4 w-4" />
+                  <h3 className="font-semibold text-slate-950 dark:text-white">安全准入状态</h3>
+                </div>
+                <div className="mt-3 divide-y divide-black/10 dark:divide-white/10">
+                  <AgreementRow detail={responsibility ? `${responsibility.version} · ${formatDate(responsibility.signedAt)}` : '提交漏洞前需签署当前版本'} label="CQUPT-SRC 授权测试责任书" signed={Boolean(responsibility)} />
+                  <AgreementRow detail={securityExam ? `${securityExam.score ?? '--'} 分 · ${formatDate(securityExam.submittedAt)}` : '按系统设置决定是否强制'} label="安全准入答题" signed={securityExam?.passed ?? false} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+      </SurfacePanel>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <SurfacePanel className="overflow-hidden p-0">
+          <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <Mail className="h-5 w-5" />
+              <h2 className="text-xl font-semibold text-slate-950 dark:text-white">邮箱绑定</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">绑定邮箱用于通知和安全验证，修改前需验证当前邮箱。</p>
+          </div>
+          <div className="grid gap-4 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">当前绑定邮箱</p>
+              <p className="mt-1 font-mono text-sm font-semibold text-slate-950 dark:text-white">{isLoadingProfile ? '加载中...' : (account?.email || '未绑定')}</p>
+              {account?.emailVerified && <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" />已验证</span>}
+            </div>
+            <button className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:text-slate-300 dark:hover:text-green-300" onClick={() => setShowEmailModal(true)} type="button">
+              <Pencil className="h-4 w-4" />修改邮箱
+            </button>
+          </div>
+        </SurfacePanel>
+
+        <SurfacePanel className="overflow-hidden p-0">
+          <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <KeyRound className="h-5 w-5" />
+              <h2 className="text-xl font-semibold text-slate-950 dark:text-white">登录密码</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">支持旧密码或邮箱验证码修改，修改后其他设备将退出登录。</p>
+          </div>
+          <div className="grid gap-4 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">上次登录</p>
+              <p className="mt-1 text-sm font-medium text-slate-950 dark:text-white">{account?.lastLoginAt ? formatDate(account.lastLoginAt) : '暂无记录'}</p>
+            </div>
+            <button className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:text-slate-300 dark:hover:text-green-300" onClick={() => setShowPasswordModal(true)} type="button">
+              <Pencil className="h-4 w-4" />修改密码
+            </button>
+          </div>
+        </SurfacePanel>
       </div>
+
+      <SurfacePanel className="mt-4 overflow-hidden p-0">
+        <div className="border-b border-black/10 px-6 py-4 dark:border-white/10">
+          <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <SlidersHorizontal className="h-5 w-5" />
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-white">账号详情</h2>
+          </div>
+        </div>
+        <div className="grid gap-px bg-black/10 dark:bg-white/10 md:grid-cols-4">
+          {[
+            ['统一认证码', account?.unifiedCode ?? user.unifiedCode],
+            ['学号', account?.studentNo || '未填写'],
+            ['年级', account?.grade || '未填写'],
+            ['所属学院', account?.college || '未填写'],
+            ['账号角色', account?.roleLabel ?? '学生用户'],
+            ['授权级别', formatAuthorizationLevel(account?.authorizationLevel)],
+            ['注册时间', account?.createdAt ? formatDate(account.createdAt) : '—'],
+            ['上次登录', account?.lastLoginAt ? formatDate(account.lastLoginAt) : '—'],
+          ].map(([label, value]) => (
+            <div className="bg-white px-5 py-4 dark:bg-[#131a15]" key={label}>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+              <p className="mt-1 truncate text-sm font-medium text-slate-950 dark:text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+      </SurfacePanel>
 
       {showEmailModal && (
         <ChangeEmailModal
@@ -750,7 +700,7 @@ function Modal({ children, onClose, title }: { children: ReactNode; onClose: () 
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl dark:border-white/10 dark:bg-[#131a15] dark:text-white"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >

@@ -56,7 +56,7 @@ export function UserLeaderboard() {
       </div>
 
       <div className="mt-7 flex justify-center">
-        <div className="inline-flex rounded-lg border border-black/10 bg-white/90 p-1 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="inline-flex rounded-lg border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-[#131a15]">
           {tabs.map((tab) => (
             <button
               className={`rounded-md px-5 py-2 text-sm font-medium transition ${

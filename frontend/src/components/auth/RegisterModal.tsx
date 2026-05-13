@@ -161,7 +161,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#131a15] dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >

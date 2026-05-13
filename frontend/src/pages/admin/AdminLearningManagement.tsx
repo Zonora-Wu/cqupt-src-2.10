@@ -265,17 +265,8 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/95 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
-          <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
-            <span>内容</span>
-            <span>类型</span>
-            <span>分类</span>
-            <span>状态</span>
-            <span>使用次数</span>
-            <span className="text-right">操作</span>
-          </div>
-
-          {loading && <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</div>}
+        <div className="mt-6 space-y-3">
+          {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</SurfacePanel>}
 
           {!loading &&
             filteredResources.map((item) => (
@@ -349,53 +340,68 @@ function LearningResourceRow({
   const Icon = item.kind === 'RANGE' ? Target : Layers3
 
   return (
-    <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10">
-      <div className="min-w-0">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
-            <Icon className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{item.title}</h2>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
-            <a
-              className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
-              href={item.externalUrl}
-              rel="noreferrer"
-              target="_blank"
+    <SurfacePanel className="overflow-hidden p-0 transition hover:border-brand-600/30">
+      <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
+            <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.category}</span>
+            <span
+              className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                item.active
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
+              }`}
             >
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{item.externalUrl}</span>
-            </a>
+              {item.status}
+            </span>
+          </div>
+
+          <div className="mt-4 flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
+              <Icon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold tracking-tight">{item.title}</h2>
+              <p className="mt-2 line-clamp-2 max-w-4xl text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+              <a
+                className="mt-3 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
+                href={item.externalUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{item.externalUrl}</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col justify-between gap-4 border-t border-black/10 bg-[#f7f9f7] p-5 dark:border-white/10 dark:bg-[#0f1511] xl:border-l xl:border-t-0">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">使用次数</p>
+              <p className="mt-1 text-xl font-semibold">{item.downloadCount}</p>
+            </div>
+            <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">当前状态</p>
+              <p className="mt-1 text-sm font-semibold">{item.status}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <IconButton label="编辑" onClick={onEdit}>
+              <Edit3 className="h-4 w-4" />
+            </IconButton>
+            <IconButton label={item.active ? '下架' : '上架'} onClick={onToggle}>
+              <Power className="h-4 w-4" />
+            </IconButton>
+            <IconButton danger label="删除" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" />
+            </IconButton>
           </div>
         </div>
       </div>
-      <TableCell>{item.kindLabel}</TableCell>
-      <TableCell>{item.category}</TableCell>
-      <TableCell>
-        <span
-          className={`rounded-md border px-2 py-1 text-xs font-medium ${
-            item.active
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          {item.status}
-        </span>
-      </TableCell>
-      <TableCell>{item.downloadCount} 次</TableCell>
-      <div className="flex items-center justify-end gap-2">
-        <IconButton label="编辑" onClick={onEdit}>
-          <Edit3 className="h-4 w-4" />
-        </IconButton>
-        <IconButton label={item.active ? '下架' : '上架'} onClick={onToggle}>
-          <Power className="h-4 w-4" />
-        </IconButton>
-        <IconButton danger label="删除" onClick={onDelete}>
-          <Trash2 className="h-4 w-4" />
-        </IconButton>
-      </div>
-    </div>
+    </SurfacePanel>
   )
 }
 
@@ -432,7 +438,7 @@ function LearningResourceModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
       <form
-        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95"
+        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]"
         onSubmit={submit}
       >
         <div className="flex items-start justify-between gap-4">
@@ -563,9 +569,6 @@ function IconButton({
   )
 }
 
-function TableCell({ children }: { children: ReactNode }) {
-  return <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">{children}</div>
-}
 
 function ConfirmDialog({
   onCancel,
@@ -580,7 +583,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

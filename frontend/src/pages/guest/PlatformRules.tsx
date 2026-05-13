@@ -74,7 +74,7 @@ export function PlatformRules() {
           const Icon = item.icon
           return (
             <article
-              className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]"
+              className="rounded-lg border border-black/10 bg-white p-7 transition hover:bg-white dark:border-white/10 dark:bg-[#131a15] dark:hover:bg-[#0f1511]"
               key={item.title}
             >
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
@@ -87,7 +87,7 @@ export function PlatformRules() {
         })}
       </section>
 
-      <section className="mt-16 rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+      <section className="mt-16 rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-semibold">漏洞处理流程</h2>
@@ -99,7 +99,7 @@ export function PlatformRules() {
         </div>
         <div className="mt-8 grid gap-3 md:grid-cols-6">
           {process.map((item, index) => (
-            <div className="rounded-lg border border-black/10 bg-white p-4 text-center dark:border-white/10 dark:bg-black/20" key={item}>
+            <div className="rounded-lg border border-black/10 bg-white p-4 text-center dark:border-white/10 dark:bg-[#131a15]" key={item}>
               <CheckCircle2 className="mx-auto mb-3 h-5 w-5 text-brand-700 dark:text-green-300" />
               <p className="text-sm font-medium">{item}</p>
               <p className="mt-1 font-mono text-xs text-slate-500">0{index + 1}</p>
@@ -109,7 +109,7 @@ export function PlatformRules() {
       </section>
 
       <section className="mt-16 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <article className="rounded-lg border border-red-500/20 bg-red-500/5 p-7 backdrop-blur-sm">
+        <article className="rounded-lg border border-red-500/20 bg-red-500/5 p-7">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-300">
               <AlertTriangle className="h-6 w-6" />
@@ -126,14 +126,14 @@ export function PlatformRules() {
           </ul>
         </article>
 
-        <article className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
           <h2 className="text-2xl font-semibold">响应时效参考</h2>
           <p className="mt-2 leading-7 text-slate-600 dark:text-slate-400">
             实际响应时间会根据漏洞影响范围、资产单位协同情况和证明材料完整度进行调整。
           </p>
           <div className="mt-6 space-y-3">
             {responseLevels.map((item) => (
-              <div className="flex items-center justify-between rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-black/20" key={item.level}>
+              <div className="flex items-center justify-between rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#131a15]" key={item.level}>
                 <span className={`font-semibold ${item.color}`}>{item.level}</span>
                 <span className="text-sm text-slate-600 dark:text-slate-400">{item.time}</span>
               </div>
@@ -143,7 +143,7 @@ export function PlatformRules() {
       </section>
 
       <section className="mt-16 grid gap-6 md:grid-cols-2">
-        <article className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-amber-600 dark:text-amber-300">
             <Award className="h-6 w-6" />
           </div>
@@ -153,7 +153,7 @@ export function PlatformRules() {
           </p>
         </article>
 
-        <article className="rounded-lg border border-black/10 bg-white p-7 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
             <FileCheck2 className="h-6 w-6" />
           </div>

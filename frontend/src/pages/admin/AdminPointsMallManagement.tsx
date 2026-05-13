@@ -17,6 +17,7 @@ import { motion } from 'motion/react'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { ModalShell } from '../../components/ui/ModalShell'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -422,7 +423,7 @@ function ProductRow({
   onToggle: () => void
 }) {
   return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
+    <SurfacePanel className="p-4 transition hover:border-brand-600/30 dark:hover:border-brand-600/30">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px] xl:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -468,7 +469,7 @@ function RedemptionRow({
   const pending = item.status === 'PENDING_PICKUP'
 
   return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
+    <SurfacePanel className="p-4 transition hover:border-brand-600/30 dark:hover:border-brand-600/30">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px] xl:items-start">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -581,13 +582,13 @@ function ProductModal({
     <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">
       <button
         aria-label="关闭弹窗"
-        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+        className="absolute inset-0 bg-black/35 backdrop-blur-sm"
         onClick={onClose}
         type="button"
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[90vh] w-full max-w-[660px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[90vh] w-full max-w-[660px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#131a15] dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -696,7 +697,7 @@ function ProductModal({
             <label className="block">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">兑换积分</span>
               <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                 min={0}
                 onChange={(e) => updateField('pointsCost', Number(e.target.value))}
                 type="number"
@@ -709,7 +710,7 @@ function ProductModal({
             <label className="block">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">库存数量</span>
               <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                 min={0}
                 onChange={(e) => updateField('stock', Number(e.target.value))}
                 type="number"
@@ -732,7 +733,7 @@ function ProductModal({
               <div className="fixed inset-0 z-[150] isolate flex items-center justify-center p-4">
                 <button
                   aria-label="关闭"
-                  className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+                  className="absolute inset-0 bg-black/35 backdrop-blur-sm"
                   onClick={() => {
                     if (form.perUserLimit <= 0) updateField('perUserLimit', 1)
                     setShowCustomLimit(false)
@@ -741,7 +742,7 @@ function ProductModal({
                 />
                 <motion.section
                   animate={{ opacity: 1, y: 0 }}
-                  className="relative w-full max-w-[320px] rounded-lg border border-black/10 bg-white/95 p-6 text-slate-950 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+                  className="relative w-full max-w-[320px] rounded-lg border border-black/10 bg-white p-6 text-slate-950 shadow-2xl dark:border-white/10 dark:bg-[#131a15] dark:text-white"
                   initial={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                 >
@@ -759,7 +760,7 @@ function ProductModal({
                   <h4 className="mb-4 text-center text-sm font-semibold">自定义每人限兑数量</h4>
                   <input
                     autoFocus
-                    className="w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                    className="w-full rounded-lg border border-black/10 bg-white px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                     min={1}
                     onChange={(e) => updateField('perUserLimit', Math.max(1, Number(e.target.value)))}
                     onKeyDown={(e) => e.key === 'Enter' && setShowCustomLimit(false)}
@@ -780,7 +781,7 @@ function ProductModal({
             <label className="block">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">排序权重</span>
               <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                 onChange={(e) => updateField('sortOrder', Number(e.target.value))}
                 type="number"
                 value={form.sortOrder}
@@ -800,7 +801,7 @@ function ProductModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">商品说明 <span className="font-normal text-slate-400">（可选）</span></span>
             <textarea
-              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
               onChange={(e) => updateField('description', e.target.value)}
               value={form.description}
             />
@@ -809,7 +810,7 @@ function ProductModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">领取说明</span>
             <textarea
-              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
               onChange={(e) => updateField('pickupInstructions', e.target.value)}
               value={form.pickupInstructions}
             />
@@ -867,9 +868,8 @@ function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; o
   if (!state) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
-        <div className="flex gap-3">
+    <ModalShell onClose={onCancel}>
+      <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -889,8 +889,7 @@ function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; o
             {state.confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   )
 }
 

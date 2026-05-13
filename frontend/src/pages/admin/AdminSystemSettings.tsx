@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { ModalShell } from '../../components/ui/ModalShell'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -300,7 +301,7 @@ export function AdminSystemSettings() {
 
   return (
     <>
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrow="System Settings"
@@ -310,8 +311,8 @@ export function AdminSystemSettings() {
           />
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="xl:sticky xl:top-24 xl:self-start">
+        <div className="mt-6 flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:flex-row">
+          <aside className="shrink-0 lg:max-h-full lg:overflow-y-auto lg:w-[280px] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
             <SurfacePanel className="overflow-hidden p-0">
               <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
                 <p className="text-sm font-semibold">设置</p>
@@ -341,6 +342,8 @@ export function AdminSystemSettings() {
               </div>
             </SurfacePanel>
           </aside>
+
+          <div className="min-w-0 flex-1 lg:overflow-y-auto lg:pb-8 lg:pr-2 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
 
           <div className="space-y-6">
             {activeSection === '基础设置' && (
@@ -810,6 +813,7 @@ export function AdminSystemSettings() {
               </>
             )}
           </div>
+          </div>
         </div>
       </section>
 
@@ -974,9 +978,8 @@ function ConfirmDialog({
   if (!state) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
-        <div className="flex items-start justify-between gap-4">
+    <ModalShell onClose={onCancel}>
+      <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">
             <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
               <AlertTriangle className="h-5 w-5" />
@@ -1011,7 +1014,6 @@ function ConfirmDialog({
             {state.confirmLabel ?? '确认修改'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   )
 }

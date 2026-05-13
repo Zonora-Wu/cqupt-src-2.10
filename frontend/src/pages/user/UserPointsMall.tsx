@@ -1,5 +1,4 @@
 import {
-  Award,
   BookOpen,
   CheckCircle2,
   Clock3,
@@ -154,34 +153,59 @@ export function UserPointsMall() {
           title="积分商城"
           description="使用漏洞贡献积分兑换学习资料、训练权益和纪念奖励。兑换成功后在蓝山工作室线下领取，不提供邮寄。"
         />
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-          onClick={() => setRecordsOpen(true)}
-          type="button"
-        >
-          <History className="h-4 w-4" />
-          查看兑换记录
-        </button>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
-        {mallStats.map((item) => {
-          const Icon = item.icon
-          return (
-            <SurfacePanel className="p-5" key={item.label}>
-              <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
-                <span className="text-3xl font-semibold">{item.value}</span>
+      <SurfacePanel className="mt-6 overflow-hidden p-0">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="p-6 md:p-7">
+            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+              <div>
+                <p className="text-sm font-medium text-brand-700 dark:text-green-300">Redemption Desk</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight">兑换工作台</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  以“可兑换判断、库存状态、领取规则”为核心重排，不再使用商品海报式卡片墙，优先让用户快速完成筛选与决策。
+                </p>
               </div>
-              <p className="mt-3 text-sm font-medium">{item.label}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-            </SurfacePanel>
-          )
-        })}
-      </div>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+                onClick={() => setRecordsOpen(true)}
+                type="button"
+              >
+                <History className="h-4 w-4" />
+                查看兑换记录
+              </button>
+            </div>
 
-      <SurfacePanel className="relative z-30 mt-6 p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {mallStats.map((item) => {
+                const Icon = item.icon
+                return (
+                  <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]" key={item.label}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{item.label}</p>
+                      <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold tracking-tight">{item.value}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-black/10 bg-[#f7f9f7] p-6 dark:border-white/10 dark:bg-[#0f1511] lg:border-l lg:border-t-0">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">兑换规则</p>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">积分只用于平台激励，不具备现金价值。</div>
+              <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">兑换成功后凭领取码线下领取，默认不邮寄。</div>
+              <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">违规测试、虚假提交或重复刷分可取消兑换。</div>
+            </div>
+          </div>
+        </div>
+      </SurfacePanel>
+
+      <SurfacePanel className="relative z-30 mt-6 p-4">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
           <SearchInput label="搜索商品" onChange={setKeyword} placeholder="输入商品、权益或分类" value={keyword} />
           <SelectInput label="商品类型" onChange={setCategory} options={categoryOptions} value={category} />
           <SelectInput label="排序方式" onChange={setSort} options={sortOptions} value={sort} />
@@ -203,52 +227,56 @@ export function UserPointsMall() {
       {loading && <SurfacePanel className="mt-6 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载积分商城...</SurfacePanel>}
 
       {!loading && (
-        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 space-y-3">
           {filteredProducts.map((item) => {
             const Icon = productIcons[item.category] ?? Gift
             const canExchange = item.stock > 0 && item.canRedeem
             const disabledReason = item.stock <= 0 ? '库存不足' : '积分不足'
 
             return (
-              <SurfacePanel
-                className="cursor-pointer overflow-hidden p-0 transition hover:-translate-y-0.5 hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]"
-                key={item.id}
-                onClick={() => setDetailProduct(item)}
-              >
-                <div className="relative h-52 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
-                  {item.imageUrl ? (
-                    <img alt={item.name} className="h-full w-full object-contain" src={item.imageUrl} />
-                  ) : (
-                    <>
-                      <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-white/70 bg-white/95 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
-                          <Icon className="h-9 w-9" />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+              <SurfacePanel className="p-0 transition hover:border-brand-600/30" key={item.id}>
+                <div className="grid gap-0 lg:grid-cols-[92px_minmax(0,1fr)_240px]">
+                  <button
+                    className="flex min-h-24 items-center justify-center border-b border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511] lg:border-b-0 lg:border-r"
+                    onClick={() => setDetailProduct(item)}
+                    type="button"
+                  >
+                    {item.imageUrl ? (
+                      <img alt={item.name} className="max-h-16 max-w-16 object-contain" src={item.imageUrl} />
+                    ) : (
+                      <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-black/10 bg-white text-brand-700 dark:border-white/10 dark:bg-[#131a15] dark:text-green-300">
+                        <Icon className="h-6 w-6" />
+                      </span>
+                    )}
+                  </button>
 
-                <div className="p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.实体奖励}`}>
-                      {item.category}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">库存 {item.stock}</span>
-                  </div>
-                  <h2 className="mt-3 text-lg font-semibold tracking-tight">{item.name}</h2>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                  <button className="min-w-0 p-5 text-left" onClick={() => setDetailProduct(item)} type="button">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.实体奖励}`}>
+                        {item.category}
+                      </span>
+                      <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">库存 {item.stock}</span>
+                      <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+                        {item.perUserLimit === 0 ? '不限兑换次数' : `每人限兑 ${item.perUserLimit} 次`}
+                      </span>
+                    </div>
+                    <h2 className="mt-3 text-lg font-semibold tracking-tight">{item.name}</h2>
+                    <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">领取地点：{item.pickupLocation}</p>
+                  </button>
 
-                  <div className="mt-5 flex items-end justify-between gap-4 border-t border-black/10 pt-4 dark:border-white/10">
+                  <div className="flex flex-col justify-between gap-4 border-t border-black/10 bg-[#f7f9f7] p-5 dark:border-white/10 dark:bg-[#0f1511] lg:border-l lg:border-t-0">
                     <div>
-                      <p className="text-2xl font-semibold text-brand-700 dark:text-green-300">{item.pointsCost}</p>
-                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">积分</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">兑换消耗</p>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <span className="text-3xl font-semibold text-brand-700 dark:text-green-300">{item.pointsCost}</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">积分</span>
+                      </div>
                     </div>
                     <button
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
                       disabled={!canExchange}
-                      onClick={(e) => { e.stopPropagation(); setConfirmProduct(item) }}
+                      onClick={() => setConfirmProduct(item)}
                       type="button"
                     >
                       {canExchange ? (
@@ -261,11 +289,6 @@ export function UserPointsMall() {
                       )}
                     </button>
                   </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span>领取地点：{item.pickupLocation}</span>
-                    <span>{item.perUserLimit === 0 ? '无限制' : `限兑 ${item.perUserLimit} 次`}</span>
-                  </div>
                 </div>
               </SurfacePanel>
             )
@@ -276,15 +299,6 @@ export function UserPointsMall() {
       {!loading && filteredProducts.length === 0 && (
         <EmptyState icon={<CheckCircle2 className="h-10 w-10" />} title="没有匹配的商品" description="调整关键词、商品类型或排序方式后再试一次。" />
       )}
-
-      <SurfacePanel className="mt-6 p-5">
-        <div className="flex items-start gap-3">
-          <Award className="mt-0.5 h-5 w-5 shrink-0 text-brand-700 dark:text-green-300" />
-          <p className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-            积分仅用于平台内激励兑换，不具备现金价值。兑换成功后采用蓝山工作室线下领取，不提供邮寄。存在违规测试、虚假提交、重复刷分等行为时，管理员可取消兑换申请并追溯积分流水。
-          </p>
-        </div>
-      </SurfacePanel>
 
       <RecordsModal open={recordsOpen} redemptions={redemptions} onClose={() => setRecordsOpen(false)} />
       <ConfirmRedeemModal
@@ -317,7 +331,7 @@ function RecordsModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-brand-700 dark:text-green-300">Redemption Records</p>
@@ -364,7 +378,7 @@ function ConfirmRedeemModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
         <h2 className="text-xl font-semibold">确认兑换</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
           将消耗 {product.pointsCost} 积分兑换「{product.name}」。兑换成功后，请凭领取码前往蓝山工作室线下领取。
@@ -416,7 +430,7 @@ function ProductDetailModal({
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-sm [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#131a15] dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -430,7 +444,7 @@ function ProductDetailModal({
         </button>
 
         {/* 商品图片 */}
-        <div className="group relative mb-6 -mx-8 -mt-8 h-44 overflow-hidden rounded-t-lg bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+        <div className="group relative mb-6 -mx-8 -mt-8 h-44 overflow-hidden rounded-t-lg bg-slate-50 dark:bg-[#131a15]">
           {product.imageUrl ? (
             <>
               <img alt={product.name} className="h-full w-full object-contain" src={product.imageUrl} />
@@ -444,7 +458,7 @@ function ProductDetailModal({
             </>
           ) : (
             <div className="flex h-full items-center justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/95 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-black/10 bg-white text-brand-700 shadow-sm dark:border-white/10 dark:bg-[#131a15] dark:text-green-300">
                 <Icon className="h-8 w-8" />
               </div>
             </div>
