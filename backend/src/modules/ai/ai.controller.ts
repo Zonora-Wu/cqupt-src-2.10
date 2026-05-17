@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { CurrentUser } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -47,9 +47,31 @@ export class AiController {
     return this.ai.getQuota(user.id)
   }
 
+  @Get('skills')
+  skills(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.ai.getSkillLibrary(user)
+  }
+
   @Post('chat')
-  chat(@Body() body: AiChatBody, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+  chat(
+    @Body() body: AiChatBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
     const input = normalizeAiChatBody(body)
     return this.ai.chat(input, user, getRequestMeta(req))
+  }
+
+  @Post('actions/:actionId/confirm')
+  confirmAction(
+    @Param('actionId') actionId: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    // 后续实现：验证 actionId → 执行对应业务逻辑（兑换/打开资源等）
+    return {
+      actionId,
+      message: '待确认动作接口预留',
+      status: 'not_implemented',
+    }
   }
 }

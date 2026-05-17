@@ -6,12 +6,10 @@ import {
   Brain,
   BookOpen,
   ChevronRight,
-  ClipboardCheck,
   Clock3,
   FilePlus2,
   FileSearch,
   Gauge,
-  Lightbulb,
   Moon,
   SearchCheck,
   ShieldCheck,
@@ -20,7 +18,6 @@ import {
   Sun,
   Target,
   Trophy,
-  WandSparkles,
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { AppBackground } from '../../components/layout/AppBackground'
@@ -28,6 +25,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard } from '../../services/dashboard'
 import { getAccountProfile } from '../../services/account'
@@ -107,10 +105,28 @@ const aiCapabilities = [
   },
 ]
 
-const aiTasks = [
-  { label: '待 AI 补全报告', value: '2', icon: WandSparkles },
-  { label: '建议复测漏洞', value: '1', icon: ClipboardCheck },
-  { label: '今日学习建议', value: '4', icon: Lightbulb },
+const fallbackAiSkills: AiSkillLibraryItem[] = [
+  {
+    aiSpace: 'STUDENT',
+    content: '辅助整理漏洞标题、影响资产、复现步骤、影响说明、修复建议与附件清单。',
+    id: 'local-report-polish',
+    source: 'platform-default',
+    title: '漏洞报告整理',
+  },
+  {
+    aiSpace: 'STUDENT',
+    content: '提醒 token、Cookie、密码、手机号、学号等敏感信息先脱敏再提交。',
+    id: 'local-redaction',
+    source: 'platform-default',
+    title: '敏感信息脱敏',
+  },
+  {
+    aiSpace: 'STUDENT',
+    content: '结合 Web 安全基础、权限控制、注入与文件上传方向推荐下一步训练。',
+    id: 'local-learning-path',
+    source: 'platform-default',
+    title: '学习路径推荐',
+  },
 ]
 
 const activities = [
@@ -142,6 +158,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
   const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
+  const [aiSkills, setAiSkills] = useState<AiSkillLibraryItem[]>(fallbackAiSkills)
   const [navAvatarUrl, setNavAvatarUrl] = useState<string | null>(null)
 
   // 加载头像用于导航栏
@@ -156,6 +173,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     getUserDashboard()
       .then((data) => setDashStats(data))
       .catch(() => { /* 静默失败，福贝默认值 */ })
+  }, [])
+
+  // 加载平台公共 AI skill 库
+  useEffect(() => {
+    getAiSkills()
+      .then((data) => setAiSkills(data.skills.length > 0 ? data.skills : fallbackAiSkills))
+      .catch(() => { /* 静默失败，保留内置 skill 展示 */ })
   }, [])
 
   const stats = [
@@ -425,27 +449,29 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
               <SurfacePanel className="flex h-full flex-col p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">AI 今日待办</p>
-                    <h2 className="mt-1 text-xl font-semibold">智能体已生成 7 条建议</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">AI Skill 库</p>
+                    <h2 className="mt-1 text-xl font-semibold">平台公共能力沉淀</h2>
                   </div>
                   <Gauge className="h-9 w-9 text-brand-700 dark:text-green-300" />
                 </div>
                 <div className="mt-4 grid flex-1 content-start gap-3">
-                  {aiTasks.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <div
-                        className="flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
-                        key={item.label}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                          <span className="text-sm">{item.label}</span>
+                  {aiSkills.slice(0, 4).map((item) => (
+                    <div
+                      className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
+                      key={item.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Brain className="h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
+                          <span className="truncate text-sm font-medium">{item.title}</span>
                         </div>
-                        <span className="text-lg font-semibold">{item.value}</span>
+                        <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-green-300/10 dark:text-green-300">
+                          {item.aiSpace === 'STUDENT' ? '学生' : item.aiSpace === 'AUDITOR' ? '审核' : '管理'}
+                        </span>
                       </div>
-                    )
-                  })}
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.content}</p>
+                    </div>
+                  ))}
                 </div>
               </SurfacePanel>
             </div>

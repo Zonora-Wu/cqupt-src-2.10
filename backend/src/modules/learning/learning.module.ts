@@ -8,6 +8,7 @@ import { LearningService } from './learning.service'
   imports: [AuthModule, RbacModule],
   controllers: [LearningController],
   providers: [LearningService],
+  exports: [LearningService],
 })
 export class LearningModule {}
 
