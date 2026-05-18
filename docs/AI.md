@@ -4,6 +4,12 @@
 
 AI 在平台中的定位是“安全运营智能层”：辅助用户理解平台数据、处理漏洞报告、检索学习与商城资源、生成草稿、总结态势，但不绕过平台权限、不直接执行高风险写操作、不替代人工审核结论。
 
+相关运行环境文档：
+
+- `docs/HERMES_RUNTIME.md`：记录 CQUPT-SRC 平台实际使用的 Hermes 独立容器目录、Docker Compose、`/opt/data` 挂载、skills 同步路径和常用维护命令。
+- `docs/AI_SKILLS.md`：记录 CQUPT-SRC 专属 Hermes skills 规划。
+- `docs/AI_KNOWLEDGE_BASE.md`：记录用户问答经验沉淀与 Skill 晋升方案。
+
 ---
 
 ## 1. 设计目标
@@ -201,7 +207,14 @@ POST /api/ai/chat
   │     - 积分、商城、漏洞、学习、证书、统计摘要
   │     - 脱敏、裁剪、token 预算控制
   │
-  ├─ 5. AiIntentRouter 识别意图
+  ├─ 5. AiSkillRouter 按角色显式路由 skills
+  │     - Core skills 常驻：平台总览 / 安全边界 / 卡片协议
+  │     - Student mode：商城搜索 / 漏洞报告助手 / 学习推荐
+  │     - Auditor mode：审核员辅助
+  │     - Admin mode：管理员运营分析
+  │     - 产出 active / available / blocked 并写入 prompt 与审计日志
+  │
+  ├─ 6. AiIntentRouter 识别意图
   │     - 积分查询
   │     - 商城搜索
   │     - 漏洞状态
@@ -211,28 +224,79 @@ POST /api/ai/chat
   │     - 管理分析
   │     - 通用安全问答
   │
-  ├─ 6. 决定执行路径
+  ├─ 7. 决定执行路径
   │     ├─ Direct Response：强业务查询直接返回
   │     ├─ Agent Response：开放式推理调用 Hermes
   │     ├─ Tool Response：只读工具调用
   │     └─ Action Proposal：写操作提案
   │
-  ├─ 7. 结构化输出清洗
+  ├─ 8. 结构化输出清洗
   │     - content
   │     - cards[]
   │     - actions[]
   │     - proposals[]
   │
-  ├─ 8. 安全校验
+  ├─ 9. 安全校验
   │     - 输出脱敏
   │     - ID 重建和权限校验
   │     - schema 校验
   │     - 禁止越权 action
   │
-  ├─ 9. 写入 AiCallLog + AuditLog
+  ├─ 10. 写入 AiCallLog + AuditLog
   │
-  └─ 10. 返回给前端
+  └─ 11. 返回给前端
 ```
+
+
+### 5.1 AiSkillRouter：按角色显式控制 Skill 加载
+
+生产实现文件：
+
+```text
+backend/src/modules/ai/ai.skill-router.service.ts
+```
+
+`AiSkillRouter` 不让 Hermes Agent 在全量 skill 库里自由选择，而是在后端根据登录用户角色、当前 `mode` 和用户消息显式计算本轮 skill 路由：
+
+```ts
+{
+  strategy: 'explicit_backend_role_routing',
+  active: string[],
+  available: string[],
+  blocked: string[]
+}
+```
+
+路由结果会进入三处：
+
+1. `system prompt`：约束 Agent 只能按 active skills 的职责回答。
+2. `AuditLog.metadata.skillRoute`：记录本轮激活了哪些 skills，便于审计和问题复盘。
+3. `/api/ai/chat` 响应体的 `skillRoute` 字段：便于前端调试与可观测性。
+
+固定常驻 Core skills：
+
+```text
+cqupt-src-platform-overview
+cqupt-src-ai-security-boundary
+cqupt-src-ai-card-protocol
+```
+
+按模式激活的角色 skills：
+
+| Mode | 可激活 skills |
+| --- | --- |
+| `student` | `cqupt-src-mall-search`, `cqupt-src-vulnerability-assistant`, `cqupt-src-learning-recommender` |
+| `auditor` | `cqupt-src-auditor-review` |
+| `admin` | `cqupt-src-admin-analytics` |
+
+关键安全规则：
+
+- 用户身份和角色只以后端 JWT 为准。
+- `student` 用户只能进入 student mode。
+- `auditor` 用户只能进入 auditor mode。
+- `admin` 可以进入 student / auditor / admin mode，但每次仍按当前 mode 缩小 skill 范围。
+- 被列入 `blocked` 的角色 skill 不会进入本轮 prompt。
+- Hermes Agent 的 HTTP chat/completions 接入不负责权限判断，权限判断在后端完成。
 
 ---
 
@@ -525,7 +589,7 @@ Agent 适合处理开放式、不需要直接生成可信业务 ID 的任务：
 ```http
 POST http://localhost:5000/v1/chat/completions
 Content-Type: application/json
-Authorization: Bearer <server-side-key>
+Authorization: Bearer ***
 ```
 
 请求：

@@ -7,15 +7,16 @@ export function buildSystemPrompt(
   mode: NormalizedAiChatInput['mode'],
   context: UserContextSnapshot | null,
   role: RoleCode,
+  skillRoutePrompt = '',
 ): string {
   const base =
-    '你是 CQUPT-SRC 校园漏洞响应与安全学习平台的 Hermes AI 助手。人格：专业、克制、友善，默认使用中文，回答要结构化、可执行，不夸大能力。安全规则：只提供授权范围内的防御性安全建议，不能指导未授权攻击、绕过、隐蔽持久化、凭据窃取或数据外传。隔离规则：用户数据按登录用户强隔离；你只能使用当前请求中由后端提供的上下文和工具返回的数据，不得声称或尝试访问其他用户、其他角色或后台未授权数据；当用户要求查看、推断、导出他人信息时必须拒绝，并建议走平台授权流程。Skill 规则：AI skill 库是平台公共能力沉淀，可面向所有用户展示和复用，但 skill 不代表任何用户私有数据。所有结论仅供辅助，最终由人工确认。'
+    '你是 CQUPT-SRC 校园漏洞响应与安全学习平台的 Hermes AI 助手。人格：专业、克制、友善，默认使用中文，回答要结构化、可执行，不夸大能力。安全规则：只提供授权范围内的防御性安全建议，不能指导未授权攻击、绕过、隐蔽持久化、凭据窃取或数据外传。隔离规则：用户数据按登录用户强隔离；你只能使用当前请求中由后端提供的上下文和工具返回的数据，不得声称或尝试访问其他用户、其他角色或后台未授权数据；当用户要求查看、推断、导出他人信息时必须拒绝，并建议走平台授权流程。Skill 规则：AI skill 库由后端按角色和意图显式路由；你只能遵循本轮后端激活的 skills，不能自行启用被禁止的角色能力。所有结论仅供辅助，最终由人工确认。'
 
   const modePrompt = getModePrompt(mode)
   const contextPrompt = context ? buildContextPrompt(context) : ''
   const toolPrompt = buildToolPrompt(role)
 
-  return `${base}\n${modePrompt}\n${contextPrompt}\n${toolPrompt}`.trim()
+  return `${base}\n${skillRoutePrompt}\n${modePrompt}\n${contextPrompt}\n${toolPrompt}`.trim()
 }
 
 function getModePrompt(mode: NormalizedAiChatInput['mode']): string {
@@ -73,7 +74,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
   }
 
   parts.push(
-    '以上数据由平台注入，已反映当前最新状态。当用户询问积分/商品/漏洞/学习资源时，请直接使用以上摘要回答，不要编造不存在的数据。',
+    '以上数据由平台注入，已反映当前最新状态。只有当用户明确询问自己的积分、商品兑换、漏洞状态或学习资源推荐时，才使用这些摘要回答；平台名、SRC 概念、漏洞知识、报告写作方法等泛问不等于请求个人业务数据，不要主动展示用户私有数据。不要编造不存在的数据。',
   )
 
   return parts.join('\n')

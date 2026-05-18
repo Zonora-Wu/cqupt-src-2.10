@@ -87,6 +87,28 @@ html.auth-modal-open body {
   overflow-x: clip;
 }
 
+.ai-chat-input-scroll {
+  scrollbar-color: rgba(42, 100, 56, 0.55) transparent;
+  scrollbar-width: thin;
+}
+
+.ai-chat-input-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-chat-input-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-chat-input-scroll::-webkit-scrollbar-thumb {
+  background: rgba(42, 100, 56, 0.45);
+  border-radius: 999px;
+}
+
+.ai-chat-input-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(42, 100, 56, 0.7);
+}
+
 .user-compact-mode section {
   padding-top: 5rem;
   padding-bottom: 1.25rem;

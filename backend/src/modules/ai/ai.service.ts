@@ -4,6 +4,7 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { parseStructuredResponse, stripJsonBlock } from './ai.response.service'
 import { buildSystemPrompt, buildUserPrompt } from './ai.prompt.service'
+import { AiSkillRouterService } from './ai.skill-router.service'
 import { getAvailableTools } from './ai.tools.registry'
 import {
   AiCard,
@@ -67,6 +68,7 @@ export class AiService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AiToolsService) private readonly toolsService: AiToolsService,
+    @Inject(AiSkillRouterService) private readonly skillRouter: AiSkillRouterService,
   ) {}
 
   async checkAgentHealth() {
@@ -126,6 +128,7 @@ export class AiService {
     }
 
     const safeMessage = redactSensitiveText(input.message)
+    const skillRoute = this.skillRouter.route({ ...input, message: safeMessage }, user)
 
     // 1. 构建用户上下文
     const context = await this.toolsService.buildUserContext(user)
@@ -159,6 +162,11 @@ export class AiService {
               promptLength: input.message.length,
               quotaRemainingBefore: quotaBefore.remaining,
               redacted: safeMessage !== input.message,
+              skillRoute: {
+                active: skillRoute.active.map((skill) => skill.name),
+                available: skillRoute.available.map((skill) => skill.name),
+                strategy: skillRoute.strategy,
+              },
               status: 200,
               tokensUsed: 0,
               upstreamModel: getOpenAiModel(),
@@ -176,12 +184,13 @@ export class AiService {
         ...directResponse,
         mode: input.mode,
         quota: await this.buildQuotaSummary(user.id),
+        skillRoute: serializeSkillRoute(skillRoute),
         toolCalls: [],
       }
     }
 
     // 3. 构建提示词。Hermes Agent 当前不执行后端业务 tool，避免发送 tools 造成 unknown tool 自纠错超时。
-    const systemPrompt = buildSystemPrompt(input.mode, context, user.role)
+    const systemPrompt = buildSystemPrompt(input.mode, context, user.role, this.skillRouter.buildPrompt(skillRoute))
     const tools: ReturnType<typeof getAvailableTools> = []
 
     // 4. 初始消息
@@ -191,63 +200,71 @@ export class AiService {
     ]
 
     let finalContent = ''
+    let fallbackResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = null
+    let agentDegradedReason: string | null = null
     const toolCallsMade: AiToolCall[] = []
     let totalTokens = 0
 
     // 4. Tool calling loop — 最多 MAX_TOOL_ROUNDS 轮
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const payload: OpenAiChatPayload = {
-        messages,
-        model: getOpenAiModel(),
-        tool_choice: round === 0 ? 'auto' : 'auto',
-        tools: tools.length > 0 ? tools : undefined,
-        user: user.id,
-      }
-
-      const result = await this.requestOpenAi('chat/completions', {
-        body: payload,
-        method: 'POST',
-        timeoutMs: REQUEST_TIMEOUT_MS,
-      })
-
-      const choice = result.body?.choices?.[0]
-      totalTokens += extractTokenUsage(result.body) ?? 0
-
-      // 4a. Agent 返回了 tool_calls
-      if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
-        // 记录 assistant 消息（含 tool_calls）
-        messages.push(choice.message)
-
-        for (const tc of choice.message.tool_calls) {
-          const toolArgs = safeParseJson(tc.function.arguments)
-          const toolCall: AiToolCall = {
-            arguments: toolArgs,
-            id: tc.id,
-            name: tc.function.name,
-          }
-          toolCallsMade.push(toolCall)
-
-          // 执行 tool
-          const toolResultStr = await this.toolsService.executeTool(toolCall, user)
-
-          // 添加 tool 结果消息
-          messages.push({
-            content: toolResultStr,
-            role: 'tool',
-            tool_call_id: tc.id,
-          })
+    try {
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const payload: OpenAiChatPayload = {
+          messages,
+          model: getOpenAiModel(),
+          tool_choice: round === 0 ? 'auto' : 'auto',
+          tools: tools.length > 0 ? tools : undefined,
+          user: user.id,
         }
-        continue // 下一轮
-      }
 
-      // 4b. Agent 返回了纯文本
-      if (choice?.message?.content) {
-        finalContent = choice.message.content
+        const result = await this.requestOpenAi('chat/completions', {
+          body: payload,
+          method: 'POST',
+          timeoutMs: REQUEST_TIMEOUT_MS,
+        })
+
+        const choice = result.body?.choices?.[0]
+        totalTokens += extractTokenUsage(result.body) ?? 0
+
+        // 4a. Agent 返回了 tool_calls
+        if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+          // 记录 assistant 消息（含 tool_calls）
+          messages.push(choice.message)
+
+          for (const tc of choice.message.tool_calls) {
+            const toolArgs = safeParseJson(tc.function.arguments)
+            const toolCall: AiToolCall = {
+              arguments: toolArgs,
+              id: tc.id,
+              name: tc.function.name,
+            }
+            toolCallsMade.push(toolCall)
+
+            // 执行 tool
+            const toolResultStr = await this.toolsService.executeTool(toolCall, user)
+
+            // 添加 tool 结果消息
+            messages.push({
+              content: toolResultStr,
+              role: 'tool',
+              tool_call_id: tc.id,
+            })
+          }
+          continue // 下一轮
+        }
+
+        // 4b. Agent 返回了纯文本
+        if (choice?.message?.content) {
+          finalContent = choice.message.content
+          break
+        }
+
+        // 4c. 空响应
         break
       }
-
-      // 4c. 空响应
-      break
+    } catch (error) {
+      agentDegradedReason = error instanceof Error ? error.message : 'Agent unavailable'
+      fallbackResponse = buildAgentDegradedResponse(input, context, skillRoute, agentDegradedReason)
+      finalContent = fallbackResponse.content
     }
 
     // 5. 如果 loop 结束仍无文本，取最后一条 assistant 消息
@@ -259,8 +276,10 @@ export class AiService {
     }
 
     // 6. 解析结构化响应
-    const structured = parseStructuredResponse(finalContent)
-    const displayContent = stripJsonBlock(finalContent) || finalContent
+    const structured = fallbackResponse
+      ? { actions: fallbackResponse.actions ?? [], cards: fallbackResponse.cards ?? [] }
+      : parseStructuredResponse(finalContent)
+    const displayContent = fallbackResponse ? fallbackResponse.content : stripJsonBlock(finalContent) || finalContent
 
     // 7. 写审计日志
     await this.prisma.$transaction(async (tx) => {
@@ -289,6 +308,13 @@ export class AiService {
             promptLength: input.message.length,
             quotaRemainingBefore: quotaBefore.remaining,
             redacted: safeMessage !== input.message,
+            degraded: Boolean(fallbackResponse),
+            degradedReason: agentDegradedReason,
+            skillRoute: {
+              active: skillRoute.active.map((skill) => skill.name),
+              available: skillRoute.available.map((skill) => skill.name),
+              strategy: skillRoute.strategy,
+            },
             status: 200,
             tokensUsed: totalTokens || 0,
             toolCalls: toolCallsMade.map((tc) => tc.name),
@@ -312,6 +338,7 @@ export class AiService {
       content: displayContent,
       mode: input.mode,
       quota: await this.buildQuotaSummary(user.id),
+      skillRoute: serializeSkillRoute(skillRoute),
       toolCalls: toolCallsMade.map((tc) => ({ name: tc.name })),
     }
   }
@@ -474,6 +501,15 @@ function getVisibleSkillSpaces(role: RoleCode) {
   return [AiSpace.STUDENT]
 }
 
+function serializeSkillRoute(decision: ReturnType<AiSkillRouterService['route']>) {
+  return {
+    active: decision.active.map((skill) => skill.name),
+    available: decision.available.map((skill) => skill.name),
+    blocked: decision.blocked.map((skill) => skill.name),
+    strategy: decision.strategy,
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // Fetch helpers
 // ══════════════════════════════════════════════════════════════
@@ -595,74 +631,53 @@ function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
 // 确定性资源响应 — 不依赖模型，避免超时/编造业务 ID
 // ══════════════════════════════════════════════════════════════
 
-/**
- * 从用户消息中提取商品相关关键词。
- * 覆盖中文自然表达：我想兑换X、我要换X、换X、有没有X、给我X…
- */
-function extractProductKeywords(message: string): string[] {
-  // 先剥掉价格修饰 + 量词，避免"400积分以下的商品" → "个的商品"污染提取
-  const cleaned = message
-    .replace(/\d+\s*(?:积分|分)?\s*(?:以下|以上|以内|左右|内|外)/g, '')
-    .replace(/[一两二两三几]个/g, '')
-    .replace(/一些/g, '')
+function buildAgentDegradedResponse(
+  input: NormalizedAiChatInput,
+  context: UserContextSnapshot,
+  skillRoute: ReturnType<AiSkillRouterService['route']>,
+  reason: string,
+): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
+  const direct = buildDirectResourceResponse(input, context)
+  if (direct) return direct
 
-  const intentPatterns = [
-    /(?:我想|我要|我想要|帮我|给我)(?:兑换|换|买|找|推荐)[个些一二两三]?([^，。！？、\s]{1,8})/,
-    /(?:兑换|换|买)[个些]?([^，。！？、\s]{1,8})/,
-    /想要[个些]?([^，。！？、\s]{1,8})/,
-    /有没有([^，。！？、\s]{1,8})/,
-    /可以兑换[个些]?([^，。！？、\s]{1,8})/,
-    /能(?:兑换|换)[个些]?([^，。！？、\s]{1,8})/,
-    /看看[个些]?([^，。！？、\s]{1,8})/,
-    /想要一个?([^，。！？、\s]{1,8})/,
-    /找个?([^，。！？、\s]{1,8})/,
-    /帮我看看[个些]?([^，。！？、\s]{1,8})/,
-    /帮我查[个些]?([^，。！？、\s]{1,8})/,
-    /看看有没有([^，。！？、\s]{1,8})/,
-    /能兑换([^，。！？、\s]{1,8})/,
-    /换个?([^，。！？、\s]{1,8})/,
-    /换个?新的([^，。！？、\s]{1,8})/,
-    /来[个些]?([^，。！？、\s]{1,8})/,
-    /推荐[个些]?([^，。！？、\s]{1,8})/,
-    /搜[索下]?([^，。！？、\s]{1,8})/,
+  const active = new Set(skillRoute.active.map((skill) => skill.name))
+  const lines = [
+    '模型服务当前响应较慢，我先基于平台后端已注入的实时数据和规则给你一个可用答复。',
+    '',
   ]
 
-  const extracted: string[] = []
-  for (const pattern of intentPatterns) {
-    const match = cleaned.match(pattern)
-    if (match && match[1]) {
-      const word = match[1]
-        .replace(/[的了吗呢啊呀吧]$/, '')
-        .replace(/^的/, '')
-        .trim()
-      // 过滤掉纯数字/量词残余 以及泛称词（"商品"、"东西"等）
-      if (
-        word.length >= 1 &&
-        word.length <= 8 &&
-        !/^[一二两三]?[个些]?$/.test(word) &&
-        !/^\d+$/.test(word) &&
-        word !== '商品' &&
-        word !== '东西' &&
-        word !== '物品' &&
-        word !== '奖品' &&
-        word !== '礼品'
-      ) {
-        extracted.push(word)
-      }
-    }
+  if (input.mode === 'student' && active.has('cqupt-src-vulnerability-assistant')) {
+    lines.push(
+      '### 漏洞报告建议',
+      '- 标题：写清漏洞类型、影响资产和核心风险。',
+      '- 复现步骤：按 1/2/3 编号，保证审核员能独立复现。',
+      '- 影响说明：说明可影响的数据、权限或业务流程，不夸大。',
+      '- 证明材料：截图、请求包、响应包和必要的脱敏说明。',
+      '- 修复建议：给出可执行的配置、代码或流程修复方案。',
+    )
+  } else if (input.mode === 'auditor') {
+    lines.push(
+      '### 审核辅助建议',
+      '- 先确认资产是否在授权范围内。',
+      '- 再检查复现步骤、证据链、影响范围和修复建议是否完整。',
+      '- 风险等级只作为建议，最终仍由审核员依据平台规则确认。',
+    )
+  } else if (input.mode === 'admin') {
+    lines.push(
+      '### 管理分析建议',
+      '- 可从漏洞数量、审核时效、待补充比例、积分发放/消耗、商城兑换和审计异常六个维度观察平台状态。',
+      '- 涉及真实统计值时，应以后端报表或管理端实时数据为准。',
+    )
+  } else {
+    lines.push(
+      '### 通用建议',
+      '- 如果你是在查询积分、商品、漏洞或学习资源，可以换成更明确的问题，例如“推荐 400 积分以下商品”或“我有哪些待补充漏洞”。',
+      '- 如果你是在问安全知识，可以直接说明漏洞类型和目标，例如“XSS 报告怎么写”。',
+    )
   }
 
-  return extracted
-}
-
-/** 从消息中提取价格约束：{ max?: number; min?: number } */
-function extractPriceFilter(message: string): { max?: number; min?: number } {
-  const filter: { max?: number; min?: number } = {}
-  const maxMatch = message.match(/(\d+)\s*(?:积分|分)?\s*以[下内]/)
-  const minMatch = message.match(/(\d+)\s*(?:积分|分)?\s*以[上外]/)
-  if (maxMatch) filter.max = parseInt(maxMatch[1], 10)
-  if (minMatch) filter.min = parseInt(minMatch[1], 10)
-  return filter
+  lines.push('', `降级原因：${reason}`)
+  return { actions: [], cards: [], content: lines.join('\n') }
 }
 
 function buildDirectResourceResponse(
@@ -672,26 +687,48 @@ function buildDirectResourceResponse(
   if (input.mode !== 'student') return null
 
   const message = input.message.toLowerCase()
-  const asksPoints = /积分|point/.test(message)
-  const keywords = extractProductKeywords(message)
-  const asksMall =
-    /兑换|商品|商城|礼品|奖品|可换|能换|推荐/.test(message) ||
-    (keywords.length > 0 && context.mallSuggestions.some((item) =>
-      keywords.some((kw) => {
-        if (item.name.includes(kw) || item.category.includes(kw)) return true
-        if (/[\u4e00-\u9fff]/.test(kw)) return [...kw].some((ch) => item.name.includes(ch))
-        return false
-      }),
-    ))
-  const asksVulnerabilities = /漏洞|报告|src|待补充|补充|审核|通过|驳回|修复|证书/.test(message)
+  const asksPoints = hasPersonalPointIntent(message)
+  const asksMall = hasMallIntent(message, context)
+  const asksReportWriting = hasReportWritingIntent(message)
+  const asksLearning = hasLearningIntent(message) && !asksReportWriting
+  const asksVulnerabilities = hasUserVulnerabilityListIntent(message)
+  const asksPlatformBasics = hasPlatformBasicsIntent(message)
+  const asksGreeting = hasGreetingIntent(message)
 
-  if (!asksPoints && !asksMall && !asksVulnerabilities) return null
+  if (!asksPoints && !asksMall && !asksLearning && !asksReportWriting && !asksVulnerabilities && !asksPlatformBasics && !asksGreeting) return null
 
   const cards: AiCard[] = []
   const actions: AiPendingAction[] = []
   const lines: string[] = []
 
-  if (asksPoints || asksMall) {
+  if (asksPlatformBasics) {
+    lines.push(
+      '### CQUPT-SRC 是什么',
+      'CQUPT-SRC 是校园漏洞响应与安全学习平台，用来承载授权范围内的漏洞提交、审核、学习资源、积分激励、证书和公告等流程。',
+      '',
+      '- 学生/白帽：提交漏洞、补充材料、学习安全知识、使用积分兑换商品。',
+      '- 审核员：审核漏洞报告、判断材料完整性、给出审核意见。',
+      '- 管理员：维护平台规则、公告、资源、商城和运营数据。',
+    )
+  }
+
+  if (asksGreeting) {
+    if (lines.length > 0) lines.push('')
+    lines.push(
+      '你好，我是 CQUPT-SRC 平台的 AI 助手。',
+      '',
+      '我可以帮你：',
+      '- 整理漏洞报告和复现步骤。',
+      '- 查询你的积分、漏洞状态和可兑换商品。',
+      '- 推荐安全学习资源和入门路线。',
+      '- 提醒敏感信息脱敏和报告材料完整性。',
+      '',
+      '你可以直接问：“推荐 400 积分以下商品”“XSS 报告怎么写”“我有哪些待补充漏洞”。',
+    )
+  }
+
+  if (asksPoints) {
+    if (lines.length > 0) lines.push('')
     lines.push(
       '### 当前积分概览',
       `- 可用积分：\`${context.points.balance.toLocaleString('zh-CN')}\` 分`,
@@ -702,99 +739,71 @@ function buildDirectResourceResponse(
   }
 
   if (asksMall) {
-    // 区分"泛问"和"特问"
-    const isGeneralQuery = /有什么|哪些|什么|多少|全部|所有|列出|显示|看看商城|积分商城/.test(message)
-
-    let products = context.mallSuggestions
-      .filter((item) => item.stock > 0)
-      .sort((a, b) => {
-        if (a.canRedeem !== b.canRedeem) return a.canRedeem ? -1 : 1
-        return a.pointsCost - b.pointsCost
-      })
-
-    // 泛问 或 仅有价格约束无具体商品名 → 返回全部（按价格过滤）
-    const priceFilter = extractPriceFilter(message)
-    const hasPriceFilter = priceFilter.max !== undefined || priceFilter.min !== undefined
-    if (isGeneralQuery || (hasPriceFilter && keywords.length === 0)) {
-      // 不做关键词过滤，走下面的全量卡片逻辑
-    } else if (keywords.length > 0) {
-      const matched = products.filter((item) =>
-        keywords.some((kw) => {
-          if (
-            item.name.includes(kw) ||
-            item.category.includes(kw) ||
-            (item.description ?? '').includes(kw)
-          )
-            return true
-          // 中文词回退：拆成单字匹配，解决"杯子"→"马克杯"这类非连续嵌入
-          if (/[\u4e00-\u9fff]/.test(kw)) {
-            return [...kw].some((ch) => item.name.includes(ch))
-          }
-          return false
-        }),
-      )
-      // 用户明确在找某样东西但商城里没有 → 放行给 Agent
-      if (matched.length === 0) return null
-      products = matched
-    } else {
-      // 没提取到关键词、非泛问、无价格约束 → 交给 Agent 做模糊搜索
-      return null
-    }
-
-    // 价格过滤
-    if (priceFilter.max !== undefined || priceFilter.min !== undefined) {
-      products = products.filter((item) => {
-        if (priceFilter.max !== undefined && item.pointsCost > priceFilter.max) return false
-        if (priceFilter.min !== undefined && item.pointsCost < priceFilter.min) return false
-        return true
-      })
-    }
-
-    products = products.slice(0, 20)
-
-    const productCards: AiCard[] = products.map((item) => ({
-      canRedeem: item.canRedeem,
-      description: item.description,
-      id: item.id,
-      imageUrl: item.imageUrl,
-      name: item.name,
-      perUserLimit: item.perUserLimit,
-      pointsCost: item.pointsCost,
-      stock: item.stock,
-      type: 'MALL_PRODUCT',
-      userBalance: context.points.balance,
-    }))
-
-    cards.push(...productCards)
+    const products = filterMallProducts(message, context).slice(0, 6)
+    cards.push(...products.map((product) => buildMallProductCard(product, context)))
     actions.push(
-      ...products
-        .filter((item) => item.canRedeem)
-        .map((item) => ({
-          expiresIn: 300,
-          id: `mall_redeem_${item.id}`,
-          label: `立即兑换${item.name}`,
-          payload: { productId: item.id },
-          type: 'MALL_REDEEM' as const,
-        })),
+      ...products.filter((product) => product.canRedeem).map((product) => ({
+        expiresIn: 300,
+        id: `redeem_${product.id}`,
+        label: '立即兑换',
+        payload: { productId: product.id },
+        type: 'MALL_REDEEM' as const,
+      })),
     )
 
-    const redeemableCount = products.filter((item) => item.canRedeem).length
     if (lines.length > 0) lines.push('')
-    lines.push('### 可兑换商品')
-    if (priceFilter.max !== undefined || priceFilter.min !== undefined) {
-      const range =
-        priceFilter.min !== undefined && priceFilter.max !== undefined
-          ? `${priceFilter.min}–${priceFilter.max} 积分`
-          : priceFilter.max !== undefined
-            ? `${priceFilter.max} 积分以下`
-            : `${priceFilter.min} 积分以上`
-      lines.push(`- 已按价格范围「${range}」筛选，匹配 ${products.length} 个商品，其中 ${redeemableCount} 个可兑换。`)
-    } else if (products.length === 0) {
-      lines.push('- 当前没有可展示的积分商城商品。')
+    lines.push('### 积分商城推荐')
+    if (products.length === 0) {
+      lines.push('- 暂时没有匹配的可见商品。你可以换一个关键词，或者去积分商城查看全部商品。')
     } else {
-      lines.push(`- 已根据你的积分筛选出 ${products.length} 个商品，其中 ${redeemableCount} 个可以直接兑换。`)
-      lines.push('- 点击下方卡片里的「立即兑换」即可在本页完成操作。')
+      lines.push(`- 已根据你的问题筛选出 ${products.length} 个商品，下方卡片可以直接查看兑换条件。`)
+      const redeemableCount = products.filter((product) => product.canRedeem).length
+      lines.push(`- 当前可直接兑换：${redeemableCount} 个；不可兑换通常是库存、积分或限购原因。`)
     }
+  }
+
+  if (asksLearning) {
+    const resources = filterLearningResources(message, context).slice(0, 4)
+    cards.push(...resources.map((resource) => ({
+      actionLabel: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
+      category: resource.category,
+      description: resource.description,
+      id: resource.id,
+      kind: resource.kind,
+      title: resource.title,
+      type: 'LEARNING_RESOURCE' as const,
+    })))
+    actions.push(...resources.map((resource) => ({
+      expiresIn: 300,
+      id: `open_learning_${resource.id}`,
+      label: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
+      payload: { resourceId: resource.id },
+      type: 'OPEN_LEARNING_RESOURCE' as const,
+    })))
+
+    if (lines.length > 0) lines.push('')
+    lines.push(
+      '### 学习建议',
+      '- 建议按“基础概念 → 漏洞原理 → 复现实验 → 报告写作 → 修复建议”的顺序学习。',
+    )
+    if (resources.length > 0) {
+      lines.push(`- 下方推荐 ${resources.length} 个平台学习资源，可直接打开。`)
+    } else {
+      lines.push('- 当前上下文里没有匹配的学习资源卡片，我先给你通用学习路径：先学 HTTP/HTML/JavaScript 基础，再学 XSS、SQL 注入、越权、文件上传和 SSRF。')
+    }
+  }
+
+  if (asksReportWriting) {
+    if (lines.length > 0) lines.push('')
+    lines.push(
+      '### 漏洞报告写作模板',
+      '- 标题：`漏洞类型 + 影响对象 + 核心风险`，例如“某系统评论处存在存储型 XSS，可影响后台管理员”。',
+      '- 影响资产：写清系统名称、URL、接口路径和测试账号权限范围。',
+      '- 复现步骤：按编号写，每一步包含操作、请求/响应、预期结果和实际结果。',
+      '- 影响说明：说明攻击者在授权测试范围内能造成什么影响，避免夸大。',
+      '- 证明材料：截图、请求包、响应包、PoC 代码要脱敏；不要提交 Cookie、Token、密码等敏感值。',
+      '- 修复建议：给出输入校验、输出编码、权限校验、参数化查询、上传白名单等可执行建议。',
+    )
   }
 
   if (asksVulnerabilities) {
@@ -844,6 +853,169 @@ function buildDirectResourceResponse(
     cards,
     content: lines.join('\n'),
   }
+}
+
+function hasPlatformBasicsIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return /(?:cqupt-src|cq?uptsrc|src平台|这个平台|平台).{0,12}(?:是什么|干什么|介绍|说明|作用|怎么用|角色|流程)/i.test(normalized)
+}
+
+function hasGreetingIntent(message: string): boolean {
+  const normalized = message.trim().toLowerCase().replace(/[。！？!?,，\s]/g, '')
+  return /^(你好|您好|hello|hi|嗨|在吗|在不在)$/.test(normalized)
+}
+
+function hasLearningIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return /学习|想学|入门|路线|教程|资源|靶场|练习|怎么学|提升|课程|xss|sql注入|ssrf|越权|文件上传|web安全|网络安全/.test(normalized)
+}
+
+function hasReportWritingIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return /报告.{0,8}(怎么写|如何写|模板|格式|优化|完善|描述)|(?:xss|sql注入|ssrf|越权|文件上传|漏洞).{0,8}报告/.test(normalized)
+}
+
+function hasMallIntent(message: string, context: UserContextSnapshot): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  const keywords = extractProductKeywords(message)
+  if (/积分.{0,8}(商品|商城|兑换|能换|可换)|商城|商品|兑换|礼品|奖品|能换|可换|换.{0,6}(笔|杯|本|钥匙|文创|电子|周边)|\d+积分以[下内上外]/.test(normalized)) {
+    return true
+  }
+  return keywords.length > 0 && context.mallSuggestions.some((item) => productMatchesKeywords(item, keywords))
+}
+
+function filterMallProducts(message: string, context: UserContextSnapshot) {
+  const keywords = extractProductKeywords(message)
+  const price = extractPriceFilter(message)
+  const hasSpecificKeywords = keywords.length > 0
+  let products = context.mallSuggestions
+
+  if (hasSpecificKeywords) {
+    products = products.filter((product) => productMatchesKeywords(product, keywords))
+  }
+  if (typeof price.max === 'number') {
+    products = products.filter((product) => product.pointsCost <= price.max!)
+  }
+  if (typeof price.min === 'number') {
+    products = products.filter((product) => product.pointsCost >= price.min!)
+  }
+
+  return products.sort((a, b) => Number(b.canRedeem) - Number(a.canRedeem) || a.pointsCost - b.pointsCost)
+}
+
+function filterLearningResources(message: string, context: UserContextSnapshot) {
+  const normalized = message.toLowerCase()
+  const topicMap: Array<[RegExp, string[]]> = [
+    [/xss|跨站/, ['xss', '跨站', '前端', 'javascript']],
+    [/sql|注入/, ['sql', '注入', '数据库']],
+    [/ssrf|服务端请求伪造/, ['ssrf', '请求伪造']],
+    [/越权|权限|访问控制/, ['越权', '权限', '访问控制']],
+    [/文件上传|上传/, ['文件上传', '上传']],
+    [/新手|入门|基础/, ['基础', '入门', '新手']],
+  ]
+  const matched = topicMap.find(([pattern]) => pattern.test(normalized))?.[1] ?? []
+  if (matched.length === 0) return context.learningSuggestions
+  return context.learningSuggestions.filter((resource) => {
+    const haystack = `${resource.title} ${resource.category} ${resource.description ?? ''}`.toLowerCase()
+    return matched.some((keyword) => haystack.includes(keyword.toLowerCase()))
+  })
+}
+
+function buildMallProductCard(product: UserContextSnapshot['mallSuggestions'][number], context: UserContextSnapshot): AiCard {
+  return {
+    canRedeem: product.canRedeem,
+    description: product.description,
+    id: product.id,
+    imageUrl: product.imageUrl,
+    name: product.name,
+    perUserLimit: product.perUserLimit,
+    pointsCost: product.pointsCost,
+    stock: product.stock,
+    type: 'MALL_PRODUCT',
+    userBalance: context.points.balance,
+  }
+}
+
+function productMatchesKeywords(product: UserContextSnapshot['mallSuggestions'][number], keywords: string[]) {
+  const haystack = `${product.name} ${product.category} ${product.description ?? ''}`.toLowerCase()
+  return keywords.some((keyword) => {
+    const normalized = keyword.toLowerCase()
+    if (haystack.includes(normalized)) return true
+    if (/[\u4e00-\u9fff]/.test(normalized)) return [...normalized].some((ch) => haystack.includes(ch))
+    return false
+  })
+}
+
+/**
+ * 从用户消息中提取商品相关关键词。
+ * 覆盖中文自然表达：我想兑换X、我要换X、换X、有没有X、给我X…
+ */
+function extractProductKeywords(message: string): string[] {
+  const cleaned = message
+    .replace(/\d+\s*(?:积分|分)?\s*(?:以下|以上|以内|左右|内|外)/g, '')
+    .replace(/[一两二三几]个/g, '')
+    .replace(/一些/g, '')
+
+  const intentPatterns = [
+    /(?:我想|我要|我想要|帮我|给我)(?:兑换|换|买|找|推荐)[个些一二两三]?([^，。！？、\s]{1,8})/,
+    /(?:兑换|换|买)[个些]?([^，。！？、\s]{1,8})/,
+    /想要[个些]?([^，。！？、\s]{1,8})/,
+    /有没有([^，。！？、\s]{1,8})/,
+    /可以兑换[个些]?([^，。！？、\s]{1,8})/,
+    /能(?:兑换|换)[个些]?([^，。！？、\s]{1,8})/,
+    /看看有没有([^，。！？、\s]{1,8})/,
+    /换个?([^，。！？、\s]{1,8})/,
+    /推荐[个些]?([^，。！？、\s]{1,8})/,
+    /搜[索下]?([^，。！？、\s]{1,8})/,
+  ]
+
+  const genericWords = new Set(['商品', '东西', '物品', '奖品', '礼品', '积分', '商城'])
+  const extracted: string[] = []
+  for (const pattern of intentPatterns) {
+    const match = cleaned.match(pattern)
+    if (!match?.[1]) continue
+    const word = match[1].replace(/[的了吗呢啊呀吧]$/, '').replace(/^的/, '').trim()
+    if (word.length >= 1 && word.length <= 8 && !/^[一二两三]?[个些]?$/.test(word) && !/^\d+$/.test(word) && !genericWords.has(word)) {
+      extracted.push(word)
+    }
+  }
+  return Array.from(new Set(extracted))
+}
+
+/** 从消息中提取价格约束：{ max?: number; min?: number } */
+function extractPriceFilter(message: string): { max?: number; min?: number } {
+  const filter: { max?: number; min?: number } = {}
+  const maxMatch = message.match(/(\d+)\s*(?:积分|分)?\s*(?:以[下内]|以内|以下)/)
+  const minMatch = message.match(/(\d+)\s*(?:积分|分)?\s*(?:以[上外]|以上)/)
+  if (maxMatch) filter.max = parseInt(maxMatch[1], 10)
+  if (minMatch) filter.min = parseInt(minMatch[1], 10)
+  return filter
+}
+
+function hasUserVulnerabilityListIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+
+  // 平台名或泛知识问题不应触发个人漏洞列表。这里的直出逻辑只处理
+  // “查我的漏洞数据”这类确定性、强业务边界的问题。
+  const hasReportId = /(?:cqupt-?src|src)[-_]?\d{4,}/i.test(normalized)
+  if (hasReportId) return true
+
+  const hasVulnerabilityNoun = /漏洞|漏洞报告|报告/.test(normalized)
+  const hasOwnedDataCue = /我的|我提交|我有|我发现|个人|自己|当前账号/.test(normalized)
+  const hasListOrStatusCue = /列表|哪些|多少|几个|查看|查询|列出|显示|打开|详情|状态|进度|最近|近期|待补充|补充材料|审核中|待审核|已确认|通过|驳回|修复中|复测|证书/.test(normalized)
+
+  if (hasVulnerabilityNoun && hasOwnedDataCue && hasListOrStatusCue) return true
+  if (/待补充|补充材料/.test(normalized) && /我的|我提交|漏洞|报告/.test(normalized)) return true
+
+  return false
+}
+
+function hasPersonalPointIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return (
+    /(?:我的|我有|当前|账户|账号|个人).{0,8}(?:积分|point)/.test(normalized) ||
+    /(?:积分|point).{0,8}(?:余额|多少|几分|还剩|剩余|够不够|够吗|可用)/.test(normalized)
+  )
 }
 
 // ══════════════════════════════════════════════════════════════

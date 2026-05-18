@@ -129,6 +129,34 @@ export type UserContextSnapshot = {
 
 // ── 结构化响应 ──
 
+export type AiVulnerabilityDraft = {
+  assetName: string
+  assetUrl?: string
+  detailMarkdown: string
+  id: string
+  impactAssessment: string
+  missingFields: string[]
+  networkPosition?: string
+  ownerUnit?: string
+  repairSuggestion: string
+  reproductionSteps: string
+  selfSeverity: string
+  sourceEvidence?: {
+    category?: string
+    rawTitle?: string
+  }
+  testBoundary?: string
+  title: string
+  vulnerabilityType: string
+}
+
+export type AiVulnerabilityReportDraftResponse = {
+  drafts: AiVulnerabilityDraft[]
+  fileName: string
+  message: string
+  sourceTextLength: number
+}
+
 export type AiCard =
   | {
       type: 'LEARNING_RESOURCE'
@@ -176,6 +204,12 @@ export type AiChatResponse = {
   cards?: AiCard[]
   actions?: AiPendingAction[]
   quota?: AiQuotaSummary
+  skillRoute?: {
+    active: string[]
+    available: string[]
+    blocked: string[]
+    strategy: 'explicit_backend_role_routing'
+  }
   toolCalls?: Array<{ name: string }>
 }
 

@@ -1,9 +1,23 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { UploadedPdfFile } from '../attachments/attachment.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AiChatBody } from './ai.types'
+import { AiReportDraftService } from './ai.report-draft.service'
 import { AiService } from './ai.service'
 import { normalizeAiChatBody } from './ai.validation'
 
@@ -30,7 +44,10 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @Controller('ai')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AiController {
-  constructor(@Inject(AiService) private readonly ai: AiService) {}
+  constructor(
+    @Inject(AiService) private readonly ai: AiService,
+    @Inject(AiReportDraftService) private readonly reportDrafts: AiReportDraftService,
+  ) {}
 
   @Get('health')
   health() {
@@ -60,6 +77,12 @@ export class AiController {
   ) {
     const input = normalizeAiChatBody(body)
     return this.ai.chat(input, user, getRequestMeta(req))
+  }
+
+  @Post('report-drafts')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined) {
+    return this.reportDrafts.extractVulnerabilityDrafts(file)
   }
 
   @Post('actions/:actionId/confirm')

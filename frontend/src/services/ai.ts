@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient'
+import { apiFormRequest, apiRequest } from './apiClient'
 
 export type AiChatMode = 'student' | 'auditor' | 'admin'
 
@@ -41,6 +41,34 @@ export type AiPendingAction = {
   label: string
   payload: Record<string, unknown>
   expiresIn: number
+}
+
+export type AiVulnerabilityDraft = {
+  assetName: string
+  assetUrl?: string
+  detailMarkdown: string
+  id: string
+  impactAssessment: string
+  missingFields: string[]
+  networkPosition?: string
+  ownerUnit?: string
+  repairSuggestion: string
+  reproductionSteps: string
+  selfSeverity: string
+  sourceEvidence?: {
+    category?: string
+    rawTitle?: string
+  }
+  testBoundary?: string
+  title: string
+  vulnerabilityType: string
+}
+
+export type AiVulnerabilityReportDraftResponse = {
+  drafts: AiVulnerabilityDraft[]
+  fileName: string
+  message: string
+  sourceTextLength: number
 }
 
 export type AiChatResponse = {
@@ -110,7 +138,18 @@ export function getAiAppearance() {
   })
 }
 
-export function getAiQuota() {
+export async function uploadAiReportDraft(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return apiFormRequest<AiVulnerabilityReportDraftResponse>('/ai/report-drafts', {
+    auth: true,
+    formData,
+    unauthenticatedMessage: '请先登录后再上传报告',
+  })
+}
+
+export async function getAiQuota() {
   return apiRequest<AiQuota>('/ai/quota', {
     auth: true,
     method: 'GET',
