@@ -87,24 +87,29 @@ html.auth-modal-open body {
   overflow-x: clip;
 }
 
+.platform-scrollbar,
 .ai-chat-input-scroll {
   scrollbar-color: rgba(42, 100, 56, 0.55) transparent;
   scrollbar-width: thin;
 }
 
+.platform-scrollbar::-webkit-scrollbar,
 .ai-chat-input-scroll::-webkit-scrollbar {
   width: 6px;
 }
 
+.platform-scrollbar::-webkit-scrollbar-track,
 .ai-chat-input-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
+.platform-scrollbar::-webkit-scrollbar-thumb,
 .ai-chat-input-scroll::-webkit-scrollbar-thumb {
   background: rgba(42, 100, 56, 0.45);
   border-radius: 999px;
 }
 
+.platform-scrollbar::-webkit-scrollbar-thumb:hover,
 .ai-chat-input-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(42, 100, 56, 0.7);
 }

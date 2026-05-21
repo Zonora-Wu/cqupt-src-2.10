@@ -2,6 +2,8 @@
 
 本文档说明 CQUPT-SRC 平台在接入 Hermes Agent 时，哪些能力应该沉淀为 Hermes skill，哪些能力应该留在后端业务代码中，以及推荐的 skill 优先级、职责边界和内容大纲。
 
+命名约定：CQUPT-SRC 平台面向用户的 AI 助手名称为 **邮宝**。Hermes Agent 是底层运行时和 skill 承载环境，skills 中涉及对话身份、卡片话术、用户提示时，应让 Agent 以“邮宝”身份回答，而不是以 Hermes 或通用 AI 自称。
+
 ---
 
 ## 1. 设计原则

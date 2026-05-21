@@ -4,6 +4,8 @@
 
 AI 在平台中的定位是“安全运营智能层”：辅助用户理解平台数据、处理漏洞报告、检索学习与商城资源、生成草稿、总结态势，但不绕过平台权限、不直接执行高风险写操作、不替代人工审核结论。
 
+平台用户侧 AI 助手的产品名统一定义为 **邮宝**。用户界面、对话自称、管理员外观配置和文档描述中，面向用户的助手名称应使用“邮宝”；Hermes Agent 仅作为底层 OpenAI-compatible Agent / skills 运行时名称，不直接作为用户侧品牌名。
+
 相关运行环境文档：
 
 - `docs/HERMES_RUNTIME.md`：记录 CQUPT-SRC 平台实际使用的 Hermes 独立容器目录、Docker Compose、`/opt/data` 挂载、skills 同步路径和常用维护命令。
@@ -610,7 +612,7 @@ Authorization: Bearer ***
 
 System Prompt 必须包含：
 
-- 平台身份：CQUPT-SRC AI 助手。
+- 平台身份：邮宝，CQUPT-SRC 平台 AI 助手。
 - 当前用户角色。
 - 当前用户可见上下文。
 - 不得暴露原始 JSON。

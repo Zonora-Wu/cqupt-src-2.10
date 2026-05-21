@@ -1,6 +1,7 @@
 import { BadGatewayException, ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { parseStructuredResponse, stripJsonBlock } from './ai.response.service'
 import { buildSystemPrompt, buildUserPrompt } from './ai.prompt.service'
@@ -22,6 +23,8 @@ import { AiToolsService } from './ai.tools.service'
 const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
 const DEFAULT_OPENAI_MODEL = 'hermes-agent'
 const REQUEST_TIMEOUT_MS = 30_000
+const ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
+const ATTACHMENT_AGENT_EXCERPT_LIMIT = 5_000
 const MAX_TOOL_ROUNDS = 3
 const DEFAULT_AI_DAILY_TOKENS = 20_000
 const DEFAULT_AI_WEEKLY_TOKENS = 60_000
@@ -69,6 +72,7 @@ export class AiService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AiToolsService) private readonly toolsService: AiToolsService,
     @Inject(AiSkillRouterService) private readonly skillRouter: AiSkillRouterService,
+    @Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService,
   ) {}
 
   async checkAgentHealth() {
@@ -121,10 +125,10 @@ export class AiService {
 
     const quotaBefore = await this.buildQuotaSummary(user.id)
     if (!quotaBefore.enabled) {
-      throw new ForbiddenException('AI 助手额度已停用，请联系管理员')
+      throw new ForbiddenException('邮宝额度已停用，请联系管理员')
     }
     if (quotaBefore.remaining <= 0) {
-      throw new ForbiddenException('本月 AI token 额度已用尽，请联系管理员调整额度')
+      throw new ForbiddenException('本月邮宝 token 额度已用尽，请联系管理员调整额度')
     }
 
     const safeMessage = redactSensitiveText(input.message)
@@ -132,9 +136,10 @@ export class AiService {
 
     // 1. 构建用户上下文
     const context = await this.toolsService.buildUserContext(user)
+    const hasAttachmentContext = hasUserAttachmentContext(input.context)
 
     // 2. 对强结构化、强事务边界的资源查询走确定性业务响应，避免模型超时/编造 ID
-    const directResponse = buildDirectResourceResponse(input, context)
+    const directResponse = hasAttachmentContext ? null : buildDirectResourceResponse(input, context)
     if (directResponse) {
       await this.prisma.$transaction(async (tx) => {
         await tx.aiCallLog.create({
@@ -189,14 +194,80 @@ export class AiService {
       }
     }
 
-    // 3. 构建提示词。Hermes Agent 当前不执行后端业务 tool，避免发送 tools 造成 unknown tool 自纠错超时。
+    // 3. 查询已审核知识库。强业务数据已经由 Direct Response 拦截，知识库只处理通用安全方法论。
+    const aiSpace = getAiSpace(input.mode)
+    const knowledgeHits = hasAttachmentContext
+      ? []
+      : await this.knowledge.retrieve({
+          aiSpace,
+          question: safeMessage,
+          userId: user.id,
+        })
+    const topKnowledgeHit = knowledgeHits[0]
+    if (topKnowledgeHit && topKnowledgeHit.similarity >= 0.65) {
+      const knowledgeContent = `${topKnowledgeHit.answer}\n\n（已引用知识库：${topKnowledgeHit.title}）`
+      await this.prisma.$transaction(async (tx) => {
+        await tx.aiCallLog.create({
+          data: {
+            aiSpace,
+            ipAddress: meta.ipAddress,
+            modelName: `${getOpenAiModel()}:knowledge-direct`,
+            outputSummary: knowledgeContent.slice(0, 1000),
+            purpose: AiCallPurpose.CHAT,
+            sanitizedInputSummary: safeMessage.slice(0, 1000),
+            tokensUsed: 0,
+            userAgent: meta.userAgent,
+            userId: user.id,
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            action: AuditAction.CALL_AI,
+            actorId: user.id,
+            ipAddress: meta.ipAddress,
+            metadata: {
+              knowledgeDirect: true,
+              knowledgeHit: { id: topKnowledgeHit.id, similarity: topKnowledgeHit.similarity, title: topKnowledgeHit.title },
+              mode: input.mode,
+              promptLength: input.message.length,
+              quotaRemainingBefore: quotaBefore.remaining,
+              redacted: safeMessage !== input.message,
+              status: 200,
+              tokensUsed: 0,
+              upstreamModel: getOpenAiModel(),
+            },
+            requestPath: meta.requestPath,
+            result: 'success',
+            targetId: user.id,
+            targetType: 'AI',
+            userAgent: meta.userAgent,
+          },
+        })
+      })
+
+      return {
+        actions: [],
+        cards: [],
+        content: knowledgeContent,
+        mode: input.mode,
+        quota: await this.buildQuotaSummary(user.id),
+        skillRoute: serializeSkillRoute(skillRoute),
+        toolCalls: [],
+      }
+    }
+
+    // 4. 构建提示词。Hermes Agent 当前不执行后端业务 tool，避免发送 tools 造成 unknown tool 自纠错超时。
     const systemPrompt = buildSystemPrompt(input.mode, context, user.role, this.skillRouter.buildPrompt(skillRoute))
     const tools: ReturnType<typeof getAvailableTools> = []
+    const promptContext = {
+      ...(hasAttachmentContext ? compactAttachmentContextForAgent(input.context) : (input.context ?? {})),
+      ...(knowledgeHits.length > 0 ? { aiKnowledgeBase: formatKnowledgeHitsForPrompt(knowledgeHits) } : {}),
+    }
 
-    // 4. 初始消息
+    // 5. 初始消息
     const messages: OpenAiChatMessage[] = [
       { content: systemPrompt, role: 'system' },
-      { content: buildUserPrompt(safeMessage, input.context), role: 'user' },
+      { content: buildUserPrompt(safeMessage, promptContext), role: 'user' },
     ]
 
     let finalContent = ''
@@ -219,7 +290,7 @@ export class AiService {
         const result = await this.requestOpenAi('chat/completions', {
           body: payload,
           method: 'POST',
-          timeoutMs: REQUEST_TIMEOUT_MS,
+          timeoutMs: hasAttachmentContext ? ATTACHMENT_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
         })
 
         const choice = result.body?.choices?.[0]
@@ -327,6 +398,13 @@ export class AiService {
           userAgent: meta.userAgent,
         },
       })
+    })
+
+    await this.knowledge.enqueueCapture({
+      aiSpace: getAiSpace(input.mode),
+      answer: displayContent,
+      question: safeMessage,
+      userId: user.id,
     })
 
     // 7. 兜底：action 存在但 card 缺失时，从上下文补全
@@ -455,7 +533,7 @@ export class AiService {
     } catch (error) {
       if (error instanceof BadGatewayException) throw error
       const message = error instanceof Error && error.name === 'AbortError'
-        ? 'AI 助手响应超时，请稍后重试或改用更具体的问题。'
+        ? '邮宝响应超时，请稍后重试或改用更具体的问题。'
         : error instanceof Error
           ? error.message
           : 'OpenAI-compatible Agent 暂不可用'
@@ -495,6 +573,16 @@ function getAiSpace(mode: NormalizedAiChatInput['mode']) {
   return AiSpace.STUDENT
 }
 
+
+function formatKnowledgeHitsForPrompt(hits: Array<{ answer: string; category: string; similarity: number; title: string }>) {
+  return hits.map((hit) => ({
+    answer: hit.answer.slice(0, 1200),
+    category: hit.category,
+    confidence: Number(hit.similarity.toFixed(2)),
+    title: hit.title,
+  }))
+}
+
 function getVisibleSkillSpaces(role: RoleCode) {
   if (role === RoleCode.ADMIN) return [AiSpace.ADMIN, AiSpace.AUDITOR, AiSpace.STUDENT]
   if (role === RoleCode.AUDITOR) return [AiSpace.AUDITOR]
@@ -508,6 +596,49 @@ function serializeSkillRoute(decision: ReturnType<AiSkillRouterService['route']>
     blocked: decision.blocked.map((skill) => skill.name),
     strategy: decision.strategy,
   }
+}
+
+function hasUserAttachmentContext(context: Record<string, unknown> | undefined) {
+  if (!context) return false
+  const attachments = context.attachments
+  return Array.isArray(attachments) && attachments.length > 0
+}
+
+function compactAttachmentContextForAgent(context: Record<string, unknown> | undefined) {
+  if (!context) return {}
+  const attachments = Array.isArray(context.attachments) ? context.attachments : []
+  return {
+    ...context,
+    attachments: attachments.map((attachment) => {
+      if (!isRecord(attachment)) return attachment
+      const textExcerpt = typeof attachment.textExcerpt === 'string' ? attachment.textExcerpt : ''
+      const truncated = textExcerpt.length > ATTACHMENT_AGENT_EXCERPT_LIMIT
+      return {
+        ...attachment,
+        textExcerpt: truncated ? textExcerpt.slice(0, ATTACHMENT_AGENT_EXCERPT_LIMIT) : textExcerpt,
+        textExcerptTruncatedForAgent: truncated,
+      }
+    }),
+  }
+}
+
+function getFirstAttachmentTextContext(context: Record<string, unknown> | undefined) {
+  if (!context) return null
+  const attachments = context.attachments
+  if (!Array.isArray(attachments)) return null
+  const first = attachments.find(isRecord)
+  if (!first) return null
+  const textExcerpt = typeof first.textExcerpt === 'string' ? first.textExcerpt.trim() : ''
+  if (!textExcerpt) return null
+  return {
+    fileName: typeof first.fileName === 'string' ? first.fileName : '已上传附件',
+    sourceTextLength: typeof first.sourceTextLength === 'number' ? first.sourceTextLength : textExcerpt.length,
+    textExcerpt,
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -637,6 +768,9 @@ function buildAgentDegradedResponse(
   skillRoute: ReturnType<AiSkillRouterService['route']>,
   reason: string,
 ): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
+  const attachment = getFirstAttachmentTextContext(input.context)
+  if (attachment) return buildAttachmentDegradedResponse(input, attachment, reason)
+
   const direct = buildDirectResourceResponse(input, context)
   if (direct) return direct
 
@@ -680,6 +814,75 @@ function buildAgentDegradedResponse(
   return { actions: [], cards: [], content: lines.join('\n') }
 }
 
+function buildAttachmentDegradedResponse(
+  input: NormalizedAiChatInput,
+  attachment: { fileName: string; sourceTextLength: number; textExcerpt: string },
+  reason: string,
+): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
+  const excerpt = attachment.textExcerpt.replace(/\s+/g, ' ').trim()
+  const preview = excerpt.length > 700 ? `${excerpt.slice(0, 700)}……` : excerpt
+  const wantsPolish = /完善|修改|润色|优化|补充|改写|写成|整理/.test(input.message)
+  const wantsSummary = /总结|概括|摘要|提炼|重点/.test(input.message)
+
+  const lines = [
+    '模型服务当前响应较慢，邮宝已读取你上传的附件文本，先基于附件内容给出一版可用的本地降级建议。',
+    '',
+    `附件：${attachment.fileName}（已提取约 ${attachment.sourceTextLength} 字）`,
+    '',
+  ]
+
+  if (wantsSummary && !wantsPolish) {
+    lines.push(
+      '### 附件内容要点',
+      `- 核心内容：${preview}`,
+      '- 建议下一步：把目标资产、测试账号权限、关键请求/响应、影响范围和修复措施分别补齐，便于后续形成正式报告。',
+    )
+  } else {
+    lines.push(
+      '### 可直接采用的完善方向',
+      '- 标题：用“漏洞类型 + 影响对象 + 核心风险”表达，避免只写“存在漏洞”。',
+      '- 背景/边界：写明这是授权测试范围内发现的问题，敏感域名、账号、Token、Cookie 要先脱敏。',
+      '- 复现步骤：按 1/2/3 编号写清账号权限、访问路径、关键参数、操作前后对比和实际返回结果。',
+      '- 影响说明：说明攻击者能看到/修改/执行什么，影响哪些用户或业务流程，不要夸大到未验证的范围。',
+      '- 修复建议：优先给服务端校验、权限绑定、输入校验、审计日志和回归测试建议，避免只写“加强过滤”。',
+      '',
+      '### 根据附件先整理出的报告骨架',
+      '```markdown',
+      '# 漏洞标题',
+      '请改为：某功能/接口存在[漏洞类型]，可能导致[核心影响]',
+      '',
+      '## 测试边界',
+      '- 测试环境：授权范围内资产',
+      '- 测试账号/角色：补充账号角色，不填写真实密码、Token 或 Cookie',
+      '',
+      '## 复现步骤',
+      '1. 登录具备普通权限的测试账号。',
+      '2. 访问相关功能并记录正常请求。',
+      '3. 修改关键参数或触发附件中描述的异常路径。',
+      '4. 观察响应结果，截图/请求包需脱敏后作为证据。',
+      '',
+      '## 实际结果',
+      '后端返回了不应由当前用户获得的数据或执行了不应允许的操作。',
+      '',
+      '## 预期结果',
+      '后端应基于当前登录用户、角色和资源归属进行强制校验，拒绝越权或异常请求。',
+      '',
+      '## 影响说明',
+      '该问题可能导致信息泄露、越权操作或业务流程被绕过。请结合附件中的实际返回字段补充具体影响。',
+      '',
+      '## 修复建议',
+      '1. 所有敏感资源查询/修改均在服务端绑定当前用户身份与资源归属。',
+      '2. 不信任前端传入的 userId、role、ownerId 等权限字段。',
+      '3. 对越权访问返回 403/404，并记录审计日志。',
+      '4. 增加同角色不同用户、低权限访问高权限资源的回归测试。',
+      '```',
+    )
+  }
+
+  lines.push('', '### 附件片段参考', `> ${preview}`, '', `降级原因：${reason}`)
+  return { actions: [], cards: [], content: lines.join('\n') }
+}
+
 function buildDirectResourceResponse(
   input: NormalizedAiChatInput,
   context: UserContextSnapshot,
@@ -715,7 +918,7 @@ function buildDirectResourceResponse(
   if (asksGreeting) {
     if (lines.length > 0) lines.push('')
     lines.push(
-      '你好，我是 CQUPT-SRC 平台的 AI 助手。',
+      '你好，我是邮宝，CQUPT-SRC 平台的 AI 助手。',
       '',
       '我可以帮你：',
       '- 整理漏洞报告和复现步骤。',

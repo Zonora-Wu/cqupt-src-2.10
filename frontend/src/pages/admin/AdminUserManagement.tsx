@@ -991,8 +991,8 @@ function AiQuotaDialog({
             type="button"
           >
             <span>
-              <span className="block font-medium">允许使用 AI 助手</span>
-              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">关闭后该用户无法发起 AI 对话</span>
+              <span className="block font-medium">允许使用邮宝</span>
+              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">关闭后该用户无法发起邮宝对话</span>
             </span>
             <span className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition ${enabled ? 'bg-brand-600' : 'bg-slate-300 dark:bg-white/20'}`}>
               <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />

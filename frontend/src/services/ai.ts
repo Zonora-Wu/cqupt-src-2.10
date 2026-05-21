@@ -71,6 +71,15 @@ export type AiVulnerabilityReportDraftResponse = {
   sourceTextLength: number
 }
 
+export type AiAttachmentTextResponse = {
+  fileName: string
+  kind: 'PDF_TEXT'
+  mimeType: string | null
+  size: number
+  sourceTextLength: number
+  textExcerpt: string
+}
+
 export type AiChatResponse = {
   content: string
   mode: AiChatMode
@@ -146,6 +155,17 @@ export async function uploadAiReportDraft(file: File) {
     auth: true,
     formData,
     unauthenticatedMessage: '请先登录后再上传报告',
+  })
+}
+
+export async function uploadAiAttachmentText(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return apiFormRequest<AiAttachmentTextResponse>('/ai/attachments/text', {
+    auth: true,
+    formData,
+    unauthenticatedMessage: '请先登录后再上传附件',
   })
 }
 

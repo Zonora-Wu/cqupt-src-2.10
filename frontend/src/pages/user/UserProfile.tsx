@@ -210,7 +210,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
                 />
               </div>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                {aiQuota?.enabled === false ? 'AI 助手已停用，请联系管理员。' : `下次重置：${formatDate(aiQuota?.resetAt)}`}
+                {aiQuota?.enabled === false ? '邮宝已停用，请联系管理员。' : `下次重置：${formatDate(aiQuota?.resetAt)}`}
               </p>
             </div>
           </SurfacePanel>

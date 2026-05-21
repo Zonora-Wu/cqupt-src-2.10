@@ -24,6 +24,9 @@ import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getAdminDashboard } from '../../services/dashboard'
 
+const AdminAiKnowledgeManagement = lazy(() =>
+  import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
+)
 const AdminAnnouncementManagement = lazy(() =>
   import('./AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
 )
@@ -63,6 +66,7 @@ const adminMenuItems = [
   '学习管理',
   '积分商城',
   '审计日志',
+  'AI 知识库',
   '系统设置',
 ]
 
@@ -126,7 +130,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch {}
+    try { localStorage.setItem('cqupt-theme', theme) } catch { void 0 }
   }, [theme])
 
   return (
@@ -179,6 +183,8 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <AdminPointsMallManagement />
           ) : activeMenu === '审计日志' ? (
             <AdminAuditLogManagement />
+          ) : activeMenu === 'AI 知识库' ? (
+            <AdminAiKnowledgeManagement />
           ) : (
             <AdminSystemSettings />
           )}

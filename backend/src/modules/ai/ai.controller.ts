@@ -85,6 +85,12 @@ export class AiController {
     return this.reportDrafts.extractVulnerabilityDrafts(file)
   }
 
+  @Post('attachments/text')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  extractAttachmentText(@UploadedFile() file: UploadedPdfFile | undefined) {
+    return this.reportDrafts.extractAttachmentText(file)
+  }
+
   @Post('actions/:actionId/confirm')
   confirmAction(
     @Param('actionId') actionId: string,

@@ -1,0 +1,75 @@
+import {
+  AiKnowledgeCategory,
+  AiKnowledgeFeedbackValue,
+  AiKnowledgeRoleScope,
+  AiKnowledgeSensitivity,
+  AiKnowledgeStatus,
+  AiKnowledgeVisibility,
+  AiSkillCandidateStatus,
+  AiSpace,
+} from '@prisma/client'
+
+export type AiKnowledgeCaptureInput = {
+  aiSpace: AiSpace
+  answer: string
+  callId?: string
+  question: string
+  userId?: string
+}
+
+export type AiKnowledgeRetrievalInput = {
+  aiSpace: AiSpace
+  limit?: number
+  question: string
+  userId?: string
+}
+
+export type AiKnowledgeHitSummary = {
+  id: string
+  title: string
+  answer: string
+  category: AiKnowledgeCategory
+  tags: string[]
+  similarity: number
+}
+
+export type AiKnowledgeListQuery = {
+  category?: AiKnowledgeCategory
+  keyword?: string
+  page: number
+  pageSize: number
+  roleScope?: AiKnowledgeRoleScope
+  status?: AiKnowledgeStatus
+}
+
+export type AiKnowledgeReviewInput = {
+  status: Extract<AiKnowledgeStatus, 'APPROVED' | 'REJECTED' | 'ARCHIVED'>
+  note?: string
+}
+
+export type AiKnowledgeCreateInput = {
+  answer: string
+  category?: AiKnowledgeCategory
+  question: string
+  roleScope?: AiKnowledgeRoleScope
+  sensitivity?: AiKnowledgeSensitivity
+  tags?: string[]
+  title: string
+  visibility?: AiKnowledgeVisibility
+}
+
+export type AiKnowledgeFeedbackInput = {
+  note?: string
+  value: AiKnowledgeFeedbackValue
+}
+
+export type AiSkillCandidateCreateInput = {
+  description: string
+  name: string
+  sourceKnowledgeIds: string[]
+}
+
+export type AiSkillCandidateReviewInput = {
+  note?: string
+  status: Extract<AiSkillCandidateStatus, 'APPROVED' | 'REJECTED'>
+}

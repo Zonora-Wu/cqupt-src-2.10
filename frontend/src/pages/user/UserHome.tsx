@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   ArrowRight,
   Award,
   Bell,
@@ -6,7 +7,9 @@ import {
   Brain,
   BookOpen,
   ChevronRight,
+  ClipboardCheck,
   Clock3,
+  FileSignature,
   FilePlus2,
   FileSearch,
   Gauge,
@@ -18,13 +21,18 @@ import {
   Sun,
   Target,
   Trophy,
+  X,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
+import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard } from '../../services/dashboard'
@@ -143,9 +151,16 @@ const menuItems = [
   '积分商城',
   '排行榜',
   '学习中心',
-  'AI 助手',
+  'AI助手',
   '平台公告',
 ]
+
+function hasPendingAccessTasks(status: AccessStatus | null) {
+  if (!status) return false
+  const needsAgreement = status.responsibilityAgreementRequired && !status.responsibilitySigned
+  const needsExam = status.securityExamRequired && !status.securityExamPassed
+  return needsAgreement || needsExam
+}
 
 export function UserHome({ onLogout, user }: UserHomeProps) {
   const preferenceKey = user.id ?? user.unifiedCode
@@ -160,6 +175,22 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
   const [aiSkills, setAiSkills] = useState<AiSkillLibraryItem[]>(fallbackAiSkills)
   const [navAvatarUrl, setNavAvatarUrl] = useState<string | null>(null)
+  const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
+  const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
+  const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
+
+  // 加载准入状态，新用户未完成责任书或安全答题时进入首页弹窗提醒
+  useEffect(() => {
+    let active = true
+    getAccessStatus()
+      .then((status) => {
+        if (!active) return
+        setAccessStatus(status)
+        setShowAccessTodoDialog(hasPendingAccessTasks(status))
+      })
+      .catch(() => { /* 静默失败，提交时后端仍会强制校验 */ })
+    return () => { active = false }
+  }, [])
 
   // 加载头像用于导航栏
   useEffect(() => {
@@ -232,7 +263,24 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setPendingAiPrompt(content)
     setAiPrompt('')
     setAiFocused(false)
-    setActiveMenu('AI 助手')
+    setActiveMenu('AI助手')
+  }
+
+  const refreshAccessStatus = async () => {
+    const status = await getAccessStatus()
+    setAccessStatus(status)
+    setShowAccessTodoDialog(hasPendingAccessTasks(status))
+    return status
+  }
+
+  const openResponsibilityDialog = () => {
+    setShowAccessTodoDialog(false)
+    setShowResponsibilityDialog(true)
+  }
+
+  const openSecurityExamPage = () => {
+    setShowAccessTodoDialog(false)
+    setActiveMenu('安全答题')
   }
 
   return (
@@ -284,13 +332,22 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
       {activeMenu !== '首页' ? (
         <Suspense fallback={<UserPageLoading />}>
-          {activeMenu === '提交漏洞' ? (
+          {activeMenu === '安全答题' ? (
+            <SecurityExamPage
+              onBack={() => setActiveMenu('首页')}
+              onPassed={() => {
+                void refreshAccessStatus().then((status) => {
+                  if (!hasPendingAccessTasks(status)) setActiveMenu('首页')
+                })
+              }}
+            />
+          ) : activeMenu === '提交漏洞' ? (
             <UserSubmitVulnerability />
           ) : activeMenu === '我的漏洞' ? (
             <UserMyVulnerabilities />
           ) : activeMenu === '学习中心' ? (
             <UserLearningCenter />
-          ) : activeMenu === 'AI 助手' ? (
+          ) : activeMenu === 'AI助手' ? (
             <UserAIAssistant
               initialPrompt={pendingAiPrompt}
               onInitialPromptConsumed={() => setPendingAiPrompt(null)}
@@ -335,16 +392,16 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                   <div>
                     <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
                       <Sparkles className="h-3.5 w-3.5" />
-                      AI Assistant
+                      YouBao AI
                     </p>
 
                     <div className="mt-12 max-w-3xl">
                       <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
                         欢迎回来，{user.name}
-                        <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给 AI 先整理一遍。</span>
+                        <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给邮宝先整理一遍。</span>
                       </h1>
                       <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-400">
-                        AI 可以辅助提取报告关键信息、检查复现材料完整度，并根据你的学习进度推荐下一步训练内容。
+                        邮宝可以辅助提取报告关键信息、检查复现材料完整度，并根据你的学习进度推荐下一步训练内容。
                       </p>
                     </div>
                   </div>
@@ -370,7 +427,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                               submitHomeAiPrompt()
                             }
                           }}
-                          placeholder="让 AI 帮我分析报告、补全漏洞信息或规划学习路径"
+                          placeholder="让邮宝帮我分析报告、补全漏洞信息或规划学习路径"
                           type="text"
                           value={aiPrompt}
                         />
@@ -525,6 +582,21 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
         </section>
       )}
+      <AccessTodoDialog
+        accessStatus={accessStatus}
+        onClose={() => setShowAccessTodoDialog(false)}
+        onOpenAgreement={openResponsibilityDialog}
+        onStartExam={openSecurityExamPage}
+        open={showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
+      />
+      <ResponsibilityAgreementDialog
+        accessStatus={accessStatus}
+        onClose={() => setShowResponsibilityDialog(false)}
+        onSigned={async () => {
+          await refreshAccessStatus()
+        }}
+        open={showResponsibilityDialog}
+      />
     </AppBackground>
   )
 }
@@ -535,6 +607,144 @@ function UserPageLoading() {
       <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
         正在加载页面...
       </SurfacePanel>
+    </section>
+  )
+}
+
+function AccessTodoDialog({
+  accessStatus,
+  onClose,
+  onOpenAgreement,
+  onStartExam,
+  open,
+}: {
+  accessStatus: AccessStatus | null
+  onClose: () => void
+  onOpenAgreement: () => void
+  onStartExam: () => void
+  open: boolean
+}) {
+  if (!open || typeof document === 'undefined') return null
+
+  const needsAgreement = Boolean(accessStatus?.responsibilityAgreementRequired && !accessStatus.responsibilitySigned)
+  const needsExam = Boolean(accessStatus?.securityExamRequired && !accessStatus.securityExamPassed)
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+        <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
+          <div>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">还有待完成的准入事项</h2>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              完成责任书签署和安全答题后，即可获得完整的漏洞提交权限。
+            </p>
+          </div>
+          <button
+            aria-label="关闭"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 p-5">
+          <AccessTaskCard
+            actionLabel={needsAgreement ? '签署责任书' : '已完成'}
+            description="请阅读平台授权测试责任书，阅读 60 秒后可签署当前版本。"
+            disabled={!needsAgreement}
+            icon={<FileSignature className="h-5 w-5" />}
+            onClick={onOpenAgreement}
+            status={needsAgreement ? '待完成' : '已完成'}
+            title="责任书签署"
+          />
+          <AccessTaskCard
+            actionLabel={needsExam ? '去答题' : '已通过'}
+            description={`完成网络安全知识答题，达到 ${accessStatus?.examThreshold ?? 80} 分后通过准入。`}
+            disabled={!needsExam}
+            icon={<ClipboardCheck className="h-5 w-5" />}
+            onClick={onStartExam}
+            status={needsExam ? '待完成' : '已通过'}
+            title="安全准入答题"
+          />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function AccessTaskCard({
+  actionLabel,
+  description,
+  disabled,
+  icon,
+  onClick,
+  status,
+  title,
+}: {
+  actionLabel: string
+  description: string
+  disabled: boolean
+  icon: ReactNode
+  onClick: () => void
+  status: string
+  title: string
+}) {
+  return (
+    <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold text-slate-950 dark:text-white">{title}</h3>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${disabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'}`}>
+                {status}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{description}</p>
+          </div>
+        </div>
+        <button
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55"
+          disabled={disabled}
+          onClick={onClick}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: () => void }) {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-5 pb-10 pt-24 md:px-8">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-green-300">SECURITY ACCESS</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
+          <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
+            完成答题并达到平台要求分数后，即可更新准入状态。
+          </p>
+        </div>
+        <button
+          className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onBack}
+          type="button"
+        >
+          返回首页
+        </button>
+      </div>
+      <SecurityExamDialog embedded onClose={onBack} onPassed={onPassed} open />
     </section>
   )
 }

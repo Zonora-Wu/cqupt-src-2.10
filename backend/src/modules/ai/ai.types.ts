@@ -157,6 +157,15 @@ export type AiVulnerabilityReportDraftResponse = {
   sourceTextLength: number
 }
 
+export type AiAttachmentTextResponse = {
+  fileName: string
+  kind: 'PDF_TEXT'
+  mimeType: string | null
+  size: number
+  sourceTextLength: number
+  textExcerpt: string
+}
+
 export type AiCard =
   | {
       type: 'LEARNING_RESOURCE'

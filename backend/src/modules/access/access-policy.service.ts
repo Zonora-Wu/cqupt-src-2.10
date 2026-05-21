@@ -106,49 +106,8 @@ export class AccessPolicyService {
     }
   }
 
-  async submitSecurityExam(user: AuthenticatedRequestUser, input: SubmitSecurityExamInput, meta: ClientRequestMeta) {
-    const threshold = await this.getSecurityExamThreshold()
-    const passed = input.score >= threshold
-
-    const attempt = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.securityExamAttempt.create({
-        data: {
-          ipAddress: meta.ipAddress,
-          passed,
-          score: input.score,
-          userAgent: meta.userAgent,
-          userId: user.id,
-        },
-      })
-
-      await tx.auditLog.create({
-        data: {
-          action: AuditAction.MANAGE_USER,
-          actorId: user.id,
-          ipAddress: meta.ipAddress,
-          metadata: {
-            action: 'submit_security_exam',
-            passed,
-            score: input.score,
-            threshold,
-          },
-          requestPath: meta.requestPath,
-          result: 'success',
-          targetId: created.id,
-          targetType: 'SecurityExamAttempt',
-          userAgent: meta.userAgent,
-        },
-      })
-
-      return created
-    })
-
-    return {
-      passed: attempt.passed,
-      score: attempt.score,
-      submittedAt: attempt.createdAt,
-      threshold,
-    }
+  async submitSecurityExam(_user: AuthenticatedRequestUser, _input: SubmitSecurityExamInput, _meta: ClientRequestMeta) {
+    throw new ForbiddenException('安全答题必须通过随机题卷提交，不能直接记录分数')
   }
 
   private async getAccessStatusByUserId(userId: string) {
@@ -233,7 +192,7 @@ export class AccessPolicyService {
       return Boolean((setting.value as { enabled?: unknown }).enabled)
     }
 
-    return false
+    return true
   }
 
   private async getSecurityExamThreshold() {

@@ -447,7 +447,7 @@ export class SystemSettingsService {
         create: {
           key: 'ai_assistant_avatar_url',
           value: avatarUrl,
-          description: 'AI 助手头像',
+          description: '邮宝头像',
           updatedById: user.id,
         },
       })

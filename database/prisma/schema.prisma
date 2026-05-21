@@ -126,10 +126,17 @@ enum AiSpace {
 enum AiCallPurpose {
   CHAT
   VULNERABILITY_PARSE
+  SECURITY_QUESTION_GENERATION
   VULNERABILITY_VALUE_REVIEW
   LEARNING_RECOMMENDATION
   REPORT_SUMMARY
   AUDIT_ANALYSIS
+}
+
+enum SecurityQuestionType {
+  SINGLE_CHOICE
+  TRUE_FALSE
+  MULTIPLE_CHOICE
 }
 
 enum AiProposalStatus {
@@ -137,6 +144,83 @@ enum AiProposalStatus {
   APPROVED
   REJECTED
   APPLIED
+}
+
+
+enum AiKnowledgeCategory {
+  VULNERABILITY_REPORTING
+  XSS
+  SQL_INJECTION
+  SSRF
+  FILE_UPLOAD
+  ACCESS_CONTROL
+  AUTHENTICATION
+  SECURITY_LEARNING
+  SRC_RULES
+  PLATFORM_USAGE
+  AUDITOR_REVIEW
+  ADMIN_ANALYTICS
+}
+
+enum AiKnowledgeRoleScope {
+  STUDENT
+  AUDITOR
+  ADMIN
+  ALL
+}
+
+enum AiKnowledgeVisibility {
+  PRIVATE
+  REVIEW_REQUIRED
+  PLATFORM_PUBLIC
+  ROLE_ONLY
+}
+
+enum AiKnowledgeSensitivity {
+  PUBLIC
+  INTERNAL
+  SENSITIVE
+  REJECTED
+}
+
+enum AiKnowledgeStatus {
+  CANDIDATE
+  AUTO_APPROVED
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+  PROMOTED_TO_SKILL
+}
+
+enum AiKnowledgeSource {
+  USER_CHAT
+  ADMIN_CREATED
+  DOC_IMPORT
+  SKILL_PROMOTION
+}
+
+enum AiKnowledgeFeedbackValue {
+  HELPFUL
+  UNHELPFUL
+  REPORT_ABUSE
+}
+
+enum AiKnowledgeJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DISCARDED
+}
+
+enum AiSkillCandidateStatus {
+  DRAFT
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  INSTALLED
+  FAILED
 }
 
 enum AuditAction {
@@ -186,6 +270,7 @@ model User {
   refreshTokens         RefreshToken[]
   permissionOverrides   UserPermissionOverride[]
   examAttempts          SecurityExamAttempt[]
+  createdSecurityQuestions SecurityQuestion[]      @relation("SecurityQuestionCreator")
   responsibilitySigns   ResponsibilitySignature[]
   submittedReports      VulnerabilityReport[]     @relation("ReportSubmitter")
   assignedReviews       ReviewAssignment[]         @relation("AssignmentAuditor")
@@ -209,6 +294,13 @@ model User {
   aiFaqEntries          AiFaqEntry[]                @relation("AiFaqCreator")
   aiActionProposals     AiActionProposal[]          @relation("AiProposalRequester")
   approvedAiProposals   AiActionProposal[]          @relation("AiProposalApprover")
+  knowledgeEntries       AiKnowledgeEntry[]          @relation("AiKnowledgeSourceUser")
+  reviewedKnowledgeEntries AiKnowledgeEntry[]        @relation("AiKnowledgeReviewer")
+  knowledgeRevisions    AiKnowledgeRevision[]       @relation("AiKnowledgeRevisionEditor")
+  knowledgeHits         AiKnowledgeHit[]            @relation("AiKnowledgeHitUser")
+  knowledgeFeedbacks    AiKnowledgeFeedback[]       @relation("AiKnowledgeFeedbackUser")
+  reviewedSkillCandidates AiSkillCandidate[]         @relation("AiSkillCandidateReviewer")
+  operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
   auditLogs             AuditLog[]                  @relation("AuditActor")
 
   @@index([roleId])
@@ -354,16 +446,41 @@ model RefreshToken {
 }
 
 model SecurityExamAttempt {
-  id        String    @id @default(cuid())
-  userId    String
-  score     Int?
-  passed    Boolean
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(cuid())
+  userId        String
+  score         Int?
+  totalScore    Int       @default(100)
+  threshold     Int       @default(80)
+  questionCount Int       @default(0)
+  correctCount  Int       @default(0)
+  detailJson    Json?
+  passed        Boolean
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, passed])
+}
+
+model SecurityQuestion {
+  id          String               @id @default(cuid())
+  type        SecurityQuestionType
+  stem        String               @db.Text
+  options     Json
+  answerKeys  String[]
+  explanation String?              @db.Text
+  source      String               @default("ADMIN")
+  active      Boolean              @default(true)
+  createdById String?
+  createdBy   User?                @relation("SecurityQuestionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  deletedAt   DateTime?
+
+  @@index([type, active])
+  @@index([createdAt])
+  @@index([createdById])
 }
 
 model ResponsibilityAgreement {
@@ -804,6 +921,180 @@ model AiActionProposal {
 
   @@index([aiSpace, status])
   @@index([reportId])
+}
+
+model AiKnowledgeEntry {
+  id                     String                  @id @default(cuid())
+  title                  String
+  canonicalQuestion      String                  @db.Text
+  canonicalAnswer        String                  @db.Text
+  summary                String?                 @db.Text
+  category               AiKnowledgeCategory
+  tags                   String[]
+  roleScope              AiKnowledgeRoleScope
+  visibility             AiKnowledgeVisibility
+  sensitivity            AiKnowledgeSensitivity
+  status                 AiKnowledgeStatus       @default(CANDIDATE)
+  source                 AiKnowledgeSource       @default(USER_CHAT)
+  sourceCallId           String?
+  sourceUserId           String?
+  sourceHash             String                  @unique
+  sanitizedInputHash     String?
+  similarityKey          String?
+  embeddingModel         String?
+  embeddingDimension     Int?
+  embeddingJson          Json?
+  generalityScore        Float                   @default(0)
+  safetyScore            Float                   @default(0)
+  privacyRiskScore       Float                   @default(1)
+  educationalValueScore  Float                   @default(0)
+  reuseValueScore        Float                   @default(0)
+  answerQualityScore     Float                   @default(0)
+  platformRelevanceScore Float                   @default(0)
+  confidenceScore        Float                   @default(0)
+  hitCount               Int                     @default(0)
+  helpfulCount           Int                     @default(0)
+  unhelpfulCount         Int                     @default(0)
+  abuseReportCount       Int                     @default(0)
+  promotedSkillId        String?
+  reviewedById           String?
+  reviewedAt             DateTime?
+  reviewNote             String?                 @db.Text
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  archivedAt             DateTime?
+
+  sourceUser             User?                   @relation("AiKnowledgeSourceUser", fields: [sourceUserId], references: [id])
+  reviewedBy             User?                   @relation("AiKnowledgeReviewer", fields: [reviewedById], references: [id])
+  hits                   AiKnowledgeHit[]
+  feedbacks              AiKnowledgeFeedback[]
+  revisions              AiKnowledgeRevision[]
+
+  @@index([status, updatedAt])
+  @@index([roleScope, status])
+  @@index([category, status])
+  @@index([sourceCallId])
+  @@index([sourceUserId])
+  @@index([similarityKey])
+}
+
+model AiKnowledgeRevision {
+  id                String            @id @default(cuid())
+  knowledgeId       String
+  editorId          String?
+  title             String
+  canonicalQuestion String            @db.Text
+  canonicalAnswer   String            @db.Text
+  changeReason      String?           @db.Text
+  createdAt         DateTime          @default(now())
+
+  knowledge         AiKnowledgeEntry  @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  editor            User?             @relation("AiKnowledgeRevisionEditor", fields: [editorId], references: [id])
+
+  @@index([knowledgeId, createdAt])
+  @@index([editorId])
+}
+
+model AiKnowledgeHit {
+  id              String            @id @default(cuid())
+  knowledgeId     String
+  userId          String?
+  aiSpace         AiSpace
+  questionHash    String
+  questionSummary String            @db.Text
+  similarity      Float
+  route           String
+  usedInResponse  Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+
+  knowledge       AiKnowledgeEntry  @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  user            User?             @relation("AiKnowledgeHitUser", fields: [userId], references: [id])
+
+  @@index([knowledgeId, createdAt])
+  @@index([userId, createdAt])
+  @@index([aiSpace, createdAt])
+  @@index([questionHash])
+}
+
+model AiKnowledgeFeedback {
+  id          String                   @id @default(cuid())
+  knowledgeId String
+  userId      String?
+  value       AiKnowledgeFeedbackValue
+  note        String?                  @db.Text
+  createdAt   DateTime                 @default(now())
+
+  knowledge   AiKnowledgeEntry         @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  user        User?                    @relation("AiKnowledgeFeedbackUser", fields: [userId], references: [id])
+
+  @@index([knowledgeId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AiKnowledgeCaptureJob {
+  id              String               @id @default(cuid())
+  callId          String?
+  userId          String?
+  aiSpace         AiSpace
+  questionSummary String               @db.Text
+  answerSummary   String               @db.Text
+  questionHash    String               @unique
+  answerHash      String
+  status          AiKnowledgeJobStatus @default(PENDING)
+  attempts        Int                  @default(0)
+  error           String?              @db.Text
+  processAfter    DateTime             @default(now())
+  lockedAt        DateTime?
+  lockedBy        String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, processAfter])
+  @@index([callId])
+  @@index([userId, createdAt])
+  @@index([questionHash])
+}
+
+model AiSkillCandidate {
+  id                 String                 @id @default(cuid())
+  name               String                 @unique
+  description        String
+  content            String                 @db.Text
+  sourceKnowledgeIds String[]
+  roleScope          AiKnowledgeRoleScope
+  status             AiSkillCandidateStatus @default(DRAFT)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  reviewNote         String?                @db.Text
+  installedPath      String?
+  installError       String?                @db.Text
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  reviewedBy         User?                  @relation("AiSkillCandidateReviewer", fields: [reviewedById], references: [id])
+  installLogs        AiSkillInstallLog[]
+
+  @@index([status, updatedAt])
+  @@index([roleScope])
+  @@index([reviewedById])
+}
+
+model AiSkillInstallLog {
+  id            String           @id @default(cuid())
+  candidateId   String
+  operatorId    String?
+  targetPath    String
+  containerPath String
+  contentSha256 String
+  success       Boolean
+  error         String?          @db.Text
+  createdAt     DateTime         @default(now())
+
+  candidate     AiSkillCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  operator      User?            @relation("AiSkillInstallOperator", fields: [operatorId], references: [id])
+
+  @@index([candidateId, createdAt])
+  @@index([operatorId, createdAt])
 }
 
 model AuditLog {

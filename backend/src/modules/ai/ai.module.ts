@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { AiKnowledgeModule } from '../ai-knowledge/ai-knowledge.module'
 import { AnnouncementsModule } from '../announcements/announcements.module'
 import { AuditLogsModule } from '../audit-logs/audit-logs.module'
 import { AuthModule } from '../auth/auth.module'
@@ -16,6 +17,7 @@ import { AiToolsService } from './ai.tools.service'
 @Module({
   controllers: [AiController],
   imports: [
+    AiKnowledgeModule,
     AnnouncementsModule,
     AuditLogsModule,
     AuthModule,

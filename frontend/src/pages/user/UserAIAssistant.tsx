@@ -5,10 +5,12 @@ import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { getAiAppearance, getAiQuota, sendAiChat, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
+import { getAiAppearance, getAiQuota, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
+import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 
 type ChatMessage = {
+  attachment?: ChatAttachment
   content: string
   role: 'assistant' | 'user'
   cards?: AiCard[]
@@ -19,6 +21,16 @@ type ChatMessage = {
 type UserAIAssistantProps = {
   initialPrompt?: string | null
   onInitialPromptConsumed?: () => void
+}
+
+type PendingAttachment = {
+  file: File
+  id: string
+}
+
+type ChatAttachment = {
+  name: string
+  size: number
 }
 
 const MAX_STORED_MESSAGES = 80
@@ -41,7 +53,8 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const consumedInitialPromptRef = useRef<string | null>(null)
   const [bottomInset, setBottomInset] = useState(156)
   const [showScrollDown, setShowScrollDown] = useState(false)
-  const [uploadingReport, setUploadingReport] = useState(false)
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const hasStarted = messages.length > 0
 
   useEffect(() => {
@@ -133,14 +146,68 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? input).trim()
-    if (!content || sending) return
+    const attachment = pendingAttachment
+    if ((!content && !attachment) || sending || uploadingAttachment) return
 
-    setMessages((current) => [...current, { role: 'user', content }])
+    const effectiveContent = content || '请阅读附件内容，并给出整理、修改或下一步建议。'
+    const shouldExtractReportDrafts = Boolean(attachment && isReportDraftIntent(effectiveContent))
+    const userAttachment = attachment ? { name: attachment.file.name, size: attachment.file.size } : undefined
+
+    setMessages((current) => [...current, { attachment: userAttachment, role: 'user', content: effectiveContent }])
     setInput('')
+    setPendingAttachment(null)
+
+    if (shouldExtractReportDrafts && attachment) {
+      setUploadingAttachment(true)
+      try {
+        const result = await uploadAiReportDraft(attachment.file)
+        result.drafts.forEach((draft) => {
+          reportAttachmentFilesRef.current[draft.id] = attachment.file
+        })
+        setMessages((current) => [
+          ...current,
+          {
+            role: 'assistant',
+            content: `${result.message}\n\n我已按你的提交/生成报告意图，把附件内容拆成可编辑的漏洞提交卡片。报告中没有的信息会保持为空；请补齐标题、影响资产、漏洞类型、等级、复现步骤、影响评估和修复建议后，再逐项确认提交。`,
+            reportDrafts: result.drafts,
+          },
+        ])
+      } catch (error) {
+        setMessages((current) => [
+          ...current,
+          { role: 'assistant', content: error instanceof Error ? error.message : '附件解析失败，请确认 PDF 可复制文本后再试。' },
+        ])
+      } finally {
+        setUploadingAttachment(false)
+        if (reportFileInputRef.current) reportFileInputRef.current.value = ''
+      }
+      return
+    }
+
     setSending(true)
+    setUploadingAttachment(Boolean(attachment))
 
     try {
-      const result = await sendAiChat(content)
+      const attachmentContext = attachment ? await uploadAiAttachmentText(attachment.file) : null
+      const result = await sendAiChat(
+        effectiveContent,
+        'student',
+        attachmentContext
+          ? {
+              attachments: [
+                {
+                  fileName: attachmentContext.fileName,
+                  kind: attachmentContext.kind,
+                  mimeType: attachmentContext.mimeType,
+                  size: attachmentContext.size,
+                  sourceTextLength: attachmentContext.sourceTextLength,
+                  textExcerpt: attachmentContext.textExcerpt,
+                },
+              ],
+              attachmentUsePolicy: '附件是用户本轮提问的上下文。不要默认把附件当作要提交的漏洞报告；只有用户明确要求生成/提交漏洞报告时才引导提交，否则按用户输入提供修改、总结、检查或建议。',
+            }
+          : undefined,
+      )
       if (result.quota) setAiQuota(result.quota)
       setMessages((current) => [
         ...current,
@@ -156,56 +223,35 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         ...current,
         {
           role: 'assistant',
-          content: error instanceof Error ? error.message : 'AI 助手暂时不可用，请稍后再试。',
+          content: error instanceof Error ? error.message : '邮宝暂时不可用，请稍后再试。',
         },
       ])
     } finally {
       setSending(false)
+      setUploadingAttachment(false)
+      if (reportFileInputRef.current) reportFileInputRef.current.value = ''
     }
   }
 
-  const handleReportUpload = async (file: File | undefined) => {
-    if (!file || uploadingReport) return
+  const handleAttachmentSelected = (file: File | undefined) => {
+    if (!file || uploadingAttachment || sending) return
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: '当前仅支持上传 PDF 渗透测试报告。请重新选择 PDF 文件。' },
+        { role: 'assistant', content: '当前仅支持上传 PDF 附件。你可以先转换为可复制文本的 PDF 后再发送给邮宝。' },
       ])
       return
     }
     if (file.size > 20 * 1024 * 1024) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: '报告文件不能超过 20MB，请压缩后再上传。' },
+        { role: 'assistant', content: '附件文件不能超过 20MB，请压缩后再上传。' },
       ])
       return
     }
 
-    setUploadingReport(true)
-    setMessages((current) => [...current, { role: 'user', content: `上传渗透测试报告：${file.name}` }])
-
-    try {
-      const result = await uploadAiReportDraft(file)
-      result.drafts.forEach((draft) => {
-        reportAttachmentFilesRef.current[draft.id] = file
-      })
-      setMessages((current) => [
-        ...current,
-        {
-          role: 'assistant',
-          content: `${result.message}\n\n我已把报告内容拆成可编辑的漏洞提交卡片。报告中没有的信息会保持为空；请补齐标题、影响资产、漏洞类型、等级、复现步骤、影响评估和修复建议后，再逐项确认提交。`,
-          reportDrafts: result.drafts,
-        },
-      ])
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { role: 'assistant', content: error instanceof Error ? error.message : '报告解析失败，请确认 PDF 可复制文本后再试。' },
-      ])
-    } finally {
-      setUploadingReport(false)
-      if (reportFileInputRef.current) reportFileInputRef.current.value = ''
-    }
+    setPendingAttachment({ file, id: `${file.name}-${file.size}-${file.lastModified}` })
+    window.setTimeout(() => inputTextareaRef.current?.focus(), 0)
   }
 
   const inputBox = (
@@ -220,22 +266,34 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
+        <AnimatePresence initial={false}>
+          {pendingAttachment && (
+            <PendingAttachmentPreview
+              attachment={pendingAttachment}
+              disabled={sending || uploadingAttachment}
+              onRemove={() => {
+                setPendingAttachment(null)
+                if (reportFileInputRef.current) reportFileInputRef.current.value = ''
+              }}
+            />
+          )}
+        </AnimatePresence>
         <div className="flex items-end gap-2">
           <input
             accept="application/pdf,.pdf"
             className="hidden"
-            onChange={(event) => void handleReportUpload(event.target.files?.[0])}
+            onChange={(event) => handleAttachmentSelected(event.target.files?.[0])}
             ref={reportFileInputRef}
             type="file"
           />
           <button
-            aria-label="上传渗透报告附件"
+            aria-label="选择 PDF 附件"
             className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-900 disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
-            disabled={uploadingReport || sending}
+            disabled={uploadingAttachment || sending}
             onClick={() => reportFileInputRef.current?.click()}
             type="button"
           >
-            <Paperclip className={`h-5 w-5 ${uploadingReport ? 'animate-pulse' : ''}`} />
+            <Paperclip className={`h-5 w-5 ${uploadingAttachment ? 'animate-pulse' : ''}`} />
           </button>
           <textarea
             className="ai-chat-input-scroll min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-white/30"
@@ -246,7 +304,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                 void sendMessage()
               }
             }}
-            placeholder="询问漏洞报告、复现步骤、修复建议或学习路径"
+            placeholder={pendingAttachment ? '说明你希望邮宝如何处理这个附件，例如：帮我修改建议 / 总结重点 / 生成提交草稿' : '询问漏洞报告、复现步骤、修复建议或学习路径'}
             ref={inputTextareaRef}
             rows={1}
             value={input}
@@ -254,7 +312,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
           <button
             aria-label="发送"
             className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-            disabled={!input.trim() || sending || aiQuota?.enabled === false || aiQuota?.remaining === 0}
+            disabled={(!input.trim() && !pendingAttachment) || sending || uploadingAttachment || aiQuota?.enabled === false || aiQuota?.remaining === 0}
             onClick={() => void sendMessage()}
             type="button"
           >
@@ -283,14 +341,14 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
           >
             <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
               <Sparkles className="h-3.5 w-3.5" />
-              AI Assistant
+              YouBao AI
             </p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">CQUPT-SRC AI 助手</h1>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">邮宝</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-              面向漏洞报告、复现材料、修复建议和学习路径的智能辅助入口。
+              CQUPT-SRC 平台 AI 助手，面向漏洞报告、复现材料、修复建议和学习路径提供智能辅助。
             </p>
             <div className="mt-8 w-full max-w-[760px]">{inputBox}</div>
-            <p className="mt-3 text-xs text-slate-400">AI 回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。</p>
+            <p className="mt-3 text-xs text-slate-400">邮宝回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -319,11 +377,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                   {!isUser && <AssistantAvatar avatarUrl={aiAvatarUrl} />}
                   <div className={isUser ? 'max-w-[760px]' : 'w-full max-w-[1040px]'}>
                     {isUser ? (
-                      message.content && (
-                        <div className="whitespace-pre-wrap rounded-lg bg-brand-600 px-4 py-3 text-sm leading-7 text-white shadow-sm">
-                          {message.content}
-                        </div>
-                      )
+                      <UserMessageBubble attachment={message.attachment} content={message.content} />
                     ) : (
                       <AssistantMessageBubble
                         actions={message.actions}
@@ -386,13 +440,124 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
               )}
             </AnimatePresence>
             {inputBox}
-            <p className="mt-2 text-center text-xs text-slate-400">AI 回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。</p>
+            <p className="mt-2 text-center text-xs text-slate-400">邮宝回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。</p>
           </motion.div>
           </>
         )}
       </AnimatePresence>
     </section>
   )
+}
+
+function PendingAttachmentPreview({
+  attachment,
+  disabled,
+  onRemove,
+}: {
+  attachment: PendingAttachment
+  disabled?: boolean
+  onRemove: () => void
+}) {
+  return (
+    <motion.div
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-2 flex justify-start"
+      exit={{ opacity: 0, y: 6, transition: { duration: 0.16 } }}
+      initial={{ opacity: 0, y: 6 }}
+      key={attachment.id}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+    >
+      <AttachmentCard
+        disabled={disabled}
+        name={attachment.file.name}
+        onRemove={onRemove}
+        size={attachment.file.size}
+        variant="input"
+      />
+    </motion.div>
+  )
+}
+
+function UserMessageBubble({ attachment, content }: { attachment?: ChatAttachment; content: string }) {
+  return (
+    <div className="space-y-2 rounded-lg bg-brand-600 px-4 py-3 text-sm leading-7 text-white shadow-sm">
+      {attachment && (
+        <AttachmentCard
+          name={attachment.name}
+          size={attachment.size}
+          variant="sent"
+        />
+      )}
+      {content && <div className="whitespace-pre-wrap">{content}</div>}
+    </div>
+  )
+}
+
+function AttachmentCard({
+  disabled,
+  name,
+  onRemove,
+  size,
+  variant,
+}: {
+  disabled?: boolean
+  name: string
+  onRemove?: () => void
+  size: number
+  variant: 'input' | 'sent'
+}) {
+  const isSent = variant === 'sent'
+
+  return (
+    <div
+      className={`relative flex max-w-full items-center gap-3 rounded-lg border py-2 pl-3 pr-10 shadow-sm ${
+        isSent
+          ? 'border-white/20 bg-white/12 text-white'
+          : 'border-brand-200/70 bg-white/80 text-slate-900 dark:border-brand-400/20 dark:bg-white/[0.06] dark:text-white'
+      }`}
+    >
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          isSent
+            ? 'bg-white/15 text-white'
+            : 'bg-brand-50 text-brand-700 dark:bg-brand-900/35 dark:text-brand-200'
+        }`}
+      >
+        <Paperclip className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="max-w-[280px] truncate text-sm font-medium md:max-w-[360px]">{name}</p>
+        <p className={`mt-0.5 text-xs ${isSent ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
+          {formatFileSize(size)}
+        </p>
+      </div>
+      {onRemove && (
+        <button
+          aria-label="移除附件"
+          className={`absolute right-1.5 top-1.5 rounded-full p-1 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            isSent
+              ? 'text-white/70 hover:bg-white/15 hover:text-white'
+              : 'text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white'
+          }`}
+          disabled={disabled}
+          onClick={onRemove}
+          type="button"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function isReportDraftIntent(content: string) {
+  return /提交|创建.*(漏洞|报告|草稿)|自动填写|填报|导入|漏洞草稿|报告草稿|提交卡片|拆成.*漏洞|生成.*(漏洞|报告|提交|草稿)/.test(content)
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
 // ════════════════════════════════════════════════════════════
@@ -563,18 +728,21 @@ function renderHighlightedCode(code: string) {
     }
 
     const token = match[0]
-    let className = 'text-neutral-300'
-    if (token.startsWith('//') || token.startsWith('#')) className = 'text-neutral-600'
-    else if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) className = 'text-neutral-400'
-    else if (/^\d/.test(token)) className = 'text-neutral-200'
-    else className = 'text-neutral-100'
+    const className = getHighlightClassName(token)
 
     nodes.push(<span className={className} key={`token-${key++}`}>{token}</span>)
     lastIndex = tokenRegex.lastIndex
   }
 
-  if (lastIndex < code.length) nodes.push(<span key={`plain-${key++}`}>{code.slice(lastIndex)}</span>)
+  if (lastIndex < code.length) nodes.push(<span key={`plain-${key}`}>{code.slice(lastIndex)}</span>)
   return nodes
+}
+
+function getHighlightClassName(token: string) {
+  if (token.startsWith('//') || token.startsWith('#')) return 'text-neutral-600'
+  if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) return 'text-neutral-400'
+  if (/^\d/.test(token)) return 'text-neutral-200'
+  return 'text-neutral-100'
 }
 
 function splitMarkdownCodeBlocks(content: string) {
@@ -648,6 +816,15 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
   const [editableDrafts, setEditableDrafts] = useState<AiVulnerabilityDraft[]>(drafts)
   const [submitStates, setSubmitStates] = useState<Record<string, DraftSubmitState>>({})
   const [confirming, setConfirming] = useState<ConfirmDraftState>(null)
+  const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
+
+  useEffect(() => {
+    let active = true
+    getAccessStatus()
+      .then((status) => { if (active) setAccessStatus(status) })
+      .catch(() => { /* 后端提交接口仍会强制校验 */ })
+    return () => { active = false }
+  }, [])
 
   const updateDraft = (draftId: string, patch: Partial<AiVulnerabilityDraft>) => {
     setEditableDrafts((current) =>
@@ -656,6 +833,14 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
   }
 
   const submitDraft = async (draft: AiVulnerabilityDraft) => {
+    if (accessStatus && !accessStatus.canSubmitVulnerability) {
+      setSubmitStates((current) => ({
+        ...current,
+        [draft.id]: { message: accessStatus.missingRequirements[0] ?? '请先完成责任书签署和安全答题后再提交漏洞', status: 'error' },
+      }))
+      return
+    }
+
     const missing = getDraftMissingFields(draft)
     if (missing.length > 0) {
       setSubmitStates((current) => ({
@@ -1248,7 +1433,7 @@ function AssistantAvatar({ avatarUrl, thinking = false }: { avatarUrl: string | 
       transition={thinking ? { duration: 1.2, ease: 'easeInOut', repeat: Infinity } : undefined}
     >
       {avatarUrl ? (
-        <img alt="AI 助手头像" className="h-full w-full object-cover" src={avatarUrl} />
+        <img alt="邮宝头像" className="h-full w-full object-cover" src={avatarUrl} />
       ) : (
         <Bot className="h-5 w-5" />
       )}

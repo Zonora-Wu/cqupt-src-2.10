@@ -41,10 +41,21 @@ import {
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
 import type { AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem } from '../../services/systemSettings'
+import {
+  createSecurityQuestions,
+  generateSecurityQuestionsWithAi,
+  getSecurityExamSettings,
+  importSecurityQuestionsFile,
+  listSecurityQuestions,
+  setSecurityQuestionActive,
+  updateSecurityExamSettings,
+  type SecurityExamSettings,
+  type SecurityQuestionAdmin,
+} from '../../services/securityExam'
 
 type SettingsSection =
   | '基础设置'
-  | 'AI 助手'
+  | '邮宝'
   | '登录与认证'
   | '邮箱与通知'
   | '漏洞流程'
@@ -76,7 +87,7 @@ const aiQuotaPeriodValues: Record<string, AiQuotaPeriod> = {
 
 const settingSections: Array<{ label: SettingsSection; icon: ReactNode; description: string }> = [
   { label: '基础设置', icon: <Building2 className="h-4 w-4" />, description: '品牌、组织、交付方式' },
-  { label: 'AI 助手', icon: <Bot className="h-4 w-4" />, description: '助手形象、模型入口' },
+  { label: '邮宝', icon: <Bot className="h-4 w-4" />, description: '助手形象、模型入口' },
   { label: '登录与认证', icon: <KeyRound className="h-4 w-4" />, description: '注册、认证、账号安全' },
   { label: '邮箱与通知', icon: <Mail className="h-4 w-4" />, description: 'SMTP、站内信、模板' },
   { label: '漏洞流程', icon: <ShieldQuestion className="h-4 w-4" />, description: '审核流、时限、规则' },
@@ -89,6 +100,7 @@ export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
   const sealInputRef = useRef<HTMLInputElement | null>(null)
   const aiAvatarInputRef = useRef<HTMLInputElement | null>(null)
+  const questionBankInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
@@ -117,6 +129,12 @@ export function AdminSystemSettings() {
   const [aiQuotaResetAt, setAiQuotaResetAt] = useState<string | null>(null)
   const [aiQuotaMessage, setAiQuotaMessage] = useState('')
   const [isSavingAiQuota, setIsSavingAiQuota] = useState(false)
+  const [securityExamSettings, setSecurityExamSettings] = useState<SecurityExamSettings | null>(null)
+  const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestionAdmin[]>([])
+  const [questionBankJson, setQuestionBankJson] = useState('')
+  const [questionAiTopic, setQuestionAiTopic] = useState('校园网络安全知识、SRC 责任边界、漏洞提交规范')
+  const [questionMessage, setQuestionMessage] = useState('')
+  const [isQuestionBusy, setIsQuestionBusy] = useState(false)
 
   const confirmChange = (nextState: Exclude<ConfirmState, null>) => {
     setConfirmState(nextState)
@@ -183,6 +201,85 @@ export function AdminSystemSettings() {
     setPendingRegistrations((prev) => prev.filter((item) => item.id !== id))
   }
 
+  useEffect(() => {
+    if (activeSection !== '安全与审计') return
+    let active = true
+    Promise.all([getSecurityExamSettings(), listSecurityQuestions()])
+      .then(([settings, questions]) => {
+        if (!active) return
+        setSecurityExamSettings(settings)
+        setSecurityQuestions(questions)
+      })
+      .catch((error) => {
+        if (active) setQuestionMessage(error instanceof Error ? error.message : '安全题库加载失败')
+      })
+    return () => { active = false }
+  }, [activeSection])
+
+  const refreshQuestionBank = async () => {
+    const [settings, questions] = await Promise.all([getSecurityExamSettings(), listSecurityQuestions()])
+    setSecurityExamSettings(settings)
+    setSecurityQuestions(questions)
+  }
+
+  const handleCreateQuestionsFromJson = async () => {
+    setQuestionMessage('')
+    try {
+      setIsQuestionBusy(true)
+      const parsed = JSON.parse(questionBankJson)
+      const result = await createSecurityQuestions(Array.isArray(parsed) ? parsed : parsed.questions)
+      await refreshQuestionBank()
+      setQuestionBankJson('')
+      setQuestionMessage(`已入库 ${result.count} 道题。`)
+    } catch (error) {
+      setQuestionMessage(error instanceof Error ? error.message : '题库 JSON 解析或入库失败')
+    } finally {
+      setIsQuestionBusy(false)
+    }
+  }
+
+  const handleGenerateQuestions = async () => {
+    setQuestionMessage('')
+    try {
+      setIsQuestionBusy(true)
+      const result = await generateSecurityQuestionsWithAi({ difficulty: '基础到中等', topic: questionAiTopic })
+      await refreshQuestionBank()
+      setQuestionMessage(`AI 已生成并入库 ${result.count} 道题。`)
+    } catch (error) {
+      setQuestionMessage(error instanceof Error ? error.message : 'AI 出题失败')
+    } finally {
+      setIsQuestionBusy(false)
+    }
+  }
+
+  const handleImportQuestionFile = async (file: File | undefined) => {
+    if (!file) return
+    setQuestionMessage('')
+    try {
+      setIsQuestionBusy(true)
+      const result = await importSecurityQuestionsFile(file)
+      await refreshQuestionBank()
+      setQuestionMessage(`AI 已分析文件并入库 ${result.count} 道题。`)
+    } catch (error) {
+      setQuestionMessage(error instanceof Error ? error.message : '题库文件导入失败')
+    } finally {
+      setIsQuestionBusy(false)
+      if (questionBankInputRef.current) questionBankInputRef.current.value = ''
+    }
+  }
+
+  const handleToggleSecurityExam = async () => {
+    const next = !(securityExamSettings?.enabled ?? true)
+    const threshold = securityExamSettings?.threshold ?? 80
+    const updated = await updateSecurityExamSettings({ enabled: next, threshold })
+    setSecurityExamSettings(updated)
+  }
+
+  const handleToggleQuestion = async (id: string, active: boolean) => {
+    const updated = await setSecurityQuestionActive(id, active)
+    setSecurityQuestions((current) => current.map((item) => item.id === id ? updated : item))
+  }
+
   const handleRejectRegistration = async (id: string) => {
     await rejectRegistration(id)
     setPendingRegistrations((prev) => prev.filter((item) => item.id !== id))
@@ -245,9 +342,9 @@ export function AdminSystemSettings() {
     try {
       const appearance = await uploadAiAssistantAvatar(file)
       setAiAvatarUrl(appearance.avatarUrl)
-      setAiAvatarMessage('AI 助手头像已保存。')
+      setAiAvatarMessage('邮宝头像已保存。')
     } catch (error) {
-      setAiAvatarMessage(error instanceof Error ? error.message : 'AI 助手头像上传失败')
+      setAiAvatarMessage(error instanceof Error ? error.message : '邮宝头像上传失败')
     } finally {
       setIsUploadingAiAvatar(false)
       if (aiAvatarInputRef.current) aiAvatarInputRef.current.value = ''
@@ -519,19 +616,19 @@ export function AdminSystemSettings() {
               </>
             )}
 
-            {activeSection === 'AI 助手' && (
+            {activeSection === '邮宝' && (
               <>
                 <SettingsCard
-                  description="配置用户端 AI 助手的展示形象。头像会在 AI 助手对话页以圆形展示，建议使用清晰的正方形 PNG、JPG、WebP 或 GIF。"
+                  description="配置用户端邮宝的展示形象。头像会在邮宝对话页以圆形展示，建议使用清晰的正方形 PNG、JPG、WebP 或 GIF。"
                   icon={<Bot className="h-5 w-5" />}
-                  title="AI 助手形象"
+                  title="邮宝形象"
                 >
                   <SettingRow
                     control={
                       <div className="flex items-center justify-end gap-3">
                         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-brand-600 text-white dark:border-white/10">
                           {aiAvatarUrl ? (
-                            <img alt="AI 助手头像" className="h-full w-full object-cover" src={aiAvatarUrl} />
+                            <img alt="邮宝头像" className="h-full w-full object-cover" src={aiAvatarUrl} />
                           ) : (
                             <Bot className="h-6 w-6" />
                           )}
@@ -551,7 +648,7 @@ export function AdminSystemSettings() {
                         />
                       </div>
                     }
-                    description="用于学生端 AI 助手消息头像和思考状态头像，上传后立即对新打开的助手页生效。"
+                    description="用于学生端邮宝消息头像和思考状态头像，上传后立即对新打开的邮宝页面生效。"
                     title="助手头像"
                   />
                   {aiAvatarMessage && (
@@ -758,13 +855,57 @@ export function AdminSystemSettings() {
                   icon={<ShieldCheck className="h-5 w-5" />}
                   title="准入与责任边界"
                 >
-                  <SettingRow control={<SettingToggle enabled />} description="新注册用户必须完成安全规范答题，达到分数要求后才能提交漏洞。" title="新用户答题准入" />
+                  <SettingRow control={<SettingToggle enabled={securityExamSettings?.enabled ?? true} onChange={() => void handleToggleSecurityExam()} />} description="新注册用户必须完成安全规范答题，达到分数要求后才能提交漏洞。" title="新用户答题准入" />
                   <SettingRow control={<SettingToggle enabled />} description="用户必须签署责任书，承诺不进行未授权扫描、爆破、数据下载、权限维持和后门植入。" title="责任书签署后提交漏洞" />
                   <SettingRow control={<SettingToggle enabled />} description="管理员、审核员和用户的关键操作都会写入审计日志。" title="管理员操作留痕" />
                   <SettingRow control={<SettingToggle enabled />} description="导出漏洞、证书、用户信息时默认隐藏手机号、邮箱、Token、Cookie 等敏感字段。" title="导出数据默认脱敏" />
                   <SettingRow control={<SettingToggle enabled />} description="附件查看、下载和预览都会记录操作人、时间、IP 和关联业务编号。" title="附件下载审计" />
                 </SettingsCard>
 
+                <SettingsCard
+                  description="题库用于新用户准入考试。系统每次随机抽取 10 道单选、5 道判断、5 道多选，满分 100 分，默认 80 分通过。"
+                  icon={<ShieldQuestion className="h-5 w-5" />}
+                  title="网络安全知识题库"
+                >
+                  <SettingRow
+                    control={<TextField onChange={setQuestionAiTopic} value={questionAiTopic} />}
+                    description="AI 会围绕该主题生成完整的 20 道准入题，内容限定为防御、授权边界、数据脱敏和负责任漏洞提交。"
+                    title="AI 出题主题"
+                  />
+                  <div className="flex flex-wrap gap-2 px-6 py-4">
+                    <ActionButton disabled={isQuestionBusy} icon={<Bot className="h-4 w-4" />} label={isQuestionBusy ? '处理中...' : '让 AI 生成 20 道题并入库'} onClick={() => void handleGenerateQuestions()} />
+                    <ActionButton disabled={isQuestionBusy} icon={<Upload className="h-4 w-4" />} label="上传题库文件由 AI 分析入库" onClick={() => questionBankInputRef.current?.click()} />
+                    <input accept="application/json,text/plain,text/markdown,text/csv,application/pdf" className="hidden" onChange={(event) => void handleImportQuestionFile(event.target.files?.[0])} ref={questionBankInputRef} type="file" />
+                  </div>
+                  <div className="border-t border-black/10 px-6 py-4 dark:border-white/10">
+                    <p className="text-sm font-semibold">直接添加题库 JSON</p>
+                    <textarea
+                      className="mt-3 min-h-40 w-full rounded-lg border border-black/10 bg-white/70 p-3 font-mono text-xs outline-none focus:border-brand-600/60 dark:border-white/10 dark:bg-white/[0.04]"
+                      onChange={(event) => setQuestionBankJson(event.target.value)}
+                      placeholder='{"questions":[{"type":"SINGLE_CHOICE","stem":"提交漏洞前应先确认什么？","options":[{"key":"A","text":"是否在授权范围内"},{"key":"B","text":"是否能造成最大影响"}],"answerKeys":["A"],"explanation":"测试必须在授权范围内进行。"}]}'
+                      value={questionBankJson}
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">当前启用：单选 {securityExamSettings?.activeCounts.SINGLE_CHOICE ?? 0} / 判断 {securityExamSettings?.activeCounts.TRUE_FALSE ?? 0} / 多选 {securityExamSettings?.activeCounts.MULTIPLE_CHOICE ?? 0}</p>
+                      <ActionButton disabled={isQuestionBusy || !questionBankJson.trim()} icon={<Save className="h-4 w-4" />} label="解析 JSON 并入库" onClick={() => void handleCreateQuestionsFromJson()} />
+                    </div>
+                    {questionMessage && <p className="mt-3 text-sm text-brand-700 dark:text-green-300">{questionMessage}</p>}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto border-t border-black/10 dark:border-white/10">
+                    {securityQuestions.slice(0, 80).map((question) => (
+                      <div className="flex items-start justify-between gap-4 border-b border-black/5 px-6 py-3 last:border-b-0 dark:border-white/5" key={question.id}>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{question.stem}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{question.type} · 答案 {question.answerKeys.join('、')} · {question.source}</p>
+                        </div>
+                        <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void handleToggleQuestion(question.id, !question.active)} type="button">
+                          {question.active ? '停用' : '启用'}
+                        </button>
+                      </div>
+                    ))}
+                    {securityQuestions.length === 0 && <p className="px-6 py-6 text-center text-sm text-slate-500">暂无题目，可上传题库或让 AI 生成。</p>}
+                  </div>
+                </SettingsCard>
                 <SettingsCard
                   description="会话超时和日志保留策略会影响平台运维安全。"
                   icon={<DatabaseBackup className="h-5 w-5" />}

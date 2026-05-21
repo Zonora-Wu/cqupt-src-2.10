@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { VulnerabilitySeverity } from '@prisma/client'
 import { PDFParse } from 'pdf-parse'
-import { AiVulnerabilityDraft, AiVulnerabilityReportDraftResponse } from './ai.types'
+import { AiAttachmentTextResponse, AiVulnerabilityDraft, AiVulnerabilityReportDraftResponse } from './ai.types'
 
 type UploadedReportFile = {
   buffer?: Buffer
@@ -33,9 +33,32 @@ const FIELD_NAMES = [
 const PLATFORM_VULNERABILITY_TYPES = ['SQL 注入', 'XSS', '权限绕过', '信息泄露', '文件上传', '弱口令', '配置错误', '其他'] as const
 
 const DEFAULT_TEST_BOUNDARY = '本次测试仅在学校授权范围内进行，未进行未授权扫描、爆破、数据下载、权限维持、后门植入或影响业务运行的操作。'
+const MAX_ATTACHMENT_TEXT_EXCERPT = 8000
 
 @Injectable()
 export class AiReportDraftService {
+  async extractAttachmentText(file: UploadedReportFile | undefined): Promise<AiAttachmentTextResponse> {
+    if (!file) {
+      throw new BadRequestException('请先选择要上传的 PDF 附件')
+    }
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('上传文件为空')
+    }
+    if (file.size && file.size > 20 * 1024 * 1024) {
+      throw new BadRequestException('附件文件不能超过 20MB')
+    }
+
+    const text = await this.extractText(file)
+    return {
+      fileName: file.originalname ?? '附件.pdf',
+      kind: 'PDF_TEXT',
+      mimeType: file.mimetype ?? null,
+      size: file.size ?? file.buffer.length,
+      sourceTextLength: text.length,
+      textExcerpt: text.slice(0, MAX_ATTACHMENT_TEXT_EXCERPT),
+    }
+  }
+
   async extractVulnerabilityDrafts(file: UploadedReportFile | undefined): Promise<AiVulnerabilityReportDraftResponse> {
     if (!file) {
       throw new BadRequestException('请上传渗透测试报告文件')
@@ -75,7 +98,7 @@ export class AiReportDraftService {
     const fileName = file.originalname ?? ''
     const isPdf = mimetype.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')
     if (!isPdf) {
-      throw new BadRequestException('当前仅支持 PDF 渗透测试报告解析')
+      throw new BadRequestException('当前仅支持 PDF 附件解析')
     }
 
     try {
