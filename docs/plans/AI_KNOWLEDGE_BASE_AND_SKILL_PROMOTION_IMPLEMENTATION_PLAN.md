@@ -1,5 +1,13 @@
 # CQUPT-SRC AI Knowledge Base 与 Skill 晋升落地实施方案
 
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
 **Goal:** 在 CQUPT-SRC 中落地企业级“AI 知识沉淀 + Hermes Skill 晋升”体系，让邮宝能复用高质量通用安全问答、减少重复 token，同时避免隐私泄露、恶意投毒和 skill 污染。
@@ -7,6 +15,22 @@
 **Architecture:** 采用三层治理：PostgreSQL 中的 AI Knowledge Base 负责动态、可审核、可检索的问答经验；NestJS AI Gateway 负责路由、脱敏、审核、检索、审计和权限；平台 Hermes 容器 `/home/cocking/cqupt-src-hermes-linux` 只承载少量管理员批准后的长期稳定 class-level skills。普通用户问答永远不直接写入 Hermes skill。
 
 **Tech Stack:** NestJS 11, Prisma 6, PostgreSQL, optional pgvector/pg_trgm, Hermes Agent OpenAI-compatible API, React 19 + TypeScript + Tailwind CSS 4.
+
+---
+
+## 0. 当前落地状态（2026-05-21）
+
+本方案中的 Phase 1 / Phase 1.5 / Phase 1.7 已完成落地并通过构建与服务层 E2E 验证：
+
+- 多轮会话级知识沉淀：`AiKnowledgeConversation` + `AiKnowledgeConversationTurn`。
+- AI 总结与 AI+规则混合评分：`overallScore`、`kbScore`、`skillScore`、`safetyScore`、`privacyRiskScore`、`confidenceScore` 等字段。
+- 自动流转：低风险高分知识可自动进入 KB 或 Skill Candidate；未达阈值进入管理员审核。
+- 相似知识去重：`duplicateRiskScore`、`similarKnowledgeMatches`、`mergeSuggestion`；0.86 以上强重复、0.72 以上中等重复均阻断自动入库。
+- 管理端展示：会话队列、AI 评分、重复风险、相似知识和合并建议。
+- Skill Candidate：生成、审批、安装和安装日志链路可用。
+- 验证方式：服务层 E2E 使用临时 `targetRoot` 完成 KB → Skill Candidate → install 验证，避免误写平台 Hermes 目录。
+
+当前剩余生产部署事项不是业务逻辑缺失，而是平台 Hermes skills 目录权限：`/home/cocking/cqupt-src-hermes-linux/data` 可能由容器 UID `10000:10000` 持有且权限为 `700`，后端进程无法直接写入。上线前需选择宿主权限调整、容器内受控安装任务或 Docker socket 运维代理中的一种。
 
 ---
 

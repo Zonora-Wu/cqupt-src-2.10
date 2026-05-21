@@ -1,5 +1,13 @@
 # 企业级 SRC 平台 AI 接入框架
 
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
 本文档定义 CQUPT-SRC 平台的企业级 AI 接入框架。目标不是简单把聊天框接入大模型，而是在 SRC 平台内部构建一个安全、可审计、可扩展、可降级、按角色隔离的 AI Gateway 能力层。
 
 AI 在平台中的定位是“安全运营智能层”：辅助用户理解平台数据、处理漏洞报告、检索学习与商城资源、生成草稿、总结态势，但不绕过平台权限、不直接执行高风险写操作、不替代人工审核结论。
@@ -11,6 +19,20 @@ AI 在平台中的定位是“安全运营智能层”：辅助用户理解平�
 - `docs/HERMES_RUNTIME.md`：记录 CQUPT-SRC 平台实际使用的 Hermes 独立容器目录、Docker Compose、`/opt/data` 挂载、skills 同步路径和常用维护命令。
 - `docs/AI_SKILLS.md`：记录 CQUPT-SRC 专属 Hermes skills 规划。
 - `docs/AI_KNOWLEDGE_BASE.md`：记录用户问答经验沉淀与 Skill 晋升方案。
+
+---
+
+## 0. 当前实现快照（2026-05-21）
+
+当前 AI 子系统已经从聊天框原型演进为后端代理的邮宝 AI Gateway：
+
+- `backend/src/modules/ai/`：负责 AI 健康检查、外观配置、配额、Skill 路由、`/api/ai/chat`、附件文本提取、报告草稿、Action Proposal 确认。
+- `backend/src/modules/ai-knowledge/`：负责 AI Knowledge Base、会话级知识沉淀、AI 评分、相似去重、管理员审核、反馈、Skill Candidate 与受控安装。
+- `frontend/src/pages/user/UserAIAssistant.tsx`：用户端邮宝助手，支持 Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片和回到底部按钮。
+- `frontend/src/pages/admin/AdminAiKnowledgeManagement.tsx`：管理员知识沉淀页面，展示会话队列、AI 总结、评分、重复风险、相似知识、合并建议和 Skill Candidate 状态。
+- 平台 Hermes 运行于 `/home/cocking/cqupt-src-hermes-linux/`，对后端暴露 `http://localhost:5000/v1/chat/completions`；CLI Hermes 的 `/home/cocking/.hermes/` 不参与平台用户请求。
+
+当前默认策略：强业务查询先走后端确定性响应；开放式问题才调用 Hermes Agent；含附件上下文时跳过确定性业务命中，避免“报告/漏洞”等关键词误吞用户的附件问题；知识沉淀必须脱敏、泛化、评分、去重并通过管理员审核。
 
 ---
 
@@ -150,38 +172,30 @@ Hermes Agent 只处理开放式推理和文本生成。
 
 ## 4. 后端 AI Gateway 模块设计
 
-建议最终模块结构如下：
+当前落地模块以“先可运行、再拆薄”为原则，已经形成以下生产文件：
 
 ```text
 backend/src/modules/ai/
 ├── ai.module.ts
 ├── ai.controller.ts
-├── ai.service.ts
-├── ai.gateway.service.ts              # 对接 Hermes/OpenAI-compatible API
-├── ai.context.service.ts              # 用户上下文快照
-├── ai.prompt.service.ts               # system prompt / role prompt
-├── ai.intent-router.service.ts        # 意图识别与路由
-├── ai.direct-response.service.ts      # 确定性业务响应
-├── ai.resource-search.service.ts      # 商品/资源/漏洞搜索
-├── ai.tool-registry.service.ts        # 工具注册和权限过滤
-├── ai.action-proposal.service.ts      # 写操作提案
-├── ai.response-normalizer.service.ts  # 结构化输出清洗
-├── ai.redaction.service.ts            # 脱敏
-├── ai.quota.service.ts                # 配额、限流、成本
-├── ai.audit.service.ts                # AI 调用审计
+├── ai.service.ts                 # 当前主编排入口：Direct Response、Agent 调用、附件上下文、知识沉淀触发
+├── ai.tools.service.ts           # 用户上下文快照：积分、商城、漏洞、学习等只读数据
+├── ai.prompt.service.ts          # system prompt、人格、Context Injection 与 Skill 路由上下文
+├── ai.response.service.ts        # Agent 回复 JSON / cards / actions 归一化
+├── ai.skill-router.service.ts    # 按角色显式控制 active / available / blocked skills
+├── ai.report-draft.service.ts    # PDF 渗透报告解析与漏洞草稿生成
 ├── ai.types.ts
 └── ai.validation.ts
+
+backend/src/modules/ai-knowledge/
+├── ai-knowledge.module.ts
+├── ai-knowledge.controller.ts
+├── ai-knowledge.service.ts       # KB、会话沉淀、AI评分、去重、Skill Candidate、安装
+├── ai-knowledge.types.ts
+└── ai-knowledge.validation.ts
 ```
 
-当前项目可以渐进演进，不必一次性拆完。现有文件可以对应为：
-
-| 当前文件 | 未来职责 |
-|---|---|
-| `ai.service.ts` | 临时编排入口，后续拆薄 |
-| `ai.tools.service.ts` | 演进为 `AiContextService` + read-only tool providers |
-| `ai.prompt.service.ts` | 保留为 Prompt Builder |
-| `ai.response.service.ts` | 演进为 Response Normalizer |
-| `ai.types.ts` | 保留类型定义 |
+后续如果继续重构，可以把 `ai.service.ts` 的编排职责拆成 intent-router、direct-response、quota、audit 等更细 service；但当前代码已经具备完整业务链路，不再是规划占位。
 
 ---
 
@@ -1217,7 +1231,7 @@ AiQuotaService
 
 ## 20. 推荐最终目录结构
 
-建议后续把文档拆分为：
+如果后续文档继续增长，可以拆分为：
 
 ```text
 docs/

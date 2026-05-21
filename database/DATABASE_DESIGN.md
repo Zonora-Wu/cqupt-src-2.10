@@ -1,5 +1,13 @@
 # CQUPT-SRC 数据库模型设计 v0.1
 
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
 ## 1. 设计目标
 
 本数据库模型面向正式上线产品设计，优先满足以下目标：
@@ -8,12 +16,12 @@
 2. 支持统一认证码 + 密码、邮箱验证码登录，后续可接学校统一认证。
 3. 用户只能拥有一个角色，但角色可以绑定多个权限点。
 4. 支持 BASIC/TRUSTED/STAFF 三层通用授权等级，并通过授权来源适配不同学校。
-5. 用户必须绑定邮箱并签署责任书后才可提交漏洞，后续可叠加考试通过要求。
+5. 用户必须绑定邮箱并满足准入策略后才可提交漏洞：责任书签署、安全答题通过、账号状态正常。
 6. 漏洞支持草稿，但提交后不可撤回。
 7. 所有漏洞状态变更、敏感附件查看、审核、证书、公告、AI 调用都需要审计。
 8. 附件只允许 PDF，单文件 10MB，保存哈希用于去重和审计。
 9. 一个漏洞只分配一个审核员，一个漏洞最多签发一张证书。
-10. AI 对话不长期保存原始会话，只保存脱敏摘要、可复用 skill、常见问题和审计日志。
+10. AI 原始对话不直接作为长期知识复用；多轮问题解决会话进入 `AiKnowledgeConversation`，经脱敏、泛化、AI 评分、相似去重和管理员审核后才可进入知识库或 Skill Candidate。
 11. 当前不做多租户，但保留单学校部署配置表，方便不同学校独立部署时替换 Logo、主题、邮箱域名、规则和证书模板。
 
 ## 2. 核心表分组
@@ -40,7 +48,8 @@
 
 | 表 | 作用 |
 |---|---|
-| `security_exam_attempts` | 只记录考试是否通过、分数、时间，不保存详细题目 |
+| `security_questions` | 安全答题题库，支持单选、判断、多选，管理员维护 |
+| `security_exam_attempts` | 答题尝试记录，保存分数、通过状态、题目快照和提交摘要 |
 | `responsibility_agreements` | 责任书版本 |
 | `responsibility_signatures` | 用户签署记录，保存版本、时间、IP、设备信息 |
 
@@ -148,17 +157,22 @@ PENDING_REVIEW / NEEDS_SUPPLEMENT / CONFIRMED
 
 | 表 | 作用 |
 |---|---|
-| `ai_call_logs` | AI 调用审计，只保存脱敏摘要和结果摘要 |
-| `ai_skills` | 从有价值对话蒸馏出的 skill |
-| `ai_faq_entries` | 常见问题与复用答案 |
-| `ai_action_proposals` | AI 提出的系统操作建议，必须人工确认后执行 |
+| `ai_call_logs` | AI 调用审计，保存脱敏输入摘要、输出摘要、模型、耗时和结果 |
+| `ai_knowledge_entries` | 审核后的 AI Knowledge Base 条目，供后续检索与复用 |
+| `ai_knowledge_capture_jobs` | 知识捕获任务队列，记录来源、状态、错误和处理结果 |
+| `ai_knowledge_conversations` | 多轮会话级沉淀单元，保存脱敏总结、AI 评分、重复风险、相似知识和审核状态 |
+| `ai_knowledge_conversation_turns` | 会话轮次，保存脱敏后的用户/助手消息摘要 |
+| `ai_skill_candidates` | 从高质量知识条目生成的 Skill 候选，需管理员二次审核 |
+| `ai_skill_install_logs` | Skill Candidate 安装记录，记录目标路径、结果和错误信息 |
 
 隔离规则：
 
-- 学生 AI、审核员 AI、管理员 AI 使用 `ai_space` 隔离。
-- 原始对话不长期保存。
-- 只保存脱敏后的输入摘要。
-- AI 对系统的任何操作都必须进入 `ai_action_proposals`，由人工确认。
+- 学生 AI、审核员 AI、管理员 AI 使用 `ai_space` / `role_scope` 隔离。
+- 原始对话不直接变成公共知识；沉淀前必须脱敏、泛化、评分、去重。
+- 评分字段包括 `overallScore`、`kbScore`、`skillScore`、`safetyScore`、`privacyRiskScore`、`confidenceScore`。
+- 去重字段包括 `duplicateRiskScore`、`similarKnowledgeMatches`、`mergeSuggestion`。
+- AI 对系统的任何写操作都必须进入 action proposal / 后端事务 / 审计链路。
+- Skill Candidate 不等于已安装 Skill；安装到平台 Hermes skills 目录前必须管理员审批。
 
 ### 2.9 审计与系统设置
 

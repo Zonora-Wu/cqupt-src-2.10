@@ -1,142 +1,61 @@
 # Deployment
 
-部署文档目录。当前阶段已完成本地前后端基础运行与本地 Docker 依赖编排，Ubuntu 云服务器部署尚未开始。
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
 
-## 本地前端
-
-推荐使用一键脚本启动本地开发环境：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
-```
-
-启动脚本会等待 PostgreSQL 和 MinIO 进入 healthy 状态，并自动执行 migration 与 seed，然后再启动前后端，避免后端先启动导致登录或文件上传接口 500。
-
-关闭：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1
-```
-
-也可以手动分别启动。
-
-本地执行：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\frontend
-npm.cmd run dev
-```
-
-默认地址：
-
-```text
-http://localhost:5173
-```
-
-## 本地后端
-
-先启动本地依赖：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10
-docker compose -f deploy\docker\docker-compose.local.yml up -d postgres
-```
-
-如果要测试 PDF 附件上传，还需要启动 MinIO：
-
-```powershell
-docker compose -f deploy\docker\docker-compose.local.yml up -d minio
-```
-
-本地 PostgreSQL：
-
-```text
-127.0.0.1:15432
-```
-
-本地 MinIO：
-
-```text
-API: http://localhost:9000
-Console: http://localhost:9001
-```
-
-本地执行：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run dev
-```
-
-健康检查：
-
-```text
-http://localhost:3000/api/health
-```
-
-## 本地验证
-
-本地执行：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run prisma:validate
-```
-
-本地数据库初始化：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10\backend
-npm.cmd run prisma:migrate:dev -- --name init
-npm.cmd run db:seed
-```
-
-## 后续 Docker 规划
-
-后续会补齐：
-
-```text
-deploy/docker/frontend.Dockerfile
-deploy/docker/backend.Dockerfile
-deploy/nginx/default.conf
-docker-compose.yml
-```
-
-服务规划：
-
-```text
-frontend
-backend
-postgres
-redis
-minio
-nginx
-hermes-agent
-```
-
-## Ubuntu 云服务器规划
-
-云服务器执行，后续步骤再落地：
+## 本地部署验证
 
 ```bash
-mkdir -p /opt/cqupt-src
-cd /opt/cqupt-src
-docker compose up -d
+cd /home/cocking/projects/cqupt-src-2.10
+bash deploy/scripts/start-local.sh
+curl -s http://localhost:3000/api/health
+curl -s http://localhost:5000/health
 ```
 
-注意：Hermes Agent 已按独立 Docker 容器接入，不和业务后端写在同一个容器里。
+## 生产部署组成
 
-本地 Hermes Agent 当前约定：
+| 组件 | 说明 |
+|---|---|
+| Nginx | TLS 终止、静态前端、反向代理 `/api` |
+| Frontend | `frontend/dist` 静态文件 |
+| Backend | NestJS API，连接 PostgreSQL / Redis / MinIO / Hermes Gateway |
+| PostgreSQL | 主业务库，包含 AI Knowledge Base |
+| Redis | 队列、缓存与异步任务扩展 |
+| MinIO | PDF 附件、证书模板、证书 PDF |
+| Hermes Agent | 独立 Docker 容器，目录 `/home/cocking/cqupt-src-hermes-linux` |
 
-```text
-配置目录：/home/cocking/cqupt-src-hermes-linux
-宿主机地址：http://localhost:5000
-健康检查：curl http://localhost:5000/health
-后端本机运行：OPENAI_BASE_URL=http://localhost:5000/v1
-后端容器运行：OPENAI_BASE_URL=http://hermes-agent:5000/v1
-API Key：OPENAI_API_KEY=API_SERVER_KEY
-模型：OPENAI_MODEL=hermes-agent
+## 生产环境关键变量
+
+```env
+DATABASE_URL=postgresql://...
+JWT_ACCESS_SECRET=...
+JWT_REFRESH_SECRET=...
+MINIO_ENDPOINT=...
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
+OPENAI_BASE_URL=http://hermes-agent:5000/v1   # 同网络容器时
+OPENAI_API_KEY=...
+OPENAI_MODEL=hermes-agent
 ```
+
+## Hermes 部署注意事项
+
+- 平台 Hermes 与 CLI Hermes 分离，生产请求只走平台容器。
+- 微信/平台回复模型由平台 Hermes `config.yaml` 控制，可设为 DeepSeek；终端 CLI 可继续使用 GPT。
+- Skill Candidate 安装前必须解决 `/home/cocking/cqupt-src-hermes-linux/data/skills` 写权限。
+
+## 上线前检查
+
+```bash
+cd backend && npm run build && npm run prisma:validate
+cd ../frontend && npm run build && npm run lint
+curl -s http://localhost:3000/api/health
+curl -s http://localhost:5000/health
+```
+
+上线前还需确认：真实 SMTP、生产密钥、MinIO bucket、数据库备份、Nginx HTTPS、日志保留和 AI 审计策略。

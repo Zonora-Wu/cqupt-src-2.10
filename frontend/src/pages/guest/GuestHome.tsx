@@ -25,9 +25,6 @@ const AboutPlatform = lazy(() => import('./AboutPlatform').then((module) => ({ d
 const CertificateVerify = lazy(() =>
   import('./CertificateVerify').then((module) => ({ default: module.CertificateVerify })),
 )
-const LearningResources = lazy(() =>
-  import('./LearningResources').then((module) => ({ default: module.LearningResources })),
-)
 const PlatformRules = lazy(() => import('./PlatformRules').then((module) => ({ default: module.PlatformRules })))
 const PublicAnnouncements = lazy(() =>
   import('./PublicAnnouncements').then((module) => ({ default: module.PublicAnnouncements })),
@@ -38,7 +35,7 @@ type GuestHomeProps = {
   onRegister: () => void
 }
 
-const navItems = ['首页', '平台规则', '公开公告', '证书查询', '学习资源', '关于平台']
+const navItems = ['首页', '平台规则', '公开公告', '证书查询', '关于平台']
 
 const capabilities = [
   {
@@ -72,7 +69,7 @@ const capabilities = [
 ]
 
 const processItems = ['注册账号', '安全答题', '签署责任书', '提交漏洞', '审核反馈', '积分与证书']
-type GuestPage = 'home' | 'rules' | 'announcements' | 'certificates' | 'learning' | 'about'
+type GuestPage = 'home' | 'rules' | 'announcements' | 'certificates' | 'about'
 
 const introParagraphs = [
   {
@@ -100,7 +97,6 @@ const navPageMap: Record<string, GuestPage> = {
   平台规则: 'rules',
   公开公告: 'announcements',
   证书查询: 'certificates',
-  学习资源: 'learning',
   关于平台: 'about',
 }
 
@@ -230,13 +226,6 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <PageTransition key="certificates">
             <LazyPage>
               <CertificateVerify />
-            </LazyPage>
-          </PageTransition>
-        )}
-        {activePage === 'learning' && (
-          <PageTransition key="learning">
-            <LazyPage>
-              <LearningResources />
             </LazyPage>
           </PageTransition>
         )}

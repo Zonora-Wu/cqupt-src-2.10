@@ -1,5 +1,13 @@
 # CQUPT-SRC Hermes Skills 建设方案
 
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
 本文档说明 CQUPT-SRC 平台在接入 Hermes Agent 时，哪些能力应该沉淀为 Hermes skill，哪些能力应该留在后端业务代码中，以及推荐的 skill 优先级、职责边界和内容大纲。
 
 命名约定：CQUPT-SRC 平台面向用户的 AI 助手名称为 **邮宝**。Hermes Agent 是底层运行时和 skill 承载环境，skills 中涉及对话身份、卡片话术、用户提示时，应让 Agent 以“邮宝”身份回答，而不是以 Hermes 或通用 AI 自称。
@@ -82,17 +90,21 @@ Hermes Skill：
 | P2 | `cqupt-src-auditor-review` | Auditor | 审核员辅助审核 |
 | P2 | `cqupt-src-admin-analytics` | Admin | 管理员运营分析 |
 
-当前已创建或已存在：
+当前平台正式专属 skills 已同步为 8 个 class-level skills，并保留 1 个历史兼容 skill：
 
 ```text
-mall-product-search
-```
-
-建议后续将其升级或重命名为：
-
-```text
+cqupt-src-platform-overview
+cqupt-src-ai-security-boundary
+cqupt-src-ai-card-protocol
 cqupt-src-mall-search
+cqupt-src-vulnerability-assistant
+cqupt-src-learning-recommender
+cqupt-src-auditor-review
+cqupt-src-admin-analytics
+mall-product-search   # 历史兼容，后续业务应优先使用 cqupt-src-mall-search
 ```
+
+运行时目录见 `docs/HERMES_RUNTIME.md`：平台 Hermes 读取 `/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src`，不会自动读取 CLI Hermes 的 `/home/cocking/.hermes/skills`。
 
 ---
 

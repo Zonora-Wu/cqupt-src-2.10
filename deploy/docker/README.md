@@ -1,50 +1,40 @@
 # Docker
 
-Docker 构建与本地依赖编排目录。
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 ## 本地开发依赖
 
-本地开发基础依赖：
+`docker-compose.local.yml` 用于本地启动 PostgreSQL、Redis、MinIO 等依赖服务：
 
-- PostgreSQL：`localhost:15432`
-- Redis：`localhost:6379`
-- MinIO API：`localhost:9000`
-- MinIO Console：`http://localhost:9001`
-
-本地执行：
-
-```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10
-docker compose -f deploy\docker\docker-compose.local.yml up -d
+```bash
+cd /home/cocking/projects/cqupt-src-2.10
+docker compose -f deploy/docker/docker-compose.local.yml up -d
 ```
 
-如果只需要登录和附件上传相关依赖，也可以只启动 PostgreSQL 与 MinIO：
+关闭：
 
-```powershell
-docker compose -f deploy\docker\docker-compose.local.yml up -d postgres minio
+```bash
+docker compose -f deploy/docker/docker-compose.local.yml down
 ```
 
-查看状态：
+## 平台 Hermes 容器
 
-```powershell
-docker compose -f deploy\docker\docker-compose.local.yml ps
+平台 Hermes 不在本目录 compose 中维护，独立位于：
+
+```text
+/home/cocking/cqupt-src-hermes-linux/docker/docker-compose.yml
 ```
 
-停止依赖：
+后端通过 `http://localhost:5000/v1` 调用该容器。详情见 `docs/HERMES_RUNTIME.md`。
 
-```powershell
-docker compose -f deploy\docker\docker-compose.local.yml down
-```
+## 注意事项
 
-如果需要清空本地数据库、Redis 和 MinIO 数据：
-
-```powershell
-docker compose -f deploy\docker\docker-compose.local.yml down -v
-```
-
-## 后续待补
-
-- `frontend.Dockerfile`
-- `backend.Dockerfile`
-- 生产环境 MinIO bucket 初始化脚本
-- 生产环境 Docker Compose
+- 不提交 `.env`、MinIO 密钥、模型 API Key 或真实附件。
+- MinIO bucket 由后端启动时按需创建。
+- 生产部署前需确认平台 Hermes `data/skills` 目录权限，避免 Skill Candidate 安装失败。

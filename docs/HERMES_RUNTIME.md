@@ -1,5 +1,13 @@
 # CQUPT-SRC 平台 Hermes 运行目录说明
 
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
 本文档记录 CQUPT-SRC 平台实际接入的 Hermes Agent 独立容器目录、挂载关系、skills 存放位置和维护注意事项。
 
 > 注意：本项目存在两套容易混淆的 Hermes 环境：
@@ -111,6 +119,16 @@ nousresearch/hermes-agent:latest
 http://localhost:5000/v1/chat/completions
 ```
 
+当前模型路由约定：
+
+```text
+后端 OPENAI_MODEL=hermes-agent   # 后端虚拟模型名
+Hermes config.yaml 默认模型       # 平台/微信回复使用 DeepSeek 系列
+CLI 当前对话模型                 # 可继续使用 GPT，与平台容器无关
+```
+
+也就是说，微信/平台用户回复走平台 Hermes 容器内配置的 DeepSeek；当前终端 CLI 对话是否使用 GPT 由 CLI 自身 provider/model 决定，二者互不覆盖。
+
 健康检查地址：
 
 ```text
@@ -210,9 +228,13 @@ CQUPT-SRC 专属 skills 目录：
 
 ## 6. 同步 CQUPT-SRC skills 到平台 Hermes
 
-由于平台 Hermes 的 `data` 目录可能由容器内 UID 创建，宿主机当前用户可能没有直接写权限。
+由于平台 Hermes 的 `data` 目录由容器内 UID 创建，宿主机当前用户可能没有直接写权限。当前已观察到的生产风险点：
 
-如果直接写入：
+```text
+/home/cocking/cqupt-src-hermes-linux/data 可能为 10000:10000 且 700
+```
+
+如果后端直接写入：
 
 ```text
 /home/cocking/cqupt-src-hermes-linux/data/skills
