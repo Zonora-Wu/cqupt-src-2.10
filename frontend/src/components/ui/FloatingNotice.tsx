@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 export type FloatingNoticeVariant = 'error' | 'info' | 'success' | 'warning'
 
@@ -29,7 +30,7 @@ const iconMap: Record<FloatingNoticeVariant, ReactNode> = {
 
 export function FloatingNotice({
   action,
-  autoCloseMs = 3200,
+  autoCloseMs = 6400,
   className = '',
   message,
   onClose,
@@ -60,14 +61,14 @@ export function FloatingNotice({
     return () => window.clearTimeout(timer)
   }, [autoCloseMs, message])
 
-  if (!message || !visible) return null
+  if (!message || !visible || typeof document === 'undefined') return null
 
   const close = () => {
     setVisible(false)
     onCloseRef.current?.()
   }
 
-  return (
+  return createPortal(
     <div className="pointer-events-none fixed left-1/2 top-[4.75rem] z-[120] w-[min(520px,calc(100vw-40px))] -translate-x-1/2">
       <div
         className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${variantStyles[variant]} ${className}`}
@@ -88,6 +89,7 @@ export function FloatingNotice({
           <X className="h-4 w-4" />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

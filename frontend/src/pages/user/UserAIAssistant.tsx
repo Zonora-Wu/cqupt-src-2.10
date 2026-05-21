@@ -1495,17 +1495,31 @@ function QuotaWarning({
   if (remainingPercent <= 5 && dismissed !== '5') {
     return (
       <div className="mb-2 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-300">
-        <span>⚠️ AI 额度仅剩 {remainingPercent}%，回复可能中断</span>
-        <button onClick={() => onDismiss('5')} type="button"><X className="h-3.5 w-3.5" /></button>
+        <span>AI 额度仅剩 {remainingPercent}%，回复可能中断</span>
+        <button
+          aria-label="关闭额度提醒"
+          className="ml-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-70 transition hover:bg-red-500/10 hover:opacity-100"
+          onClick={() => onDismiss('5')}
+          type="button"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     )
   }
 
-  if (remainingPercent <= 20 && dismissed !== '20') {
+  if (remainingPercent <= 20 && dismissed !== '20' && dismissed !== '5') {
     return (
       <div className="mb-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
         <span>AI 额度剩余 {remainingPercent}%</span>
-        <button onClick={() => onDismiss('20')} type="button"><X className="h-3.5 w-3.5" /></button>
+        <button
+          aria-label="关闭额度提醒"
+          className="ml-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-70 transition hover:bg-amber-500/10 hover:opacity-100"
+          onClick={() => onDismiss('20')}
+          type="button"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     )
   }

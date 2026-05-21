@@ -79,8 +79,8 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
       setAvatarNotice({ text: '请选择图片文件', type: 'warning' })
       return
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setAvatarNotice({ text: '图片大小不能超过 2MB', type: 'warning' })
+    if (file.size >= 2 * 1024 * 1024) {
+      setAvatarNotice({ text: '头像图片大小需小于 2MB', type: 'warning' })
       return
     }
     setAvatarUploading(true)
@@ -90,7 +90,6 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
       setProfile((prev) => prev ? { ...prev, account: { ...prev.account, avatarUrl: result.avatarUrl } } : prev)
       onAvatarChange?.(result.avatarUrl)
       setAvatarNotice({ text: '头像已保存', type: 'success' })
-      window.setTimeout(() => setAvatarNotice(null), 2000)
     } catch (error) {
       setAvatarNotice({ text: getErrorMessage(error), type: 'error' })
     } finally {
@@ -156,13 +155,14 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
                 ref={avatarInputRef}
                 type="file"
               />
-              {avatarNotice ? (
-                <p className={`text-xs ${avatarNotice.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                  {avatarNotice.text}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500">点击头像修改，≤ 2MB</p>
+              {avatarNotice && (
+                <AlertMessage
+                  message={avatarNotice.text}
+                  onClose={() => setAvatarNotice(null)}
+                  variant={avatarNotice.type}
+                />
               )}
+              <p className="text-xs text-slate-400 dark:text-slate-500">点击头像修改</p>
               <div className="text-center">
                 <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{displayName}</h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{account?.roleLabel ?? '学生用户'}</p>
@@ -709,15 +709,7 @@ function ChangePasswordModal({
         </div>
 
         <p className="text-xs text-slate-400 dark:text-slate-500">密码修改操作将记录至安全审计日志。</p>
-        {notice && (
-          <div className={`rounded-lg border px-3 py-2.5 text-sm ${
-            notice.type === 'error' ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300' :
-            notice.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' :
-            'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-          }`}>
-            {notice.text}
-          </div>
-        )}
+        {notice && <NoticeBar notice={notice} />}
         <div className="flex justify-end gap-3 pt-1">
           <button className="rounded-lg px-4 py-2.5 text-sm text-slate-600 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10" onClick={onClose} type="button">取消</button>
           <button
