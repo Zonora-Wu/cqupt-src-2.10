@@ -1,5 +1,6 @@
 import { Bot, CheckCircle2, DatabaseZap, FileText, Hammer, PackageCheck, RefreshCw, ShieldCheck, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   createAiSkillCandidate,
@@ -159,9 +160,14 @@ export function AdminAiKnowledgeManagement() {
       </div>
 
       {(message || error) && (
-        <div aria-live={error ? 'assertive' : 'polite'} role={error ? 'alert' : 'status'} className={`mt-5 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-500/20 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-200' : 'border-emerald-500/20 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200'}`}>
-          {error || message}
-        </div>
+        <FloatingNotice
+          message={error || message}
+          onClose={() => {
+            setMessage('')
+            setError('')
+          }}
+          variant={error ? 'error' : 'success'}
+        />
       )}
 
       <div className="mt-6 grid gap-3 md:grid-cols-4">
@@ -327,4 +333,3 @@ function Metric({ inverse, label, raw, value }: { inverse?: boolean; label: stri
     </div>
   )
 }
-

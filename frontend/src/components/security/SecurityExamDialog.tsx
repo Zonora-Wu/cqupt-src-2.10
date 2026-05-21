@@ -1,6 +1,7 @@
-import { AlertCircle, CheckCircle2, Loader2, ShieldCheck, X } from 'lucide-react'
+import { Loader2, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { FloatingNotice } from '../ui/FloatingNotice'
 import { getSecurityExamPaper, submitSecurityExamAnswers, type SecurityExamPaper, type SecurityExamQuestion } from '../../services/securityExam'
 
 type Props = {
@@ -93,10 +94,11 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
         </div>
 
         {message && (
-          <div className={`mx-5 mt-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${message.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : message.type === 'warning' ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200' : 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-300'}`}>
-            {message.type === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <AlertCircle className="mt-0.5 h-4 w-4" />}
-            <span>{message.text}</span>
-          </div>
+          <FloatingNotice
+            message={message.text}
+            onClose={() => setMessage(null)}
+            variant={message.type}
+          />
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">

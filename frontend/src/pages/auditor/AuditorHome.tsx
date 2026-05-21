@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
-  CheckCircle2,
   Eye,
   FileCheck2,
   FileSearch,
@@ -28,6 +27,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -748,11 +748,7 @@ export function AuditorReviewQueue() {
           title="漏洞审核"
           description="处理分派给你的漏洞报告，结合 AI 初评完成复现、价值判断、补充材料要求和审核结论。"
         />
-        {errorMessage && (
-          <SurfacePanel className="mt-4 border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
-            {errorMessage}
-          </SurfacePanel>
-        )}
+        {errorMessage && <FloatingNotice message={errorMessage} onClose={() => setErrorMessage('')} variant="error" />}
         {done && <SuccessNotice>{done}</SuccessNotice>}
         <FilterBar>
           <SearchInput label="搜索漏洞" onChange={setKeyword} placeholder="编号、标题、资产或提交人" value={keyword} />
@@ -1558,10 +1554,7 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 
 function SuccessNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-      <CheckCircle2 className="h-4 w-4" />
-      {children}
-    </div>
+    <FloatingNotice message={children} variant="success" />
   )
 }
 
