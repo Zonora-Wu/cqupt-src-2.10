@@ -7,6 +7,8 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { AiKnowledgeService } from './ai-knowledge.service'
 import {
   normalizeCreateKnowledgeBody,
+  normalizeConversationListQuery,
+  normalizeConversationReviewBody,
   normalizeKnowledgeFeedbackBody,
   normalizeKnowledgeListQuery,
   normalizeKnowledgeReviewBody,
@@ -40,6 +42,28 @@ export class AiKnowledgeController {
       ? (query.status as AiKnowledgeJobStatus)
       : undefined
     return this.knowledge.listCaptureJobs({ page, pageSize, status })
+  }
+
+  @Get('conversations')
+  @RequirePermissions('ai:manage_skills')
+  conversations(@Query() query: Record<string, unknown>) {
+    return this.knowledge.listConversations(normalizeConversationListQuery(query))
+  }
+
+  @Post('conversations/:id/summarize')
+  @RequirePermissions('ai:manage_skills')
+  summarizeConversation(@Param('id') id: string) {
+    return this.knowledge.summarizeConversation(id)
+  }
+
+  @Post('conversations/:id/review')
+  @RequirePermissions('ai:manage_skills')
+  reviewConversation(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.knowledge.reviewConversation(id, normalizeConversationReviewBody(body), user.id)
   }
 
   @Post()

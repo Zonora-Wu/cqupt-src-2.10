@@ -234,9 +234,7 @@ export function AdminUserManagement() {
             <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
               <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
                 <SurfacePanel className="p-6 text-center">
-                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-black/10 bg-brand-600 text-2xl font-semibold text-white dark:border-white/10">
-                    {selectedUser.name.slice(0, 1)}
-                  </div>
+                  <ManagedUserAvatar user={selectedUser} size="lg" />
                   <h1 className="mt-4 text-2xl font-semibold">{selectedUser.name}</h1>
                   <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">{selectedUser.unifiedCode}</p>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -522,9 +520,7 @@ export function AdminUserManagement() {
               <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
                   <div className="flex gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600 text-base font-semibold text-white">
-                      {item.name.slice(0, 1)}
-                    </div>
+                    <ManagedUserAvatar user={item} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg font-semibold tracking-tight">{item.name}</h2>
@@ -640,6 +636,23 @@ export function AdminUserManagement() {
 
 function RoleBadge({ user }: { user: ManagedUserItem | ManagedUserDetail }) {
   return <SimpleBadge className={roleClassMap[user.role]}>{user.roleLabel}</SimpleBadge>
+}
+
+function ManagedUserAvatar({ size = 'md', user }: { size?: 'lg' | 'md'; user: ManagedUserItem | ManagedUserDetail }) {
+  const sizeClass = size === 'lg' ? 'h-24 w-24 text-2xl' : 'h-12 w-12 text-base'
+  const firstLetter = user.name.trim().slice(0, 1) || user.unifiedCode.slice(0, 1) || '用'
+
+  return (
+    <div
+      className={`${size === 'lg' ? 'mx-auto' : ''} flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-brand-600 font-semibold text-white dark:border-white/10`}
+    >
+      {user.avatarUrl ? (
+        <img alt={`${user.name} 头像`} className="h-full w-full object-cover" src={user.avatarUrl} />
+      ) : (
+        firstLetter
+      )}
+    </div>
+  )
 }
 
 function SimpleBadge({ children, className }: { children: ReactNode; className: string }) {

@@ -407,6 +407,13 @@ export class AiService {
       userId: user.id,
     })
 
+    await this.knowledge.recordConversationTurn({
+      aiSpace: getAiSpace(input.mode),
+      answer: displayContent,
+      question: safeMessage,
+      userId: user.id,
+    }).catch(() => undefined)
+
     // 7. 兜底：action 存在但 card 缺失时，从上下文补全
     const enrichedCards = enrichCardsFromContext(structured.cards, structured.actions, context)
 

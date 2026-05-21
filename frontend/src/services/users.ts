@@ -6,6 +6,7 @@ export type UserStatusCode = 'ACTIVE' | 'PENDING' | 'DISABLED' | 'LOCKED'
 export type ManagedUserItem = {
   accessStatus: '未答题' | '答题通过' | '已签责任书' | '未通过'
   accountStatus: '正常' | '待准入' | '已禁用' | '已锁定'
+  avatarUrl: string | null
   aiQuota: {
     activeLimit: number
     dailyLimit: number

@@ -4,6 +4,7 @@ import { constants, existsSync, lstatSync, mkdirSync, openSync, closeSync, realp
 import { dirname, isAbsolute, join, relative, resolve } from 'path'
 import {
   AiKnowledgeCategory,
+  AiKnowledgeConversationStatus,
   AiKnowledgeFeedbackValue,
   AiKnowledgeJobStatus,
   AiKnowledgeRoleScope,
@@ -19,6 +20,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import {
   AiKnowledgeCaptureInput,
+  AiKnowledgeConversationListQuery,
+  AiKnowledgeConversationReviewInput,
+  AiKnowledgeConversationTurnInput,
   AiKnowledgeCreateInput,
   AiKnowledgeFeedbackInput,
   AiKnowledgeHitSummary,
@@ -48,6 +52,45 @@ const PROMPT_INJECTION_PATTERNS = [
   /system\s*prompt/i,
   /开发者指令|系统提示词|越权|绕过.*(权限|规则)/i,
 ]
+const AI_KNOWLEDGE_AUTO_APPROVE_THRESHOLD = 0.88
+const AI_KNOWLEDGE_REVIEW_THRESHOLD = 0.62
+const AI_KNOWLEDGE_DUPLICATE_REVIEW_THRESHOLD = 0.72
+const AI_KNOWLEDGE_DUPLICATE_STRONG_THRESHOLD = 0.86
+const AI_KNOWLEDGE_EVALUATION_TIMEOUT_MS = 45_000
+const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
+const DEFAULT_OPENAI_MODEL = 'hermes-agent'
+
+type ConversationLearningSummary = ReturnType<typeof buildConversationLearningSummary>
+type ConversationAiEvaluation = {
+  suggestedKnowledgeType: 'KB' | 'SKILL' | 'DISCARD'
+  overallScore: number
+  kbScore: number
+  skillScore: number
+  safetyScore: number
+  privacyRiskScore: number
+  confidenceScore: number
+  reason: string
+  signals: string[]
+  risks: string[]
+}
+
+type SimilarKnowledgeMatch = {
+  id: string
+  title: string
+  category: AiKnowledgeCategory
+  status: AiKnowledgeStatus
+  similarity: number
+  hitCount: number
+  helpfulCount: number
+  tags: string[]
+}
+
+type ConversationDuplicateAssessment = {
+  duplicateRiskScore: number
+  matches: SimilarKnowledgeMatch[]
+  mergeSuggestion: string | null
+}
+
 const CATEGORY_KEYWORDS: Array<[AiKnowledgeCategory, RegExp]> = [
   [AiKnowledgeCategory.XSS, /xss|跨站|脚本/i],
   [AiKnowledgeCategory.SQL_INJECTION, /sql\s*注入|sqli|union\s+select/i],
@@ -169,6 +212,317 @@ export class AiKnowledgeService {
         status: rejectionReason ? AiKnowledgeJobStatus.DISCARDED : AiKnowledgeJobStatus.PENDING,
       },
       where: { questionHash },
+    })
+  }
+
+  async recordConversationTurn(input: AiKnowledgeConversationTurnInput) {
+    const question = redactSensitiveText(input.question)
+    const answer = redactSensitiveText(input.answer)
+    if (getRejectionReason(question, answer)) return null
+
+    const topicKey = buildTopicKey(question)
+    const activeSince = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    const existing = await this.prisma.aiKnowledgeConversation.findFirst({
+      orderBy: { updatedAt: 'desc' },
+      where: {
+        aiSpace: input.aiSpace,
+        status: { in: [AiKnowledgeConversationStatus.ACTIVE, AiKnowledgeConversationStatus.READY_REVIEW] },
+        topicKey,
+        updatedAt: { gte: activeSince },
+        userId: input.userId,
+      },
+    })
+
+    const title = buildConversationTitle(question)
+    const conversation = existing
+      ? existing
+      : await this.prisma.aiKnowledgeConversation.create({
+          data: {
+            aiSpace: input.aiSpace,
+            problemStatement: question.slice(0, 3000),
+            title,
+            topicKey,
+            userId: input.userId,
+          },
+        })
+
+    const userHash = stableHash(`${conversation.id}:user:${question}`)
+    const assistantHash = stableHash(`${conversation.id}:assistant:${answer}`)
+    await this.prisma.$transaction([
+      this.prisma.aiKnowledgeConversationTurn.createMany({
+        data: [
+          { callId: input.callId, content: question.slice(0, 6000), contentHash: userHash, conversationId: conversation.id, role: 'user' },
+          { callId: input.callId, content: answer.slice(0, 8000), contentHash: assistantHash, conversationId: conversation.id, role: 'assistant' },
+        ],
+        skipDuplicates: true,
+      }),
+      this.prisma.aiKnowledgeConversation.update({
+        data: {
+          lastUserMessage: question.slice(0, 3000),
+          sourceCallIds: input.callId ? { push: input.callId } : undefined,
+          turnCount: { increment: 1 },
+        },
+        where: { id: conversation.id },
+      }),
+    ])
+
+    const updated = await this.prisma.aiKnowledgeConversation.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 40 } },
+      where: { id: conversation.id },
+    })
+    if (!updated) return null
+    if (shouldSummarizeConversation(updated.turnCount, question, answer)) {
+      return this.summarizeConversation(updated.id)
+    }
+    return updated
+  }
+
+  async summarizeConversation(id: string) {
+    const conversation = await this.prisma.aiKnowledgeConversation.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+      where: { id },
+    })
+    if (!conversation) throw new NotFoundException('知识沉淀会话不存在')
+    const summary = buildConversationLearningSummary(conversation.turns)
+    const aiEvaluation = await this.evaluateConversationLearning(conversation.turns, summary)
+    return this.applyConversationLearningDecision(id, summary, aiEvaluation)
+  }
+
+  async listConversations(query: AiKnowledgeConversationListQuery) {
+    const where: Prisma.AiKnowledgeConversationWhereInput = query.status ? { status: query.status } : {}
+    const [total, items] = await Promise.all([
+      this.prisma.aiKnowledgeConversation.count({ where }),
+      this.prisma.aiKnowledgeConversation.findMany({
+        include: { turns: { orderBy: { createdAt: 'asc' }, take: 12 } },
+        orderBy: { updatedAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        where,
+      }),
+    ])
+    return { items, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } }
+  }
+
+  async reviewConversation(id: string, input: AiKnowledgeConversationReviewInput, reviewerId: string) {
+    const conversation = await this.prisma.aiKnowledgeConversation.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+      where: { id },
+    })
+    if (!conversation) throw new NotFoundException('知识沉淀会话不存在')
+    const reviewableConversationStatuses = new Set<AiKnowledgeConversationStatus>([
+      AiKnowledgeConversationStatus.READY_REVIEW,
+      AiKnowledgeConversationStatus.ACTIVE,
+      AiKnowledgeConversationStatus.SKILL_CANDIDATE,
+    ])
+    if (!reviewableConversationStatuses.has(conversation.status)) {
+      throw new ConflictException('只有活跃、待审核或 Skill 候选会话可以审核沉淀')
+    }
+
+    if (input.status === AiKnowledgeConversationStatus.DISCARDED) {
+      return this.prisma.aiKnowledgeConversation.update({
+        data: { reviewNote: input.note, reviewedAt: new Date(), reviewedById: reviewerId, status: AiKnowledgeConversationStatus.DISCARDED },
+        where: { id },
+      })
+    }
+
+    const summarized = conversation.resolutionSummary ? conversation : await this.summarizeConversation(id)
+    if (input.status === AiKnowledgeConversationStatus.SKILL_CANDIDATE) {
+      return this.prisma.aiKnowledgeConversation.update({
+        data: { reviewNote: input.note, reviewedAt: new Date(), reviewedById: reviewerId, status: AiKnowledgeConversationStatus.SKILL_CANDIDATE },
+        where: { id },
+      })
+    }
+
+    await this.createKnowledgeEntryFromConversation(summarized, reviewerId, input.note)
+    return this.prisma.aiKnowledgeConversation.update({
+      data: { reviewNote: input.note, reviewedAt: new Date(), reviewedById: reviewerId, status: AiKnowledgeConversationStatus.APPROVED_TO_KB },
+      where: { id },
+    })
+  }
+
+  private async evaluateConversationLearning(turns: Array<{ role: string; content: string }>, summary: ConversationLearningSummary): Promise<ConversationAiEvaluation> {
+    const heuristic = buildHeuristicConversationEvaluation(turns, summary)
+    try {
+      const aiEvaluation = await requestConversationAiEvaluation(turns, summary)
+      return mergeConversationEvaluations(heuristic, aiEvaluation)
+    } catch (error) {
+      this.logger.warn(`AI 会话沉淀评分失败，使用规则评分兜底：${error instanceof Error ? error.message : String(error)}`)
+      return heuristic
+    }
+  }
+
+  private async applyConversationLearningDecision(id: string, summary: ConversationLearningSummary, evaluation: ConversationAiEvaluation) {
+    const conversation = await this.prisma.aiKnowledgeConversation.findUnique({ select: { aiSpace: true }, where: { id } })
+    const duplicateAssessment = await this.assessSimilarKnowledgeForConversation(summary, evaluation, conversation?.aiSpace ?? AiSpace.STUDENT)
+    const duplicateRiskNote = duplicateAssessment.mergeSuggestion ? `；相似知识检查：${duplicateAssessment.mergeSuggestion}` : ''
+    const suggestedKnowledgeType = evaluation.suggestedKnowledgeType === 'DISCARD' ? (summary.requiresTooling ? 'SKILL' : 'KB') : evaluation.suggestedKnowledgeType
+    const baseData = {
+      aiAutoApproveThreshold: AI_KNOWLEDGE_AUTO_APPROVE_THRESHOLD,
+      aiConfidenceScore: evaluation.confidenceScore,
+      aiEvaluation: evaluation as unknown as Prisma.InputJsonValue,
+      aiKbScore: evaluation.kbScore,
+      aiOverallScore: evaluation.overallScore,
+      aiPrivacyRiskScore: evaluation.privacyRiskScore,
+      aiReviewThreshold: AI_KNOWLEDGE_REVIEW_THRESHOLD,
+      aiSafetyScore: evaluation.safetyScore,
+      aiSkillScore: evaluation.skillScore,
+      autoDecisionReason: `${evaluation.reason}${duplicateRiskNote}`,
+      collectedEvidence: summary.collectedEvidence,
+      duplicateRiskScore: duplicateAssessment.duplicateRiskScore,
+      environmentNotes: summary.environmentNotes,
+      failedAttempts: summary.failedAttempts,
+      mergeSuggestion: duplicateAssessment.mergeSuggestion,
+      pitfalls: summary.pitfalls,
+      resolutionSummary: summary.resolutionSummary,
+      similarKnowledgeMatches: duplicateAssessment.matches as unknown as Prisma.InputJsonValue,
+      successfulSteps: summary.successfulSteps,
+      suggestedKnowledgeType,
+      title: summary.title,
+    }
+
+    if (duplicateAssessment.duplicateRiskScore >= AI_KNOWLEDGE_DUPLICATE_REVIEW_THRESHOLD) {
+      return this.prisma.aiKnowledgeConversation.update({
+        data: { ...baseData, status: AiKnowledgeConversationStatus.READY_REVIEW },
+        include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+        where: { id },
+      })
+    }
+
+    if (shouldAutoApproveKnowledge(evaluation)) {
+      const summarized = await this.prisma.aiKnowledgeConversation.update({
+        data: { ...baseData, status: AiKnowledgeConversationStatus.APPROVED_TO_KB },
+        include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+        where: { id },
+      })
+      await this.createKnowledgeEntryFromConversation(summarized, null, 'AI 评分达到自动沉淀阈值')
+      return summarized
+    }
+
+    if (shouldAutoRouteSkillCandidate(evaluation)) {
+      return this.prisma.aiKnowledgeConversation.update({
+        data: { ...baseData, status: AiKnowledgeConversationStatus.SKILL_CANDIDATE },
+        include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+        where: { id },
+      })
+    }
+
+    const status = evaluation.overallScore < AI_KNOWLEDGE_REVIEW_THRESHOLD && evaluation.confidenceScore >= 0.72
+      ? AiKnowledgeConversationStatus.READY_REVIEW
+      : AiKnowledgeConversationStatus.READY_REVIEW
+    return this.prisma.aiKnowledgeConversation.update({
+      data: { ...baseData, status },
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 60 } },
+      where: { id },
+    })
+  }
+
+  private async assessSimilarKnowledgeForConversation(summary: ConversationLearningSummary, evaluation: ConversationAiEvaluation, aiSpace: AiSpace): Promise<ConversationDuplicateAssessment> {
+    if (evaluation.suggestedKnowledgeType === 'DISCARD' || evaluation.privacyRiskScore > 0.32) {
+      return { duplicateRiskScore: 0, matches: [], mergeSuggestion: null }
+    }
+
+    const question = `${summary.title}\n${summary.resolutionSummary}`
+    const tokens = tokenizeForSearch(question)
+    if (tokens.length === 0) return { duplicateRiskScore: 0, matches: [], mergeSuggestion: null }
+
+    const category = inferCategory(question)
+    const roleScope = mapAiSpaceToRoleScope(aiSpace)
+    const entries = await this.prisma.aiKnowledgeEntry.findMany({
+      orderBy: [{ helpfulCount: 'desc' }, { hitCount: 'desc' }, { updatedAt: 'desc' }],
+      take: 18,
+      where: {
+        category,
+        roleScope: { in: [roleScope, AiKnowledgeRoleScope.ALL] },
+        sensitivity: { in: [AiKnowledgeSensitivity.PUBLIC, AiKnowledgeSensitivity.INTERNAL] },
+        status: { in: [AiKnowledgeStatus.APPROVED, AiKnowledgeStatus.AUTO_APPROVED, AiKnowledgeStatus.PROMOTED_TO_SKILL, AiKnowledgeStatus.NEEDS_REVIEW] },
+        OR: tokens.slice(0, 10).flatMap((token) => [
+          { title: { contains: token, mode: 'insensitive' as const } },
+          { canonicalQuestion: { contains: token, mode: 'insensitive' as const } },
+          { canonicalAnswer: { contains: token, mode: 'insensitive' as const } },
+          { tags: { has: token } },
+        ]),
+      },
+    })
+
+    const matches = entries
+      .map((entry) => ({
+        category: entry.category,
+        helpfulCount: entry.helpfulCount,
+        hitCount: entry.hitCount,
+        id: entry.id,
+        similarity: scoreKnowledgeHit(question, tokens, entry),
+        status: entry.status,
+        tags: entry.tags,
+        title: entry.title,
+      }))
+      .filter((match) => match.similarity >= 0.42)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5)
+
+    const duplicateRiskScore = clampScore(matches[0]?.similarity ?? 0)
+    const mergeSuggestion = buildMergeSuggestion(matches, duplicateRiskScore)
+    return { duplicateRiskScore, matches, mergeSuggestion }
+  }
+
+  private async createKnowledgeEntryFromConversation(summarized: {
+    aiSpace: AiSpace
+    aiKbScore?: number
+    aiOverallScore?: number
+    aiPrivacyRiskScore?: number
+    aiSafetyScore?: number
+    autoDecisionReason?: string | null
+    collectedEvidence: string[]
+    environmentNotes: string[]
+    failedAttempts: string[]
+    id: string
+    pitfalls: string[]
+    problemStatement: string
+    resolutionSummary?: string | null
+    suggestedKnowledgeType: string
+    successfulSteps: string[]
+    title: string
+    userId?: string | null
+  }, reviewerId: string | null, reviewNote?: string) {
+    const sourceText = renderConversationKnowledgeAnswer(summarized)
+    const rejectionReason = getRejectionReason(summarized.problemStatement, sourceText)
+    if (rejectionReason) throw new BadRequestException(`会话总结未通过安全沉淀检查：${rejectionReason}`)
+    const sourceHash = stableHash(`conversation:${summarized.id}:${stableHash(sourceText)}`)
+    const category = inferCategory(`${summarized.problemStatement}\n${sourceText}`)
+    const roleScope = mapAiSpaceToRoleScope(summarized.aiSpace)
+    const status = reviewerId ? AiKnowledgeStatus.APPROVED : AiKnowledgeStatus.AUTO_APPROVED
+
+    return this.prisma.aiKnowledgeEntry.upsert({
+      create: {
+        answerQualityScore: clampScore((summarized.aiKbScore ?? 0.82) + 0.04),
+        canonicalAnswer: sourceText,
+        canonicalQuestion: summarized.problemStatement,
+        category,
+        confidenceScore: clampScore(summarized.aiOverallScore ?? 0.78),
+        educationalValueScore: 0.9,
+        generalityScore: clampScore(summarized.aiKbScore ?? 0.82),
+        platformRelevanceScore: 0.82,
+        privacyRiskScore: clampScore(summarized.aiPrivacyRiskScore ?? 0.08),
+        reuseValueScore: clampScore(summarized.aiOverallScore ?? 0.9),
+        reviewedById: reviewerId ?? undefined,
+        reviewedAt: new Date(),
+        reviewNote,
+        roleScope,
+        safetyScore: clampScore(summarized.aiSafetyScore ?? 0.88),
+        sanitizedInputHash: stableHash(summarized.problemStatement),
+        sensitivity: AiKnowledgeSensitivity.INTERNAL,
+        similarityKey: buildSimilarityKey(summarized.problemStatement),
+        source: AiKnowledgeSource.USER_CHAT,
+        sourceConversationId: summarized.id,
+        sourceHash,
+        sourceUserId: summarized.userId ?? undefined,
+        status,
+        summary: summarized.resolutionSummary,
+        tags: inferTags(`${summarized.title}\n${sourceText}`),
+        title: summarized.title,
+        visibility: AiKnowledgeVisibility.ROLE_ONLY,
+      },
+      update: { reviewNote, reviewedAt: new Date(), reviewedById: reviewerId ?? undefined, status, updatedAt: new Date() },
+      where: { sourceHash },
     })
   }
 
@@ -567,6 +921,228 @@ ${candidate.content}`)
   }
 }
 
+function buildTopicKey(question: string) {
+  return stableHash(tokenizeForSearch(question).filter((token) => !['安装', '配置', '报错', '失败', '问题'].includes(token)).slice(0, 6).join('|') || question.slice(0, 40))
+}
+
+function buildConversationTitle(question: string) {
+  const compact = question.replace(/\s+/g, ' ').replace(/[？?。.!！]+$/g, '').slice(0, 72)
+  if (/pikachu|皮卡丘/i.test(compact)) return 'Pikachu 靶场安装部署排错经验'
+  if (/dvwa/i.test(compact)) return 'DVWA 靶场安装部署排错经验'
+  if (/vulhub/i.test(compact)) return 'Vulhub 环境配置排错经验'
+  return compact || 'AI 多轮问题解决经验'
+}
+
+function shouldSummarizeConversation(turnCount: number, question: string, answer: string) {
+  const text = `${question}\n${answer}`
+  const solved = /成功|解决了|好了|可以了|跑起来|部署好了|安装好了|finally|works/i.test(text)
+  const troubleshooting = /报错|错误|失败|不兼容|版本|依赖|环境|docker|compose|php|mysql|脚本|日志|命令|端口/i.test(text)
+  return (turnCount >= 3 && troubleshooting) || (turnCount >= 2 && solved)
+}
+
+function buildConversationLearningSummary(turns: Array<{ role: string; content: string }>) {
+  const fullText = turns.map((turn) => `${turn.role}: ${turn.content}`).join('\n')
+  const userMessages = turns.filter((turn) => turn.role === 'user').map((turn) => turn.content)
+  const assistantMessages = turns.filter((turn) => turn.role === 'assistant').map((turn) => turn.content)
+  const firstQuestion = userMessages[0] ?? ''
+  const lastAnswer = assistantMessages.at(-1) ?? ''
+  const title = buildConversationTitle(firstQuestion)
+  const environmentNotes = extractLines(fullText, /(windows|wsl|linux|ubuntu|centos|docker|compose|php\s*\d|mysql|mariadb|nginx|apache|node|npm|python|端口|版本|兼容)/i, 8)
+  const pitfalls = extractLines(fullText, /(报错|错误|失败|不兼容|permission denied|denied|not found|timeout|端口占用|版本|依赖|乱码|空白页|连接失败|启动失败)/i, 10)
+  const successfulSteps = extractLines(assistantMessages.join('\n'), /(执行|运行|修改|配置|安装|重启|检查|确认|设置|创建|导入|访问|启动)/i, 12)
+  const failedAttempts = extractLines(userMessages.join('\n'), /(还是|又|仍然|报错|失败|不行|不能|无法|不兼容|空白|连不上)/i, 8)
+  const collectedEvidence = extractLines(fullText, /(日志|截图|报错|命令输出|状态码|版本|php -v|docker ps|端口|配置文件|路径|堆栈)/i, 8)
+  const requiresTooling = /脚本|批量|扫描|收集|自动|命令输出|docker ps|php -v|检查系统|日志收集|诊断/i.test(fullText)
+  const resolutionSummary = [
+    `问题：${firstQuestion.slice(0, 500)}`,
+    environmentNotes.length ? `环境/版本要点：${environmentNotes.join('；')}` : '',
+    pitfalls.length ? `踩坑点：${pitfalls.join('；')}` : '',
+    successfulSteps.length ? `最终有效步骤：${successfulSteps.join('；')}` : `最终回复要点：${lastAnswer.slice(0, 1200)}`,
+  ].filter(Boolean).join('\n')
+  return {
+    autoDecisionReason: requiresTooling
+      ? '多轮排错中出现脚本/命令/环境信息收集，建议先作为 Skill 候选由管理员二次审核。'
+      : '多轮排错形成了可复用安装步骤和踩坑说明，建议进入 AI 知识库待审核。',
+    collectedEvidence,
+    environmentNotes,
+    failedAttempts,
+    pitfalls,
+    requiresTooling,
+    resolutionSummary,
+    successfulSteps,
+    title,
+  }
+}
+
+async function requestConversationAiEvaluation(turns: Array<{ role: string; content: string }>, summary: ConversationLearningSummary): Promise<ConversationAiEvaluation> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), AI_KNOWLEDGE_EVALUATION_TIMEOUT_MS)
+  const prompt = buildConversationEvaluationPrompt(turns, summary)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const apiKey = getOpenAiApiKey()
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+
+  try {
+    const response = await fetch(new URL('chat/completions', getOpenAiBaseUrl()), {
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: '你是 CQUPT-SRC 的 AI 知识沉淀评分器。只输出严格 JSON，不要输出解释文本。' },
+          { role: 'user', content: prompt },
+        ],
+        model: getOpenAiModel(),
+        temperature: 0.1,
+      }),
+      headers,
+      method: 'POST',
+      signal: controller.signal,
+    })
+    const body = await readResponseBody(response)
+    if (!response.ok) throw new Error(`AI评分接口失败：${response.status}`)
+    const content = extractOpenAiContent(body)
+    return parseConversationAiEvaluation(content)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function buildConversationEvaluationPrompt(turns: Array<{ role: string; content: string }>, summary: ConversationLearningSummary) {
+  const compactTurns = turns
+    .slice(-24)
+    .map((turn) => `${turn.role}: ${turn.content.slice(0, 1200)}`)
+    .join('\n---\n')
+  return `请评估下面这段已脱敏的多轮 AI 助手会话是否适合沉淀。\n\n判定边界：\n1. KB：可复用的经验答案、安装排错、平台使用、漏洞报告写作、安全学习建议。\n2. SKILL：稳定流程/方法论，包含脚本、命令收集信息、批量诊断、多步骤工具化操作，先进入 Skill 候选，不允许自动安装。\n3. DISCARD：包含隐私/凭证/真实资产/越权/未解决/仅闲聊/复用价值低。\n\n评分 0-1：overallScore、kbScore、skillScore、safetyScore、privacyRiskScore、confidenceScore。privacyRiskScore 越高越危险。\n自动沉淀只允许：KB 且 overall>=${AI_KNOWLEDGE_AUTO_APPROVE_THRESHOLD} 且 kbScore>=0.82 且 safety>=0.86 且 privacyRisk<=0.16 且 confidence>=0.76。\n\n规则摘要：\n${JSON.stringify(summary, null, 2)}\n\n会话：\n${compactTurns}\n\n只返回 JSON：\n{\"suggestedKnowledgeType\":\"KB|SKILL|DISCARD\",\"overallScore\":0.0,\"kbScore\":0.0,\"skillScore\":0.0,\"safetyScore\":0.0,\"privacyRiskScore\":0.0,\"confidenceScore\":0.0,\"reason\":\"一句中文原因\",\"signals\":[\"证据\"],\"risks\":[\"风险\"]}`
+}
+
+function buildHeuristicConversationEvaluation(turns: Array<{ role: string; content: string }>, summary: ConversationLearningSummary): ConversationAiEvaluation {
+  const fullText = turns.map((turn) => `${turn.role}: ${turn.content}`).join('\n')
+  const hasSolvedSignal = /成功|解决了|好了|可以了|跑起来|部署好了|安装好了|works|fixed/i.test(fullText)
+  const hasTroubleshooting = /报错|错误|失败|不兼容|版本|依赖|环境|docker|compose|php|mysql|端口|日志/i.test(fullText)
+  const hasTooling = summary.requiresTooling || /脚本|批量|收集|自动化|扫描|诊断|命令输出|docker ps|php -v|日志收集/i.test(fullText)
+  const hasSafetyRisk = shouldRejectForSafety(fullText)
+  const evidenceScore = clampScore((summary.successfulSteps.length * 0.04) + (summary.pitfalls.length * 0.03) + (summary.environmentNotes.length * 0.025) + (summary.collectedEvidence.length * 0.02))
+  const base = 0.48 + evidenceScore + (hasSolvedSignal ? 0.18 : 0) + (hasTroubleshooting ? 0.1 : 0)
+  const privacyRiskScore = hasSafetyRisk ? 0.82 : clampScore(SENSITIVE_PATTERNS.filter((pattern) => pattern.test(fullText)).length * 0.24 + PROMPT_INJECTION_PATTERNS.filter((pattern) => pattern.test(fullText)).length * 0.3 + 0.06)
+  const safetyScore = clampScore(0.94 - privacyRiskScore * 0.72)
+  const kbScore = clampScore(base + (hasTooling ? -0.08 : 0.06))
+  const skillScore = clampScore(base + (hasTooling ? 0.18 : -0.14))
+  const suggestedKnowledgeType = privacyRiskScore > 0.45 || !hasTroubleshooting ? 'DISCARD' : hasTooling && skillScore >= kbScore ? 'SKILL' : 'KB'
+  const overallScore = clampScore(Math.max(kbScore, skillScore) * 0.68 + safetyScore * 0.22 + (1 - privacyRiskScore) * 0.1)
+  return {
+    confidenceScore: clampScore(0.62 + evidenceScore * 0.32 + (hasSolvedSignal ? 0.08 : 0)),
+    kbScore,
+    overallScore,
+    privacyRiskScore,
+    reason: suggestedKnowledgeType === 'SKILL'
+      ? '规则评分认为该会话包含可复用流程和命令/脚本/诊断信息，更适合进入 Skill 候选池。'
+      : suggestedKnowledgeType === 'KB'
+        ? '规则评分认为该会话已有明确问题、踩坑和有效步骤，适合沉淀为知识库。'
+        : '规则评分认为该会话存在安全风险、未解决或复用价值不足，需人工判断。',
+    risks: hasSafetyRisk ? ['检测到敏感信息或 prompt injection 风险'] : [],
+    safetyScore,
+    signals: [hasSolvedSignal ? '出现解决成功信号' : '', hasTroubleshooting ? '出现排错/环境信号' : '', hasTooling ? '出现工具化流程信号' : ''].filter(Boolean),
+    skillScore,
+    suggestedKnowledgeType,
+  }
+}
+
+function mergeConversationEvaluations(heuristic: ConversationAiEvaluation, ai: ConversationAiEvaluation): ConversationAiEvaluation {
+  const privacyRiskScore = Math.max(heuristic.privacyRiskScore, ai.privacyRiskScore)
+  const safetyScore = Math.min(heuristic.safetyScore, ai.safetyScore)
+  const suggestedKnowledgeType = privacyRiskScore > 0.42 || safetyScore < 0.68
+    ? 'DISCARD'
+    : ai.suggestedKnowledgeType === 'SKILL' || heuristic.suggestedKnowledgeType === 'SKILL'
+      ? 'SKILL'
+      : ai.suggestedKnowledgeType === 'KB' || heuristic.suggestedKnowledgeType === 'KB'
+        ? 'KB'
+        : 'DISCARD'
+  return {
+    confidenceScore: clampScore(ai.confidenceScore * 0.7 + heuristic.confidenceScore * 0.3),
+    kbScore: clampScore(ai.kbScore * 0.7 + heuristic.kbScore * 0.3),
+    overallScore: clampScore(ai.overallScore * 0.7 + heuristic.overallScore * 0.3),
+    privacyRiskScore,
+    reason: `AI评分：${ai.reason}；规则校验：${heuristic.reason}`,
+    risks: [...new Set([...ai.risks, ...heuristic.risks])].slice(0, 8),
+    safetyScore,
+    signals: [...new Set([...ai.signals, ...heuristic.signals])].slice(0, 8),
+    skillScore: clampScore(ai.skillScore * 0.7 + heuristic.skillScore * 0.3),
+    suggestedKnowledgeType,
+  }
+}
+
+function parseConversationAiEvaluation(content: string): ConversationAiEvaluation {
+  const jsonText = extractJsonObject(content)
+  const raw = JSON.parse(jsonText) as Partial<ConversationAiEvaluation>
+  const type = raw.suggestedKnowledgeType === 'SKILL' || raw.suggestedKnowledgeType === 'DISCARD' ? raw.suggestedKnowledgeType : 'KB'
+  return {
+    confidenceScore: clampScore(Number(raw.confidenceScore)),
+    kbScore: clampScore(Number(raw.kbScore)),
+    overallScore: clampScore(Number(raw.overallScore)),
+    privacyRiskScore: clampScore(Number(raw.privacyRiskScore)),
+    reason: typeof raw.reason === 'string' ? raw.reason.slice(0, 800) : 'AI 已完成知识沉淀评分。',
+    risks: Array.isArray(raw.risks) ? raw.risks.map(String).slice(0, 8) : [],
+    safetyScore: clampScore(Number(raw.safetyScore)),
+    signals: Array.isArray(raw.signals) ? raw.signals.map(String).slice(0, 8) : [],
+    skillScore: clampScore(Number(raw.skillScore)),
+    suggestedKnowledgeType: type,
+  }
+}
+
+function buildMergeSuggestion(matches: SimilarKnowledgeMatch[], duplicateRiskScore: number) {
+  if (matches.length === 0) return null
+  const top = matches[0]
+  if (duplicateRiskScore >= AI_KNOWLEDGE_DUPLICATE_STRONG_THRESHOLD) {
+    return `高相似知识“${top.title}”（${Math.round(top.similarity * 100)}%）已存在，建议管理员优先合并踩坑点/环境差异，不要直接新增重复条目。`
+  }
+  if (duplicateRiskScore >= AI_KNOWLEDGE_DUPLICATE_REVIEW_THRESHOLD) {
+    return `发现相似知识“${top.title}”（${Math.round(top.similarity * 100)}%），建议人工审核是否补充到既有条目或作为独立变体保留。`
+  }
+  return `发现 ${matches.length} 条弱相似知识，可作为审核参考。`
+}
+
+function shouldAutoApproveKnowledge(evaluation: ConversationAiEvaluation) {
+  return evaluation.suggestedKnowledgeType === 'KB'
+    && evaluation.overallScore >= AI_KNOWLEDGE_AUTO_APPROVE_THRESHOLD
+    && evaluation.kbScore >= 0.82
+    && evaluation.safetyScore >= 0.86
+    && evaluation.privacyRiskScore <= 0.16
+    && evaluation.confidenceScore >= 0.76
+}
+
+function shouldAutoRouteSkillCandidate(evaluation: ConversationAiEvaluation) {
+  return evaluation.suggestedKnowledgeType === 'SKILL'
+    && evaluation.overallScore >= 0.84
+    && evaluation.skillScore >= 0.82
+    && evaluation.safetyScore >= 0.82
+    && evaluation.privacyRiskScore <= 0.18
+    && evaluation.confidenceScore >= 0.72
+}
+
+function clampScore(value: number) {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0
+}
+
+function extractLines(text: string, pattern: RegExp, limit: number) {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-*\d.\s>]+/, '').trim())
+    .filter((line) => line.length >= 8 && line.length <= 260 && pattern.test(line))
+  return [...new Set(lines)].slice(0, limit)
+}
+
+function renderConversationKnowledgeAnswer(conversation: {
+  autoDecisionReason?: string | null
+  collectedEvidence: string[]
+  environmentNotes: string[]
+  failedAttempts: string[]
+  pitfalls: string[]
+  resolutionSummary?: string | null
+  successfulSteps: string[]
+  suggestedKnowledgeType: string
+}) {
+  const section = (title: string, items: string[]) => items.length ? `\n## ${title}\n${items.map((item) => `- ${item}`).join('\n')}` : ''
+  return `# 多轮问题解决沉淀\n\n${conversation.resolutionSummary ?? '本条目来自多轮 AI 助手排错会话，经管理员审核后沉淀。'}${section('最终有效步骤', conversation.successfulSteps)}${section('踩坑与不兼容点', conversation.pitfalls)}${section('环境/版本要点', conversation.environmentNotes)}${section('失败尝试', conversation.failedAttempts)}${section('证据/信息收集', conversation.collectedEvidence)}\n\n## 沉淀建议\n- 建议类型：${conversation.suggestedKnowledgeType}\n- 原因：${conversation.autoDecisionReason ?? '管理员审核通过'}\n\n## 安全边界\n- 内容已脱敏，不包含真实凭证、Cookie、Token 或私有资产。\n- 如涉及靶场部署，仅用于授权学习环境，不适用于未授权攻击真实目标。`
+}
+
 function canRoleAccessKnowledge(userRole: RoleCode, entry: { roleScope: AiKnowledgeRoleScope; sensitivity: AiKnowledgeSensitivity; status: AiKnowledgeStatus; visibility: AiKnowledgeVisibility }) {
   if (entry.status !== AiKnowledgeStatus.APPROVED && entry.status !== AiKnowledgeStatus.AUTO_APPROVED && entry.status !== AiKnowledgeStatus.PROMOTED_TO_SKILL) return false
   if (entry.sensitivity !== AiKnowledgeSensitivity.PUBLIC && entry.sensitivity !== AiKnowledgeSensitivity.INTERNAL) return false
@@ -642,6 +1218,40 @@ function getRejectionReason(question: string, answer: string) {
   if (PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text))) return '疑似 prompt injection'
   if (answer.length < 80) return '回答过短，复用价值不足'
   return null
+}
+
+function getOpenAiBaseUrl() {
+  const baseUrl = process.env.OPENAI_BASE_URL || process.env.HERMES_AGENT_BASE_URL || DEFAULT_OPENAI_BASE_URL
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+}
+
+function getOpenAiApiKey() {
+  return process.env.OPENAI_API_KEY || process.env.HERMES_AGENT_API_KEY || ''
+}
+
+function getOpenAiModel() {
+  return process.env.OPENAI_MODEL || process.env.HERMES_AGENT_MODEL || DEFAULT_OPENAI_MODEL
+}
+
+async function readResponseBody(response: Response) {
+  const contentType = response.headers.get('content-type') ?? ''
+  return contentType.includes('application/json') ? response.json() : response.text()
+}
+
+function extractOpenAiContent(body: unknown) {
+  const choices = body && typeof body === 'object' ? (body as { choices?: unknown }).choices : null
+  if (!Array.isArray(choices)) return ''
+  const first = choices[0] as { message?: { content?: unknown }; text?: unknown } | undefined
+  return typeof first?.message?.content === 'string' ? first.message.content : typeof first?.text === 'string' ? first.text : ''
+}
+
+function extractJsonObject(content: string) {
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]
+  const candidate = (fenced ?? content).trim()
+  const start = candidate.indexOf('{')
+  const end = candidate.lastIndexOf('}')
+  if (start < 0 || end <= start) throw new Error('AI评分未返回JSON对象')
+  return candidate.slice(start, end + 1)
 }
 
 function stableHash(value: string) {

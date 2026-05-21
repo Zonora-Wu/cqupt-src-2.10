@@ -8,10 +8,14 @@ import {
   installAiSkillCandidate,
   listAiKnowledge,
   listAiKnowledgeCaptureJobs,
+  listAiKnowledgeConversations,
   listAiSkillCandidates,
   processAiKnowledgeCaptures,
   reviewAiKnowledge,
+  reviewAiKnowledgeConversation,
   reviewAiSkillCandidate,
+  summarizeAiKnowledgeConversation,
+  type AiKnowledgeConversation,
   type AiKnowledgeEntry,
   type AiKnowledgeStats,
   type AiKnowledgeStatus,
@@ -20,6 +24,7 @@ import {
 
 const statusLabels: Record<string, string> = {
   APPROVED: '已批准',
+  APPROVED_TO_KB: '已沉入知识库',
   ARCHIVED: '已归档',
   AUTO_APPROVED: '自动批准',
   CANDIDATE: '候选',
@@ -31,7 +36,9 @@ const statusLabels: Record<string, string> = {
   PENDING: '待处理',
   PROCESSING: '处理中',
   PROMOTED_TO_SKILL: '已晋升 Skill',
+  READY_REVIEW: '待沉淀审核',
   REJECTED: '已拒绝',
+  SKILL_CANDIDATE: 'Skill 候选会话',
 }
 
 const roleScopeLabels: Record<string, string> = {
@@ -62,6 +69,7 @@ const categoryLabels: Record<string, string> = {
 
 export function AdminAiKnowledgeManagement() {
   const [entries, setEntries] = useState<AiKnowledgeEntry[]>([])
+  const [conversations, setConversations] = useState<AiKnowledgeConversation[]>([])
   const [candidates, setCandidates] = useState<AiSkillCandidate[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [stats, setStats] = useState<AiKnowledgeStats | null>(null)
@@ -82,16 +90,18 @@ export function AdminAiKnowledgeManagement() {
     setLoading(true)
     setError('')
     try {
-      const [statsData, entriesData, candidatesData, jobsData] = await Promise.all([
+      const [statsData, entriesData, candidatesData, jobsData, conversationData] = await Promise.all([
         getAiKnowledgeStats(),
         listAiKnowledge({ page: 1, pageSize: 20, status: status === 'ALL' ? undefined : status, keyword }),
         listAiSkillCandidates(),
         listAiKnowledgeCaptureJobs({ page: 1, pageSize: 8 }),
+        listAiKnowledgeConversations({ page: 1, pageSize: 8 }),
       ])
       setStats(statsData)
       setEntries(entriesData.items)
       setCandidates(candidatesData)
       setCaptureJobs(jobsData.items)
+      setConversations(conversationData.items)
       setSelectedIds((current) => current.filter((id) => entriesData.items.some((entry) => entry.id === id && promotableStatuses.has(entry.status))))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'AI 知识库数据加载失败')
@@ -179,6 +189,79 @@ export function AdminAiKnowledgeManagement() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
+          <SurfacePanel className="p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">多轮会话沉淀队列</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">把用户从“提出问题 → 多次报错 → 最终解决”的完整路径沉淀为知识库；涉及脚本/信息收集的复杂流程先标为 Skill 候选。</p>
+              </div>
+              <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">刷新会话</button>
+            </div>
+          </SurfacePanel>
+
+          {conversations.map((conversation) => (
+            <SurfacePanel className="p-5" key={conversation.id}>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={conversation.status} />
+                    <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{conversation.aiSpace}</span>
+                    <span className="rounded-lg bg-brand-700/10 px-2.5 py-1 text-xs text-brand-800 dark:text-green-200">建议：{conversation.suggestedKnowledgeType === 'SKILL' ? 'Skill 候选' : conversation.suggestedKnowledgeType === 'DISCARD' ? '不建议沉淀' : '知识库'}</span>
+                    <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">AI评分 {formatPercent(conversation.aiOverallScore)}</span>
+                    <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{conversation.turnCount} 轮</span>
+                  </div>
+                  <h3 className="mt-3 text-lg font-semibold">{conversation.title}</h3>
+                  <div className="mt-3 grid gap-2 md:grid-cols-6">
+                    <ScorePill label="综合" value={conversation.aiOverallScore} />
+                    <ScorePill label="KB" value={conversation.aiKbScore} />
+                    <ScorePill label="Skill" value={conversation.aiSkillScore} />
+                    <ScorePill label="安全" value={conversation.aiSafetyScore} />
+                    <ScorePill label="隐私风险" value={conversation.aiPrivacyRiskScore} inverse />
+                    <ScorePill label="重复风险" value={conversation.duplicateRiskScore} inverse />
+                  </div>
+                  <p className="mt-3 rounded-lg border border-black/5 bg-black/[0.025] p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">{conversation.resolutionSummary || conversation.problemStatement}</p>
+                  {conversation.pitfalls.length > 0 ? <TagList label="踩坑" items={conversation.pitfalls} /> : null}
+                  {conversation.successfulSteps.length > 0 ? <TagList label="有效步骤" items={conversation.successfulSteps} /> : null}
+                  {conversation.mergeSuggestion ? (
+                    <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-800 dark:text-amber-100">
+                      <p className="font-medium">相似知识合并建议</p>
+                      <p className="mt-1">{conversation.mergeSuggestion}</p>
+                      {conversation.similarKnowledgeMatches?.length ? (
+                        <div className="mt-2 grid gap-2 md:grid-cols-2">
+                          {conversation.similarKnowledgeMatches.map((match) => (
+                            <div className="rounded-lg border border-amber-500/20 bg-white/55 p-2 text-xs dark:bg-black/15" key={match.id}>
+                              <p className="font-medium text-slate-900 dark:text-slate-100">{match.title}</p>
+                              <p className="mt-1 text-slate-600 dark:text-slate-300">相似度 {formatPercent(match.similarity)} · {statusLabels[match.status] ?? match.status} · 命中 {match.hitCount}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {conversation.autoDecisionReason ? <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">自动判定：{conversation.autoDecisionReason}</p> : null}
+                  {conversation.aiEvaluation?.signals?.length ? <TagList label="AI 证据" items={conversation.aiEvaluation.signals} /> : null}
+                  {conversation.aiEvaluation?.risks?.length ? <TagList label="AI 风险" items={conversation.aiEvaluation.risks} /> : null}
+                  {conversation.turns && conversation.turns.length > 0 ? (
+                    <details className="mt-3 rounded-lg border border-black/5 p-3 text-xs dark:border-white/10">
+                      <summary className="cursor-pointer font-medium">查看原始脱敏对话片段</summary>
+                      <div className="mt-3 space-y-2">
+                        {conversation.turns.map((turn) => <p className="line-clamp-3 rounded-lg bg-black/[0.025] p-2 dark:bg-white/[0.035]" key={turn.id}><b>{turn.role}：</b>{turn.content}</p>)}
+                      </div>
+                    </details>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2 xl:w-40 xl:flex-col">
+                  <button className="rounded-lg border border-brand-600/20 px-3 py-2 text-sm font-medium text-brand-700 disabled:opacity-60 dark:text-green-200" disabled={busy === conversation.id} onClick={() => void runAction(conversation.id, () => summarizeAiKnowledgeConversation(conversation.id), '会话已重新总结')} type="button">重新总结</button>
+                  <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === conversation.id} onClick={() => void runAction(conversation.id, () => reviewAiKnowledgeConversation(conversation.id, 'APPROVED_TO_KB', '管理员批准沉入知识库'), '已沉入 AI 知识库')} type="button">沉入知识库</button>
+                  <button className="rounded-lg border border-amber-500/30 px-3 py-2 text-sm font-medium text-amber-700 disabled:opacity-60 dark:text-amber-200" disabled={busy === conversation.id} onClick={() => void runAction(conversation.id, () => reviewAiKnowledgeConversation(conversation.id, 'SKILL_CANDIDATE', '复杂流程，进入 Skill 候选池'), '已标记为 Skill 候选会话')} type="button">标为 Skill</button>
+                  <button className="rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60 dark:text-red-200" disabled={busy === conversation.id} onClick={() => void runAction(conversation.id, () => reviewAiKnowledgeConversation(conversation.id, 'DISCARDED', '不适合沉淀'), '会话已丢弃')} type="button">丢弃</button>
+                </div>
+              </div>
+            </SurfacePanel>
+          ))}
+
+          {conversations.length === 0 && !loading ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">暂无待沉淀的多轮会话。用户完成一次多轮排错后会自动出现在这里。</SurfacePanel> : null}
+
           <SurfacePanel className="p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -305,6 +388,17 @@ export function AdminAiKnowledgeManagement() {
   )
 }
 
+function TagList({ items, label }: { items: string[]; label: string }) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.slice(0, 8).map((item) => <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs leading-5 dark:bg-white/[0.06]" key={item}>{item}</span>)}
+      </div>
+    </div>
+  )
+}
+
 function StatCard({ icon: Icon, label, value }: { icon: typeof FileText; label: string; value: number }) {
   return (
     <SurfacePanel className="p-4">
@@ -321,6 +415,26 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof FileText; label: 
 
 function StatusBadge({ status }: { status: string }) {
   return <span className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium dark:border-white/10">{statusLabels[status] ?? status}</span>
+}
+
+function ScorePill({ inverse, label, value }: { inverse?: boolean; label: string; value: number }) {
+  const effective = inverse ? 1 - (value ?? 0) : (value ?? 0)
+  const tone = effective >= 0.82 ? 'text-emerald-700 dark:text-emerald-200' : effective >= 0.62 ? 'text-amber-700 dark:text-amber-200' : 'text-red-700 dark:text-red-200'
+  return (
+    <div className="rounded-lg border border-black/5 bg-black/[0.025] p-2 dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-slate-500 dark:text-slate-400">{label}</span>
+        <span className={`font-semibold ${tone}`}>{formatPercent(value)}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+        <div className="h-full rounded-full bg-brand-600 dark:bg-green-400" style={{ width: `${Math.max(4, Math.round(effective * 100))}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function formatPercent(value: number) {
+  return `${Math.round((value ?? 0) * 100)}%`
 }
 
 function Metric({ inverse, label, raw, value }: { inverse?: boolean; label: string; raw?: boolean; value: number }) {

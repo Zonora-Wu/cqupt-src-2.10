@@ -214,6 +214,14 @@ enum AiKnowledgeJobStatus {
   DISCARDED
 }
 
+enum AiKnowledgeConversationStatus {
+  ACTIVE
+  READY_REVIEW
+  APPROVED_TO_KB
+  SKILL_CANDIDATE
+  DISCARDED
+}
+
 enum AiSkillCandidateStatus {
   DRAFT
   NEEDS_REVIEW
@@ -299,6 +307,8 @@ model User {
   knowledgeRevisions    AiKnowledgeRevision[]       @relation("AiKnowledgeRevisionEditor")
   knowledgeHits         AiKnowledgeHit[]            @relation("AiKnowledgeHitUser")
   knowledgeFeedbacks    AiKnowledgeFeedback[]       @relation("AiKnowledgeFeedbackUser")
+  aiKnowledgeConversations AiKnowledgeConversation[] @relation("AiKnowledgeConversationUser")
+  reviewedAiKnowledgeConversations AiKnowledgeConversation[] @relation("AiKnowledgeConversationReviewer")
   reviewedSkillCandidates AiSkillCandidate[]         @relation("AiSkillCandidateReviewer")
   operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
   auditLogs             AuditLog[]                  @relation("AuditActor")
@@ -923,6 +933,69 @@ model AiActionProposal {
   @@index([reportId])
 }
 
+model AiKnowledgeConversation {
+  id                     String                         @id @default(cuid())
+  userId                 String?
+  aiSpace                AiSpace
+  status                 AiKnowledgeConversationStatus @default(ACTIVE)
+  title                  String
+  problemStatement       String                         @db.Text
+  resolutionSummary      String?                        @db.Text
+  pitfalls               String[]                       @default([])
+  environmentNotes       String[]                       @default([])
+  successfulSteps        String[]                       @default([])
+  failedAttempts         String[]                       @default([])
+  collectedEvidence      String[]                       @default([])
+  suggestedKnowledgeType String                         @default("KB")
+  autoDecisionReason     String?                        @db.Text
+  aiOverallScore         Float                          @default(0)
+  aiKbScore              Float                          @default(0)
+  aiSkillScore           Float                          @default(0)
+  aiSafetyScore          Float                          @default(0)
+  aiPrivacyRiskScore     Float                          @default(1)
+  aiConfidenceScore      Float                          @default(0)
+  aiAutoApproveThreshold Float                          @default(0.88)
+  aiReviewThreshold      Float                          @default(0.62)
+  aiEvaluation           Json?
+  duplicateRiskScore     Float                          @default(0)
+  similarKnowledgeMatches Json?
+  mergeSuggestion        String?                        @db.Text
+  topicKey               String
+  turnCount              Int                            @default(0)
+  lastUserMessage        String?                        @db.Text
+  sourceCallIds          String[]                       @default([])
+  reviewedById           String?
+  reviewedAt             DateTime?
+  reviewNote             String?                        @db.Text
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
+
+  user                   User?                          @relation("AiKnowledgeConversationUser", fields: [userId], references: [id])
+  reviewedBy             User?                          @relation("AiKnowledgeConversationReviewer", fields: [reviewedById], references: [id])
+  turns                  AiKnowledgeConversationTurn[]
+  knowledgeEntries       AiKnowledgeEntry[]             @relation("AiKnowledgeConversationEntry")
+
+  @@index([status, updatedAt])
+  @@index([userId, aiSpace, updatedAt])
+  @@index([aiSpace, topicKey, updatedAt])
+}
+
+model AiKnowledgeConversationTurn {
+  id             String                  @id @default(cuid())
+  conversationId String
+  callId         String?
+  role           String
+  content        String                  @db.Text
+  contentHash    String
+  createdAt      DateTime                @default(now())
+
+  conversation   AiKnowledgeConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([contentHash])
+  @@unique([conversationId, contentHash])
+}
+
 model AiKnowledgeEntry {
   id                     String                  @id @default(cuid())
   title                  String
@@ -937,6 +1010,7 @@ model AiKnowledgeEntry {
   status                 AiKnowledgeStatus       @default(CANDIDATE)
   source                 AiKnowledgeSource       @default(USER_CHAT)
   sourceCallId           String?
+  sourceConversationId   String?
   sourceUserId           String?
   sourceHash             String                  @unique
   sanitizedInputHash     String?
@@ -965,6 +1039,7 @@ model AiKnowledgeEntry {
   archivedAt             DateTime?
 
   sourceUser             User?                   @relation("AiKnowledgeSourceUser", fields: [sourceUserId], references: [id])
+  sourceConversation     AiKnowledgeConversation? @relation("AiKnowledgeConversationEntry", fields: [sourceConversationId], references: [id])
   reviewedBy             User?                   @relation("AiKnowledgeReviewer", fields: [reviewedById], references: [id])
   hits                   AiKnowledgeHit[]
   feedbacks              AiKnowledgeFeedback[]
@@ -974,6 +1049,7 @@ model AiKnowledgeEntry {
   @@index([roleScope, status])
   @@index([category, status])
   @@index([sourceCallId])
+  @@index([sourceConversationId])
   @@index([sourceUserId])
   @@index([similarityKey])
 }

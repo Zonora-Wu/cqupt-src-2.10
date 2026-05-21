@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common'
 import {
   AiKnowledgeCategory,
+  AiKnowledgeConversationStatus,
   AiKnowledgeFeedbackValue,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
@@ -10,6 +11,8 @@ import {
 } from '@prisma/client'
 import {
   AiKnowledgeCreateInput,
+  AiKnowledgeConversationListQuery,
+  AiKnowledgeConversationReviewInput,
   AiKnowledgeFeedbackInput,
   AiKnowledgeListQuery,
   AiKnowledgeReviewInput,
@@ -29,6 +32,22 @@ export function normalizeKnowledgeListQuery(query: Record<string, unknown>): AiK
     roleScope: normalizeEnum(query.roleScope, AiKnowledgeRoleScope, '角色范围'),
     status: normalizeEnum(query.status, AiKnowledgeStatus, '知识状态'),
   }
+}
+
+export function normalizeConversationListQuery(query: Record<string, unknown>): AiKnowledgeConversationListQuery {
+  return {
+    page: positiveInt(query.page, 1),
+    pageSize: Math.min(positiveInt(query.pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
+    status: normalizeEnum(query.status, AiKnowledgeConversationStatus, '会话状态'),
+  }
+}
+
+export function normalizeConversationReviewBody(body: Record<string, unknown>): AiKnowledgeConversationReviewInput {
+  const status = normalizeEnum(body.status, AiKnowledgeConversationStatus, '会话审核状态')
+  if (status !== AiKnowledgeConversationStatus.APPROVED_TO_KB && status !== AiKnowledgeConversationStatus.SKILL_CANDIDATE && status !== AiKnowledgeConversationStatus.DISCARDED) {
+    throw new BadRequestException('会话审核状态只能是 APPROVED_TO_KB、SKILL_CANDIDATE 或 DISCARDED')
+  }
+  return { note: optionalText(body.note, '审核备注', 1000), status }
 }
 
 export function normalizeCreateKnowledgeBody(body: Record<string, unknown>): AiKnowledgeCreateInput {

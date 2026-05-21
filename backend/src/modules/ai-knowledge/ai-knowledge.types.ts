@@ -1,5 +1,6 @@
 import {
   AiKnowledgeCategory,
+  AiKnowledgeConversationStatus,
   AiKnowledgeFeedbackValue,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
@@ -15,6 +16,25 @@ export type AiKnowledgeCaptureInput = {
   callId?: string
   question: string
   userId?: string
+}
+
+export type AiKnowledgeConversationTurnInput = {
+  aiSpace: AiSpace
+  answer: string
+  callId?: string
+  question: string
+  userId?: string
+}
+
+export type AiKnowledgeConversationListQuery = {
+  page: number
+  pageSize: number
+  status?: AiKnowledgeConversationStatus
+}
+
+export type AiKnowledgeConversationReviewInput = {
+  note?: string
+  status: Extract<AiKnowledgeConversationStatus, 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'>
 }
 
 export type AiKnowledgeRetrievalInput = {
