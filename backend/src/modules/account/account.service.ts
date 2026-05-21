@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
-import { SchoolPolicyService } from '../school/school-policy.service'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
 
 type UploadedImageFile = { buffer?: Buffer; mimetype?: string; size?: number }
@@ -22,8 +21,6 @@ export class AccountService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(SchoolPolicyService)
-    private readonly schoolPolicy: SchoolPolicyService,
   ) {}
 
   async getProfile(user: AuthenticatedRequestUser) {
@@ -317,8 +314,6 @@ export class AccountService {
     if (input.newEmail === user.email.toLowerCase()) {
       throw new BadRequestException('新邮箱不能与当前邮箱相同')
     }
-
-    await this.schoolPolicy.assertSchoolEmail(input.newEmail)
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: input.newEmail },

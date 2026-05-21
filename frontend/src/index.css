@@ -114,6 +114,28 @@ html.auth-modal-open body {
   background: rgba(42, 100, 56, 0.7);
 }
 
+.select-dropdown-scrollbar {
+  scrollbar-color: rgba(100, 116, 139, 0.55) transparent;
+  scrollbar-width: thin;
+}
+
+.select-dropdown-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.select-dropdown-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.select-dropdown-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 999px;
+}
+
+.select-dropdown-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.68);
+}
+
 .user-compact-mode section {
   padding-top: 5rem;
   padding-bottom: 1.25rem;

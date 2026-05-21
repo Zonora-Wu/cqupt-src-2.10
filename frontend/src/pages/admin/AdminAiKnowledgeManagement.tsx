@@ -1,6 +1,7 @@
 import { Bot, CheckCircle2, DatabaseZap, FileText, Hammer, PackageCheck, RefreshCw, ShieldCheck, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   createAiSkillCandidate,
@@ -270,12 +271,17 @@ export function AdminAiKnowledgeManagement() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <input className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 dark:border-white/10 dark:bg-[#101711]" onChange={(event) => setKeyword(event.target.value)} placeholder="搜索问题/答案" value={keyword} />
-                <select className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-[#101711]" onChange={(event) => setStatus(event.target.value as KnowledgeStatusFilter)} value={status}>
-                  <option value="NEEDS_REVIEW">待审核</option>
-                  <option value="APPROVED">已批准</option>
-                  <option value="REJECTED">已拒绝</option>
-                  <option value="ALL">全部</option>
-                </select>
+                <SelectInput
+                  className="min-w-32"
+                  onChange={(value) => setStatus(value as KnowledgeStatusFilter)}
+                  options={[
+                    { label: '待审核', value: 'NEEDS_REVIEW' },
+                    { label: '已批准', value: 'APPROVED' },
+                    { label: '已拒绝', value: 'REJECTED' },
+                    { label: '全部', value: 'ALL' },
+                  ]}
+                  value={status}
+                />
                 <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">查询</button>
               </div>
             </div>

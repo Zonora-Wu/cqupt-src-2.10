@@ -8,6 +8,7 @@ import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabil
 import { getAiAppearance, getAiQuota, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
+import { SelectInput } from '../../components/ui/SelectInput'
 
 type ChatMessage = {
   attachment?: ChatAttachment
@@ -929,28 +930,20 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
                 <div className="grid gap-3 md:grid-cols-2">
                   <DraftTextInput label="影响资产" value={draft.assetName} onChange={(value) => updateDraft(draft.id, { assetName: value })} />
                   <DraftTextInput label="资产 URL" value={draft.assetUrl ?? ''} onChange={(value) => updateDraft(draft.id, { assetUrl: value })} />
-                  <label className="block">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">漏洞类型</span>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:bg-[#131a15] dark:text-white"
-                      onChange={(event) => updateDraft(draft.id, { vulnerabilityType: event.target.value })}
-                      value={draft.vulnerabilityType}
-                    >
-                      <option value="">留空，手动选择</option>
-                      {vulnerabilityTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">自评等级</span>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:bg-[#131a15] dark:text-white"
-                      onChange={(event) => updateDraft(draft.id, { selfSeverity: event.target.value })}
-                      value={draft.selfSeverity}
-                    >
-                      <option value="">留空，手动选择</option>
-                      {severityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                  </label>
+                  <SelectInput
+                    label="漏洞类型"
+                    onChange={(value) => updateDraft(draft.id, { vulnerabilityType: value })}
+                    options={[{ label: '留空，手动选择', value: '' }, ...vulnerabilityTypes]}
+                    placeholder="留空，手动选择"
+                    value={draft.vulnerabilityType}
+                  />
+                  <SelectInput
+                    label="自评等级"
+                    onChange={(value) => updateDraft(draft.id, { selfSeverity: value })}
+                    options={[{ label: '留空，手动选择', value: '' }, ...severityOptions]}
+                    placeholder="留空，手动选择"
+                    value={draft.selfSeverity}
+                  />
                   <DraftTextInput label="责任单位/定级单元（可选）" value={draft.ownerUnit ?? ''} onChange={(value) => updateDraft(draft.id, { ownerUnit: value })} />
                   <DraftTextInput label="测试边界（可选）" value={draft.testBoundary ?? ''} onChange={(value) => updateDraft(draft.id, { testBoundary: value })} />
                 </div>

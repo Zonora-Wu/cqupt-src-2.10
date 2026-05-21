@@ -12,18 +12,22 @@ export type NormalizedRegisterInput = {
   unifiedCode: string
 }
 
+const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
+
 export function normalizeRegisterBody(body: Record<string, unknown>): NormalizedRegisterInput {
   const password = requireText(body.password, '密码', 8, 128)
+  const identityText = requireText(body.identityText, '身份', 2, 40)
+  const studentNo = optionalText(body.studentNo, 40)
 
   return {
     code: normalizeEmailCode(body.code),
     college: requireText(body.college, '学院', 2, 80),
     email: normalizeEmail(body.email),
     grade: optionalText(body.grade, 20),
-    identityText: requireText(body.identityText, '身份', 2, 40),
+    identityText,
     name: requireText(body.name, '姓名', 2, 40),
     password: validatePassword(password),
-    studentNo: optionalText(body.studentNo, 40),
+    studentNo: teacherIdentityTypes.has(identityText) ? '' : requireStudentNo(studentNo),
     unifiedCode: normalizeUnifiedCode(body.unifiedCode),
   }
 }
@@ -53,6 +57,14 @@ function normalizeUnifiedCode(value: unknown) {
   }
 
   return code
+}
+
+function requireStudentNo(value: string) {
+  if (!value) {
+    throw new BadRequestException('请填写学号')
+  }
+
+  return value
 }
 
 function validatePassword(password: string) {
