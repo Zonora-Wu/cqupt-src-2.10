@@ -167,7 +167,7 @@ CQUPT-SRC 专属 skills 目录：
 
 ```text
 容器内：/opt/data/skills/cqupt-src
-宿主机：/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src
+宿主机：/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
 ```
 
 当前已同步到平台 Hermes 容器内的 CQUPT-SRC skills：
@@ -220,7 +220,7 @@ CQUPT-SRC 专属 skills 目录：
 
 ```text
 /home/cocking/.hermes/skills/cqupt-src
-  -> /home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src
+  -> /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
   -> 容器内 /opt/data/skills/cqupt-src
 ```
 
@@ -228,36 +228,51 @@ CQUPT-SRC 专属 skills 目录：
 
 ## 6. 同步 CQUPT-SRC skills 到平台 Hermes
 
-由于平台 Hermes 的 `data` 目录由容器内 UID 创建，宿主机当前用户可能没有直接写权限。当前已观察到的生产风险点：
+平台 Hermes 的 `data` 根目录由容器内 UID 创建并可能被保持为 `700`。不要依赖对 `data` 根目录做 chmod；当前采用更稳定的独立 bind mount：
 
 ```text
-/home/cocking/cqupt-src-hermes-linux/data 可能为 10000:10000 且 700
+宿主可写目录：/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
+容器读取目录：/opt/data/skills/cqupt-src
+后端安装根：  CQUPT_HERMES_SKILLS_ROOT=/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
 ```
 
-如果后端直接写入：
+宿主权限：
 
 ```text
-/home/cocking/cqupt-src-hermes-linux/data/skills
+/home/cocking/cqupt-src-hermes-linux/data                       -> 10000:* 700  # 容器私有，后端不写这里
+/home/cocking/cqupt-src-hermes-linux/platform-skills            -> cocking:cocking 755
+/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src  -> cocking:cocking 775
 ```
 
-可能出现：
+Docker Compose 需要保留第二条 volume 覆盖挂载：
 
-```text
-PermissionError: [Errno 13] Permission denied
+```yaml
+volumes:
+  - ../data:/opt/data
+  - ../platform-skills/cqupt-src:/opt/data/skills/cqupt-src
 ```
 
-推荐通过容器复制。
+该配置已通过真实后端链路验证：管理员 API 创建临时 Knowledge → 审核 → 创建 Skill Candidate → 审核 → `POST /api/ai/knowledge/skill-candidates/:id/install` 使用默认 `CQUPT_HERMES_SKILLS_ROOT` 安装到宿主 `platform-skills`，容器内 `/opt/data/skills/cqupt-src/.../SKILL.md` 可读取。临时文件和临时数据库记录已清理。
+
+如果容器重启或迁移后需要恢复目录，可执行：
+
+```bash
+sudo install -d -o cocking -g cocking -m 775 \
+  /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
+rsync -a /home/cocking/.hermes/skills/cqupt-src/ \
+  /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src/
+docker compose -f /home/cocking/cqupt-src-hermes-linux/docker/docker-compose.yml up -d --force-recreate hermes-agent
+```
+
+从 CLI Hermes 同步整批基础 skills 时，应同步到 `platform-skills/cqupt-src`，而不是写入 `data/skills/cqupt-src`。
 
 ### 6.1 从当前 CLI Hermes 同步到平台容器
 
 ```bash
-cd /home/cocking/.hermes/skills
-rm -f /tmp/cqupt-src-skills.tar
-tar -cf /tmp/cqupt-src-skills.tar cqupt-src
-
-docker exec hermes-agent mkdir -p /opt/data/skills
-docker cp /tmp/cqupt-src-skills.tar hermes-agent:/tmp/cqupt-src-skills.tar
-docker exec hermes-agent sh -lc 'cd /opt/data/skills && tar -xf /tmp/cqupt-src-skills.tar'
+sudo install -d -o cocking -g cocking -m 775 /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
+rsync -a --delete /home/cocking/.hermes/skills/cqupt-src/ \
+  /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src/
+docker compose -f /home/cocking/cqupt-src-hermes-linux/docker/docker-compose.yml up -d --force-recreate hermes-agent
 ```
 
 验证：
@@ -489,13 +504,13 @@ CQUPT-SRC 平台实际运行的 Hermes Agent 是独立 Docker 容器：
 /opt/data
 ```
 
-平台专属 skills 应维护在：
+平台专属 skills 应维护在宿主可写挂载目录：
 
 ```text
-/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src
+/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
 ```
 
-或通过容器写入：
+容器内读取路径仍是：
 
 ```text
 /opt/data/skills/cqupt-src

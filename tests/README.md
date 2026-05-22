@@ -10,7 +10,14 @@
 
 跨端测试目录。
 
-后续建议：
+## 测试入口
 
-- `e2e/`：Playwright 端到端测试
-- `fixtures/`：测试账号、漏洞报告、附件样例
+- `api/core-api-smoke.mjs`：核心 API smoke test。运行：`cd backend && npm run test:core-api`。
+- `e2e/core-e2e.mjs`：P0 核心端到端回归。运行：`cd backend && npm run test:core-e2e`。
+- `e2e/evidence/`：E2E 运行证据 JSON。失败时用于定位，成功时保留最近一次证据即可。
+
+## 当前 P0 E2E 覆盖
+
+`core-e2e.mjs` 已覆盖：安全答题准入、责任书签署、漏洞提交、PDF 附件上传和受控预览、AI 附件文本抽取、报告草稿解析、AI Knowledge 创建/审核、Skill Candidate 审核/安装、学生访问管理端接口的 RBAC 拒绝。
+
+脚本默认会清理本次临时用户、漏洞、知识、候选 Skill 和安装出来的测试 Skill；设置 `CLEANUP_E2E_ARTIFACTS=false` 可保留现场。

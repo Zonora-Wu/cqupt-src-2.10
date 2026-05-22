@@ -74,7 +74,7 @@ Hermes Skill 是长期稳定方法论，数量应少而精。它不保存实时�
 当前平台 Hermes skills 根目录：
 
 ```text
-宿主机: /home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src
+宿主机: /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
 容器内: /opt/data/skills/cqupt-src
 ```
 
@@ -362,7 +362,7 @@ POST /api/ai/knowledge/skill-candidates/:id/install
 
 安装安全措施：
 
-- 默认写入 `/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src`。
+- 默认写入 `CQUPT_HERMES_SKILLS_ROOT`，当前本地值为 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`，并由 Docker bind mount 暴露到容器 `/opt/data/skills/cqupt-src`。
 - 使用 `resolve` / `relative` 校验路径不逃逸根目录。
 - 禁止符号链接目录。
 - 使用临时文件 + `renameSync` 原子替换 `SKILL.md`。

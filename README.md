@@ -19,7 +19,7 @@
 已完成：后端 AI Gateway、Context Injection、按角色 Skill 路由、确定性业务响应、邮宝用户端 AI 助手。
 已完成：附件问答与渗透报告草稿解析，明确报告意图才生成可编辑漏洞草稿卡片。
 已完成：AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与受控安装链路。
-待部署确认：生产环境 Hermes skills 目录写入权限，需通过宿主权限调整或容器内运维脚本完成。
+已完成：平台 Hermes skills 目录宿主写入权限已按最小权限修正，并通过后端真实 Skill Candidate 安装链路验证。
 ```
 
 ## 技术栈
@@ -200,6 +200,6 @@ curl -s http://localhost:5000/health
 
 ## 近期待处理
 
-1. 生产部署时处理 `/home/cocking/cqupt-src-hermes-linux/data` 的写入权限，确保 Skill Candidate 可以按受控流程安装到平台 Hermes skills 目录。
+1. 生产部署时复核 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src` 是否保持 `cocking:cocking` 与 `775`，且 Docker Compose 是否把它挂载到容器 `/opt/data/skills/cqupt-src`；后端 `CQUPT_HERMES_SKILLS_ROOT` 应指向该宿主目录。
 2. 在生产数据规模下继续观察 AI 知识沉淀去重效果、评分阈值和审核工作量。
-3. 补充更多端到端测试覆盖附件问答、报告草稿、安全答题和知识沉淀链路。
+3. 生产部署后复跑 `cd backend && npm run test:core-e2e`，确认安全答题、附件、报告草稿、知识沉淀和 Skill 安装链路在服务器拓扑下仍通过。

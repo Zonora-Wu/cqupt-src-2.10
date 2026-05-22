@@ -104,7 +104,7 @@ cqupt-src-admin-analytics
 mall-product-search   # 历史兼容，后续业务应优先使用 cqupt-src-mall-search
 ```
 
-运行时目录见 `docs/HERMES_RUNTIME.md`：平台 Hermes 读取 `/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src`，不会自动读取 CLI Hermes 的 `/home/cocking/.hermes/skills`。
+运行时目录见 `docs/HERMES_RUNTIME.md`：后端写入宿主 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`，Docker Compose 将其挂载为平台 Hermes 容器内 `/opt/data/skills/cqupt-src`；平台不会自动读取 CLI Hermes 的 `/home/cocking/.hermes/skills`。
 
 ---
 

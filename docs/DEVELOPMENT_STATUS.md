@@ -16,7 +16,7 @@
 前端：Vite / React 构建通过，用户端、审核员端、管理员端页面已接入主要真实接口。
 AI：后端 AI Gateway 代理平台 Hermes；邮宝支持确定性业务响应、Agent 回复、卡片、附件、报告草稿和知识沉淀。
 知识沉淀：多轮会话捕获、AI 总结、AI+规则评分、相似去重、管理员审核、KB 入库、Skill Candidate、受控安装链路已验证。
-部署待确认：生产环境平台 Hermes skills 目录权限与 Ubuntu Docker 全量联调。
+部署待确认：Ubuntu Docker 全量联调；平台 Hermes skills 目录权限已修正并通过真实安装链路验证。
 ```
 
 ## 已完成能力
@@ -73,18 +73,19 @@ curl -s http://localhost:5000/health
 - 后端 TypeScript 构建通过。
 - 前端 Vite 构建通过。
 - 后端健康检查返回 200。
-- AI Knowledge Base → Skill Candidate → 安装链路用临时 targetRoot 完成 E2E 验证。
+- AI Knowledge Base → Skill Candidate → 安装链路已使用真实平台 skills 挂载目录完成核心 E2E 验证。
+- `backend npm run test:core-e2e` 已覆盖安全答题准入、责任书、漏洞提交、PDF 附件、AI 报告草稿、知识沉淀、Skill 安装与 RBAC 拒绝。
 
 ## 已知限制
 
 - 生产环境真实 SMTP 邮件发送仍需接入；开发环境验证码为固定 `123456`。
-- 平台 Hermes 持久化目录 `/home/cocking/cqupt-src-hermes-linux/data` 当前由容器 UID 拥有，宿主后端进程不能直接写入；生产部署需调整权限或使用容器内受控安装任务。
+- 平台 Hermes 专属 skills 已迁移到宿主可写目录 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`，并通过 Docker bind mount 暴露为容器内 `/opt/data/skills/cqupt-src`；后端 `CQUPT_HERMES_SKILLS_ROOT` 已指向该目录，真实 Skill Candidate 安装链路和容器读取均已验证。
 - 证书模板坐标可视化仍可继续增强。
 - 大规模生产数据下，AI 知识沉淀评分阈值、去重阈值和审核工作量需要持续观察。
 
 ## 近期待办
 
-1. 处理平台 Hermes skills 目录生产写入权限，确保 Skill Candidate 安装流程可在真实环境落地。
+1. 复核平台 Hermes skills 独立挂载目录在容器重启和部署迁移后仍保持可写，并把该检查纳入部署验收。
 2. 接入真实 SMTP，并将开发环境 `devCode` 输出仅保留在本地模式。
-3. 补充 Playwright / Supertest E2E 覆盖安全答题、附件问答、报告草稿、知识沉淀和 Skill 安装链路。
+3. 在 Ubuntu 服务器部署环境复跑 `cd backend && npm run test:core-e2e`，确认 Docker Compose / Nginx / MinIO / Hermes 全链路在生产拓扑下仍通过。
 4. Ubuntu 服务器 Docker Compose 全服务联调与 Nginx 反向代理配置验证。

@@ -69,7 +69,7 @@ cd ../frontend && npm run build && npm run lint
 
 ## 6. 当前风险与交接重点
 
-- 平台 Hermes data 目录可能是 `10000:10000` 且权限 `700`；后端直接安装 Skill Candidate 到平台 skills 目录前需处理权限或改用容器内受控任务。
+- 平台 Hermes data 根目录会被容器保持为 `10000:*` 与 `700`，不再依赖修改该目录权限。专属 skills 改为宿主可写目录 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`，Docker Compose 单独挂载到容器 `/opt/data/skills/cqupt-src`，后端 `.env` 的 `CQUPT_HERMES_SKILLS_ROOT` 指向该宿主目录。已通过后端真实 Skill Candidate 安装链路与容器读取验证。
 - 生产 SMTP 仍需接入；开发环境验证码固定为 `123456`。
 - AI 相关写操作必须维持“提案/确认/后端事务/审计”链路，不能让模型直接执行。
 - AI Knowledge 入库必须继续执行脱敏、泛化、评分、重复检测和管理员审核。

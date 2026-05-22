@@ -10,10 +10,37 @@
 
 端到端测试目录。
 
-后续用于覆盖：
+## 核心 E2E：`core-e2e.mjs`
 
-- 用户登录
-- 提交漏洞
-- 审核员审核
-- 证书签发
-- 公告管理
+运行方式：
+
+```bash
+cd backend
+npm run test:core-e2e
+```
+
+默认目标：`API_BASE_URL=http://localhost:3000/api`。
+
+当前覆盖 P0 核心链路：
+
+1. 健康检查。
+2. 隔离临时学生账号准备与真实登录。
+3. 管理员 / 审核员真实登录。
+4. RBAC：学生访问管理员 AI Knowledge 统计接口必须被 403 拒绝。
+5. 安全准入：新学生未签署责任书 / 未通过安全考试前不能提交漏洞。
+6. 安全答题：获取随机 20 题题卷，验证题卷不泄露 `answerKeys`，提交正确答案后通过阈值。
+7. 责任书签署后重新查询准入状态，确认允许提交漏洞。
+8. 漏洞提交、PDF 附件上传、受控 PDF 预览。
+9. AI 附件文本抽取与 PDF 报告草稿解析。
+10. AI Knowledge 创建 / 审核、Skill Candidate 创建 / 批准 / 安装，并验证宿主机 `SKILL.md` 写入和容器路径映射。
+
+脚本会在 `tests/e2e/evidence/` 写入 JSON 证据。默认在测试通过后清理本次临时数据库记录和安装出来的测试 Skill；如需保留现场用于排查：
+
+```bash
+CLEANUP_E2E_ARTIFACTS=false npm run test:core-e2e
+```
+
+## 与 smoke test 的区别
+
+- `tests/api/core-api-smoke.mjs`：只验证主要 API 是否可达、认证账号是否可用。
+- `tests/e2e/core-e2e.mjs`：创建隔离临时用户，真实执行跨模块状态流转，更适合作为 P0 回归验收。

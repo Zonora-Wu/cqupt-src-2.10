@@ -63,15 +63,17 @@ database/prisma/schema.prisma
 Hermes skill 最终安装位置只用于被批准的长期稳定方法论：
 
 ```text
-宿主机：/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src
+宿主机：/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
 容器内：/opt/data/skills/cqupt-src
 ```
 
-但因为宿主权限可能属于容器 UID，安装时通过容器执行：
+但因为平台 Hermes `data` 根目录会保持容器私有，当前安装时不再通过 `docker cp` 写 `/opt/data`，而是写宿主可写目录并由 Compose bind mount 到容器：
 
 ```bash
-docker exec hermes-agent sh -lc 'mkdir -p /opt/data/skills/cqupt-src/<skill-name>'
-docker cp /tmp/<skill-name>/SKILL.md hermes-agent:/opt/data/skills/cqupt-src/<skill-name>/SKILL.md
+# 后端受控安装写入宿主 CQUPT_HERMES_SKILLS_ROOT：
+# /home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src/<skill-name>/SKILL.md
+# Docker Compose 将该目录挂载为容器内：
+# /opt/data/skills/cqupt-src/<skill-name>/SKILL.md
 docker restart hermes-agent
 ```
 

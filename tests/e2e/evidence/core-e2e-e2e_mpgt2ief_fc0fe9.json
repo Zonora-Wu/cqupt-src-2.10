@@ -1,0 +1,58 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "failed": [],
+  "generatedAt": "2026-05-22T10:57:33.887Z",
+  "marker": "[e2e_mpgt2ief_fc0fe9]",
+  "reportId": "cmpgt2iop005quk9legsdidcq",
+  "runId": "e2e_mpgt2ief_fc0fe9",
+  "skillName": "cqupt_e2e_e2e_mpgt2ief_fc0fe9",
+  "skillPath": "/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src/cqupt_e2e_e2e_mpgt2ief_fc0fe9/SKILL.md",
+  "status": "passed",
+  "steps": [
+    {
+      "duration": 44,
+      "label": "health check",
+      "ok": true
+    },
+    {
+      "duration": 136,
+      "label": "prepare isolated student account",
+      "ok": true
+    },
+    {
+      "duration": 82,
+      "label": "admin and auditor login",
+      "ok": true
+    },
+    {
+      "duration": 7,
+      "label": "RBAC denies student access to admin knowledge stats",
+      "ok": true
+    },
+    {
+      "duration": 19,
+      "label": "security access gate blocks vulnerability before prerequisites",
+      "ok": true
+    },
+    {
+      "duration": 64,
+      "label": "security exam + responsibility agreement unlock vulnerability submission",
+      "ok": true
+    },
+    {
+      "duration": 62,
+      "label": "vulnerability submit + attachment upload + controlled preview",
+      "ok": true
+    },
+    {
+      "duration": 25,
+      "label": "AI attachment text extraction and report draft parsing",
+      "ok": true
+    },
+    {
+      "duration": 90,
+      "label": "AI knowledge create/review + skill candidate approve/install",
+      "ok": true
+    }
+  ]
+}
