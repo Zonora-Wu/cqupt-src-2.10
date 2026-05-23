@@ -4,12 +4,9 @@ import {
   BookOpen,
   Bug,
   CheckCircle2,
-  DatabaseZap,
   Menu,
   Moon,
   Search,
-  Shield,
-  ShieldCheck,
   Sun,
   Terminal,
   X,
@@ -21,6 +18,9 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { InteractivePretextParagraph } from '../../components/ui/InteractivePretextParagraph'
 import { usePretextBlockMetrics } from '../../hooks/usePretextBlockMetrics'
 
+const KaliLaptopShowcase = lazy(() =>
+  import('../../components/guest/KaliLaptopShowcase').then((module) => ({ default: module.KaliLaptopShowcase })),
+)
 const AboutPlatform = lazy(() => import('./AboutPlatform').then((module) => ({ default: module.AboutPlatform })))
 const CertificateVerify = lazy(() =>
   import('./CertificateVerify').then((module) => ({ default: module.CertificateVerify })),
@@ -109,7 +109,11 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch {}
+    try {
+      localStorage.setItem('cqupt-theme', theme)
+    } catch {
+      // localStorage may be unavailable in private browsing or restricted contexts.
+    }
   }, [theme])
 
   const openPage = (page: GuestPage) => {
@@ -269,8 +273,9 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         </motion.div>
 
         <div className="relative mx-auto mt-20 max-w-5xl">
-          <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-transparent to-[#f7f9f7] opacity-70 dark:to-[#0f1511] dark:opacity-80" />
-          <DashboardPreview />
+          <Suspense fallback={<LaptopShowcaseSkeleton />}>
+            <KaliLaptopShowcase />
+          </Suspense>
         </div>
       </section>
 
@@ -372,7 +377,7 @@ function PageTransition({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
       animate={{ opacity: 1, scale: 1 }}
-      className="overflow-hidden"
+      className="overflow-visible"
       exit={{ opacity: 0, scale: 0.998 }}
       initial={{ opacity: 0, scale: 0.998 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -382,50 +387,9 @@ function PageTransition({ children }: { children: React.ReactNode }) {
   )
 }
 
-function DashboardPreview() {
+function LaptopShowcaseSkeleton() {
   return (
-    <div className="relative overflow-hidden rounded-lg border border-black/10 bg-white/70 p-4 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
-      <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-lg border border-black/10 bg-white/70 p-5 dark:border-white/10 dark:bg-black/20">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <p className="font-mono text-xs text-brand-700 dark:text-green-300">LIVE DASHBOARD</p>
-              <h3 className="mt-1 text-lg font-semibold">安全态势驾驶舱</h3>
-            </div>
-            <ShieldCheck className="h-8 w-8 text-brand-700 dark:text-green-300" />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {['待审核 12', '高危 3', '已修复 86%'].map((item) => (
-              <div className="rounded-lg border border-black/10 bg-white/80 p-3 text-left dark:border-white/10 dark:bg-white/[0.04]" key={item}>
-                <p className="font-mono text-xs text-slate-500">METRIC</p>
-                <p className="mt-2 text-sm font-semibold">{item}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 h-28 rounded-lg border border-brand-600/15 bg-[linear-gradient(135deg,rgba(42,100,56,0.2),rgba(255,255,255,0.7))] dark:border-green-300/15 dark:bg-[linear-gradient(135deg,rgba(42,100,56,0.28),rgba(255,255,255,0.03))]" />
-        </div>
-        <div className="space-y-4 rounded-lg border border-black/10 bg-white/70 p-5 dark:border-white/10 dark:bg-black/20">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-400/10">
-              <Shield className="h-5 w-5 text-brand-700 dark:text-green-300" />
-            </div>
-            <div>
-              <p className="font-semibold">AI 初审提醒</p>
-              <p className="text-sm text-slate-500">发现疑似高价值漏洞</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-400/10">
-              <DatabaseZap className="h-5 w-5 text-blue-300" />
-            </div>
-            <div>
-              <p className="font-semibold">数据沉淀</p>
-              <p className="text-sm text-slate-500">漏洞、学习与证书闭环</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div className="relative z-[80] mx-auto h-[620px] max-w-7xl overflow-visible md:h-[760px]" />
   )
 }
 
