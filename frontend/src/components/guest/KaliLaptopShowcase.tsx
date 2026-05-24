@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
@@ -6,22 +6,50 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 RectAreaLightUniformsLib.init()
 
+const MODEL_VERTICAL_OFFSET = -0.3
+const LID_OPEN_DEGREES = -108
+const LID_ANIMATION_SECONDS = 1.05
+
+type SceneTheme = 'dark' | 'light'
+
 type LaptopSceneProps = {
+  baseCanvasHeight: number
   dragRotation: { x: number; y: number }
-  scrollProgress: number
+  lidOpen: boolean
+  theme: SceneTheme
+}
+
+type LaptopModel = {
+  lid: THREE.Object3D | null
+  root: THREE.Group
+}
+
+type LidAnimation = {
+  from: number
+  startedAt: number
+  to: number
 }
 
 type PointerState = {
   dragging: boolean
   lastX: number
   lastY: number
+  travel: number
+}
+
+type CanvasBounds = {
+  baseHeight: number
+  bottom: number
+  top: number
 }
 
 export function KaliLaptopShowcase() {
   const sceneRef = useRef<HTMLDivElement | null>(null)
-  const pointerRef = useRef<PointerState>({ dragging: false, lastX: 0, lastY: 0 })
+  const pointerRef = useRef<PointerState>({ dragging: false, lastX: 0, lastY: 0, travel: 0 })
+  const [canvasBounds, setCanvasBounds] = useState<CanvasBounds>(() => getBaseCanvasBounds())
   const [dragRotation, setDragRotation] = useState({ x: 0, y: 0 })
-  const [scrollProgress, setScrollProgress] = useState(0)
+  const [lidOpen, setLidOpen] = useState(false)
+  const theme = useSceneTheme()
 
   useEffect(() => {
     let frame = 0
@@ -32,9 +60,10 @@ export function KaliLaptopShowcase() {
       if (!element) return
 
       const rect = element.getBoundingClientRect()
-      const viewport = window.innerHeight || 1
-      const progress = 1 - (rect.top + rect.height * 0.18) / (viewport + rect.height * 0.46)
-      setScrollProgress(THREE.MathUtils.clamp(progress, 0, 1))
+      setCanvasBounds((current) => {
+        const next = getCanvasBounds(rect)
+        return current.top === next.top && current.bottom === next.bottom ? current : next
+      })
     }
 
     const requestUpdate = () => {
@@ -43,11 +72,9 @@ export function KaliLaptopShowcase() {
     }
 
     update()
-    window.addEventListener('scroll', requestUpdate, { passive: true })
     window.addEventListener('resize', requestUpdate)
 
     return () => {
-      window.removeEventListener('scroll', requestUpdate)
       window.removeEventListener('resize', requestUpdate)
       if (frame) window.cancelAnimationFrame(frame)
     }
@@ -57,10 +84,10 @@ export function KaliLaptopShowcase() {
     <div className="relative z-[80] mx-auto h-[620px] max-w-7xl overflow-visible md:h-[760px]" ref={sceneRef}>
       <div
         aria-label="ROG 笔记本电脑 3D 模型展示，可拖动查看"
-        className="absolute -inset-x-20 -inset-y-24 z-[90] cursor-grab touch-none select-none active:cursor-grabbing md:-inset-x-36 md:-inset-y-32"
+        className="absolute -inset-x-20 z-[90] cursor-grab touch-none select-none active:cursor-grabbing md:-inset-x-36"
         onPointerCancel={stopDragging}
         onPointerDown={(event) => {
-          pointerRef.current = { dragging: true, lastX: event.clientX, lastY: event.clientY }
+          pointerRef.current = { dragging: true, lastX: event.clientX, lastY: event.clientY, travel: 0 }
           event.currentTarget.setPointerCapture(event.pointerId)
         }}
         onPointerLeave={stopDragging}
@@ -70,13 +97,23 @@ export function KaliLaptopShowcase() {
 
           const deltaX = event.clientX - pointer.lastX
           const deltaY = event.clientY - pointer.lastY
-          pointerRef.current = { dragging: true, lastX: event.clientX, lastY: event.clientY }
+          pointerRef.current = {
+            dragging: true,
+            lastX: event.clientX,
+            lastY: event.clientY,
+            travel: pointer.travel + Math.hypot(deltaX, deltaY),
+          }
           setDragRotation((current) => ({
             x: current.x - deltaY * 0.16,
             y: current.y + deltaX * 0.18,
           }))
         }}
-        onPointerUp={stopDragging}
+        onPointerUp={(event) => {
+          const wasClick = pointerRef.current.travel < 6
+          stopDragging(event)
+          if (wasClick) setLidOpen((current) => !current)
+        }}
+        style={{ bottom: -canvasBounds.bottom, top: -canvasBounds.top }}
       >
         <Canvas
           camera={{ fov: 28, position: [0, 1.18, 9.4] }}
@@ -84,12 +121,19 @@ export function KaliLaptopShowcase() {
           dpr={[1, 1.75]}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
         >
-          <ambientLight intensity={0.72} />
-          <hemisphereLight args={['#ffffff', '#3a352e', 0.7]} />
-          <FrontSoftboxLight />
-          <WarmRimLight />
+          <ambientLight intensity={theme === 'dark' ? 0.72 : 0.92} />
+          <hemisphereLight
+            args={theme === 'dark' ? ['#ffffff', '#3a352e', 0.7] : ['#fff8ec', '#d8e5d4', 0.92]}
+          />
+          <FrontSoftboxLight theme={theme} />
+          <WarmRimLight theme={theme} />
 
-          <LaptopScene dragRotation={dragRotation} scrollProgress={scrollProgress} />
+          <LaptopScene
+            baseCanvasHeight={canvasBounds.baseHeight}
+            dragRotation={dragRotation}
+            lidOpen={lidOpen}
+            theme={theme}
+          />
         </Canvas>
       </div>
     </div>
@@ -103,17 +147,66 @@ export function KaliLaptopShowcase() {
   }
 }
 
-function FrontSoftboxLight() {
+function useSceneTheme(): SceneTheme {
+  const [theme, setTheme] = useState<SceneTheme>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+  )
+
+  useEffect(() => {
+    const root = document.documentElement
+    const updateTheme = () => setTheme(root.classList.contains('dark') ? 'dark' : 'light')
+    const observer = new MutationObserver(updateTheme)
+
+    updateTheme()
+    observer.observe(root, { attributeFilter: ['class'], attributes: true })
+    return () => observer.disconnect()
+  }, [])
+
+  return theme
+}
+
+function getBaseCanvasBounds(): CanvasBounds {
+  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  const sceneHeight = isDesktop ? 760 : 620
+  const bottom = isDesktop ? 128 : 96
+  const top = isDesktop ? 128 : 96
+  return {
+    baseHeight: sceneHeight + top + bottom,
+    bottom,
+    top,
+  }
+}
+
+function getCanvasBounds(sceneRect: DOMRect): CanvasBounds {
+  const base = getBaseCanvasBounds()
+  const navBottom = document.querySelector('nav')?.getBoundingClientRect().bottom ?? 64
+  return {
+    baseHeight: base.baseHeight,
+    bottom: base.bottom,
+    top: Math.max(base.top, Math.ceil(sceneRect.top - navBottom)),
+  }
+}
+
+function FrontSoftboxLight({ theme }: { theme: SceneTheme }) {
   const lightRef = useRef<THREE.RectAreaLight | null>(null)
 
   useEffect(() => {
     lightRef.current?.lookAt(0, 0.2, 0)
   }, [])
 
-  return <rectAreaLight ref={lightRef} color="#ffffff" height={4.2} intensity={5.6} position={[0, 4.2, 5.2]} width={6.8} />
+  return (
+    <rectAreaLight
+      ref={lightRef}
+      color={theme === 'dark' ? '#ffffff' : '#fff2dc'}
+      height={4.2}
+      intensity={theme === 'dark' ? 5.6 : 4.2}
+      position={[0, 4.2, 5.2]}
+      width={6.8}
+    />
+  )
 }
 
-function WarmRimLight() {
+function WarmRimLight({ theme }: { theme: SceneTheme }) {
   const lightRef = useRef<THREE.DirectionalLight | null>(null)
 
   useEffect(() => {
@@ -123,15 +216,36 @@ function WarmRimLight() {
 
   return (
     <>
-      <directionalLight ref={lightRef} color="#ffd2a3" intensity={1.45} position={[-3.6, 2.9, -4.8]} />
-      <directionalLight color="#fff7ee" intensity={0.42} position={[3.4, 2.4, -3.2]} />
+      <directionalLight
+        ref={lightRef}
+        color={theme === 'dark' ? '#ffd2a3' : '#b8e8c2'}
+        intensity={theme === 'dark' ? 1.45 : 1.05}
+        position={[-3.6, 2.9, -4.8]}
+      />
+      <directionalLight
+        color={theme === 'dark' ? '#fff7ee' : '#ffffff'}
+        intensity={theme === 'dark' ? 0.42 : 0.62}
+        position={[3.4, 2.4, -3.2]}
+      />
     </>
   )
 }
 
-function LaptopScene({ dragRotation, scrollProgress }: LaptopSceneProps) {
+function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, theme }: LaptopSceneProps) {
   const groupRef = useRef<THREE.Group | null>(null)
+  const lidRef = useRef<THREE.Object3D | null>(null)
+  const lidAnimationRef = useRef<LidAnimation>({ from: 0, startedAt: 0, to: 0 })
+  const lidProgressRef = useRef(0)
   const [model, setModel] = useState<THREE.Group | null>(null)
+  const viewportSize = useThree((state) => state.size)
+
+  useEffect(() => {
+    lidAnimationRef.current = {
+      from: lidProgressRef.current,
+      startedAt: performance.now() * 0.001,
+      to: lidOpen ? 1 : 0,
+    }
+  }, [lidOpen])
 
   useEffect(() => {
     let cancelled = false
@@ -142,7 +256,8 @@ function LaptopScene({ dragRotation, scrollProgress }: LaptopSceneProps) {
       (gltf) => {
         if (cancelled) return
         const normalized = normalizeLaptopModel(gltf.scene)
-        setModel(normalized)
+        lidRef.current = normalized.lid
+        setModel(normalized.root)
       },
       undefined,
       (error) => {
@@ -155,31 +270,53 @@ function LaptopScene({ dragRotation, scrollProgress }: LaptopSceneProps) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!model) return
+    applyLaptopTheme(model, theme)
+  }, [model, theme])
+
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
 
     const elapsed = performance.now() * 0.001
-    const easedScroll = smoothstep(scrollProgress)
     const idleBreath = Math.sin(elapsed * 0.78) * 0.016
+    const scaleCompensation = viewportSize.height > 0 ? baseCanvasHeight / viewportSize.height : 1
 
-    group.position.y = THREE.MathUtils.lerp(group.position.y, 0.08 + Math.sin(easedScroll * Math.PI) * 0.14 + idleBreath, 0.075)
-    group.position.z = THREE.MathUtils.lerp(group.position.z, THREE.MathUtils.lerp(0.18, -0.12, easedScroll), 0.075)
-    group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, THREE.MathUtils.degToRad(-3 + easedScroll * -2.5 + dragRotation.x), 0.075)
-    group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, THREE.MathUtils.degToRad(-16 + easedScroll * 28 + dragRotation.y), 0.075)
-    group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, THREE.MathUtils.degToRad(-0.8 + easedScroll * 1.8), 0.075)
-    group.scale.setScalar(THREE.MathUtils.lerp(group.scale.x, 1 + Math.sin(easedScroll * Math.PI) * 0.035, 0.06))
+    group.position.y = THREE.MathUtils.lerp(
+      group.position.y,
+      MODEL_VERTICAL_OFFSET + 0.08 + idleBreath,
+      0.075,
+    )
+    group.position.z = THREE.MathUtils.lerp(group.position.z, 0.18, 0.075)
+    group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, THREE.MathUtils.degToRad(-3 + dragRotation.x), 0.075)
+    group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, THREE.MathUtils.degToRad(-16 + dragRotation.y), 0.075)
+    group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, THREE.MathUtils.degToRad(-0.8), 0.075)
+    group.scale.setScalar(THREE.MathUtils.lerp(group.scale.x, scaleCompensation, 0.06))
+
+    const lid = lidRef.current
+    if (lid) {
+      const animation = lidAnimationRef.current
+      const elapsedSinceToggle = elapsed - animation.startedAt
+      const rawProgress = THREE.MathUtils.clamp(elapsedSinceToggle / LID_ANIMATION_SECONDS, 0, 1)
+      const easedProgress = smootherstep(rawProgress)
+      const lidProgress = THREE.MathUtils.lerp(animation.from, animation.to, easedProgress)
+      const idleLidMotion = lidProgress > 0.96 ? Math.sin(elapsed * 0.92) * 0.012 : 0
+      lidProgressRef.current = lidProgress
+      lid.rotation.x = THREE.MathUtils.degToRad(LID_OPEN_DEGREES * lidProgress) + idleLidMotion
+    }
   })
 
   return (
     <group ref={groupRef}>
-      {model ? <primitive object={model} /> : <ModelLoadingFallback />}
+      {model && <primitive object={model} />}
     </group>
   )
 }
 
-function normalizeLaptopModel(source: THREE.Group) {
+function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   const model = source.clone(true)
+  const lid = model.getObjectByName('ab面') ?? null
   const box = new THREE.Box3().setFromObject(model)
   const size = new THREE.Vector3()
   const center = new THREE.Vector3()
@@ -194,6 +331,7 @@ function normalizeLaptopModel(source: THREE.Group) {
   model.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return
     object.frustumCulled = false
+
     const materials = Array.isArray(object.material) ? object.material : [object.material]
     materials.forEach((material) => {
       if (!material || !(material instanceof THREE.MeshStandardMaterial)) return
@@ -203,24 +341,59 @@ function normalizeLaptopModel(source: THREE.Group) {
     })
   })
 
-  return model
+  return { lid, root: model }
 }
 
-function ModelLoadingFallback() {
-  return (
-    <group>
-      <mesh position={[0, -0.18, 0]}>
-        <boxGeometry args={[3.6, 0.12, 2.35]} />
-        <meshStandardMaterial color="#26312b" metalness={0.45} roughness={0.42} />
-      </mesh>
-      <mesh position={[0, 0.82, -1.05]} rotation={[THREE.MathUtils.degToRad(-8), 0, 0]}>
-        <boxGeometry args={[3.5, 2.2, 0.08]} />
-        <meshStandardMaterial color="#0a0f0c" metalness={0.42} roughness={0.4} />
-      </mesh>
-    </group>
-  )
+function applyLaptopTheme(model: THREE.Group, theme: SceneTheme) {
+  model.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return
+    const materials = Array.isArray(object.material) ? object.material : [object.material]
+
+    materials.forEach((material) => {
+      if (!(material instanceof THREE.MeshStandardMaterial)) return
+      applyMaterialTheme(material, theme)
+    })
+  })
 }
 
-function smoothstep(value: number) {
-  return value * value * (3 - 2 * value)
+function applyMaterialTheme(material: THREE.MeshStandardMaterial, theme: SceneTheme) {
+  const isDark = theme === 'dark'
+  const name = material.name.toLowerCase()
+
+  if (name.includes('screen')) {
+    material.emissive = new THREE.Color(isDark ? '#dfffe8' : '#fff7df')
+    material.emissiveIntensity = isDark ? 1.75 : 0.78
+    material.roughness = isDark ? 0.34 : 0.48
+    material.metalness = 0
+  } else if (name.includes('laptopsurface') || name.includes('painted') || name.includes('logo')) {
+    material.color = new THREE.Color(isDark ? '#151d1b' : '#d7ded2')
+    material.metalness = isDark ? 0.72 : 0.42
+    material.roughness = isDark ? 0.32 : 0.46
+    material.envMapIntensity = isDark ? 0.72 : 0.55
+  } else if (name.includes('surfacemetal')) {
+    material.color = new THREE.Color(isDark ? '#111a1a' : '#c9d4cc')
+    material.metalness = isDark ? 0.82 : 0.52
+    material.roughness = isDark ? 0.3 : 0.42
+    material.envMapIntensity = isDark ? 0.78 : 0.58
+  } else if (name.includes('interiorblack')) {
+    material.color = new THREE.Color(isDark ? '#070b0c' : '#323c38')
+    material.metalness = isDark ? 0.56 : 0.34
+    material.roughness = isDark ? 0.52 : 0.58
+    material.envMapIntensity = isDark ? 0.64 : 0.5
+  } else if (name.includes('keyboard')) {
+    material.color = new THREE.Color(isDark ? '#ffffff' : '#f7f3e7')
+    material.emissive = new THREE.Color(isDark ? '#dfffe8' : '#fff3d2')
+    material.emissiveIntensity = isDark ? 0.42 : 0.16
+    material.metalness = 0
+    material.roughness = isDark ? 0.3 : 0.4
+  } else if (name.includes('indicatorlights')) {
+    material.emissive = new THREE.Color(isDark ? '#9cffc2' : '#35a464')
+    material.emissiveIntensity = isDark ? 1.25 : 0.55
+  }
+
+  material.needsUpdate = true
+}
+
+function smootherstep(value: number) {
+  return value * value * value * (value * (value * 6 - 15) + 10)
 }

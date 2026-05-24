@@ -378,15 +378,21 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                   {!isUser && <AssistantAvatar avatarUrl={aiAvatarUrl} />}
                   <div className={isUser ? 'max-w-[760px]' : 'w-full max-w-[1040px]'}>
                     {isUser ? (
-                      <UserMessageBubble attachment={message.attachment} content={message.content} />
+                      <>
+                        <UserMessageBubble attachment={message.attachment} content={message.content} />
+                        <MessageCopyButton align="right" content={message.content} />
+                      </>
                     ) : (
-                      <AssistantMessageBubble
-                        actions={message.actions}
-                        cards={message.cards}
-                        content={message.content}
-                        getReportAttachmentFile={(draftId) => reportAttachmentFilesRef.current[draftId]}
-                        reportDrafts={message.reportDrafts}
-                      />
+                      <>
+                        <AssistantMessageBubble
+                          actions={message.actions}
+                          cards={message.cards}
+                          content={message.content}
+                          getReportAttachmentFile={(draftId) => reportAttachmentFilesRef.current[draftId]}
+                          reportDrafts={message.reportDrafts}
+                        />
+                        <MessageCopyButton align="left" content={message.content} />
+                      </>
                     )}
                   </div>
                   {isUser && <UserChatAvatar avatarUrl={userAvatarUrl} name={userName} />}
@@ -490,6 +496,36 @@ function UserMessageBubble({ attachment, content }: { attachment?: ChatAttachmen
         />
       )}
       {content && <div className="whitespace-pre-wrap">{content}</div>}
+    </div>
+  )
+}
+
+function MessageCopyButton({ align, content }: { align: 'left' | 'right'; content: string }) {
+  const [copied, setCopied] = useState(false)
+  const disabled = !content.trim()
+
+  const handleCopy = async () => {
+    if (disabled) return
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className={`mt-1.5 flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <button
+        aria-label={copied ? '已复制本条消息' : '复制本条消息'}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-black/[0.04] hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+        disabled={disabled}
+        onClick={handleCopy}
+        type="button"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   )
 }
@@ -1169,8 +1205,8 @@ function AiCardRenderer({
 
 function LearningResourceCard({ card }: { card: AiCard & { type: 'LEARNING_RESOURCE' }; action?: AiPendingAction }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="flex items-start gap-3">
+    <div className="flex h-full flex-col rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="flex flex-1 items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
           <GraduationCap className="h-4 w-4" />
         </div>
@@ -1184,7 +1220,7 @@ function LearningResourceCard({ card }: { card: AiCard & { type: 'LEARNING_RESOU
           )}
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-auto flex gap-2 pt-3">
         <a
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
           href={`/learning/${card.id}`}
@@ -1364,12 +1400,12 @@ function MallProductCard({
 
 function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABILITY' }; action?: AiPendingAction }) {
   return (
-    <div className={`rounded-lg border p-4 shadow-sm transition ${
+    <div className={`flex h-full flex-col rounded-lg border p-4 shadow-sm transition ${
       card.needsSupplement
         ? 'border-amber-300/50 bg-amber-50/80 dark:border-amber-700/40 dark:bg-amber-950/20'
         : 'border-black/10 bg-white/90 dark:border-white/10 dark:bg-white/[0.04]'
     }`}>
-      <div className="flex items-start gap-3">
+      <div className="flex flex-1 items-start gap-3">
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
           card.needsSupplement
             ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-800/40'
@@ -1397,7 +1433,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
           </p>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-auto flex flex-wrap gap-2 pt-3">
         <a
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             card.needsSupplement
@@ -1463,7 +1499,6 @@ function TypingIndicator() {
           transition={{ duration: 1.2, ease: 'easeInOut', repeat: Infinity, delay }}
         />
       ))}
-      <span className="ml-1 text-xs">思考中...</span>
     </span>
   )
 }

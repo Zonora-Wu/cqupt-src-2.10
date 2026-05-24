@@ -85,7 +85,8 @@ curl -s http://localhost:5000/health
 
 ## 近期待办
 
-1. 复核平台 Hermes skills 独立挂载目录在容器重启和部署迁移后仍保持可写，并把该检查纳入部署验收。
-2. 接入真实 SMTP，并将开发环境 `devCode` 输出仅保留在本地模式。
-3. 在 Ubuntu 服务器部署环境复跑 `cd backend && npm run test:core-e2e`，确认 Docker Compose / Nginx / MinIO / Hermes 全链路在生产拓扑下仍通过。
-4. Ubuntu 服务器 Docker Compose 全服务联调与 Nginx 反向代理配置验证。
+1. 完成 AI Gateway 下一步架构调整：从“每轮预注入大量平台数据”升级为“AI 先判断需求，再通过只读工具或按需上下文获取平台数据”。详细方案见 `docs/AI.md` 的“10.0 下一步待完成：按需查询平台数据”。
+2. 复核平台 Hermes skills 独立挂载目录在容器重启和部署迁移后仍保持可写，并把该检查纳入部署验收。
+3. 接入真实 SMTP，并将开发环境 `devCode` 输出仅保留在本地模式。
+4. 在 Ubuntu 服务器部署环境复跑 `cd backend && npm run test:core-e2e`，确认 Docker Compose / Nginx / MinIO / Hermes 全链路在生产拓扑下仍通过。
+5. Ubuntu 服务器 Docker Compose 全服务联调与 Nginx 反向代理配置验证。

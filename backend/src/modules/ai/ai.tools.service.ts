@@ -75,13 +75,14 @@ export class AiToolsService {
     // 漏洞摘要：最多 10 条，优先 NEEDS_SUPPLEMENT
     const recentVulns = vulnReport.items.slice(0, 10)
 
-    // 学习建议：多样性采样，让 Agent 知道平台有哪些资源
+    // 学习建议：优先注入靶场，避免用户明确要靶场时被普通工具资料挤占上下文。
     const learningResult = await this.learning.listVisibleResources()
-    const learningItems = sampleDiverse(learningResult.items, 8, (item) => item.category)
+    const learningItems = selectLearningSuggestions(learningResult.items, 12)
 
-    // 商城建议：展示所有可见商品（含积分不够的），让 Agent 全面了解平台商品
+    // 商城建议：展示所有可见商品（含积分不够的），让 Agent 全面了解平台商品。
+    // listVisibleProducts 每轮请求实时查库，管理员新增/修改商品后下一轮 AI 对话即可看到。
     const mallResult = await this.pointsMall.listVisibleProducts(user)
-    const mallItems = mallResult.items.slice(0, 20)
+    const mallItems = mallResult.items
 
     return {
       learningSuggestions: learningItems.map((item) => ({
@@ -467,6 +468,17 @@ function sampleDiverse<T>(items: T[], n: number, keyFn: (item: T) => string): T[
     }
   }
   return result
+}
+
+function selectLearningSuggestions<T extends { id: string; category: string; kind: LearningResourceKind }>(items: T[], n: number): T[] {
+  const ranges = sampleDiverse(items.filter((item) => item.kind === LearningResourceKind.RANGE), Math.ceil(n * 0.75), (item) => item.category)
+  const selectedIds = new Set(ranges.map((item) => item.id))
+  const resources = sampleDiverse(
+    items.filter((item) => item.kind === LearningResourceKind.RESOURCE && !selectedIds.has(item.id)),
+    n - ranges.length,
+    (item) => item.category,
+  )
+  return [...ranges, ...resources].slice(0, n)
 }
 
 /** 对 tool 结果脱敏（屏蔽 email 等字段） */

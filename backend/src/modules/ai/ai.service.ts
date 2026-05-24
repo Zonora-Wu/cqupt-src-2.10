@@ -1,4 +1,4 @@
-import { BadGatewayException, ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
+import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
@@ -22,8 +22,8 @@ import { AiToolsService } from './ai.tools.service'
 
 const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
 const DEFAULT_OPENAI_MODEL = 'hermes-agent'
-const REQUEST_TIMEOUT_MS = 30_000
-const ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
+const DEFAULT_REQUEST_TIMEOUT_MS = 300_000
+const DEFAULT_ATTACHMENT_REQUEST_TIMEOUT_MS = 300_000
 const ATTACHMENT_AGENT_EXCERPT_LIMIT = 5_000
 const MAX_TOOL_ROUNDS = 3
 const DEFAULT_AI_DAILY_TOKENS = 20_000
@@ -138,8 +138,10 @@ export class AiService {
     const context = await this.toolsService.buildUserContext(user)
     const hasAttachmentContext = hasUserAttachmentContext(input.context)
 
-    // 2. 对强结构化、强事务边界的资源查询走确定性业务响应，避免模型超时/编造 ID
-    const directResponse = hasAttachmentContext ? null : buildDirectResourceResponse(input, context)
+    // 2. 平台数据只作为模型上下文注入，不再用关键词规则直接生成回复。
+    const directResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = shouldUseDirectResourceResponse()
+      ? buildDirectResourceResponse(input, context)
+      : null
     if (directResponse) {
       await this.prisma.$transaction(async (tx) => {
         await tx.aiCallLog.create({
@@ -204,7 +206,7 @@ export class AiService {
           userId: user.id,
         })
     const topKnowledgeHit = knowledgeHits[0]
-    if (topKnowledgeHit && topKnowledgeHit.similarity >= 0.65) {
+    if (topKnowledgeHit && topKnowledgeHit.similarity >= 0.65 && shouldUseKnowledgeDirectResponse()) {
       const knowledgeContent = `${topKnowledgeHit.answer}\n\n（已引用知识库：${topKnowledgeHit.title}）`
       await this.prisma.$transaction(async (tx) => {
         await tx.aiCallLog.create({
@@ -260,6 +262,7 @@ export class AiService {
     const systemPrompt = buildSystemPrompt(input.mode, context, user.role, this.skillRouter.buildPrompt(skillRoute))
     const tools: ReturnType<typeof getAvailableTools> = []
     const promptContext = {
+      platformRuntimeData: formatPlatformRuntimeDataForPrompt(context),
       ...(hasAttachmentContext ? compactAttachmentContextForAgent(input.context) : (input.context ?? {})),
       ...(knowledgeHits.length > 0 ? { aiKnowledgeBase: formatKnowledgeHitsForPrompt(knowledgeHits) } : {}),
     }
@@ -290,7 +293,7 @@ export class AiService {
         const result = await this.requestOpenAi('chat/completions', {
           body: payload,
           method: 'POST',
-          timeoutMs: hasAttachmentContext ? ATTACHMENT_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+          timeoutMs: hasAttachmentContext ? getAttachmentRequestTimeoutMs() : getRequestTimeoutMs(),
         })
 
         const choice = result.body?.choices?.[0]
@@ -333,8 +336,8 @@ export class AiService {
         break
       }
     } catch (error) {
-      agentDegradedReason = error instanceof Error ? error.message : 'Agent unavailable'
-      fallbackResponse = buildAgentDegradedResponse(input, context, skillRoute, agentDegradedReason)
+      agentDegradedReason = getAgentErrorMessage(error)
+      fallbackResponse = buildAgentFailureResponse(agentDegradedReason)
       finalContent = fallbackResponse.content
     }
 
@@ -526,11 +529,9 @@ export class AiService {
       const body = await readResponseBody(response)
 
       if (!response.ok) {
-        throw new BadGatewayException({
-          detail: body,
-          message: 'OpenAI-compatible Agent 调用失败',
-          status: response.status,
-        })
+        throw new ServiceUnavailableException(
+          `模型服务返回 HTTP ${response.status}${formatUpstreamErrorDetail(body)}`,
+        )
       }
 
       return {
@@ -538,9 +539,8 @@ export class AiService {
         status: response.status,
       }
     } catch (error) {
-      if (error instanceof BadGatewayException) throw error
       const message = error instanceof Error && error.name === 'AbortError'
-        ? '邮宝响应超时，请稍后重试或改用更具体的问题。'
+        ? `模型服务在 ${formatDuration(options.timeoutMs)} 内没有返回结果，已终止本次请求。`
         : error instanceof Error
           ? error.message
           : 'OpenAI-compatible Agent 暂不可用'
@@ -568,6 +568,22 @@ function getOpenAiModel() {
   return process.env.OPENAI_MODEL || process.env.HERMES_AGENT_MODEL || DEFAULT_OPENAI_MODEL
 }
 
+function shouldUseDirectResourceResponse() {
+  return process.env.AI_DIRECT_RESOURCE_RESPONSE === 'true'
+}
+
+function shouldUseKnowledgeDirectResponse() {
+  return process.env.AI_KNOWLEDGE_DIRECT_RESPONSE === 'true'
+}
+
+function getRequestTimeoutMs() {
+  return normalizeTimeoutMs(process.env.OPENAI_REQUEST_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS)
+}
+
+function getAttachmentRequestTimeoutMs() {
+  return normalizeTimeoutMs(process.env.OPENAI_ATTACHMENT_REQUEST_TIMEOUT_MS, DEFAULT_ATTACHMENT_REQUEST_TIMEOUT_MS)
+}
+
 function getModePermission(mode: NormalizedAiChatInput['mode']) {
   if (mode === 'auditor') return 'ai:use_auditor'
   if (mode === 'admin') return 'ai:use_admin'
@@ -588,6 +604,25 @@ function formatKnowledgeHitsForPrompt(hits: Array<{ answer: string; category: st
     confidence: Number(hit.similarity.toFixed(2)),
     title: hit.title,
   }))
+}
+
+function formatPlatformRuntimeDataForPrompt(context: UserContextSnapshot) {
+  return {
+    mallProducts: context.mallSuggestions.map((product) => ({
+      canRedeem: product.canRedeem,
+      category: product.category,
+      description: product.description,
+      id: product.id,
+      imageUrl: product.imageUrl,
+      name: product.name,
+      perUserLimit: product.perUserLimit,
+      pointsCost: product.pointsCost,
+      remainingAfterRedeem: product.remainingAfterRedeem,
+      stock: product.stock,
+    })),
+    points: context.points,
+    visibleMallProductCount: context.mallSuggestions.length,
+  }
 }
 
 function getVisibleSkillSpaces(role: RoleCode) {
@@ -658,6 +693,37 @@ async function readResponseBody(response: Response) {
     return response.json()
   }
   return response.text()
+}
+
+function formatUpstreamErrorDetail(body: unknown) {
+  if (!body) return ''
+  if (typeof body === 'string') return body.trim() ? `：${body.trim().slice(0, 300)}` : ''
+  if (!isRecord(body)) return ''
+
+  const message = body.message ?? body.error ?? body.detail
+  if (typeof message === 'string' && message.trim()) return `：${message.trim().slice(0, 300)}`
+  return `：${JSON.stringify(body).slice(0, 300)}`
+}
+
+function getAgentErrorMessage(error: unknown) {
+  if (error instanceof ServiceUnavailableException) {
+    const response = error.getResponse()
+    if (typeof response === 'string') return response
+    if (isRecord(response) && typeof response.message === 'string') return response.message
+  }
+
+  if (error instanceof Error && error.message.trim()) return error.message
+  return '模型服务暂不可用，后端没有收到可解析的错误信息。'
+}
+
+function normalizeTimeoutMs(value: string | undefined, fallback: number) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 5_000 ? numberValue : fallback
+}
+
+function formatDuration(ms: number) {
+  if (ms % 1000 !== 0) return `${ms} 毫秒`
+  return `${ms / 1000} 秒`
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -769,125 +835,18 @@ function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
 // 确定性资源响应 — 不依赖模型，避免超时/编造业务 ID
 // ══════════════════════════════════════════════════════════════
 
-function buildAgentDegradedResponse(
-  input: NormalizedAiChatInput,
-  context: UserContextSnapshot,
-  skillRoute: ReturnType<AiSkillRouterService['route']>,
-  reason: string,
-): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
-  const attachment = getFirstAttachmentTextContext(input.context)
-  if (attachment) return buildAttachmentDegradedResponse(input, attachment, reason)
-
-  const direct = buildDirectResourceResponse(input, context)
-  if (direct) return direct
-
-  const active = new Set(skillRoute.active.map((skill) => skill.name))
-  const lines = [
-    '模型服务当前响应较慢，我先基于平台后端已注入的实时数据和规则给你一个可用答复。',
-    '',
-  ]
-
-  if (input.mode === 'student' && active.has('cqupt-src-vulnerability-assistant')) {
-    lines.push(
-      '### 漏洞报告建议',
-      '- 标题：写清漏洞类型、影响资产和核心风险。',
-      '- 复现步骤：按 1/2/3 编号，保证审核员能独立复现。',
-      '- 影响说明：说明可影响的数据、权限或业务流程，不夸大。',
-      '- 证明材料：截图、请求包、响应包和必要的脱敏说明。',
-      '- 修复建议：给出可执行的配置、代码或流程修复方案。',
-    )
-  } else if (input.mode === 'auditor') {
-    lines.push(
-      '### 审核辅助建议',
-      '- 先确认资产是否在授权范围内。',
-      '- 再检查复现步骤、证据链、影响范围和修复建议是否完整。',
-      '- 风险等级只作为建议，最终仍由审核员依据平台规则确认。',
-    )
-  } else if (input.mode === 'admin') {
-    lines.push(
-      '### 管理分析建议',
-      '- 可从漏洞数量、审核时效、待补充比例、积分发放/消耗、商城兑换和审计异常六个维度观察平台状态。',
-      '- 涉及真实统计值时，应以后端报表或管理端实时数据为准。',
-    )
-  } else {
-    lines.push(
-      '### 通用建议',
-      '- 如果你是在查询积分、商品、漏洞或学习资源，可以换成更明确的问题，例如“推荐 400 积分以下商品”或“我有哪些待补充漏洞”。',
-      '- 如果你是在问安全知识，可以直接说明漏洞类型和目标，例如“XSS 报告怎么写”。',
-    )
+function buildAgentFailureResponse(reason: string): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
+  return {
+    actions: [],
+    cards: [],
+    content: [
+      '这次没有拿到模型回复。',
+      '',
+      `原因：${reason}`,
+      '',
+      '请稍后重试；如果连续出现，可以检查平台 Hermes Gateway、模型 API Key、模型服务日志或网络连接。',
+    ].join('\n'),
   }
-
-  lines.push('', `降级原因：${reason}`)
-  return { actions: [], cards: [], content: lines.join('\n') }
-}
-
-function buildAttachmentDegradedResponse(
-  input: NormalizedAiChatInput,
-  attachment: { fileName: string; sourceTextLength: number; textExcerpt: string },
-  reason: string,
-): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
-  const excerpt = attachment.textExcerpt.replace(/\s+/g, ' ').trim()
-  const preview = excerpt.length > 700 ? `${excerpt.slice(0, 700)}……` : excerpt
-  const wantsPolish = /完善|修改|润色|优化|补充|改写|写成|整理/.test(input.message)
-  const wantsSummary = /总结|概括|摘要|提炼|重点/.test(input.message)
-
-  const lines = [
-    '模型服务当前响应较慢，邮宝已读取你上传的附件文本，先基于附件内容给出一版可用的本地降级建议。',
-    '',
-    `附件：${attachment.fileName}（已提取约 ${attachment.sourceTextLength} 字）`,
-    '',
-  ]
-
-  if (wantsSummary && !wantsPolish) {
-    lines.push(
-      '### 附件内容要点',
-      `- 核心内容：${preview}`,
-      '- 建议下一步：把目标资产、测试账号权限、关键请求/响应、影响范围和修复措施分别补齐，便于后续形成正式报告。',
-    )
-  } else {
-    lines.push(
-      '### 可直接采用的完善方向',
-      '- 标题：用“漏洞类型 + 影响对象 + 核心风险”表达，避免只写“存在漏洞”。',
-      '- 背景/边界：写明这是授权测试范围内发现的问题，敏感域名、账号、Token、Cookie 要先脱敏。',
-      '- 复现步骤：按 1/2/3 编号写清账号权限、访问路径、关键参数、操作前后对比和实际返回结果。',
-      '- 影响说明：说明攻击者能看到/修改/执行什么，影响哪些用户或业务流程，不要夸大到未验证的范围。',
-      '- 修复建议：优先给服务端校验、权限绑定、输入校验、审计日志和回归测试建议，避免只写“加强过滤”。',
-      '',
-      '### 根据附件先整理出的报告骨架',
-      '```markdown',
-      '# 漏洞标题',
-      '请改为：某功能/接口存在[漏洞类型]，可能导致[核心影响]',
-      '',
-      '## 测试边界',
-      '- 测试环境：授权范围内资产',
-      '- 测试账号/角色：补充账号角色，不填写真实密码、Token 或 Cookie',
-      '',
-      '## 复现步骤',
-      '1. 登录具备普通权限的测试账号。',
-      '2. 访问相关功能并记录正常请求。',
-      '3. 修改关键参数或触发附件中描述的异常路径。',
-      '4. 观察响应结果，截图/请求包需脱敏后作为证据。',
-      '',
-      '## 实际结果',
-      '后端返回了不应由当前用户获得的数据或执行了不应允许的操作。',
-      '',
-      '## 预期结果',
-      '后端应基于当前登录用户、角色和资源归属进行强制校验，拒绝越权或异常请求。',
-      '',
-      '## 影响说明',
-      '该问题可能导致信息泄露、越权操作或业务流程被绕过。请结合附件中的实际返回字段补充具体影响。',
-      '',
-      '## 修复建议',
-      '1. 所有敏感资源查询/修改均在服务端绑定当前用户身份与资源归属。',
-      '2. 不信任前端传入的 userId、role、ownerId 等权限字段。',
-      '3. 对越权访问返回 403/404，并记录审计日志。',
-      '4. 增加同角色不同用户、低权限访问高权限资源的回归测试。',
-      '```',
-    )
-  }
-
-  lines.push('', '### 附件片段参考', `> ${preview}`, '', `降级原因：${reason}`)
-  return { actions: [], cards: [], content: lines.join('\n') }
 }
 
 function buildDirectResourceResponse(
@@ -899,13 +858,11 @@ function buildDirectResourceResponse(
   const message = input.message.toLowerCase()
   const asksPoints = hasPersonalPointIntent(message)
   const asksMall = hasMallIntent(message, context)
-  const asksReportWriting = hasReportWritingIntent(message)
-  const asksLearning = hasLearningIntent(message) && !asksReportWriting
   const asksVulnerabilities = hasUserVulnerabilityListIntent(message)
   const asksPlatformBasics = hasPlatformBasicsIntent(message)
   const asksGreeting = hasGreetingIntent(message)
 
-  if (!asksPoints && !asksMall && !asksLearning && !asksReportWriting && !asksVulnerabilities && !asksPlatformBasics && !asksGreeting) return null
+  if (!asksPoints && !asksMall && !asksVulnerabilities && !asksPlatformBasics && !asksGreeting) return null
 
   const cards: AiCard[] = []
   const actions: AiPendingAction[] = []
@@ -972,50 +929,6 @@ function buildDirectResourceResponse(
     }
   }
 
-  if (asksLearning) {
-    const resources = filterLearningResources(message, context).slice(0, 4)
-    cards.push(...resources.map((resource) => ({
-      actionLabel: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
-      category: resource.category,
-      description: resource.description,
-      id: resource.id,
-      kind: resource.kind,
-      title: resource.title,
-      type: 'LEARNING_RESOURCE' as const,
-    })))
-    actions.push(...resources.map((resource) => ({
-      expiresIn: 300,
-      id: `open_learning_${resource.id}`,
-      label: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
-      payload: { resourceId: resource.id },
-      type: 'OPEN_LEARNING_RESOURCE' as const,
-    })))
-
-    if (lines.length > 0) lines.push('')
-    lines.push(
-      '### 学习建议',
-      '- 建议按“基础概念 → 漏洞原理 → 复现实验 → 报告写作 → 修复建议”的顺序学习。',
-    )
-    if (resources.length > 0) {
-      lines.push(`- 下方推荐 ${resources.length} 个平台学习资源，可直接打开。`)
-    } else {
-      lines.push('- 当前上下文里没有匹配的学习资源卡片，我先给你通用学习路径：先学 HTTP/HTML/JavaScript 基础，再学 XSS、SQL 注入、越权、文件上传和 SSRF。')
-    }
-  }
-
-  if (asksReportWriting) {
-    if (lines.length > 0) lines.push('')
-    lines.push(
-      '### 漏洞报告写作模板',
-      '- 标题：`漏洞类型 + 影响对象 + 核心风险`，例如“某系统评论处存在存储型 XSS，可影响后台管理员”。',
-      '- 影响资产：写清系统名称、URL、接口路径和测试账号权限范围。',
-      '- 复现步骤：按编号写，每一步包含操作、请求/响应、预期结果和实际结果。',
-      '- 影响说明：说明攻击者在授权测试范围内能造成什么影响，避免夸大。',
-      '- 证明材料：截图、请求包、响应包、PoC 代码要脱敏；不要提交 Cookie、Token、密码等敏感值。',
-      '- 修复建议：给出输入校验、输出编码、权限校验、参数化查询、上传白名单等可执行建议。',
-    )
-  }
-
   if (asksVulnerabilities) {
     const wantsSupplement = /待补充|补充/.test(message)
     const vulnerabilities = context.vulnerabilities.recent
@@ -1075,28 +988,22 @@ function hasGreetingIntent(message: string): boolean {
   return /^(你好|您好|hello|hi|嗨|在吗|在不在)$/.test(normalized)
 }
 
-function hasLearningIntent(message: string): boolean {
+function requiresModelJudgement(message: string): boolean {
   const normalized = message.toLowerCase().replace(/\s+/g, '')
-  return /学习|想学|入门|路线|教程|资源|靶场|练习|怎么学|提升|课程|xss|sql注入|ssrf|越权|文件上传|web安全|网络安全/.test(normalized)
-}
-
-function hasReportWritingIntent(message: string): boolean {
-  const normalized = message.toLowerCase().replace(/\s+/g, '')
-  return /报告.{0,8}(怎么写|如何写|模板|格式|优化|完善|描述)|(?:xss|sql注入|ssrf|越权|文件上传|漏洞).{0,8}报告/.test(normalized)
+  return /学习|想学|入门|路线|教程|资源|靶场|练习|怎么学|提升|课程|全网|热门|热度|业内|公开|ctf|lab|range|报告.{0,8}(怎么写|如何写|模板|格式|优化|完善|描述)|(?:xss|sql注入|ssrf|越权|文件上传|漏洞).{0,8}报告/.test(normalized)
 }
 
 function hasMallIntent(message: string, context: UserContextSnapshot): boolean {
-  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  const normalized = normalizeIntentText(message)
   const keywords = extractProductKeywords(message)
-  if (/积分.{0,8}(商品|商城|兑换|能换|可换)|商城|商品|兑换|礼品|奖品|能换|可换|换.{0,6}(笔|杯|本|钥匙|文创|电子|周边)|\d+积分以[下内上外]/.test(normalized)) {
-    return true
-  }
+  if (hasMallBrowseIntent(normalized) || hasPriceFilterIntent(normalized)) return true
   return keywords.length > 0 && context.mallSuggestions.some((item) => productMatchesKeywords(item, keywords))
 }
 
 function filterMallProducts(message: string, context: UserContextSnapshot) {
   const keywords = extractProductKeywords(message)
   const price = extractPriceFilter(message)
+  const wantsRedeemable = hasRedeemableMallIntent(normalizeIntentText(message))
   const hasSpecificKeywords = keywords.length > 0
   let products = context.mallSuggestions
 
@@ -1109,26 +1016,11 @@ function filterMallProducts(message: string, context: UserContextSnapshot) {
   if (typeof price.min === 'number') {
     products = products.filter((product) => product.pointsCost >= price.min!)
   }
+  if (wantsRedeemable) {
+    products = products.filter((product) => product.canRedeem)
+  }
 
   return products.sort((a, b) => Number(b.canRedeem) - Number(a.canRedeem) || a.pointsCost - b.pointsCost)
-}
-
-function filterLearningResources(message: string, context: UserContextSnapshot) {
-  const normalized = message.toLowerCase()
-  const topicMap: Array<[RegExp, string[]]> = [
-    [/xss|跨站/, ['xss', '跨站', '前端', 'javascript']],
-    [/sql|注入/, ['sql', '注入', '数据库']],
-    [/ssrf|服务端请求伪造/, ['ssrf', '请求伪造']],
-    [/越权|权限|访问控制/, ['越权', '权限', '访问控制']],
-    [/文件上传|上传/, ['文件上传', '上传']],
-    [/新手|入门|基础/, ['基础', '入门', '新手']],
-  ]
-  const matched = topicMap.find(([pattern]) => pattern.test(normalized))?.[1] ?? []
-  if (matched.length === 0) return context.learningSuggestions
-  return context.learningSuggestions.filter((resource) => {
-    const haystack = `${resource.title} ${resource.category} ${resource.description ?? ''}`.toLowerCase()
-    return matched.some((keyword) => haystack.includes(keyword.toLowerCase()))
-  })
 }
 
 function buildMallProductCard(product: UserContextSnapshot['mallSuggestions'][number], context: UserContextSnapshot): AiCard {
@@ -1148,12 +1040,29 @@ function buildMallProductCard(product: UserContextSnapshot['mallSuggestions'][nu
 
 function productMatchesKeywords(product: UserContextSnapshot['mallSuggestions'][number], keywords: string[]) {
   const haystack = `${product.name} ${product.category} ${product.description ?? ''}`.toLowerCase()
-  return keywords.some((keyword) => {
-    const normalized = keyword.toLowerCase()
-    if (haystack.includes(normalized)) return true
-    if (/[\u4e00-\u9fff]/.test(normalized)) return [...normalized].some((ch) => haystack.includes(ch))
-    return false
-  })
+  return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()))
+}
+
+function normalizeIntentText(message: string) {
+  return message.toLowerCase().replace(/\s+/g, '')
+}
+
+function hasMallBrowseIntent(normalized: string) {
+  return (
+    /(?:我的|我有|当前|账户|账号|个人)?积分.{0,10}(?:可以|可|能)?(?:兑换|换|买).{0,8}(?:哪些|什么|啥|有什么|有哪些|商品|东西|物品|奖品|礼品)/.test(normalized) ||
+    /(?:积分商城|商城).{0,8}(?:有哪些|有什么|看看|查看|商品|东西|物品|奖品|礼品)/.test(normalized) ||
+    /(?:有哪些|有什么|哪些|什么|啥).{0,6}(?:商品|东西|物品|奖品|礼品).{0,8}(?:兑换|换|买|积分|商城)/.test(normalized) ||
+    /(?:可以|可|能)(?:兑换|换).{0,8}(?:哪些|什么|啥|商品|东西|物品|奖品|礼品)/.test(normalized) ||
+    /(?:兑换|换).{0,8}(?:列表|清单|商品|东西|物品|奖品|礼品)/.test(normalized)
+  )
+}
+
+function hasRedeemableMallIntent(normalized: string) {
+  return /(?:可以|可|能|够)(?:兑换|换|买)|(?:兑换|换).{0,8}(?:哪些|什么|啥|商品|东西|物品|奖品|礼品)/.test(normalized)
+}
+
+function hasPriceFilterIntent(normalized: string) {
+  return /\d+(?:积分|分)?(?:以[下上内外]|以内|以下|以上|左右)/.test(normalized)
 }
 
 /**
@@ -1170,26 +1079,81 @@ function extractProductKeywords(message: string): string[] {
     /(?:我想|我要|我想要|帮我|给我)(?:兑换|换|买|找|推荐)[个些一二两三]?([^，。！？、\s]{1,8})/,
     /(?:兑换|换|买)[个些]?([^，。！？、\s]{1,8})/,
     /想要[个些]?([^，。！？、\s]{1,8})/,
-    /有没有([^，。！？、\s]{1,8})/,
+    /有没有([^，。！？、\s]{1,8})(?:可以|能|可)?(?:兑换|换|买)?/,
     /可以兑换[个些]?([^，。！？、\s]{1,8})/,
     /能(?:兑换|换)[个些]?([^，。！？、\s]{1,8})/,
     /看看有没有([^，。！？、\s]{1,8})/,
     /换个?([^，。！？、\s]{1,8})/,
-    /推荐[个些]?([^，。！？、\s]{1,8})/,
-    /搜[索下]?([^，。！？、\s]{1,8})/,
+    /(?:推荐|搜[索下]?)[个些]?([^，。！？、\s]{1,8})(?:商品|礼品|奖品|东西|物品)?/,
   ]
 
-  const genericWords = new Set(['商品', '东西', '物品', '奖品', '礼品', '积分', '商城'])
+  const genericWords = new Set([
+    '商品',
+    '东西',
+    '物品',
+    '奖品',
+    '礼品',
+    '积分',
+    '商城',
+    '哪些',
+    '什么',
+    '啥',
+    '有哪些',
+    '有什么',
+    '哪些东西',
+    '什么东西',
+    '哪些商品',
+    '什么商品',
+    '哪些物品',
+    '什么物品',
+    '哪些奖品',
+    '什么奖品',
+    '哪些礼品',
+    '什么礼品',
+  ])
+  const blockedTopicWords = new Set([
+    '靶场',
+    '练习',
+    '实操',
+    '课程',
+    '教程',
+    '资料',
+    '资源',
+    '漏洞',
+    '报告',
+    '全网',
+    '热门',
+    '热度',
+    '公开',
+    '业内',
+    '学习',
+    '路线',
+  ])
   const extracted: string[] = []
   for (const pattern of intentPatterns) {
     const match = cleaned.match(pattern)
     if (!match?.[1]) continue
-    const word = match[1].replace(/[的了吗呢啊呀吧]$/, '').replace(/^的/, '').trim()
-    if (word.length >= 1 && word.length <= 8 && !/^[一二两三]?[个些]?$/.test(word) && !/^\d+$/.test(word) && !genericWords.has(word)) {
+    const word = normalizeProductKeyword(match[1])
+    if (
+      word.length >= 1 &&
+      word.length <= 8 &&
+      !/^[一二两三]?[个些]?$/.test(word) &&
+      !/^\d+$/.test(word) &&
+      !genericWords.has(word) &&
+      !blockedTopicWords.has(word)
+    ) {
       extracted.push(word)
     }
   }
   return Array.from(new Set(extracted))
+}
+
+function normalizeProductKeyword(value: string) {
+  return value
+    .replace(/[的了吗呢啊呀吧]$/, '')
+    .replace(/^的/, '')
+    .replace(/^(有哪些|有什么|哪些|什么|啥)(?=商品|东西|物品|奖品|礼品)/, '')
+    .trim()
 }
 
 /** 从消息中提取价格约束：{ max?: number; min?: number } */

@@ -641,6 +641,75 @@ System Prompt 必须包含：
 
 AI 工具能力分三阶段推进。
 
+### 10.0 下一步待完成：按需查询平台数据
+
+当前需要完成的下一步是把“每轮预注入大量平台数据”的模式升级为“AI 先判断需求，再按需获取平台数据”。
+
+目标流程：
+
+1. 用户向 `/api/ai/chat` 发送消息。
+2. 后端只注入最小上下文：用户角色、AI 模式、平台能力说明、安全边界、可查询数据类型。
+3. AI 先判断问题是否需要平台数据。
+4. 如果需要平台数据，AI 通过只读工具请求后端查询，例如积分、商城商品、漏洞、学习资源。
+5. 后端使用 JWT 当前用户身份执行查询，忽略 tool 参数中的 userId。
+6. 后端把脱敏后的查询结果返回给 AI。
+7. AI 基于工具结果生成自然语言回复和前端交互卡片。
+
+推荐最终工具：
+
+```text
+get_point_balance              # 当前用户积分余额
+search_mall_products           # 商城商品搜索、价格过滤、可兑换/不可兑换过滤
+get_redeem_eligibility         # 单个商品兑换资格
+get_my_vulnerabilities         # 当前用户漏洞列表/状态
+search_learning_resources      # 学习资源/靶场检索
+get_user_summary               # 当前用户概览
+```
+
+`search_mall_products` 需要支持：
+
+```ts
+{
+  keyword?: string
+  minPoints?: number
+  maxPoints?: number
+  canRedeem?: boolean
+  category?: string
+}
+```
+
+这样可以准确处理：
+
+- “我的积分可以兑换哪些东西”
+- “哪些商品我的积分兑换不了”
+- “400 积分以上商品有哪些”
+- “有没有杯子可以换”
+
+安全规则：
+
+- 只读工具不能执行兑换、提交、审核、删除、修改等写操作。
+- 所有查询必须以后端 JWT 用户为准，不能信任模型传入的用户 ID。
+- Tool 返回结果必须脱敏，不能返回密码、token、验证码、密钥、私有文件直链。
+- AI 输出的卡片只能引用 tool 结果中的真实 ID。
+- 写操作仍必须走 Action Proposal + 用户确认 + 后端事务 + AuditLog。
+
+实施顺序：
+
+1. 先验证平台 Hermes OpenAI-compatible `/v1/chat/completions` 是否稳定支持 `tools` / `tool_calls`。
+2. 如果支持，恢复后端 `getAvailableTools(user.role)`，启用现有 tool loop。
+3. 把默认全量 Context Injection 改为最小上下文。
+4. 扩展商城、学习、漏洞工具参数和返回字段。
+5. 加卡片 ID 白名单校验，确保 AI 不能编造业务卡片。
+6. 增加日志和测试用例，覆盖可兑换、不可兑换、价格过滤、平台靶场、个人漏洞状态等问题。
+
+如果 Hermes tool calling 仍不稳定，则先采用折中方案：
+
+- 后端做轻量意图分类，只决定需要查询哪些模块。
+- 后端按需注入对应模块数据，例如只在商城问题注入积分和商品。
+- AI 仍负责组织最终回复和卡片，后端不再直接拼业务回答。
+
+这属于当前 AI Gateway 的下一步架构任务，完成后可减少 prompt 长度、降低 token 消耗，并避免模型漏读长商品列表。
+
 ### 阶段 1：Context Injection + Direct Response
 
 当前优先采用此阶段。
