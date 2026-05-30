@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -6,6 +7,13 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { LearningResourceBody } from './learning.types'
 import { normalizeLearningResourceBody } from './learning.validation'
 import { LearningService } from './learning.service'
+
+type UploadedImageFile = {
+  buffer?: Buffer
+  mimetype?: string
+  originalname?: string
+  size?: number
+}
 
 type RequestLike = {
   ip?: string
@@ -46,6 +54,14 @@ export class LearningController {
   @RequirePermissions('learning:manage')
   listManageResources() {
     return this.learning.listManageResources()
+  }
+
+  @Post('manage/upload-cover')
+  @RequirePermissions('learning:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }))
+  uploadCoverImage(@UploadedFile() file: UploadedImageFile | undefined) {
+    if (!file) throw new BadRequestException('请选择图片文件')
+    return this.learning.uploadCoverImage(file)
   }
 
   @Post()
@@ -101,4 +117,3 @@ export class LearningController {
     return this.learning.deleteResource(id, user, getRequestMeta(req))
   }
 }
-

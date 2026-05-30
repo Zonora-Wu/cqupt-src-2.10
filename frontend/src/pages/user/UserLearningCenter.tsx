@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  Expand,
   FileText,
   GraduationCap,
   Layers3,
@@ -12,7 +13,9 @@ import {
   Sparkles,
   Target,
   TerminalSquare,
+  X,
 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -49,6 +52,7 @@ export function UserLearningCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [detailResource, setDetailResource] = useState<LearningResourceItem | null>(null)
 
   async function loadResources() {
     setError('')
@@ -185,59 +189,227 @@ export function UserLearningCenter() {
       {message && <AlertMessage className="mt-4" message={message} onClose={() => setMessage('')} variant="error" />}
       {error && <AlertMessage className="mt-4" message={error} onClose={() => setError('')} variant="error" />}
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+      <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400 lg:col-span-2">正在加载学习资源...</SurfacePanel>}
 
         {!loading &&
           filteredResources.map((item) => (
-            <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.工具资源}`}>{item.category}</span>
-                    <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
+            <SurfacePanel
+              className="cursor-pointer overflow-hidden p-0 transition hover:-translate-y-0.5 hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]"
+              key={item.id}
+              onClick={() => setDetailResource(item)}
+            >
+              <LearningCover item={item} />
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.工具资源}`}>{item.category}</span>
+                      <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
+                    </div>
+                    <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
                   </div>
-                  <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
-                </div>
-                {item.kind === 'RANGE' ? (
-                  <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
-                ) : (
-                  <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
-                )}
-              </div>
-
-              <p className="mt-3 min-h-12 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
-
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  访问 {item.downloadCount} 次 · 更新于 {formatDate(item.updatedAt)}
-                </div>
-                <button
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                  onClick={() => void openResource(item)}
-                  type="button"
-                >
                   {item.kind === 'RANGE' ? (
-                    <>
-                      <ExternalLink className="h-4 w-4" />
-                      进入靶场
-                    </>
+                    <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
                   ) : (
-                    <>
-                      <Download className="h-4 w-4" />
-                      访问资源
-                    </>
+                    <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
                   )}
-                </button>
+                </div>
+
+                <p className="mt-3 line-clamp-2 min-h-12 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    访问 {item.downloadCount} 次 · 更新于 {formatDate(item.updatedAt)}
+                  </div>
+                  <button
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void openResource(item)
+                    }}
+                    type="button"
+                  >
+                    {item.kind === 'RANGE' ? (
+                      <>
+                        <ExternalLink className="h-4 w-4" />
+                        进入靶场
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        访问资源
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </SurfacePanel>
           ))}
       </div>
 
+      <LearningResourceDetailModal
+        item={detailResource}
+        onClose={() => setDetailResource(null)}
+        onOpen={(item) => void openResource(item)}
+      />
+
       {!loading && filteredResources.length === 0 && (
         <EmptyState icon={<BookOpen className="h-10 w-10" />} title="没有匹配的学习资源" description="调整关键词、资源类型或分类后再试一次。" />
       )}
     </section>
+  )
+}
+
+function LearningCover({ item }: { item: LearningResourceItem }) {
+  const Icon = item.kind === 'RANGE' ? Target : TerminalSquare
+
+  return (
+    <div className="relative h-40 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+      {item.coverUrl ? (
+        <img alt={item.title} className="h-full w-full object-cover" src={item.coverUrl} />
+      ) : (
+        <>
+          <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+              <Icon className="h-8 w-8" />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function LearningResourceDetailModal({
+  item,
+  onClose,
+  onOpen,
+}: {
+  item: LearningResourceItem | null
+  onClose: () => void
+  onOpen: (item: LearningResourceItem) => void
+}) {
+  const [lightbox, setLightbox] = useState(false)
+
+  useEffect(() => {
+    if (!item) return undefined
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [item])
+
+  if (!item) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">
+      <button
+        aria-label="关闭资源详情"
+        className="absolute inset-0 bg-slate-950/45 dark:bg-black/70"
+        onClick={onClose}
+        type="button"
+      />
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="relative max-h-[88vh] w-full max-w-[520px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-7 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        initial={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+      >
+        <button
+          aria-label="关闭资源详情"
+          className="absolute right-4 top-4 z-10 rounded-md p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="group relative -mx-7 -mt-7 mb-6 h-52 overflow-hidden rounded-t-lg bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+          {item.coverUrl ? (
+            <>
+              <img alt={item.title} className="h-full w-full object-cover" src={item.coverUrl} />
+              <button
+                className="absolute inset-0 flex items-center justify-center bg-black/0 transition hover:bg-black/20"
+                onClick={() => setLightbox(true)}
+                type="button"
+              >
+                <Expand className="h-8 w-8 text-white opacity-0 transition group-hover:opacity-100" />
+              </button>
+            </>
+          ) : (
+            <LearningCover item={item} />
+          )}
+        </div>
+
+        {lightbox && item.coverUrl && (
+          <div className="fixed inset-0 z-[200] isolate flex items-center justify-center p-4">
+            <button
+              aria-label="关闭图片预览"
+              className="absolute inset-0 bg-black/85"
+              onClick={() => setLightbox(false)}
+              type="button"
+            />
+            <button
+              aria-label="关闭图片预览"
+              className="absolute right-4 top-4 rounded-md p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
+              onClick={() => setLightbox(false)}
+              type="button"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              alt={item.title}
+              className="relative max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+              src={item.coverUrl}
+            />
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.工具资源}`}>{item.category}</span>
+          <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
+        </div>
+
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight">{item.title}</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.description}</p>
+
+        <div className="mt-5 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+          <DetailRow label="访问次数" value={`${item.downloadCount} 次`} />
+          <DetailRow label="更新时间" value={formatDate(item.updatedAt)} />
+          <div className="px-4 py-3 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">资源链接</span>
+            <p className="mt-1 break-all font-mono text-xs leading-5 text-slate-700 dark:text-slate-300">{item.externalUrl}</p>
+          </div>
+        </div>
+
+        <button
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+          onClick={() => onOpen(item)}
+          type="button"
+        >
+          {item.kind === 'RANGE' ? (
+            <>
+              <ExternalLink className="h-4 w-4" />
+              进入靶场
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4" />
+              访问资源
+            </>
+          )}
+        </button>
+      </motion.section>
+    </div>
+  )
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
   )
 }
 

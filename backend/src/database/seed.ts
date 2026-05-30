@@ -157,6 +157,51 @@ const seedLearningResources = [
     description: '覆盖多类型 Web 安全问题的综合训练靶场，适合用于学习报告撰写和复现材料整理。',
     externalUrl: 'https://owasp.org/www-project-juice-shop/',
   },
+  {
+    id: 'learn_range_vulhub',
+    kind: LearningResourceKind.RANGE,
+    category: '综合演练靶场',
+    title: 'Vulhub',
+    description:
+      '国内非常常用的漏洞复现环境集合，基于 Docker / Docker Compose，适合复现中间件、Web 组件、CMS、框架类漏洞。启动方便，适合学生做 CVE 复现、漏洞原理学习和课程实验。',
+    externalUrl: 'https://vulhub.org/',
+  },
+  {
+    id: 'learn_range_pikachu',
+    kind: LearningResourceKind.RANGE,
+    category: 'Web靶场',
+    title: 'Pikachu 皮卡丘靶场',
+    description:
+      '中文 Web 安全练习靶场，适合新手入门。包含 XSS、SQL 注入、命令执行、文件包含、CSRF、越权等常见 Web 漏洞，适合基础 Web 安全漏洞练习。',
+    externalUrl: 'https://github.com/zhuifengshaonianhanlu/pikachu',
+  },
+  {
+    id: 'learn_range_dvwa',
+    kind: LearningResourceKind.RANGE,
+    category: 'Web靶场',
+    title: 'DVWA',
+    description:
+      '经典 Web 漏洞靶场，全名 Damn Vulnerable Web Application。适合练习 SQL 注入、XSS、CSRF、命令注入、文件上传、文件包含、暴力破解等基础漏洞。',
+    externalUrl: 'https://github.com/digininja/DVWA',
+  },
+  {
+    id: 'learn_range_sqli_labs',
+    kind: LearningResourceKind.RANGE,
+    category: 'Web靶场',
+    title: 'sqli-labs',
+    description:
+      'SQL 注入专项靶场，适合系统练习 GET、POST、报错注入、盲注、联合查询、堆叠注入、绕过等 SQL 注入技巧，是学习和测试 SQL 注入的常用开源平台。',
+    externalUrl: 'https://github.com/Audi-1/sqli-labs',
+  },
+  {
+    id: 'learn_range_upload_labs',
+    kind: LearningResourceKind.RANGE,
+    category: 'Web靶场',
+    title: 'upload-labs',
+    description:
+      '文件上传漏洞专项靶场，适合练习前端校验绕过、MIME 绕过、后缀绕过、解析漏洞、条件竞争、图片马等上传类漏洞，常用于 Web 安全课程、CTF 入门和渗透测试练习。',
+    externalUrl: 'https://github.com/c0ny1/upload-labs',
+  },
 ]
 
 const seedMallProducts = [

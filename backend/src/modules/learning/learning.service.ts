@@ -4,6 +4,13 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { NormalizedLearningResourceInput } from './learning.types'
 
+type UploadedImageFile = {
+  buffer?: Buffer
+  mimetype?: string
+  originalname?: string
+  size?: number
+}
+
 @Injectable()
 export class LearningService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -68,6 +75,26 @@ export class LearningService {
     }
   }
 
+  uploadCoverImage(file: UploadedImageFile) {
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!file.mimetype || !allowedMime.includes(file.mimetype)) {
+      throw new BadRequestException('仅支持 JPG、PNG、WebP、GIF 格式的图片')
+    }
+
+    if (!file.buffer || !file.size) {
+      throw new BadRequestException('文件内容为空')
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      throw new BadRequestException('图片大小不能超过 2MB')
+    }
+
+    const base64 = file.buffer.toString('base64')
+    const coverUrl = `data:${file.mimetype};base64,${base64}`
+
+    return { coverUrl }
+  }
+
   async createResource(
     input: NormalizedLearningResourceInput,
     user: AuthenticatedRequestUser,
@@ -78,6 +105,7 @@ export class LearningService {
         data: {
           active: input.active,
           category: input.category,
+          coverUrl: input.coverUrl,
           description: input.description,
           externalUrl: input.externalUrl,
           kind: input.kind,
@@ -94,6 +122,7 @@ export class LearningService {
             action: 'create',
             active: input.active,
             category: input.category,
+            coverUrl: input.coverUrl,
             kind: input.kind,
             title: input.title,
           },
@@ -125,6 +154,7 @@ export class LearningService {
         data: {
           active: input.active,
           category: input.category,
+          coverUrl: input.coverUrl,
           description: input.description,
           externalUrl: input.externalUrl,
           kind: input.kind,
@@ -141,6 +171,7 @@ export class LearningService {
             action: 'update',
             active: input.active,
             category: input.category,
+            coverUrl: input.coverUrl,
             kind: input.kind,
             title: input.title,
           },
@@ -253,6 +284,7 @@ export class LearningService {
 function summarizeResource(resource: {
   active: boolean
   category: string
+  coverUrl: string | null
   createdAt: Date
   description: string | null
   downloadCount: number
@@ -265,6 +297,7 @@ function summarizeResource(resource: {
   return {
     active: resource.active,
     category: resource.category,
+    coverUrl: resource.coverUrl ?? '',
     createdAt: resource.createdAt,
     description: resource.description ?? '',
     downloadCount: resource.downloadCount,
@@ -291,4 +324,3 @@ function summarizeStats(
     total: resources.length,
   }
 }
-

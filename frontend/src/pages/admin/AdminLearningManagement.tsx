@@ -5,14 +5,16 @@ import {
   Filter,
   GraduationCap,
   Layers3,
+  Loader2,
   Plus,
   Power,
   RefreshCw,
   Target,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -26,6 +28,7 @@ import {
   enableLearningResource,
   listManagedLearningResources,
   updateLearningResource,
+  uploadLearningCover,
 } from '../../services/learning'
 import type { LearningKind, LearningResourceItem, LearningResourcePayload } from '../../services/learning'
 
@@ -44,6 +47,7 @@ type FormState = LearningResourcePayload & {
 const emptyForm: FormState = {
   active: true,
   category: '工具资源',
+  coverUrl: '',
   description: '',
   externalUrl: '',
   kind: 'RESOURCE',
@@ -52,7 +56,10 @@ const emptyForm: FormState = {
 
 const kindOptions = ['全部类型', '工具资料', '靶场资源']
 const statusOptions = ['全部状态', '已上架', '已下架']
-const categoryPresets = ['工具资源', '文档资料', 'Web靶场', '权限控制靶场', '代码审计靶场', '报告规范']
+const categoryPresets: Record<LearningKind, string[]> = {
+  RESOURCE: ['工具资源', '文档资料', '报告规范', '学习资料', '环境配置'],
+  RANGE: ['Web靶场', '权限控制靶场', '代码审计靶场', '内网渗透靶场', '综合演练靶场'],
+}
 
 export function AdminLearningManagement() {
   const [resources, setResources] = useState<LearningResourceItem[]>([])
@@ -138,6 +145,7 @@ export function AdminLearningManagement() {
     setEditing({
       active: item.active,
       category: item.category,
+      coverUrl: item.coverUrl,
       description: item.description,
       externalUrl: item.externalUrl,
       id: item.id,
@@ -411,10 +419,17 @@ function LearningResourceModal({
   saving: boolean
 }) {
   const [form, setForm] = useState<FormState>(emptyForm)
+  const [coverUploading, setCoverUploading] = useState(false)
+  const [coverNotice, setCoverNotice] = useState('')
+  const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (initialValue) {
-      setForm(initialValue)
+      const categoryOptions = categoryPresets[initialValue.kind]
+      setForm({
+        ...initialValue,
+        category: categoryOptions.includes(initialValue.category) ? initialValue.category : categoryOptions[0],
+      })
     }
   }, [initialValue])
 
@@ -424,9 +439,48 @@ function LearningResourceModal({
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function updateKind(nextKind: LearningKind) {
+    setForm((current) => {
+      const nextCategoryOptions = categoryPresets[nextKind]
+      return {
+        ...current,
+        category: nextCategoryOptions[0],
+        kind: nextKind,
+      }
+    })
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     onSave(form)
+  }
+
+  async function handleCoverUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (event.target) event.target.value = ''
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setCoverNotice('请选择图片文件')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setCoverNotice('图片大小不能超过 2MB')
+      return
+    }
+
+    setCoverUploading(true)
+    setCoverNotice('')
+    try {
+      const result = await uploadLearningCover(file)
+      updateField('coverUrl', result.coverUrl)
+      setCoverNotice('封面已上传')
+      window.setTimeout(() => setCoverNotice(''), 2000)
+    } catch (uploadError) {
+      setCoverNotice(uploadError instanceof Error ? uploadError.message : '上传失败')
+    } finally {
+      setCoverUploading(false)
+    }
   }
 
   return (
@@ -452,17 +506,82 @@ function LearningResourceModal({
         </div>
 
         <div className="mt-6 grid gap-4">
+          <div>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              封面图片 <span className="font-normal text-slate-400">（可选）</span>
+            </span>
+            {form.coverUrl ? (
+              <div className="mt-2 flex items-center gap-4 rounded-lg border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+                <img
+                  alt="资源封面预览"
+                  className="h-20 w-28 shrink-0 rounded-lg object-cover"
+                  src={form.coverUrl}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{form.coverUrl}</p>
+                  <button
+                    className="mt-2 rounded-lg border border-black/10 px-3 py-1.5 text-xs text-slate-600 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                    onClick={() => updateField('coverUrl', '')}
+                    type="button"
+                  >
+                    移除封面
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  className="mt-2 flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-black/10 px-6 py-8 text-slate-500 transition hover:border-brand-600/40 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-70 dark:border-white/10 dark:hover:border-brand-200/40 dark:hover:text-brand-200"
+                  disabled={coverUploading}
+                  onClick={() => coverInputRef.current?.click()}
+                  type="button"
+                >
+                  {coverUploading ? (
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  ) : (
+                    <Upload className="h-8 w-8" />
+                  )}
+                  <span className="text-sm">{coverUploading ? '上传中...' : '点击上传本地封面'}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">支持 JPG、PNG、WebP、GIF，最大 2MB</span>
+                </button>
+                <input
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleCoverUpload}
+                  ref={coverInputRef}
+                  type="file"
+                />
+              </>
+            )}
+            {coverNotice && (
+              <p className={`mt-2 text-xs ${coverNotice === '封面已上传' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                {coverNotice}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+              <span className="text-xs text-slate-400 dark:text-slate-500">或输入图片 URL</span>
+              <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+            </div>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              onChange={(event) => updateField('coverUrl', event.target.value)}
+              placeholder="https://example.com/cover.png"
+              value={form.coverUrl}
+            />
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             <SelectInput
               label="类型"
-              onChange={(value) => updateField('kind', value === '靶场资源' ? 'RANGE' : 'RESOURCE')}
+              onChange={(value) => updateKind(value === '靶场资源' ? 'RANGE' : 'RESOURCE')}
               options={['工具资料', '靶场资源']}
               value={form.kind === 'RANGE' ? '靶场资源' : '工具资料'}
             />
             <SelectInput
               label="分类"
               onChange={(value) => updateField('category', value)}
-              options={categoryPresets}
+              options={categoryPresets[form.kind]}
               value={form.category}
             />
             <SelectInput
