@@ -516,6 +516,10 @@ function applyMaterialTheme(material: THREE.MeshStandardMaterial, theme: SceneTh
   const isDark = theme === 'dark'
   const name = material.name.toLowerCase()
 
+  if (shouldPreserveLaptopMaterial(material)) {
+    return
+  }
+
   if (!isDark && name === 'laptopsurface.002') {
     return
   }
@@ -552,6 +556,17 @@ function applyMaterialTheme(material: THREE.MeshStandardMaterial, theme: SceneTh
   }
 
   material.needsUpdate = true
+}
+
+function shouldPreserveLaptopMaterial(material: THREE.MeshStandardMaterial) {
+  const name = material.name.toLowerCase()
+  return (
+    name.includes('laser') ||
+    name.includes('iridescent') ||
+    name.includes('镭射') ||
+    name.includes('logo') ||
+    Boolean(material.map && !name.includes('keyboard') && !name.includes('screen'))
+  )
 }
 
 function smootherstep(value: number) {

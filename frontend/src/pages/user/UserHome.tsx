@@ -23,7 +23,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
@@ -45,6 +45,7 @@ import {
   type ThemeMode,
   type UserDevicePreferences,
 } from '../../services/userPreferences'
+import { applyColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const UserAIAssistant = lazy(() =>
   import('./UserAIAssistant').then((module) => ({ default: module.UserAIAssistant })),
@@ -225,10 +226,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   useEffect(() => {
     const nextTheme = resolveThemeMode(preferences.themeMode)
     setTheme(nextTheme)
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+    applyColorTheme(nextTheme)
     document.documentElement.dataset.motion = preferences.reduceMotion ? 'reduced' : 'default'
     saveUserDevicePreferences(preferenceKey, preferences)
-    try { localStorage.setItem('cqupt-theme', nextTheme) } catch {}
   }, [preferenceKey, preferences])
 
   useEffect(() => {
@@ -238,7 +238,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     const syncSystemTheme = () => {
       const nextTheme = resolveThemeMode('system')
       setTheme(nextTheme)
-      document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+      applyColorTheme(nextTheme)
     }
 
     media.addEventListener('change', syncSystemTheme)
@@ -249,7 +249,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setPreferences(nextPreferences)
   }
 
-  const changeThemeMode = (themeMode: ThemeMode) => {
+  const changeThemeMode = (themeMode: ThemeMode, event?: MouseEvent<HTMLElement>) => {
+    if (themeMode === 'light' || themeMode === 'dark') {
+      transitionColorTheme(themeMode, event)
+    }
     setPreferences((current) => ({ ...current, themeMode }))
   }
 
@@ -310,7 +313,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => changeThemeMode(theme === 'dark' ? 'light' : 'dark')}
+              onClick={(event) => changeThemeMode(theme === 'dark' ? 'light' : 'dark', event)}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}

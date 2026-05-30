@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { preloadLaptopShowcaseAssets } from '../../components/guest/laptopShowcaseAssets'
+import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const IntroCopySection = lazy(() =>
   import('../../components/guest/IntroCopySection').then((module) => ({ default: module.IntroCopySection })),
@@ -87,36 +88,15 @@ const navPageMap: Record<string, GuestPage> = {
 
 export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
   const [activePage, setActivePage] = useState<GuestPage>('home')
   const [homeCertificateNo, setHomeCertificateNo] = useState('')
   const [certificateSearchNo, setCertificateSearchNo] = useState('')
   const [certificateQueryNonce, setCertificateQueryNonce] = useState(0)
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    try {
-      localStorage.setItem('cqupt-theme', theme)
-    } catch {
-      // localStorage may be unavailable in private browsing or restricted contexts.
-    }
+    applyColorTheme(theme)
   }, [theme])
-
-  useEffect(() => {
-    const preload = () => preloadLaptopShowcaseAssets()
-    const requestIdleCallback = window.requestIdleCallback
-    const cancelIdleCallback = window.cancelIdleCallback
-
-    if (requestIdleCallback && cancelIdleCallback) {
-      const idleId = requestIdleCallback(preload, { timeout: 1600 })
-      return () => cancelIdleCallback(idleId)
-    }
-
-    const timeout = window.setTimeout(preload, 700)
-    return () => window.clearTimeout(timeout)
-  }, [])
 
   const openPage = (page: GuestPage) => {
     if (page === 'about') {
@@ -174,7 +154,11 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             <button
               aria-label="切换主题"
               className="hidden rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 md:inline-flex dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={(event) => {
+                const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                transitionColorTheme(nextTheme, event)
+                setTheme(nextTheme)
+              }}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}

@@ -1,5 +1,5 @@
 export const ENVIRONMENT_MAP_URL = '/hdr/sunset_2K_65d6cbb9-5c06-44f8-9be3-41df7a99f52a.exr'
-export const LAPTOP_MODEL_URL = '/models/幻14笔记本电脑.glb?v=20260524-separated-keys'
+export const LAPTOP_MODEL_URL = '/models/幻14笔记本电脑添加a面镭射效果.glb?v=20260530-laser-cover'
 
 let preloaded = false
 

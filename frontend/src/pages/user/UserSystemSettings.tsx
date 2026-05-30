@@ -10,7 +10,7 @@ import {
   Sun,
   SunMoon,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type MouseEvent, type ReactNode, useEffect, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -19,6 +19,7 @@ import {
   type ThemeMode,
   type UserDevicePreferences,
 } from '../../services/userPreferences'
+import { transitionColorTheme } from '../../utils/themeTransition'
 
 type UserSystemSettingsProps = {
   effectiveTheme: 'dark' | 'light'
@@ -56,7 +57,10 @@ export function UserSystemSettings({
     return () => window.clearTimeout(timer)
   }, [message])
 
-  const setThemeMode = (themeMode: ThemeMode) => {
+  const setThemeMode = (themeMode: ThemeMode, event?: MouseEvent<HTMLElement>) => {
+    if (themeMode === 'light' || themeMode === 'dark') {
+      transitionColorTheme(themeMode, event)
+    }
     updatePreferences({ ...preferences, themeMode })
   }
 
@@ -134,13 +138,13 @@ export function UserSystemSettings({
                       active={preferences.themeMode === 'light'}
                       icon={<Sun className="h-5 w-5" />}
                       label="浅色"
-                      onClick={() => setThemeMode('light')}
+                      onClick={(event) => setThemeMode('light', event)}
                     />
                     <ThemeOption
                       active={preferences.themeMode === 'dark'}
                       icon={<Moon className="h-5 w-5" />}
                       label="深色"
-                      onClick={() => setThemeMode('dark')}
+                      onClick={(event) => setThemeMode('dark', event)}
                     />
                     <ThemeOption
                       active={preferences.themeMode === 'system'}
@@ -353,7 +357,7 @@ function ThemeOption({
   description?: string
   icon: ReactNode
   label: string
-  onClick: () => void
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void
 }) {
   return (
     <button
