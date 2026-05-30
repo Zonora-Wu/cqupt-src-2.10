@@ -25,6 +25,8 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   approveRegistration,
+  getCertificateTemplateBackgroundPreview,
+  getCertificateSealPreview,
   getActiveCertificateTemplate,
   getAiAssistantAppearance,
   getAiQuotaSettings,
@@ -34,6 +36,7 @@ import {
   previewCertificateTemplate,
   rejectRegistration,
   setRegistrationMode,
+  updateCertificateTemplateLayout,
   updatePlatformSettings,
   uploadAiAssistantAvatar,
   updateAiQuotaSettings,
@@ -72,6 +75,65 @@ type ConfirmState = {
 } | null
 
 type AiQuotaPeriod = AiQuotaSettings['quotaPeriod']
+
+type CertificateLayoutKey =
+  | 'certificateNo'
+  | 'recipientName'
+  | 'reportNo'
+  | 'severity'
+  | 'issuedAt'
+  | 'certificateType'
+  | 'seal'
+
+type CertificateLayoutPoint = {
+  align?: 'center' | 'left' | 'right'
+  fontSize?: number
+  height?: number
+  width?: number
+  x: number
+  y: number
+}
+
+type CertificateFontFamily = 'notoSansCjk' | 'simHei' | 'microsoftYaHei' | 'systemSans'
+
+type CertificateLayoutConfig = Record<CertificateLayoutKey, CertificateLayoutPoint> & {
+  fontFamily: CertificateFontFamily
+}
+
+type CertificateCanvasSize = {
+  height: number
+  width: number
+}
+
+const defaultCertificateCanvasSize: CertificateCanvasSize = { height: 595, width: 842 }
+
+const certificateFontOptions: Array<{ label: string; value: CertificateFontFamily; css: string }> = [
+  { label: '思源黑体', value: 'notoSansCjk', css: '"Noto Sans CJK SC", "Noto Sans SC", sans-serif' },
+  { label: '黑体', value: 'simHei', css: 'SimHei, "Noto Sans CJK SC", sans-serif' },
+  { label: '微软雅黑', value: 'microsoftYaHei', css: '"Microsoft YaHei", "Noto Sans CJK SC", sans-serif' },
+  { label: '系统无衬线', value: 'systemSans', css: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+]
+
+const certificateLayoutFields: Array<{ key: CertificateLayoutKey; label: string; sample: string; type: 'seal' | 'text' }> = [
+  { key: 'certificateNo', label: '证书编号', sample: 'CQUPT-SRC-CERT-2026-A1B2C3', type: 'text' },
+  { key: 'recipientName', label: '获得者姓名', sample: '张三', type: 'text' },
+  { key: 'reportNo', label: '漏洞编号', sample: 'CQUPT-SRC-20260525-A1B2C3', type: 'text' },
+  { key: 'severity', label: '漏洞等级', sample: '高危', type: 'text' },
+  { key: 'issuedAt', label: '颁发日期', sample: '2026 年 05 月 25 日', type: 'text' },
+  { key: 'certificateType', label: '证书类型', sample: '漏洞贡献证书', type: 'text' },
+  { key: 'seal', label: '电子印章', sample: '印章', type: 'seal' },
+]
+
+const defaultCertificateLayout: CertificateLayoutConfig = {
+  certificateNo: { fontSize: 28, x: 90, y: 74 },
+  certificateType: { align: 'center', fontSize: 28, x: 421, y: 150 },
+  fontFamily: 'notoSansCjk',
+  issuedAt: { fontSize: 28, x: 420, y: 520 },
+  recipientName: { align: 'center', fontSize: 28, x: 421, y: 220 },
+  reportNo: { fontSize: 28, x: 118, y: 424 },
+  seal: { width: 120, x: 450, y: 430 },
+  severity: { fontSize: 28, x: 118, y: 456 },
+}
 
 const aiQuotaPeriodLabels: Record<AiQuotaPeriod, string> = {
   DAY: '每日重置',
@@ -119,6 +181,13 @@ export function AdminSystemSettings() {
   const [certificateTemplateMessage, setCertificateTemplateMessage] = useState('')
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
   const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
+  const [coordinateEditorOpen, setCoordinateEditorOpen] = useState(false)
+  const [coordinatePreviewUrl, setCoordinatePreviewUrl] = useState('')
+  const [coordinateSealUrl, setCoordinateSealUrl] = useState('')
+  const [coordinateCanvasSize, setCoordinateCanvasSize] = useState<CertificateCanvasSize>(defaultCertificateCanvasSize)
+  const [coordinateSealSize, setCoordinateSealSize] = useState<CertificateCanvasSize | null>(null)
+  const [coordinateLayout, setCoordinateLayout] = useState<CertificateLayoutConfig>(defaultCertificateLayout)
+  const [isSavingCoordinateLayout, setIsSavingCoordinateLayout] = useState(false)
   const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
   const [aiAvatarMessage, setAiAvatarMessage] = useState('')
   const [isUploadingAiAvatar, setIsUploadingAiAvatar] = useState(false)
@@ -195,6 +264,37 @@ export function AdminSystemSettings() {
 
     return () => { active = false }
   }, [activeSection])
+
+  useEffect(() => {
+    if (activeSection !== '证书模板') return
+
+    let active = true
+    getActiveCertificateTemplate()
+      .then((template) => {
+        if (active) setCertificateTemplate(template)
+      })
+      .catch((error) => {
+        if (active) setCertificateTemplateMessage(error instanceof Error ? error.message : '证书模板信息加载失败')
+      })
+
+    return () => { active = false }
+  }, [activeSection])
+
+  useEffect(() => {
+    if (coordinateEditorOpen) return
+    if (coordinatePreviewUrl) URL.revokeObjectURL(coordinatePreviewUrl)
+    if (coordinateSealUrl) URL.revokeObjectURL(coordinateSealUrl)
+    setCoordinatePreviewUrl('')
+    setCoordinateSealUrl('')
+    setCoordinateSealSize(null)
+  }, [coordinateEditorOpen, coordinatePreviewUrl, coordinateSealUrl])
+
+  useEffect(() => {
+    return () => {
+      if (coordinatePreviewUrl) URL.revokeObjectURL(coordinatePreviewUrl)
+      if (coordinateSealUrl) URL.revokeObjectURL(coordinateSealUrl)
+    }
+  }, [coordinatePreviewUrl, coordinateSealUrl])
 
   const handleApproveRegistration = async (id: string) => {
     await approveRegistration(id)
@@ -283,6 +383,49 @@ export function AdminSystemSettings() {
   const handleRejectRegistration = async (id: string) => {
     await rejectRegistration(id)
     setPendingRegistrations((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  const handleOpenCoordinateEditor = async () => {
+    if (!certificateTemplate) return
+    setCertificateTemplateMessage('')
+    setCoordinateLayout(normalizeCertificateLayout(certificateTemplate.layoutJson))
+    setCoordinateEditorOpen(true)
+    try {
+      const preview = await getCertificateTemplateBackgroundPreview()
+      setCoordinatePreviewUrl(preview.url)
+      setCoordinateCanvasSize({
+        height: preview.height ?? defaultCertificateCanvasSize.height,
+        width: preview.width ?? defaultCertificateCanvasSize.width,
+      })
+      if (certificateTemplate.sealConfigured) {
+        const seal = await getCertificateSealPreview()
+        setCoordinateSealUrl(seal.url)
+        setCoordinateSealSize(
+          seal.height && seal.width
+            ? { height: seal.height, width: seal.width }
+            : null,
+        )
+      } else {
+        setCoordinateSealUrl('')
+        setCoordinateSealSize(null)
+      }
+    } catch (error) {
+      setCertificateTemplateMessage(error instanceof Error ? error.message : '证书模板预览加载失败')
+    }
+  }
+
+  const saveCoordinateLayout = async () => {
+    setIsSavingCoordinateLayout(true)
+    try {
+      const next = await updateCertificateTemplateLayout(coordinateLayout)
+      setCertificateTemplate(next)
+      setCertificateTemplateMessage('证书坐标配置已保存，后续签发将使用新位置。')
+      setCoordinateEditorOpen(false)
+    } catch (error) {
+      setCertificateTemplateMessage(error instanceof Error ? error.message : '证书坐标配置保存失败')
+    } finally {
+      setIsSavingCoordinateLayout(false)
+    }
   }
 
   const handleTemplateUpload = async (file: File | undefined) => {
@@ -822,6 +965,12 @@ export function AdminSystemSettings() {
                     onClick={() => sealInputRef.current?.click()}
                   />
                   <ActionButton
+                    disabled={!certificateTemplate}
+                    icon={<SlidersHorizontal className="h-4 w-4" />}
+                    label="配置坐标"
+                    onClick={() => void handleOpenCoordinateEditor()}
+                  />
+                  <ActionButton
                     disabled={isPreviewingPdf || !certificateTemplate}
                     icon={<FileBadge2 className="h-4 w-4" />}
                     label={isPreviewingPdf ? '生成中...' : '测试生成 PDF'}
@@ -961,6 +1110,25 @@ export function AdminSystemSettings() {
           confirmState?.onConfirm()
           setConfirmState(null)
         }}
+      />
+      <CertificateCoordinateDialog
+        canvasSize={coordinateCanvasSize}
+        layout={coordinateLayout}
+        open={coordinateEditorOpen}
+        previewUrl={coordinatePreviewUrl}
+        sealSize={coordinateSealSize}
+        sealUrl={coordinateSealUrl}
+        saving={isSavingCoordinateLayout}
+        templateMimeType={certificateTemplate?.templateMimeType}
+        onCancel={() => setCoordinateEditorOpen(false)}
+        onChange={setCoordinateLayout}
+        onSave={() =>
+          confirmChange({
+            title: '确认保存证书坐标？',
+            description: '保存后，后续新签发的漏洞证书会使用当前坐标配置。历史已生成证书不会自动重绘。',
+            onConfirm: () => void saveCoordinateLayout(),
+          })
+        }
       />
     </>
   )
@@ -1103,6 +1271,391 @@ function formatDateTime(value: string | null) {
   }).format(date)
 }
 
+function normalizeCertificateLayout(value: unknown): CertificateLayoutConfig {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  const layout = certificateLayoutFields.reduce((nextLayout, field) => {
+    const current = source[field.key]
+    const point = current && typeof current === 'object' && !Array.isArray(current) ? current as Record<string, unknown> : {}
+    const fallback = defaultCertificateLayout[field.key]
+    nextLayout[field.key] = {
+      align: point.align === 'center' || point.align === 'right' || point.align === 'left' ? point.align : fallback.align,
+      fontSize: normalizeOptionalCoordinateNumber(point.fontSize, fallback.fontSize),
+      height: normalizeOptionalCoordinateNumber(point.height, fallback.height),
+      width: normalizeOptionalCoordinateNumber(point.width, fallback.width),
+      x: normalizeCoordinateNumber(point.x, fallback.x),
+      y: normalizeCoordinateNumber(point.y, fallback.y),
+    }
+    return nextLayout
+  }, {} as CertificateLayoutConfig)
+
+  layout.fontFamily = normalizeCertificateFontFamily(source.fontFamily)
+  return layout
+}
+
+function normalizeCoordinateNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function normalizeOptionalCoordinateNumber(value: unknown, fallback: number | undefined) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  return fallback
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function normalizeCertificateFontFamily(value: unknown): CertificateFontFamily {
+  return value === 'notoSansCjk' || value === 'simHei' || value === 'microsoftYaHei' || value === 'systemSans'
+    ? value
+    : defaultCertificateLayout.fontFamily
+}
+
+function CertificateCoordinateDialog({
+  canvasSize,
+  layout,
+  onCancel,
+  onChange,
+  onSave,
+  open,
+  previewUrl,
+  sealSize,
+  sealUrl,
+  saving,
+  templateMimeType,
+}: {
+  canvasSize: CertificateCanvasSize
+  layout: CertificateLayoutConfig
+  onCancel: () => void
+  onChange: (layout: CertificateLayoutConfig) => void
+  onSave: () => void
+  open: boolean
+  previewUrl: string
+  sealSize: CertificateCanvasSize | null
+  sealUrl: string
+  saving: boolean
+  templateMimeType?: string
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const planeRef = useRef<HTMLDivElement | null>(null)
+  const draggableRefs = useRef<Partial<Record<CertificateLayoutKey, HTMLButtonElement | null>>>({})
+  const dragOffsetRef = useRef<{ key: CertificateLayoutKey; x: number; y: number } | null>(null)
+  const [viewportWidth, setViewportWidth] = useState(canvasSize.width)
+  const [snapGuideX, setSnapGuideX] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!open || !viewportRef.current) return
+
+    const updateWidth = () => {
+      setViewportWidth(viewportRef.current?.clientWidth || canvasSize.width)
+    }
+    updateWidth()
+
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(viewportRef.current)
+    return () => observer.disconnect()
+  }, [canvasSize.width, open])
+
+  const scale = Math.min(1, viewportWidth / canvasSize.width)
+  const scaledHeight = canvasSize.height * scale
+  const selectedFont = certificateFontOptions.find((item) => item.value === layout.fontFamily) ?? certificateFontOptions[0]
+
+  if (!open) return null
+
+  function getPointerCoordinate(clientX: number, clientY: number) {
+    const rect = planeRef.current?.getBoundingClientRect()
+    if (!rect) return
+    return {
+      x: ((clientX - rect.left) / rect.width) * canvasSize.width,
+      y: ((clientY - rect.top) / rect.height) * canvasSize.height,
+    }
+  }
+
+  function startDrag(key: CertificateLayoutKey, clientX: number, clientY: number) {
+    const pointer = getPointerCoordinate(clientX, clientY)
+    if (!pointer) return
+    dragOffsetRef.current = {
+      key,
+      x: pointer.x - layout[key].x,
+      y: pointer.y - layout[key].y,
+    }
+  }
+
+  function moveField(key: CertificateLayoutKey, clientX: number, clientY: number) {
+    const pointer = getPointerCoordinate(clientX, clientY)
+    if (!pointer) return
+    const offset = dragOffsetRef.current?.key === key ? dragOffsetRef.current : { x: 0, y: 0 }
+    const rawX = pointer.x - offset.x
+    const snapped = getSnappedX(key, rawX)
+    const y = Math.round(pointer.y - offset.y)
+    onChange({
+      ...layout,
+      [key]: {
+        ...layout[key],
+        x: clampNumber(Math.round(snapped.x), 0, canvasSize.width),
+        y: clampNumber(y, 0, canvasSize.height),
+      },
+    })
+    setSnapGuideX(snapped.guideX)
+  }
+
+  function getElementMetrics(key: CertificateLayoutKey) {
+    const element = draggableRefs.current[key]
+    const plane = planeRef.current
+    if (!element || !plane) return null
+
+    const elementRect = element.getBoundingClientRect()
+    const planeRect = plane.getBoundingClientRect()
+    const left = ((elementRect.left - planeRect.left) / planeRect.width) * canvasSize.width
+    const right = ((elementRect.right - planeRect.left) / planeRect.width) * canvasSize.width
+    return {
+      center: (left + right) / 2,
+      left,
+      right,
+    }
+  }
+
+  function getSnappedX(key: CertificateLayoutKey, rawX: number) {
+    const current = getElementMetrics(key)
+    const currentPoint = layout[key]
+    if (!current) return { guideX: null, x: rawX }
+
+    const movingAnchors = [
+      { offset: current.left - currentPoint.x },
+      { offset: current.center - currentPoint.x },
+      { offset: current.right - currentPoint.x },
+    ]
+    const snapDistance = 8 / Math.max(scale, 0.2)
+    let best: { distance: number; guideX: number; x: number } | null = null
+
+    certificateLayoutFields.forEach((field) => {
+      if (field.key === key) return
+      const target = getElementMetrics(field.key)
+      if (!target) return
+
+      ;[target.left, target.center, target.right].forEach((targetX) => {
+        movingAnchors.forEach((anchor) => {
+          const candidateX = rawX + anchor.offset
+          const distance = Math.abs(candidateX - targetX)
+          if (distance > snapDistance) return
+          if (best && distance >= best.distance) return
+          best = {
+            distance,
+            guideX: targetX,
+            x: targetX - anchor.offset,
+          }
+        })
+      })
+    })
+
+    return best ? { guideX: best.guideX, x: best.x } : { guideX: null, x: rawX }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-5 py-8 backdrop-blur-sm">
+      <div className="flex max-h-full w-full max-w-6xl flex-col rounded-lg border border-black/10 bg-[#f7f9f7]/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-5 dark:border-white/10">
+          <div>
+            <h2 className="text-xl font-semibold">配置证书坐标</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              左侧按模板真实尺寸显示，拖动时会自动用当前项的左侧、中线、右侧吸附其他项的左侧、中线、右侧。
+            </p>
+          </div>
+          <button
+            aria-label="关闭坐标配置"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
+            onClick={onCancel}
+            type="button"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid min-h-0 gap-5 overflow-auto p-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0">
+            <div
+              className="relative mx-auto w-full max-w-[960px] overflow-auto rounded-lg border border-black/10 bg-slate-200 p-3 shadow-inner dark:border-white/10 dark:bg-black/20"
+              ref={viewportRef}
+              style={{ height: scaledHeight + 24 }}
+            >
+              <div
+                className="relative origin-top-left overflow-hidden bg-white"
+                ref={planeRef}
+                style={{
+                  height: canvasSize.height,
+                  transform: `scale(${scale})`,
+                  width: canvasSize.width,
+                }}
+              >
+                {previewUrl ? (
+                  templateMimeType === 'application/pdf' ? (
+                    <object
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                      data={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=Fit`}
+                      type="application/pdf"
+                    />
+                  ) : (
+                    <img alt="证书模板背景" className="pointer-events-none absolute inset-0 h-full w-full" src={previewUrl} />
+                  )
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">正在加载证书模板...</div>
+                )}
+
+                {certificateLayoutFields.map((field) => {
+                  const point = layout[field.key]
+                  const isSeal = field.type === 'seal'
+                  const sealWidth = point.width ?? defaultCertificateLayout.seal.width ?? 120
+                  const sealHeight = point.height ?? (coordinateSealRatio(sealSize) ? sealWidth * coordinateSealRatio(sealSize) : sealWidth)
+                  return (
+                    <button
+                      aria-label={`拖动${field.label}`}
+                      className={`absolute cursor-grab select-none p-0 ring-1 ring-brand-600/40 active:cursor-grabbing ${
+                        isSeal ? 'bg-brand-600/10' : 'bg-transparent text-[#111827]'
+                      }`}
+                      key={field.key}
+                      onPointerCancel={() => {
+                        dragOffsetRef.current = null
+                        setSnapGuideX(null)
+                      }}
+                      onPointerDown={(event) => {
+                        event.currentTarget.setPointerCapture(event.pointerId)
+                        startDrag(field.key, event.clientX, event.clientY)
+                      }}
+                      onPointerMove={(event) => {
+                        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+                        moveField(field.key, event.clientX, event.clientY)
+                      }}
+                      onPointerUp={(event) => {
+                        dragOffsetRef.current = null
+                        setSnapGuideX(null)
+                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                          event.currentTarget.releasePointerCapture(event.pointerId)
+                        }
+                      }}
+                      ref={(node) => {
+                        draggableRefs.current[field.key] = node
+                      }}
+                      style={{
+                        fontSize: point.fontSize ?? 12,
+                        fontFamily: selectedFont.css,
+                        height: isSeal ? sealHeight : undefined,
+                        left: point.x,
+                        lineHeight: 1,
+                        top: point.y,
+                        transform: !isSeal && point.align === 'center' ? 'translateX(-50%)' : !isSeal && point.align === 'right' ? 'translateX(-100%)' : undefined,
+                        width: isSeal ? sealWidth : undefined,
+                      }}
+                      title={field.label}
+                      type="button"
+                    >
+                      {isSeal ? (
+                        sealUrl ? (
+                          <img alt="电子印章" className="pointer-events-none h-full w-full" src={sealUrl} />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-xs text-brand-700">印章</span>
+                        )
+                      ) : (
+                        <span className="whitespace-nowrap font-medium">{field.sample}</span>
+                      )}
+                    </button>
+                  )
+                })}
+                {snapGuideX !== null && (
+                  <div
+                    className="pointer-events-none absolute bottom-0 top-0 w-px bg-brand-600/80"
+                    style={{ left: snapGuideX }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-lg border border-black/10 bg-white/70 p-3 text-xs dark:border-white/10 dark:bg-white/[0.04]">
+              <label className="block">
+                <span className="font-medium">全局字体</span>
+                <select
+                  className="mt-2 w-full rounded border border-black/10 bg-white px-2 py-2 text-xs outline-none dark:border-white/10 dark:bg-black/20"
+                  onChange={(event) => onChange({ ...layout, fontFamily: event.target.value as CertificateFontFamily })}
+                  value={layout.fontFamily}
+                >
+                  {certificateFontOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="text-sm font-semibold">当前坐标</p>
+            <div className="space-y-2">
+              {certificateLayoutFields.map((field) => {
+                const point = layout[field.key]
+                return (
+                  <div className="rounded-lg border border-black/10 bg-white/70 p-3 text-xs dark:border-white/10 dark:bg-white/[0.04]" key={field.key}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">{field.label}</span>
+                      <span className="font-mono text-slate-500">
+                        {point.x}, {point.y}
+                      </span>
+                    </div>
+                    <div className={`mt-2 grid gap-2 ${field.type === 'seal' ? 'grid-cols-3' : 'grid-cols-3'}`}>
+                      <SmallNumberInput label="X" value={point.x} onChange={(x) => onChange({ ...layout, [field.key]: { ...point, x } })} />
+                      <SmallNumberInput label="Y" value={point.y} onChange={(y) => onChange({ ...layout, [field.key]: { ...point, y } })} />
+                      {field.type === 'seal' ? (
+                        <SmallNumberInput label="大小" value={point.width ?? 120} onChange={(width) => onChange({ ...layout, [field.key]: { ...point, width } })} />
+                      ) : (
+                        <SmallNumberInput label="字号" value={point.fontSize ?? 12} onChange={(fontSize) => onChange({ ...layout, [field.key]: { ...point, fontSize } })} />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-black/10 px-6 py-4 dark:border-white/10">
+          <button
+            className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+            onClick={onCancel}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving}
+            onClick={onSave}
+            type="button"
+          >
+            {saving ? '保存中...' : '保存坐标'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function coordinateSealRatio(sealSize: CertificateCanvasSize | null) {
+  if (!sealSize || !sealSize.width) return null
+  return sealSize.height / sealSize.width
+}
+
+function SmallNumberInput({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-slate-500">{label}</span>
+      <input
+        className="mt-1 w-full rounded border border-black/10 bg-white/70 px-2 py-1 font-mono text-xs outline-none dark:border-white/10 dark:bg-black/20"
+        onChange={(event) => onChange(Number(event.target.value) || 0)}
+        type="number"
+        value={value}
+      />
+    </label>
+  )
+}
+
 function ConfirmDialog({
   onCancel,
   onConfirm,
@@ -1115,7 +1668,7 @@ function ConfirmDialog({
   if (!state) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
       <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">

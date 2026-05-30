@@ -69,7 +69,6 @@ export type PublicCertificateVerifyResult = {
   vulnerability: {
     finalSeverity: SeverityLabel | null
     reportNo: string
-    title: string
   }
 }
 

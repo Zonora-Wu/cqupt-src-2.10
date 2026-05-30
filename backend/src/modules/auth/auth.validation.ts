@@ -50,10 +50,10 @@ export function normalizeEmailCode(value: unknown) {
   return code
 }
 
-function normalizeUnifiedCode(value: unknown) {
-  const code = requireText(value, '统一认证码', 4, 32)
-  if (!/^[A-Za-z0-9_-]+$/.test(code)) {
-    throw new BadRequestException('统一认证码只能包含字母、数字、下划线或短横线')
+export function normalizeUnifiedCode(value: unknown) {
+  const code = requireText(value, '统一认证码', 7, 7)
+  if (!/^\d{7}$/.test(code)) {
+    throw new BadRequestException('统一认证码必须是 7 位数字')
   }
 
   return code

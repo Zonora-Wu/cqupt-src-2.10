@@ -1,9 +1,5 @@
 import { Building2, GraduationCap, Network, ShieldCheck, Target, Users } from 'lucide-react'
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
-
-const KaliLaptopShowcase = lazy(() =>
-  import('../../components/guest/KaliLaptopShowcase').then((module) => ({ default: module.KaliLaptopShowcase })),
-)
+import { KaliLaptopShowcase } from '../../components/guest/KaliLaptopShowcase'
 
 const values = [
   {
@@ -44,11 +40,7 @@ export function AboutPlatform() {
       </section>
 
       <section className="mt-12">
-        <DeferredContent fallback={<LaptopShowcaseSkeleton />} rootMargin="520px 0px">
-          <Suspense fallback={<LaptopShowcaseSkeleton />}>
-            <KaliLaptopShowcase />
-          </Suspense>
-        </DeferredContent>
+        <KaliLaptopShowcase />
       </section>
 
       <section className="mt-16 grid gap-5 md:grid-cols-3">
@@ -87,46 +79,4 @@ export function AboutPlatform() {
       </section>
     </main>
   )
-}
-
-function LaptopShowcaseSkeleton() {
-  return (
-    <div className="relative z-[80] mx-auto h-[620px] max-w-7xl overflow-visible md:h-[760px]" />
-  )
-}
-
-function DeferredContent({
-  children,
-  fallback,
-  rootMargin = '480px 0px',
-}: {
-  children: ReactNode
-  fallback: ReactNode
-  rootMargin?: string
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [shouldRender, setShouldRender] = useState(false)
-
-  useEffect(() => {
-    if (shouldRender) return
-    const element = containerRef.current
-    if (!element || !('IntersectionObserver' in window)) {
-      setShouldRender(true)
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return
-        setShouldRender(true)
-        observer.disconnect()
-      },
-      { rootMargin },
-    )
-
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [rootMargin, shouldRender])
-
-  return <div ref={containerRef}>{shouldRender ? children : fallback}</div>
 }

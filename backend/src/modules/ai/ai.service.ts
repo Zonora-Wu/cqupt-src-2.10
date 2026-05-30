@@ -5,6 +5,7 @@ import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { parseStructuredResponse, stripJsonBlock } from './ai.response.service'
 import { buildSystemPrompt, buildUserPrompt } from './ai.prompt.service'
+import { AiDataRequestService } from './ai.data-request.service'
 import { AiSkillRouterService } from './ai.skill-router.service'
 import { getAvailableTools } from './ai.tools.registry'
 import {
@@ -16,6 +17,7 @@ import {
   NormalizedAiChatInput,
   OpenAiChatMessage,
   OpenAiChatPayload,
+  UserContextDomain,
   UserContextSnapshot,
 } from './ai.types'
 import { AiToolsService } from './ai.tools.service'
@@ -72,6 +74,7 @@ export class AiService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AiToolsService) private readonly toolsService: AiToolsService,
     @Inject(AiSkillRouterService) private readonly skillRouter: AiSkillRouterService,
+    @Inject(AiDataRequestService) private readonly dataRequests: AiDataRequestService,
     @Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService,
   ) {}
 
@@ -134,9 +137,16 @@ export class AiService {
     const safeMessage = redactSensitiveText(input.message)
     const skillRoute = this.skillRouter.route({ ...input, message: safeMessage }, user)
 
-    // 1. 构建用户上下文
-    const context = await this.toolsService.buildUserContext(user)
     const hasAttachmentContext = hasUserAttachmentContext(input.context)
+    const contextDomains = selectContextDomains({
+      forceFullContext: shouldUseDirectResourceResponse(),
+      hasAttachmentContext,
+      input: { ...input, message: safeMessage },
+      role: user.role,
+    })
+
+    // 1. 构建按需用户上下文。附件场景默认不注入平台业务数据，避免报告/PDF 问题被商城或漏洞列表污染。
+    const context = await this.toolsService.buildUserContext(user, { domains: contextDomains })
 
     // 2. 平台数据只作为模型上下文注入，不再用关键词规则直接生成回复。
     const directResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = shouldUseDirectResourceResponse()
@@ -164,6 +174,7 @@ export class AiService {
             actorId: user.id,
             ipAddress: meta.ipAddress,
             metadata: {
+              contextDomains: context.injectedDomains,
               directResponse: true,
               mode: input.mode,
               promptLength: input.message.length,
@@ -228,6 +239,7 @@ export class AiService {
             actorId: user.id,
             ipAddress: meta.ipAddress,
             metadata: {
+              contextDomains: context.injectedDomains,
               knowledgeDirect: true,
               knowledgeHit: { id: topKnowledgeHit.id, similarity: topKnowledgeHit.similarity, title: topKnowledgeHit.title },
               mode: input.mode,
@@ -258,8 +270,12 @@ export class AiService {
       }
     }
 
-    // 4. 构建提示词。Hermes Agent 当前不执行后端业务 tool，避免发送 tools 造成 unknown tool 自纠错超时。
-    const systemPrompt = buildSystemPrompt(input.mode, context, user.role, this.skillRouter.buildPrompt(skillRoute))
+    // 4. 构建提示词。Hermes Agent 当前不执行后端业务 tool；实时平台数据通过 dataRequests JSON 由后端代执行。
+    const routeAndDataRequestPrompt = [
+      this.skillRouter.buildPrompt(skillRoute),
+      this.dataRequests.buildPrompt(user.role),
+    ].join('\n')
+    const systemPrompt = buildSystemPrompt(input.mode, context, user.role, routeAndDataRequestPrompt)
     const tools: ReturnType<typeof getAvailableTools> = []
     const promptContext = {
       platformRuntimeData: formatPlatformRuntimeDataForPrompt(context),
@@ -277,6 +293,8 @@ export class AiService {
     let fallbackResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = null
     let agentDegradedReason: string | null = null
     const toolCallsMade: AiToolCall[] = []
+    let dataRequestsMade: ReturnType<AiDataRequestService['parse']> = []
+    let dataRequestResults: Awaited<ReturnType<AiDataRequestService['execute']>> = []
     let totalTokens = 0
 
     // 4. Tool calling loop — 最多 MAX_TOOL_ROUNDS 轮
@@ -326,13 +344,25 @@ export class AiService {
           continue // 下一轮
         }
 
-        // 4b. Agent 返回了纯文本
+        // 4b. Agent 通过 dataRequests JSON 请求后端代查实时平台数据（最多一轮）
+        if (choice?.message?.content && round === 0) {
+          const requestedData = this.dataRequests.parse(choice.message.content)
+          if (requestedData.length > 0) {
+            dataRequestsMade = requestedData
+            dataRequestResults = await this.dataRequests.execute(requestedData, user)
+            messages.push({ content: this.dataRequests.strip(choice.message.content), role: 'assistant' })
+            messages.push({ content: this.dataRequests.buildResultPrompt(dataRequestResults), role: 'user' })
+            continue
+          }
+        }
+
+        // 4c. Agent 返回了纯文本
         if (choice?.message?.content) {
-          finalContent = choice.message.content
+          finalContent = this.dataRequests.strip(choice.message.content)
           break
         }
 
-        // 4c. 空响应
+        // 4d. 空响应
         break
       }
     } catch (error) {
@@ -346,13 +376,16 @@ export class AiService {
       const lastAssistant = [...messages].reverse().find(
         (m) => m.role === 'assistant' && typeof m.content === 'string' && m.content.length > 0,
       )
-      finalContent = (lastAssistant?.content as string) || ''
+      finalContent = this.dataRequests.strip((lastAssistant?.content as string) || '')
     }
 
     // 6. 解析结构化响应
-    const structured = fallbackResponse
+    const parsedStructured = fallbackResponse
       ? { actions: fallbackResponse.actions ?? [], cards: fallbackResponse.cards ?? [] }
       : parseStructuredResponse(finalContent)
+    const structured = fallbackResponse
+      ? parsedStructured
+      : this.dataRequests.filterStructuredOutput(parsedStructured.cards, parsedStructured.actions, context, dataRequestResults)
     const displayContent = fallbackResponse ? fallbackResponse.content : stripJsonBlock(finalContent) || finalContent
 
     // 7. 写审计日志
@@ -378,6 +411,7 @@ export class AiService {
           actorId: user.id,
           ipAddress: meta.ipAddress,
           metadata: {
+            contextDomains: context.injectedDomains,
             mode: input.mode,
             promptLength: input.message.length,
             quotaRemainingBefore: quotaBefore.remaining,
@@ -391,6 +425,8 @@ export class AiService {
             },
             status: 200,
             tokensUsed: totalTokens || 0,
+            dataRequests: dataRequestsMade.map((request) => ({ id: request.id, tool: request.tool })),
+            dataRequestResults: dataRequestResults.map((result) => ({ id: result.id, ok: result.ok, tool: result.tool })),
             toolCalls: toolCallsMade.map((tc) => tc.name),
             upstreamModel: getOpenAiModel(),
           },
@@ -427,7 +463,10 @@ export class AiService {
       mode: input.mode,
       quota: await this.buildQuotaSummary(user.id),
       skillRoute: serializeSkillRoute(skillRoute),
-      toolCalls: toolCallsMade.map((tc) => ({ name: tc.name })),
+      toolCalls: [
+        ...toolCallsMade.map((tc) => ({ name: tc.name })),
+        ...dataRequestsMade.map((request) => ({ name: request.tool })),
+      ],
     }
   }
 
@@ -607,22 +646,60 @@ function formatKnowledgeHitsForPrompt(hits: Array<{ answer: string; category: st
 }
 
 function formatPlatformRuntimeDataForPrompt(context: UserContextSnapshot) {
+  const injected = new Set(context.injectedDomains)
   return {
-    mallProducts: context.mallSuggestions.map((product) => ({
-      canRedeem: product.canRedeem,
-      category: product.category,
-      description: product.description,
-      id: product.id,
-      imageUrl: product.imageUrl,
-      name: product.name,
-      perUserLimit: product.perUserLimit,
-      pointsCost: product.pointsCost,
-      remainingAfterRedeem: product.remainingAfterRedeem,
-      stock: product.stock,
-    })),
-    points: context.points,
-    visibleMallProductCount: context.mallSuggestions.length,
+    injectedDomains: context.injectedDomains,
+    ...(injected.has('mall')
+      ? {
+          mallProducts: context.mallSuggestions.map((product) => ({
+            canRedeem: product.canRedeem,
+            category: product.category,
+            description: product.description,
+            id: product.id,
+            imageUrl: product.imageUrl,
+            name: product.name,
+            perUserLimit: product.perUserLimit,
+            pointsCost: product.pointsCost,
+            remainingAfterRedeem: product.remainingAfterRedeem,
+            stock: product.stock,
+          })),
+          visibleMallProductCount: context.mallSuggestions.length,
+        }
+      : {}),
+    ...(injected.has('points') || injected.has('mall') ? { points: context.points } : {}),
   }
+}
+
+function selectContextDomains(options: {
+  forceFullContext: boolean
+  hasAttachmentContext: boolean
+  input: NormalizedAiChatInput
+  role: RoleCode
+}): UserContextDomain[] {
+  if (options.forceFullContext) return ['points', 'mall', 'vulnerabilities', 'learning']
+  if (options.hasAttachmentContext) return []
+
+  const message = options.input.message
+  const normalized = normalizeIntentText(message)
+  const domains = new Set<UserContextDomain>()
+
+  if (options.input.mode === 'student') {
+    if (hasPersonalPointIntent(message)) domains.add('points')
+    if (hasMallBrowseIntent(normalized) || hasPriceFilterIntent(normalized) || extractProductKeywords(message).length > 0) {
+      domains.add('points')
+      domains.add('mall')
+    }
+    if (hasUserVulnerabilityListIntent(message)) domains.add('vulnerabilities')
+    if (hasLearningResourceIntent(message)) domains.add('learning')
+    if (hasUserSummaryIntent(message)) {
+      domains.add('points')
+      domains.add('vulnerabilities')
+    }
+  }
+
+  // 当前 UserContextSnapshot 只承载学生域实时数据；审核/管理域后续接 read-only tools 或独立上下文。
+  void options.role
+  return Array.from(domains)
 }
 
 function getVisibleSkillSpaces(role: RoleCode) {
@@ -986,6 +1063,16 @@ function hasPlatformBasicsIntent(message: string): boolean {
 function hasGreetingIntent(message: string): boolean {
   const normalized = message.trim().toLowerCase().replace(/[。！？!?,，\s]/g, '')
   return /^(你好|您好|hello|hi|嗨|在吗|在不在)$/.test(normalized)
+}
+
+function hasLearningResourceIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return /(?:平台|src|学习中心|资源库|站内|校内).{0,12}(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线)|(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线).{0,12}(?:平台|src|学习中心|资源库|站内|校内)|(?:推荐|找|有没有|查看|看看).{0,10}(?:靶场|学习资源|教程|资料|课程)/.test(normalized)
+}
+
+function hasUserSummaryIntent(message: string): boolean {
+  const normalized = message.toLowerCase().replace(/\s+/g, '')
+  return /(?:我的|个人|当前账号|账户|账号).{0,8}(?:概览|总览|摘要|情况|状态)|(?:我在平台|我的平台).{0,8}(?:情况|状态|数据)/.test(normalized)
 }
 
 function requiresModelJudgement(message: string): boolean {

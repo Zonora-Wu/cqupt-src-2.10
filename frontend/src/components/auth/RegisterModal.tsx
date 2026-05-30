@@ -16,7 +16,15 @@ import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
 import { SelectInput } from '../ui/SelectInput'
 import { SlideVerify } from '../ui/SlideVerify'
-import { isValidEmail, registerAccount, sendRegisterEmailCode, type AuthUser, type RegisterResult } from '../../services/auth'
+import {
+  isValidEmail,
+  isValidUnifiedCode,
+  normalizeUnifiedCode,
+  registerAccount,
+  sendRegisterEmailCode,
+  type AuthUser,
+  type RegisterResult,
+} from '../../services/auth'
 
 type RegisterModalProps = {
   onClose: () => void
@@ -76,12 +84,13 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const shouldCollectStudentInfo = !teacherIdentityTypes.has(form.identityText)
 
   const updateField = (key: keyof typeof form, value: string) => {
+    const nextValue = key === 'unifiedCode' ? normalizeUnifiedCode(value) : value
     setForm((current) => ({
       ...current,
-      [key]: value,
-      ...(key === 'identityText' && teacherIdentityTypes.has(value) ? { grade: '', studentNo: '' } : {}),
+      [key]: nextValue,
+      ...(key === 'identityText' && teacherIdentityTypes.has(nextValue) ? { grade: '', studentNo: '' } : {}),
     }))
-    if (key === 'email' && value.trim().toLowerCase() !== emailCodeSentTo) {
+    if (key === 'email' && nextValue.trim().toLowerCase() !== emailCodeSentTo) {
       setEmailCodeSentTo('')
     }
   }
@@ -156,6 +165,11 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
     if (!form.identityText) {
       setError('请选择身份类型')
+      return
+    }
+
+    if (!isValidUnifiedCode(form.unifiedCode)) {
+      setError('请输入 7 位数字统一认证码')
       return
     }
 
@@ -267,7 +281,17 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 value={form.identityText}
               />
 
-              <Input icon={<Badge />} onChange={(value) => updateField('unifiedCode', value)} placeholder="统一认证码" required type="text" value={form.unifiedCode} />
+              <Input
+                icon={<Badge />}
+                inputMode="numeric"
+                maxLength={7}
+                onChange={(value) => updateField('unifiedCode', value)}
+                pattern="\d{7}"
+                placeholder="统一认证码"
+                required
+                type="text"
+                value={form.unifiedCode}
+              />
 
               {shouldCollectStudentInfo && (
                 <div className="grid gap-3">
@@ -376,7 +400,10 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 function Input({
   className = '',
   icon,
+  inputMode,
+  maxLength,
   onChange,
+  pattern,
   placeholder,
   required = false,
   type,
@@ -384,7 +411,10 @@ function Input({
 }: {
   className?: string
   icon: React.ReactNode
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  maxLength?: number
   onChange?: (value: string) => void
+  pattern?: string
   placeholder: string
   required?: boolean
   type: string
@@ -397,7 +427,10 @@ function Input({
       </span>
       <input
         className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+        inputMode={inputMode}
+        maxLength={maxLength}
         onChange={(event) => onChange?.(event.target.value)}
+        pattern={pattern}
         placeholder={placeholder}
         required={required}
         type={type}

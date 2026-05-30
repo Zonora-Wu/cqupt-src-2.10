@@ -4,7 +4,7 @@ import { JwtAuthGuard } from './jwt-auth.guard'
 import { AuthService } from './auth.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from './auth.types'
 import { normalizeCaptchaToken } from '../captcha/captcha.validation'
-import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody } from './auth.validation'
+import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody, normalizeUnifiedCode } from './auth.validation'
 
 type RequestLike = {
   ip?: string
@@ -53,7 +53,7 @@ export class AuthController {
 
   @Post('login/password')
   loginWithPassword(@Body() body: PasswordLoginBody, @Req() req: RequestLike) {
-    return this.auth.loginWithPassword(getString(body.unifiedCode), getString(body.password), getRequestMeta(req))
+    return this.auth.loginWithPassword(normalizeUnifiedCode(body.unifiedCode), getString(body.password), getRequestMeta(req))
   }
 
   @Post('login/email-code')

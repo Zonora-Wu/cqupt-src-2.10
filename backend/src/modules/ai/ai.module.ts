@@ -9,6 +9,7 @@ import { PointsMallModule } from '../points-mall/points-mall.module'
 import { RbacModule } from '../rbac/rbac.module'
 import { VulnerabilitiesModule } from '../vulnerabilities/vulnerabilities.module'
 import { AiController } from './ai.controller'
+import { AiDataRequestService } from './ai.data-request.service'
 import { AiReportDraftService } from './ai.report-draft.service'
 import { AiService } from './ai.service'
 import { AiSkillRouterService } from './ai.skill-router.service'
@@ -27,6 +28,6 @@ import { AiToolsService } from './ai.tools.service'
     RbacModule,
     VulnerabilitiesModule,
   ],
-  providers: [AiService, AiToolsService, AiSkillRouterService, AiReportDraftService],
+  providers: [AiService, AiToolsService, AiSkillRouterService, AiDataRequestService, AiReportDraftService],
 })
 export class AiModule {}

@@ -19,6 +19,7 @@ type ApiFormRequestOptions = {
 
 type ApiBlobRequestOptions = {
   auth?: boolean
+  body?: unknown
   method?: 'GET' | 'POST'
   unauthenticatedMessage?: string
 }
@@ -71,9 +72,16 @@ export async function apiFormRequest<T>(path: string, options: ApiFormRequestOpt
 }
 
 export async function apiBlobRequest(path: string, options: ApiBlobRequestOptions = {}) {
+  const { blob } = await apiBlobResponse(path, options)
+  return blob
+}
+
+export async function apiBlobResponse(path: string, options: ApiBlobRequestOptions = {}) {
   const response = await rawApiRequest(path, {
     auth: options.auth,
+    headers: options.body === undefined ? undefined : { 'Content-Type': 'application/json' },
     method: options.method ?? 'GET',
+    rawBody: options.body === undefined ? undefined : JSON.stringify(options.body),
     unauthenticatedMessage: options.unauthenticatedMessage,
   })
 
@@ -82,7 +90,10 @@ export async function apiBlobRequest(path: string, options: ApiBlobRequestOption
     assertOk(response, data, Boolean(options.auth))
   }
 
-  return response.blob()
+  return {
+    blob: await response.blob(),
+    response,
+  }
 }
 
 async function rawApiRequest(

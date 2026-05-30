@@ -109,7 +109,11 @@ export type UserLearningSuggestion = {
   description: string | null
 }
 
+export type UserContextDomain = 'learning' | 'mall' | 'points' | 'vulnerabilities'
+
 export type UserContextSnapshot = {
+  injectedDomains: UserContextDomain[]
+  omittedDomains: UserContextDomain[]
   points: {
     balance: number
     earned: number
@@ -125,6 +129,35 @@ export type UserContextSnapshot = {
   }
   mallSuggestions: UserMallSuggestion[]
   learningSuggestions: UserLearningSuggestion[]
+}
+
+// ── Backend-hosted Agent Tool Gateway（模型输出 dataRequests，后端执行）──
+
+export type AiDataRequestToolName =
+  | 'get_audit_log_summary'
+  | 'get_assigned_reports'
+  | 'get_my_vulnerabilities'
+  | 'get_platform_stats'
+  | 'get_point_balance'
+  | 'get_redeem_eligibility'
+  | 'get_review_queue_stats'
+  | 'get_user_summary'
+  | 'search_learning_resources'
+  | 'search_mall_products'
+
+export type AiDataRequest = {
+  id: string
+  tool: AiDataRequestToolName
+  arguments: Record<string, unknown>
+  reason?: string
+}
+
+export type AiDataRequestResult = {
+  id: string
+  tool: AiDataRequestToolName
+  ok: boolean
+  result?: unknown
+  error?: string
 }
 
 // ── 结构化响应 ──

@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { VulnerabilitiesService } from '../vulnerabilities/vulnerabilities.service'
 import { AnnouncementsService } from '../announcements/announcements.service'
 import { AuditLogsService } from '../audit-logs/audit-logs.service'
-import { AiToolCall, AiToolDefinition, UserContextSnapshot } from './ai.types'
+import { AiToolCall, AiToolDefinition, UserContextDomain, UserContextSnapshot } from './ai.types'
 import { getToolDefinition, isToolAllowed } from './ai.tools.registry'
 
 // ══════════════════════════════════════════════════════════════
@@ -64,27 +64,40 @@ export class AiToolsService {
     }
   }
 
-  /** 构建初始用户上下文（注入 system prompt） */
-  async buildUserContext(user: AuthenticatedRequestUser): Promise<UserContextSnapshot> {
-    const [points, vulnReport, vulnSummary] = await Promise.all([
-      this.pointsMall.getPointSummary(user),
-      this.vulnerabilities.listMyReports(user),
-      this.dashboard.getUserDashboard(user),
-    ])
+  /** 构建按需用户上下文（注入 system prompt） */
+  async buildUserContext(
+    user: AuthenticatedRequestUser,
+    options: { domains?: UserContextDomain[] } = {},
+  ): Promise<UserContextSnapshot> {
+    const requestedDomains = normalizeContextDomains(options.domains)
+    const hasPoints = requestedDomains.includes('points')
+    const hasVulnerabilities = requestedDomains.includes('vulnerabilities')
+    const hasLearning = requestedDomains.includes('learning')
+    const hasMall = requestedDomains.includes('mall')
 
-    // 漏洞摘要：最多 10 条，优先 NEEDS_SUPPLEMENT
-    const recentVulns = vulnReport.items.slice(0, 10)
+    const points = hasPoints || hasMall
+      ? await this.pointsMall.getPointSummary(user)
+      : { balance: 0, earned: 0, pendingRedemptions: 0, spent: 0 }
+
+    const [vulnReport, vulnSummary] = hasVulnerabilities
+      ? await Promise.all([
+          this.vulnerabilities.listMyReports(user),
+          this.dashboard.getUserDashboard(user),
+        ])
+      : [null, null]
+
+    const recentVulns = vulnReport?.items.slice(0, 10) ?? []
 
     // 学习建议：优先注入靶场，避免用户明确要靶场时被普通工具资料挤占上下文。
-    const learningResult = await this.learning.listVisibleResources()
-    const learningItems = selectLearningSuggestions(learningResult.items, 12)
+    const learningResult = hasLearning ? await this.learning.listVisibleResources() : { items: [] }
+    const learningItems = selectLearningSuggestions(learningResult.items, 8)
 
-    // 商城建议：展示所有可见商品（含积分不够的），让 Agent 全面了解平台商品。
-    // listVisibleProducts 每轮请求实时查库，管理员新增/修改商品后下一轮 AI 对话即可看到。
-    const mallResult = await this.pointsMall.listVisibleProducts(user)
-    const mallItems = mallResult.items
+    // 商城建议：只在商城/兑换意图时注入，避免每轮把完整商品列表塞进 prompt。
+    const mallResult = hasMall ? await this.pointsMall.listVisibleProducts(user) : { items: [] }
+    const mallItems = mallResult.items.slice(0, 20)
 
     return {
+      injectedDomains: requestedDomains,
       learningSuggestions: learningItems.map((item) => ({
         category: item.category,
         description: item.description ?? null,
@@ -111,9 +124,9 @@ export class AiToolsService {
         spent: points.spent,
       },
       vulnerabilities: {
-        confirmed: vulnSummary.confirmedCount,
-        needsSupplement: vulnReport.stats.needSupplement,
-        pending: vulnReport.stats.pending,
+        confirmed: vulnSummary?.confirmedCount ?? 0,
+        needsSupplement: vulnReport?.stats.needSupplement ?? 0,
+        pending: vulnReport?.stats.pending ?? 0,
         recent: recentVulns.map((v) => ({
           finalSeverity: v.finalSeverity ?? null,
           hasCertificate: false,
@@ -125,8 +138,9 @@ export class AiToolsService {
           submittedAt: v.submittedAt?.toISOString() ?? null,
           title: v.title,
         })),
-        total: vulnReport.stats.total,
+        total: vulnReport?.stats.total ?? 0,
       },
+      omittedDomains: CONTEXT_DOMAINS.filter((domain) => !requestedDomains.includes(domain)),
     }
   }
 
@@ -440,6 +454,14 @@ export class AiToolsService {
 // ══════════════════════════════════════════════════════════════
 // Helpers
 // ══════════════════════════════════════════════════════════════
+
+const CONTEXT_DOMAINS: UserContextDomain[] = ['points', 'mall', 'vulnerabilities', 'learning']
+
+function normalizeContextDomains(domains: UserContextDomain[] | undefined): UserContextDomain[] {
+  if (!domains) return [...CONTEXT_DOMAINS]
+  const allowed = new Set(CONTEXT_DOMAINS)
+  return Array.from(new Set(domains.filter((domain) => allowed.has(domain))))
+}
 
 const STATUS_LABEL_MAP: Record<string, string> = {
   CERTIFIED: '已发证',

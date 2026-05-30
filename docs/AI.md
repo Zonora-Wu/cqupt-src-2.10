@@ -1,7 +1,7 @@
 # 企业级 SRC 平台 AI 接入框架
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-05-28 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路，并已落地最小上下文 + dataRequests 后端托管工具网关。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
@@ -178,8 +178,9 @@ Hermes Agent 只处理开放式推理和文本生成。
 backend/src/modules/ai/
 ├── ai.module.ts
 ├── ai.controller.ts
-├── ai.service.ts                 # 当前主编排入口：Direct Response、Agent 调用、附件上下文、知识沉淀触发
-├── ai.tools.service.ts           # 用户上下文快照：积分、商城、漏洞、学习等只读数据
+├── ai.service.ts                 # 当前主编排入口：最小上下文、dataRequests 二段式 Agent 调用、附件上下文、知识沉淀触发
+├── ai.data-request.service.ts    # Backend-hosted Agent Tool Gateway：解析/校验 dataRequests、执行只读查询、卡片 ID 白名单
+├── ai.tools.service.ts           # 用户上下文快照与只读工具执行器：积分、商城、漏洞、学习等数据
 ├── ai.prompt.service.ts          # system prompt、人格、Context Injection 与 Skill 路由上下文
 ├── ai.response.service.ts        # Agent 回复 JSON / cards / actions 归一化
 ├── ai.skill-router.service.ts    # 按角色显式控制 active / available / blocked skills
@@ -317,6 +318,8 @@ cqupt-src-ai-card-protocol
 ---
 
 ## 6. 用户上下文注入设计
+
+当前落地规则详见 `docs/architecture/AI_CONTEXT_INJECTION.md`。现阶段采用“最小上下文 + Backend-hosted Agent Tool Gateway（dataRequests）”：每轮先只注入本轮问题需要的 `points`、`mall`、`vulnerabilities`、`learning` 摘要；若 Hermes 判断还需要未注入的实时平台数据，只输出结构化 `dataRequests`，由 NestJS 后端基于当前 JWT/RBAC 执行只读查询并回灌 `platformToolResults`，最终回复和卡片只能引用已注入上下文或回灌结果中的真实 ID。附件场景默认不注入平台业务数据，避免 PDF/报告分析被个人业务列表污染。
 
 ### 6.1 UserContextSnapshot
 
@@ -641,21 +644,22 @@ System Prompt 必须包含：
 
 AI 工具能力分三阶段推进。
 
-### 10.0 下一步待完成：按需查询平台数据
+### 10.0 已落地：按需查询平台数据（dataRequests）
 
-当前需要完成的下一步是把“每轮预注入大量平台数据”的模式升级为“AI 先判断需求，再按需获取平台数据”。
+当前已将“每轮预注入大量平台数据”的模式升级为“最小上下文 + Backend-hosted Agent Tool Gateway”。第一阶段不依赖 Hermes 原生 `tools/tool_calls`，而是让 Hermes 输出 `dataRequests` JSON；NestJS 后端解析、校验并基于当前 JWT/RBAC 执行只读查询，然后把 `platformToolResults` 回灌给 Hermes 生成最终回复。详细规则见 `docs/architecture/AI_CONTEXT_INJECTION.md`。
 
-目标流程：
+当前流程：
 
 1. 用户向 `/api/ai/chat` 发送消息。
-2. 后端只注入最小上下文：用户角色、AI 模式、平台能力说明、安全边界、可查询数据类型。
-3. AI 先判断问题是否需要平台数据。
-4. 如果需要平台数据，AI 通过只读工具请求后端查询，例如积分、商城商品、漏洞、学习资源。
-5. 后端使用 JWT 当前用户身份执行查询，忽略 tool 参数中的 userId。
-6. 后端把脱敏后的查询结果返回给 AI。
+2. 后端只注入最小上下文：用户角色、AI 模式、平台能力说明、安全边界、已识别的 `contextDomains` 摘要。
+3. AI 先判断问题是否需要未注入的实时平台数据。
+4. 如果需要，AI 输出 `{"dataRequests":[...]}`，不直接访问后端、不持有 JWT。
+5. `AiDataRequestService` 解析并过滤请求：一次最多 4 个，只允许角色可用的只读工具，丢弃 `userId/role/token` 等不可信参数。
+6. 后端用当前 JWT 用户身份执行查询并脱敏，生成 `platformToolResults`。
 7. AI 基于工具结果生成自然语言回复和前端交互卡片。
+8. 后端对最终 `cards/actions` 做 ID 白名单校验，只保留已注入上下文或 `platformToolResults` 中真实存在的业务 ID，并在 AuditLog 记录 `contextDomains/dataRequests/dataRequestResults`。
 
-推荐最终工具：
+当前可请求工具：
 
 ```text
 get_point_balance              # 当前用户积分余额
@@ -693,35 +697,28 @@ get_user_summary               # 当前用户概览
 - AI 输出的卡片只能引用 tool 结果中的真实 ID。
 - 写操作仍必须走 Action Proposal + 用户确认 + 后端事务 + AuditLog。
 
-实施顺序：
+实施状态：
 
-1. 先验证平台 Hermes OpenAI-compatible `/v1/chat/completions` 是否稳定支持 `tools` / `tool_calls`。
-2. 如果支持，恢复后端 `getAvailableTools(user.role)`，启用现有 tool loop。
-3. 把默认全量 Context Injection 改为最小上下文。
-4. 扩展商城、学习、漏洞工具参数和返回字段。
-5. 加卡片 ID 白名单校验，确保 AI 不能编造业务卡片。
-6. 增加日志和测试用例，覆盖可兑换、不可兑换、价格过滤、平台靶场、个人漏洞状态等问题。
+1. 已新增 `backend/src/modules/ai/ai.data-request.service.ts`：解析 dataRequests、执行只读查询、构造回灌 prompt、过滤最终 cards/actions。
+2. 已在 `ai.service.ts` 接入最多一轮 dataRequests 二段式 Agent 调用；原生 OpenAI `tools` 仍保持关闭。
+3. 已在平台 Hermes skills 目录新增 `cqupt-src-platform-data-request`，让 Agent 理解何时输出 dataRequests。
+4. 后续扩展商城工具参数与自动化测试。
 
-如果 Hermes tool calling 仍不稳定，则先采用折中方案：
+如果后续确认 Hermes tool calling 稳定，可把 dataRequests 协议迁移为 OpenAI function calling，但安全边界不变：后端托管执行权、JWT/RBAC 查库、结果脱敏、卡片 ID 白名单。
 
-- 后端做轻量意图分类，只决定需要查询哪些模块。
-- 后端按需注入对应模块数据，例如只在商城问题注入积分和商品。
-- AI 仍负责组织最终回复和卡片，后端不再直接拼业务回答。
+### 阶段 1：Context Injection + dataRequests Gateway
 
-这属于当前 AI Gateway 的下一步架构任务，完成后可减少 prompt 长度、降低 token 消耗，并避免模型漏读长商品列表。
-
-### 阶段 1：Context Injection + Direct Response
-
-当前优先采用此阶段。
+当前采用此阶段。
 
 特点：
 
-- Agent 不直接调用平台工具。
-- 后端注入上下文。
-- 强业务查询由后端确定性返回。
-- Agent 只处理开放式问题。
+- Agent 不直接调用平台 API，也不持有 JWT。
+- 后端注入最小上下文。
+- Agent 如需更多实时平台数据，输出 dataRequests JSON。
+- 后端执行只读查询并回灌 platformToolResults。
+- 后端校验最终 cards/actions 的真实 ID。
 
-优点：稳定、安全、低延迟、便于审计。
+优点：不依赖 Hermes 原生 tool_calls，仍保留最小上下文、安全隔离和审计链。
 
 ### 阶段 2：Read-only Tools
 

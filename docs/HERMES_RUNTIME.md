@@ -1,7 +1,7 @@
 # CQUPT-SRC 平台 Hermes 运行目录说明
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-05-28 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路，并已落地最小上下文 + dataRequests 后端托管工具网关。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
@@ -37,6 +37,10 @@
 │       └── .env.agent
 └── data/
     └── ...
+└── platform-skills/
+    └── cqupt-src/
+        ├── cqupt-src-platform-data-request/SKILL.md
+        └── ...
 ```
 
 其中：
@@ -179,6 +183,7 @@ CQUPT-SRC 专属 skills 目录：
 /opt/data/skills/cqupt-src/cqupt-src-auditor-review/SKILL.md
 /opt/data/skills/cqupt-src/cqupt-src-learning-recommender/SKILL.md
 /opt/data/skills/cqupt-src/cqupt-src-mall-search/SKILL.md
+/opt/data/skills/cqupt-src/cqupt-src-platform-data-request/SKILL.md
 /opt/data/skills/cqupt-src/cqupt-src-platform-overview/SKILL.md
 /opt/data/skills/cqupt-src/cqupt-src-vulnerability-assistant/SKILL.md
 /opt/data/skills/cqupt-src/mall-product-search/SKILL.md
@@ -187,6 +192,7 @@ CQUPT-SRC 专属 skills 目录：
 说明：
 
 - `cqupt-src-*` 是正式平台专属 skills。
+- `cqupt-src-platform-data-request` 是 dataRequests 协议 skill：Hermes 只输出数据请求，NestJS 后端基于 JWT/RBAC 执行只读查询并回灌结果。
 - `mall-product-search` 是早期旧版商城搜索 skill，当前保留是为了避免历史引用断掉。
 - 后续推荐平台接入使用 `cqupt-src-mall-search`。
 

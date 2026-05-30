@@ -1,14 +1,20 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { ENVIRONMENT_MAP_URL, LAPTOP_MODEL_URL } from './laptopShowcaseAssets'
 
-RectAreaLightUniformsLib.init()
-
+const ENVIRONMENT_ROTATION_Y_DEGREES = 20
 const MODEL_VERTICAL_OFFSET = -0.3
-const LID_OPEN_DEGREES = -108
+const LID_OPEN_DELTA_DEGREES = -108
 const LID_ANIMATION_SECONDS = 1.05
+const KEY_PRESS_DEPTH = 0.0025
+const KEY_PRESS_DOWN_SECONDS = 0.07
+const KEY_RELEASE_SECONDS = 0.14
+
+let laptopModelPromise: Promise<THREE.Group> | null = null
+let environmentTexturePromise: Promise<THREE.DataTexture> | null = null
 
 type SceneTheme = 'dark' | 'light'
 
@@ -16,6 +22,7 @@ type LaptopSceneProps = {
   baseCanvasHeight: number
   dragRotation: { x: number; y: number }
   lidOpen: boolean
+  onKeyboardPress: () => void
   theme: SceneTheme
 }
 
@@ -37,15 +44,31 @@ type PointerState = {
   travel: number
 }
 
+type KeyPressState = {
+  currentOffset: number
+  object: THREE.Object3D
+  originalY: number
+  pressedAt: number
+  pressStartOffset: number
+  releasedAt: number | null
+  releaseStartOffset: number
+}
+
 type CanvasBounds = {
   baseHeight: number
   bottom: number
   top: number
 }
 
+export function preloadKaliLaptopShowcaseResources() {
+  void loadLaptopModel()
+  void loadEnvironmentTexture()
+}
+
 export function KaliLaptopShowcase() {
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const pointerRef = useRef<PointerState>({ dragging: false, lastX: 0, lastY: 0, travel: 0 })
+  const suppressNextClickRef = useRef(false)
   const [canvasBounds, setCanvasBounds] = useState<CanvasBounds>(() => getBaseCanvasBounds())
   const [dragRotation, setDragRotation] = useState({ x: 0, y: 0 })
   const [lidOpen, setLidOpen] = useState(false)
@@ -110,8 +133,10 @@ export function KaliLaptopShowcase() {
         }}
         onPointerUp={(event) => {
           const wasClick = pointerRef.current.travel < 6
+          const shouldToggleLid = wasClick && !suppressNextClickRef.current
+          suppressNextClickRef.current = false
           stopDragging(event)
-          if (wasClick) setLidOpen((current) => !current)
+          if (shouldToggleLid) setLidOpen((current) => !current)
         }}
         style={{ bottom: -canvasBounds.bottom, top: -canvasBounds.top }}
       >
@@ -120,18 +145,21 @@ export function KaliLaptopShowcase() {
           className="h-full w-full"
           dpr={[1, 1.75]}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+          onCreated={({ gl }) => {
+            gl.outputColorSpace = THREE.SRGBColorSpace
+            gl.toneMapping = THREE.ACESFilmicToneMapping
+            gl.toneMappingExposure = theme === 'dark' ? 1.05 : 0.92
+          }}
         >
-          <ambientLight intensity={theme === 'dark' ? 0.72 : 0.92} />
-          <hemisphereLight
-            args={theme === 'dark' ? ['#ffffff', '#3a352e', 0.7] : ['#fff8ec', '#d8e5d4', 0.92]}
-          />
-          <FrontSoftboxLight theme={theme} />
-          <WarmRimLight theme={theme} />
-
+          <ExrEnvironment exposure={theme === 'dark' ? 1.05 : 0.92} />
           <LaptopScene
             baseCanvasHeight={canvasBounds.baseHeight}
             dragRotation={dragRotation}
             lidOpen={lidOpen}
+            onKeyboardPress={() => {
+              suppressNextClickRef.current = true
+              pointerRef.current.travel = 999
+            }}
             theme={theme}
           />
         </Canvas>
@@ -187,55 +215,57 @@ function getCanvasBounds(sceneRect: DOMRect): CanvasBounds {
   }
 }
 
-function FrontSoftboxLight({ theme }: { theme: SceneTheme }) {
-  const lightRef = useRef<THREE.RectAreaLight | null>(null)
+function ExrEnvironment({ exposure }: { exposure: number }) {
+  const gl = useThree((state) => state.gl)
+  const scene = useThree((state) => state.scene)
 
   useEffect(() => {
-    lightRef.current?.lookAt(0, 0.2, 0)
-  }, [])
+    let disposed = false
+    const pmrem = new THREE.PMREMGenerator(gl)
 
-  return (
-    <rectAreaLight
-      ref={lightRef}
-      color={theme === 'dark' ? '#ffffff' : '#fff2dc'}
-      height={4.2}
-      intensity={theme === 'dark' ? 5.6 : 4.2}
-      position={[0, 4.2, 5.2]}
-      width={6.8}
-    />
-  )
-}
+    pmrem.compileEquirectangularShader()
 
-function WarmRimLight({ theme }: { theme: SceneTheme }) {
-  const lightRef = useRef<THREE.DirectionalLight | null>(null)
+    loadEnvironmentTexture()
+      .then((texture) => {
+        const environmentMap = pmrem.fromEquirectangular(texture).texture
+
+        if (disposed) {
+          environmentMap.dispose()
+          return
+        }
+
+        scene.environment = environmentMap
+        scene.environmentRotation.y = THREE.MathUtils.degToRad(ENVIRONMENT_ROTATION_Y_DEGREES)
+      })
+      .catch((error) => {
+        console.error('Failed to load EXR environment:', error)
+      })
+
+    return () => {
+      disposed = true
+      const currentEnvironment = scene.environment
+      scene.environment = null
+      scene.environmentRotation.set(0, 0, 0)
+      currentEnvironment?.dispose()
+      pmrem.dispose()
+    }
+  }, [gl, scene])
 
   useEffect(() => {
-    lightRef.current?.target.position.set(0, 0.35, 0)
-    lightRef.current?.target.updateMatrixWorld()
-  }, [])
+    gl.toneMappingExposure = exposure
+  }, [exposure, gl])
 
-  return (
-    <>
-      <directionalLight
-        ref={lightRef}
-        color={theme === 'dark' ? '#ffd2a3' : '#b8e8c2'}
-        intensity={theme === 'dark' ? 1.45 : 1.05}
-        position={[-3.6, 2.9, -4.8]}
-      />
-      <directionalLight
-        color={theme === 'dark' ? '#fff7ee' : '#ffffff'}
-        intensity={theme === 'dark' ? 0.42 : 0.62}
-        position={[3.4, 2.4, -3.2]}
-      />
-    </>
-  )
+  return null
 }
 
-function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, theme }: LaptopSceneProps) {
+function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, theme }: LaptopSceneProps) {
   const groupRef = useRef<THREE.Group | null>(null)
   const lidRef = useRef<THREE.Object3D | null>(null)
+  const lidClosedRotationXRef = useRef(0)
   const lidAnimationRef = useRef<LidAnimation>({ from: 0, startedAt: 0, to: 0 })
   const lidProgressRef = useRef(0)
+  const keyPressesRef = useRef<Map<string, KeyPressState>>(new Map())
+  const activePointerKeysRef = useRef<Map<number, string>>(new Map())
   const [model, setModel] = useState<THREE.Group | null>(null)
   const viewportSize = useThree((state) => state.size)
 
@@ -249,21 +279,17 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, theme }: LaptopS
 
   useEffect(() => {
     let cancelled = false
-    const loader = new GLTFLoader()
-
-    loader.load(
-      '/models/幻14笔记本电脑.glb',
-      (gltf) => {
+    loadLaptopModel()
+      .then((source) => {
         if (cancelled) return
-        const normalized = normalizeLaptopModel(gltf.scene)
+        const normalized = normalizeLaptopModel(source)
         lidRef.current = normalized.lid
+        lidClosedRotationXRef.current = normalized.lid?.rotation.x ?? 0
         setModel(normalized.root)
-      },
-      undefined,
-      (error) => {
+      })
+      .catch((error) => {
         console.error('Failed to load ROG laptop model:', error)
-      },
-    )
+      })
 
     return () => {
       cancelled = true
@@ -275,17 +301,40 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, theme }: LaptopS
     applyLaptopTheme(model, theme)
   }, [model, theme])
 
+  useEffect(() => {
+    const releaseAllKeys = () => {
+      activePointerKeysRef.current.clear()
+      const now = performance.now() * 0.001
+
+      for (const press of keyPressesRef.current.values()) {
+        if (press.releasedAt !== null) continue
+        press.releasedAt = now
+        press.releaseStartOffset = press.currentOffset
+      }
+    }
+
+    window.addEventListener('blur', releaseAllKeys)
+    window.addEventListener('pointerup', releaseAllKeys)
+    window.addEventListener('pointercancel', releaseAllKeys)
+
+    return () => {
+      window.removeEventListener('blur', releaseAllKeys)
+      window.removeEventListener('pointerup', releaseAllKeys)
+      window.removeEventListener('pointercancel', releaseAllKeys)
+    }
+  }, [])
+
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
 
     const elapsed = performance.now() * 0.001
-    const idleBreath = Math.sin(elapsed * 0.78) * 0.016
+    const idleBreath = Math.sin(elapsed * 0.92) * 0.032
     const scaleCompensation = viewportSize.height > 0 ? baseCanvasHeight / viewportSize.height : 1
 
     group.position.y = THREE.MathUtils.lerp(
       group.position.y,
-      MODEL_VERTICAL_OFFSET + 0.08 + idleBreath,
+      MODEL_VERTICAL_OFFSET + 0.09 + idleBreath,
       0.075,
     )
     group.position.z = THREE.MathUtils.lerp(group.position.z, 0.18, 0.075)
@@ -297,21 +346,128 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, theme }: LaptopS
     const lid = lidRef.current
     if (lid) {
       const animation = lidAnimationRef.current
+      const closedRotationX = lidClosedRotationXRef.current
       const elapsedSinceToggle = elapsed - animation.startedAt
       const rawProgress = THREE.MathUtils.clamp(elapsedSinceToggle / LID_ANIMATION_SECONDS, 0, 1)
       const easedProgress = smootherstep(rawProgress)
       const lidProgress = THREE.MathUtils.lerp(animation.from, animation.to, easedProgress)
       const idleLidMotion = lidProgress > 0.96 ? Math.sin(elapsed * 0.92) * 0.012 : 0
       lidProgressRef.current = lidProgress
-      lid.rotation.x = THREE.MathUtils.degToRad(LID_OPEN_DEGREES * lidProgress) + idleLidMotion
+      lid.rotation.x = closedRotationX + THREE.MathUtils.degToRad(LID_OPEN_DELTA_DEGREES * lidProgress) + idleLidMotion
+    }
+
+    for (const [id, press] of keyPressesRef.current) {
+      if (press.releasedAt === null) {
+        const progress = smootherstep(THREE.MathUtils.clamp((elapsed - press.pressedAt) / KEY_PRESS_DOWN_SECONDS, 0, 1))
+        press.currentOffset = THREE.MathUtils.lerp(press.pressStartOffset, -KEY_PRESS_DEPTH, progress)
+        press.object.position.y = press.originalY + press.currentOffset
+        continue
+      }
+
+      const progress = smootherstep(THREE.MathUtils.clamp((elapsed - press.releasedAt) / KEY_RELEASE_SECONDS, 0, 1))
+      press.currentOffset = THREE.MathUtils.lerp(press.releaseStartOffset, 0, progress)
+      press.object.position.y = press.originalY + press.currentOffset
+
+      if (progress >= 1) {
+        press.object.position.y = press.originalY
+        keyPressesRef.current.delete(id)
+      }
     }
   })
 
   return (
     <group ref={groupRef}>
-      {model && <primitive object={model} />}
+      {model && (
+        <primitive
+          object={model}
+          onPointerDown={(event: ThreeEvent<PointerEvent>) => {
+            const key = findKeyboardKey(event.object)
+            if (!key) return
+
+            event.stopPropagation()
+            event.nativeEvent.stopPropagation()
+            if (event.target instanceof Element) {
+              event.target.setPointerCapture(event.pointerId)
+            }
+            onKeyboardPress()
+
+            const now = performance.now() * 0.001
+            const current = keyPressesRef.current.get(key.uuid)
+            activePointerKeysRef.current.set(event.pointerId, key.uuid)
+            keyPressesRef.current.set(key.uuid, {
+              currentOffset: current?.currentOffset ?? 0,
+              object: key,
+              originalY: current?.originalY ?? key.position.y,
+              pressedAt: now,
+              pressStartOffset: current?.currentOffset ?? 0,
+              releasedAt: null,
+              releaseStartOffset: current?.currentOffset ?? 0,
+            })
+          }}
+          onPointerCancel={(event: ThreeEvent<PointerEvent>) => {
+            releaseKeyboardKeyForPointer(event.pointerId)
+          }}
+          onPointerLeave={(event: ThreeEvent<PointerEvent>) => {
+            releaseKeyboardKeyForPointer(event.pointerId)
+          }}
+          onLostPointerCapture={(event: ThreeEvent<PointerEvent>) => {
+            releaseKeyboardKeyForPointer(event.pointerId)
+          }}
+          onPointerUp={(event: ThreeEvent<PointerEvent>) => {
+            releaseKeyboardKeyForPointer(event.pointerId)
+            if (event.target instanceof Element && event.target.hasPointerCapture(event.pointerId)) {
+              event.target.releasePointerCapture(event.pointerId)
+            }
+          }}
+        />
+      )}
     </group>
   )
+
+  function releaseKeyboardKeyForPointer(pointerId: number) {
+    const keyId = activePointerKeysRef.current.get(pointerId)
+    if (!keyId) return
+
+    activePointerKeysRef.current.delete(pointerId)
+    releaseKeyboardKey(keyId)
+  }
+
+  function releaseKeyboardKey(keyId: string) {
+    const press = keyPressesRef.current.get(keyId)
+    if (!press || press.releasedAt !== null) return
+
+    press.releasedAt = performance.now() * 0.001
+    press.releaseStartOffset = press.currentOffset
+  }
+}
+
+function loadLaptopModel() {
+  laptopModelPromise ??= new Promise<THREE.Group>((resolve, reject) => {
+    new GLTFLoader().load(LAPTOP_MODEL_URL, (gltf) => resolve(gltf.scene), undefined, reject)
+  })
+
+  return laptopModelPromise
+}
+
+function loadEnvironmentTexture() {
+  environmentTexturePromise ??= new Promise<THREE.DataTexture>((resolve, reject) => {
+    new EXRLoader().load(ENVIRONMENT_MAP_URL, resolve, undefined, reject)
+  })
+
+  return environmentTexturePromise
+}
+
+function findKeyboardKey(object: THREE.Object3D): THREE.Object3D | null {
+  let current: THREE.Object3D | null = object
+
+  while (current) {
+    if (current instanceof THREE.Mesh && current.name.includes('键') && current.name !== '键盘') {
+      return current
+    }
+    current = current.parent
+  }
+
+  return null
 }
 
 function normalizeLaptopModel(source: THREE.Group): LaptopModel {
@@ -359,6 +515,10 @@ function applyLaptopTheme(model: THREE.Group, theme: SceneTheme) {
 function applyMaterialTheme(material: THREE.MeshStandardMaterial, theme: SceneTheme) {
   const isDark = theme === 'dark'
   const name = material.name.toLowerCase()
+
+  if (!isDark && name === 'laptopsurface.002') {
+    return
+  }
 
   if (name.includes('screen')) {
     material.emissive = new THREE.Color(isDark ? '#dfffe8' : '#fff7df')

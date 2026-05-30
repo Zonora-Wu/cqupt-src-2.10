@@ -57,6 +57,15 @@ const CORE_SKILLS: SkillDefinition[] = [
     reason: '前端结构化卡片协议常驻',
     title: 'AI 卡片协议',
   },
+  {
+    aiSpace: 'CORE',
+    always: true,
+    modes: ['student', 'auditor', 'admin'],
+    name: 'cqupt-src-platform-data-request',
+    prompt: '当回答必须依赖未注入的实时平台数据时，不要让 Hermes 直接访问后端；按 dataRequests JSON 协议提出只读数据请求，等待 NestJS 后端基于当前 JWT/RBAC 执行并回灌 platformToolResults，再生成最终回答。',
+    reason: '最小上下文 + 后端托管工具执行权',
+    title: '平台数据按需请求',
+  },
 ]
 
 const ROLE_SKILLS: SkillDefinition[] = [

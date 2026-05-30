@@ -177,6 +177,7 @@ export class CertificatesService {
     const certificatePdf = await generateCertificatePdf({
       assetName: report.assetName,
       certificateNo,
+      certificateType: '漏洞贡献证书',
       contribution: input.contribution,
       issuedAt,
       recipientName: report.submitter.name,
@@ -427,7 +428,6 @@ export class CertificatesService {
           select: {
             finalSeverity: true,
             reportNo: true,
-            title: true,
           },
         },
       },
@@ -448,7 +448,6 @@ export class CertificatesService {
           ? formatSeverity(certificate.vulnerability.finalSeverity)
           : null,
         reportNo: certificate.vulnerability.reportNo,
-        title: certificate.vulnerability.title,
       },
     }
   }

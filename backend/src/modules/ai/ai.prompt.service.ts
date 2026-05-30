@@ -31,19 +31,28 @@ function getModePrompt(mode: NormalizedAiChatInput['mode']): string {
 }
 
 function buildContextPrompt(context: UserContextSnapshot): string {
-  const parts: string[] = ['当前用户数据摘要：']
+  const injected = new Set(context.injectedDomains)
+  const parts: string[] = ['当前用户数据摘要（后端按本轮意图最小化注入）：']
+  parts.push(`- 已注入模块：${context.injectedDomains.length > 0 ? context.injectedDomains.join(', ') : '无实时业务数据'}`)
+  if (context.omittedDomains.length > 0) {
+    parts.push(`- 未注入模块：${context.omittedDomains.join(', ')}。未注入表示本轮没有识别到相关业务查询，不代表数据不存在。`)
+  }
 
   // 积分
-  parts.push(
-    `- 积分：余额 ${context.points.balance}（累计获得 ${context.points.earned}，累计支出 ${context.points.spent}，待领取 ${context.points.pendingRedemptions} 个兑换）`,
-  )
+  if (injected.has('points') || injected.has('mall')) {
+    parts.push(
+      `- 积分：余额 ${context.points.balance}（累计获得 ${context.points.earned}，累计支出 ${context.points.spent}，待领取 ${context.points.pendingRedemptions} 个兑换）`,
+    )
+  }
 
   // 漏洞
-  parts.push(
-    `- 漏洞：共 ${context.vulnerabilities.total} 个（待补充 ${context.vulnerabilities.needsSupplement}，审核中 ${context.vulnerabilities.pending}，已确认 ${context.vulnerabilities.confirmed}）`,
-  )
+  if (injected.has('vulnerabilities')) {
+    parts.push(
+      `- 漏洞：共 ${context.vulnerabilities.total} 个（待补充 ${context.vulnerabilities.needsSupplement}，审核中 ${context.vulnerabilities.pending}，已确认 ${context.vulnerabilities.confirmed}）`,
+    )
+  }
 
-  if (context.vulnerabilities.recent.length > 0) {
+  if (injected.has('vulnerabilities') && context.vulnerabilities.recent.length > 0) {
     parts.push('  近期漏洞[JSON]：')
     for (const v of context.vulnerabilities.recent) {
       const statusTag = v.needsSupplement ? ' ⚠️待补充' : ''
@@ -54,7 +63,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
   }
 
   // 学习推荐 — 包含 ID
-  if (context.learningSuggestions.length > 0) {
+  if (injected.has('learning') && context.learningSuggestions.length > 0) {
     const items = context.learningSuggestions
       .map((r) => `{id:"${r.id}",title:"${r.title}",category:"${r.category}",kind:"${r.kind}"}`)
       .join(', ')
@@ -62,7 +71,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
   }
 
   // 商城推荐 — 包含 ID
-  if (context.mallSuggestions.length > 0) {
+  if (injected.has('mall') && context.mallSuggestions.length > 0) {
     parts.push(`- 积分商城商品完整列表[JSONL]（平台当前共 ${context.mallSuggestions.length} 个可见商品，以下逐条完整列出）：`)
     for (const p of context.mallSuggestions) {
       parts.push(
@@ -83,7 +92,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
   }
 
   parts.push(
-    '以上平台数据由后端在本轮请求中实时查库注入，已反映平台当前最新状态；管理员新增、下架或修改商品后，下一轮对话会使用更新后的列表。用户询问自己的积分、商品兑换、漏洞状态或平台学习资源推荐时，必须先结合这些平台数据判断，不要绕过上下文直接泛泛回答。当前没有可用工具调用，不要说“我用查询工具再查一下”。平台名、SRC 概念、漏洞知识、报告写作方法等泛问不等于请求个人业务数据，不要主动展示用户私有数据。不要编造不存在的平台数据。用户问“能兑换/可以兑换哪些商品”时，优先返回 canRedeem=true 的商品；用户问“兑换不了/不能兑换/积分不够哪些商品”时，优先返回 canRedeem=false 的商品，并简要说明通常是积分、库存或限购原因。用户要求“靶场/实操/练习环境”且要平台内推荐时，只能推荐 kind 为 RANGE 的学习资源，不要混入 RESOURCE 工具资料。用户要求“全网热门、业内常用、公开靶场”等平台外建议时，不要把平台资源伪装成全网热度；可以基于通用知识给文本建议，并说明平台上下文不包含全网实时热度数据。',
+    '以上平台数据由后端在本轮请求中实时查库、按需注入。只允许使用已注入模块回答实时业务数据；未注入模块不能当作“为空/没有”，也不要编造不存在的平台数据。若用户明确请求未注入的实时业务数据，只能按 dataRequests 协议请求后端代查，不能自行访问后端、数据库或外部网络。平台名、SRC 概念、漏洞知识、报告写作方法等泛问不等于请求个人业务数据，不要主动展示用户私有数据。用户问“能兑换/可以兑换哪些商品”且已注入 mall 时，优先返回 canRedeem=true 的商品；用户问“兑换不了/不能兑换/积分不够哪些商品”且已注入 mall 时，优先返回 canRedeem=false 的商品，并简要说明通常是积分、库存或限购原因。用户要求“靶场/实操/练习环境”且要平台内推荐时，只有已注入 learning 才能推荐平台资源，且只能推荐 kind 为 RANGE 的学习资源，不要混入 RESOURCE 工具资料。用户要求“全网热门、业内常用、公开靶场”等平台外建议时，不要把平台资源伪装成全网热度；可以基于通用知识给文本建议，并说明平台上下文不包含全网实时热度数据。',
   )
 
   return parts.join('\n')
@@ -91,7 +100,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
 
 function buildToolPrompt(role: RoleCode): string {
   void role
-  return '当前请求没有启用工具调用。平台业务数据已经在上方上下文中给出；回答时直接使用这些上下文，不要声称稍后调用工具查询。'
+  return '当前请求没有启用 OpenAI function/tool_calls。若需要未注入的实时平台数据，只能按上方 dataRequests JSON 协议请求后端代查；最终回答只能使用已注入上下文和后端回灌的 platformToolResults。'
 }
 
 /** 构造 user prompt */

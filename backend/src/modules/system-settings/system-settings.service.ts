@@ -7,6 +7,7 @@ import {
 import { AuditAction, UserStatus } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
+import { PDFDocument } from 'pdf-lib'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { generateCertificatePdf } from '../certificates/certificate-pdf.generator'
@@ -25,12 +26,14 @@ const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
 
 const DEFAULT_LAYOUT = {
-  certificateNo: { x: 90, y: 74, fontSize: 12 },
-  issuedAt: { x: 420, y: 520, fontSize: 14 },
-  qrCode: { height: 86, width: 86, x: 72, y: 480 },
-  recipientName: { align: 'center', x: 300, y: 220, fontSize: 28 },
+  certificateNo: { x: 90, y: 74, fontSize: 28 },
+  certificateType: { align: 'center', x: 421, y: 150, fontSize: 28 },
+  fontFamily: 'notoSansCjk',
+  issuedAt: { x: 420, y: 520, fontSize: 28 },
+  recipientName: { align: 'center', x: 421, y: 220, fontSize: 28 },
+  reportNo: { x: 118, y: 424, fontSize: 28 },
   seal: { width: 120, x: 450, y: 430 },
-  vulnerabilityTitle: { align: 'center', x: 300, y: 302, fontSize: 16 },
+  severity: { x: 118, y: 456, fontSize: 28 },
 }
 
 @Injectable()
@@ -242,11 +245,12 @@ export class SystemSettingsService {
 
     const pdfBuffer = await generateCertificatePdf({
       assetName: '重庆邮电大学学生工作系统',
-      certificateNo: 'CERT-PREVIEW-20260507',
+      certificateNo: 'CQUPT-SRC-CERT-2026-A1B2C3',
+      certificateType: '漏洞贡献证书',
       contribution: '发现了一处存储型跨站脚本漏洞（XSS），攻击者可通过该漏洞向其他用户注入恶意脚本，对用户数据安全构成威胁。提交报告详细描述了漏洞成因和修复建议。',
       issuedAt: new Date(),
       recipientName: '张三（预览模式）',
-      reportNo: 'RPT-20260507-PREVIEW',
+      reportNo: 'CQUPT-SRC-20260525-A1B2C3',
       sealBuffer: sealObject.body,
       severity: '高危',
       template: {
@@ -275,6 +279,91 @@ export class SystemSettingsService {
     })
 
     return { body: pdfBuffer, contentType: 'application/pdf', fileName: 'certificate-preview.pdf' }
+  }
+
+  async previewCertificateTemplateLayout(layoutJson: unknown) {
+    const template = await this.prisma.certificateTemplate.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!template) {
+      throw new NotFoundException('当前无启用的证书模板')
+    }
+
+    if (!layoutJson || typeof layoutJson !== 'object' || Array.isArray(layoutJson)) {
+      throw new BadRequestException('layoutJson 必须是对象')
+    }
+
+    const [templateObject, sealObject] = await Promise.all([
+      this.storage.getObject(template.templateStorageKey),
+      template.sealStorageKey ? this.storage.getObject(template.sealStorageKey) : Promise.resolve(null),
+    ])
+
+    const pdfBuffer = await generateCertificatePdf({
+      assetName: '重庆邮电大学学生工作系统',
+      certificateNo: 'CQUPT-SRC-CERT-2026-A1B2C3',
+      certificateType: '漏洞贡献证书',
+      contribution: '发现了一处存储型跨站脚本漏洞（XSS），攻击者可通过该漏洞向其他用户注入恶意脚本，对用户数据安全构成威胁。提交报告详细描述了漏洞成因和修复建议。',
+      issuedAt: new Date(),
+      recipientName: '张三',
+      reportNo: 'CQUPT-SRC-20260525-A1B2C3',
+      sealBuffer: sealObject?.body,
+      severity: '高危',
+      template: {
+        layoutJson,
+        sealMimeType: template.sealMimeType,
+        sealStorageKey: template.sealStorageKey,
+        templateMimeType: template.templateMimeType,
+      },
+      templateBuffer: templateObject.body,
+      title: '存储型跨站脚本漏洞',
+      verifyCode: 'VERIFY-CODE-1234',
+    })
+
+    return { body: pdfBuffer, contentType: 'application/pdf', fileName: 'certificate-layout-preview.pdf' }
+  }
+
+  async previewCertificateTemplateBackground() {
+    const template = await this.prisma.certificateTemplate.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!template) {
+      throw new NotFoundException('当前无启用的证书模板，请先上传背景图')
+    }
+
+    const templateObject = await this.storage.getObject(template.templateStorageKey)
+    const dimensions = await getTemplateDimensions(template.templateMimeType, templateObject.body)
+    return {
+      body: templateObject.body,
+      contentType: template.templateMimeType,
+      fileName: template.name || 'certificate-template',
+      height: dimensions.height,
+      width: dimensions.width,
+    }
+  }
+
+  async previewCertificateSeal() {
+    const template = await this.prisma.certificateTemplate.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!template || !template.sealStorageKey || !template.sealMimeType) {
+      throw new NotFoundException('当前证书模板未配置电子印章')
+    }
+
+    const sealObject = await this.storage.getObject(template.sealStorageKey)
+    const dimensions = getPngDimensions(sealObject.body)
+    return {
+      body: sealObject.body,
+      contentType: template.sealMimeType,
+      fileName: 'certificate-seal.png',
+      height: dimensions.height,
+      width: dimensions.width,
+    }
   }
 
   async getRegistrationMode(): Promise<RegistrationMode> {
@@ -652,6 +741,31 @@ function validateTemplateFile(file: UploadedSettingsFile | undefined) {
   }
 
   return validated
+}
+
+async function getTemplateDimensions(mimeType: string, body: Buffer) {
+  if (mimeType === 'application/pdf') {
+    const pdf = await PDFDocument.load(body)
+    const page = pdf.getPage(0)
+    return { height: page.getHeight(), width: page.getWidth() }
+  }
+
+  if (mimeType === 'image/png') {
+    return getPngDimensions(body)
+  }
+
+  throw new BadRequestException('不支持的证书模板格式')
+}
+
+function getPngDimensions(body: Buffer) {
+  if (!hasPngMagicBytes(body) || body.length < 24) {
+    throw new BadRequestException('PNG 文件损坏，无法读取尺寸')
+  }
+
+  return {
+    height: body.readUInt32BE(20),
+    width: body.readUInt32BE(16),
+  }
 }
 
 function validateSealFile(file: UploadedSettingsFile | undefined) {

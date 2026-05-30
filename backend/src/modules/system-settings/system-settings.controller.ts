@@ -84,6 +84,32 @@ export class SystemSettingsController {
     return this.settings.updateCertificateTemplateLayout(body.layoutJson, user, getRequestMeta(req))
   }
 
+  @Get('certificate-template/background-preview')
+  @RequirePermissions('system:manage')
+  async previewCertificateTemplateBackground(@Res() res: Response) {
+    const preview = await this.settings.previewCertificateTemplateBackground()
+    res.setHeader('Content-Type', preview.contentType)
+    res.setHeader('Content-Length', preview.body.length)
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
+    res.setHeader('X-Certificate-Page-Width', String(preview.width))
+    res.setHeader('X-Certificate-Page-Height', String(preview.height))
+    res.setHeader('Access-Control-Expose-Headers', 'X-Certificate-Page-Width, X-Certificate-Page-Height, X-Certificate-Seal-Width, X-Certificate-Seal-Height')
+    res.send(preview.body)
+  }
+
+  @Get('certificate-template/seal-preview')
+  @RequirePermissions('system:manage')
+  async previewCertificateSeal(@Res() res: Response) {
+    const preview = await this.settings.previewCertificateSeal()
+    res.setHeader('Content-Type', preview.contentType)
+    res.setHeader('Content-Length', preview.body.length)
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
+    res.setHeader('X-Certificate-Seal-Width', String(preview.width))
+    res.setHeader('X-Certificate-Seal-Height', String(preview.height))
+    res.setHeader('Access-Control-Expose-Headers', 'X-Certificate-Page-Width, X-Certificate-Page-Height, X-Certificate-Seal-Width, X-Certificate-Seal-Height')
+    res.send(preview.body)
+  }
+
   @Post('certificate-template/preview')
   @RequirePermissions('system:manage')
   async previewCertificateTemplate(
@@ -92,6 +118,19 @@ export class SystemSettingsController {
     @Res() res: Response,
   ) {
     const preview = await this.settings.previewCertificateTemplate(user, getRequestMeta(req))
+    res.setHeader('Content-Type', preview.contentType)
+    res.setHeader('Content-Length', preview.body.length)
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
+    res.send(preview.body)
+  }
+
+  @Post('certificate-template/layout-preview')
+  @RequirePermissions('system:manage')
+  async previewCertificateTemplateLayout(
+    @Body() body: { layoutJson?: unknown },
+    @Res() res: Response,
+  ) {
+    const preview = await this.settings.previewCertificateTemplateLayout(body.layoutJson)
     res.setHeader('Content-Type', preview.contentType)
     res.setHeader('Content-Length', preview.body.length)
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
