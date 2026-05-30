@@ -673,6 +673,7 @@ model Certificate {
   status          CertificateStatus   @default(PENDING)
   verifyCode      String              @unique
   publicVerify    Boolean             @default(true)
+  publicVerifyCount Int               @default(0)
   contribution    String              @db.Text
   issuedAt        DateTime?
   revokedAt       DateTime?

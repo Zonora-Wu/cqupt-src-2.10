@@ -1,5 +1,6 @@
-import { Award, CheckCircle2, FileSearch, Search, ShieldCheck } from 'lucide-react'
+import { Award, CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
 
 type CertificateVerifyProps = {
@@ -7,14 +8,11 @@ type CertificateVerifyProps = {
   queryNonce?: number
 }
 
-const QUERY_COUNT_KEY = 'cqupt-src-public-certificate-query-count'
-
 export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }: CertificateVerifyProps) {
   const [certificateNo, setCertificateNo] = useState(initialCertificateNo)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PublicCertificateVerifyResult | null>(null)
-  const [message, setMessage] = useState('')
-  const [queryCount, setQueryCount] = useState(() => readQueryCount())
+  const [notice, setNotice] = useState<{ message: string; variant: FloatingNoticeVariant } | null>(null)
 
   useEffect(() => {
     const normalized = initialCertificateNo.trim()
@@ -26,24 +24,23 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   async function searchCertificate(nextCertificateNo = certificateNo) {
     const normalized = nextCertificateNo.trim()
     setResult(null)
-    setMessage('')
+    setNotice(null)
 
     if (!normalized) {
-      setMessage('请输入证书编号后再查询。')
+      setNotice({ message: '请输入证书编号后再查询。', variant: 'warning' })
       return
     }
 
     setLoading(true)
     try {
       const nextResult = await publicVerifyCertificate(normalized)
-      const nextCount = incrementQueryCount()
-      setQueryCount(nextCount)
       setResult(nextResult)
-      setMessage(`公开查询成功。本浏览器累计查询 ${nextCount} 次。`)
+      setNotice({ message: `公开查询成功。该证书累计公开查询 ${nextResult.publicVerifyCount} 次。`, variant: 'success' })
     } catch (error) {
-      const nextCount = incrementQueryCount()
-      setQueryCount(nextCount)
-      setMessage(error instanceof Error ? `${error.message}。本浏览器累计查询 ${nextCount} 次。` : `查询失败。本浏览器累计查询 ${nextCount} 次。`)
+      setNotice({
+        message: error instanceof Error ? error.message : '查询失败，请稍后重试。',
+        variant: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -51,6 +48,14 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
 
   return (
     <main className="relative z-10 flex min-h-[calc(100vh-4rem)] flex-col justify-center px-5 py-24 md:px-8">
+      {notice && (
+        <FloatingNotice
+          message={notice.message}
+          onClose={() => setNotice(null)}
+          variant={notice.variant}
+        />
+      )}
+
       <section className="mx-auto max-w-4xl text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-green-300">
           <Award className="h-4 w-4" />
@@ -91,47 +96,51 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
 
         <div className="mt-4 flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
           <span>公开查询仅展示脱敏信息，不公开漏洞细节或证书 PDF。</span>
-          <span className="font-mono">本浏览器累计查询 {queryCount} 次</span>
+          <span className="font-mono">查询成功后显示该证书累计公开查询次数</span>
         </div>
       </section>
 
-      {(message || result) && (
-        <section className="mx-auto mt-6 w-full max-w-3xl">
-          {message && (
-            <div className="rounded-lg border border-black/10 bg-white/60 px-4 py-3 text-sm text-slate-600 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">
-              {message}
-            </div>
-          )}
-
-          {result && (
-            <article className="mt-4 overflow-hidden rounded-lg border border-black/10 bg-white/75 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.045]">
-              <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300">
-                      <CheckCircle2 className="h-4 w-4" />
-                      证书核验有效
-                    </div>
-                    <h2 className="mt-2 break-all font-mono text-lg font-semibold">{result.certificateNo}</h2>
+      {result && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 py-8 backdrop-blur-sm">
+          <article className="w-full max-w-2xl overflow-hidden rounded-lg border border-black/10 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111813]/95">
+            <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    证书核验有效
                   </div>
-                  <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm text-brand-700 dark:text-green-300">
-                    <ShieldCheck className="h-4 w-4" />
-                    {result.status}
-                  </span>
+                  <h2 className="mt-2 break-all font-mono text-lg font-semibold">{result.certificateNo}</h2>
                 </div>
+                <button
+                  aria-label="关闭证书核验结果"
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                  onClick={() => setResult(null)}
+                  type="button"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
+              <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm text-brand-700 dark:text-green-300">
+                <ShieldCheck className="h-4 w-4" />
+                {result.status}
+              </span>
+            </div>
 
-              <dl className="grid gap-0 sm:grid-cols-2">
-                <ResultField label="获得者" value={result.recipientName} />
-                <ResultField label="统一认证码" value={result.unifiedCode} />
-                <ResultField label="签发日期" value={formatDate(result.issuedAt)} />
-                <ResultField label="关联漏洞编号" value={result.vulnerability.reportNo} />
-                <ResultField label="漏洞等级" value={result.vulnerability.finalSeverity ?? '未公开'} />
-                <ResultField label="查询次数" value={`本浏览器累计 ${queryCount} 次`} />
-              </dl>
-            </article>
-          )}
-        </section>
+            <dl className="grid gap-0 sm:grid-cols-2">
+              <ResultField label="获得者" value={result.recipientName} />
+              <ResultField label="统一认证码" value={result.unifiedCode} />
+              <ResultField label="签发日期" value={formatDate(result.issuedAt)} />
+              <ResultField label="关联漏洞编号" value={result.vulnerability.reportNo} />
+              <ResultField label="漏洞等级" value={result.vulnerability.finalSeverity ?? '未公开'} />
+              <ResultField label="查询次数" value={`该证书累计公开查询 ${result.publicVerifyCount} 次`} />
+            </dl>
+
+            <div className="border-t border-black/10 px-6 py-4 text-xs leading-6 text-slate-500 dark:border-white/10 dark:text-slate-400">
+              公开核验仅展示证书真实性与脱敏信息，不公开漏洞细节或证书 PDF。
+            </div>
+          </article>
+        </div>
       )}
     </main>
   )
@@ -155,24 +164,4 @@ function formatDate(value: string | null) {
     month: '2-digit',
     year: 'numeric',
   })
-}
-
-function readQueryCount() {
-  try {
-    const raw = window.localStorage.getItem(QUERY_COUNT_KEY)
-    const value = raw ? Number.parseInt(raw, 10) : 0
-    return Number.isFinite(value) && value > 0 ? value : 0
-  } catch {
-    return 0
-  }
-}
-
-function incrementQueryCount() {
-  const next = readQueryCount() + 1
-  try {
-    window.localStorage.setItem(QUERY_COUNT_KEY, String(next))
-  } catch {
-    // Ignore storage failures; the in-memory count still updates for this render.
-  }
-  return next
 }

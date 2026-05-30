@@ -1,0 +1,2 @@
+ALTER TABLE "Certificate"
+ADD COLUMN "publicVerifyCount" INTEGER NOT NULL DEFAULT 0;
