@@ -247,14 +247,16 @@ export class AiToolsService {
       products: products.map((p) => ({
         canRedeem: p.canRedeem ?? false,
         category: p.category,
+        description: p.description || null,
         id: p.id,
+        imageUrl: p.imageUrl && p.imageUrl.length > 0 ? p.imageUrl : null,
         name: p.name,
         perUserLimit: p.perUserLimit ?? 1,
         pointsCost: p.pointsCost,
         remainingAfterRedeem: points.balance - p.pointsCost,
         stock: p.stock,
       })),
-      totalBalance: products.length > 0 ? products[0].pointsCost : 0, // 近似值
+      totalBalance: points.balance,
     }
   }
 
@@ -316,7 +318,9 @@ export class AiToolsService {
       items: items.slice(0, 8).map((p) => ({
         canRedeem: p.canRedeem ?? false,
         category: p.category,
+        description: p.description || null,
         id: p.id,
+        imageUrl: p.imageUrl && p.imageUrl.length > 0 ? p.imageUrl : null,
         name: p.name,
         perUserLimit: p.perUserLimit ?? 1,
         pointsCost: p.pointsCost,

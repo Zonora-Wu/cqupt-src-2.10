@@ -12,6 +12,7 @@ const LID_ANIMATION_SECONDS = 1.05
 const KEY_PRESS_DEPTH = 0.0025
 const KEY_PRESS_DOWN_SECONDS = 0.07
 const KEY_RELEASE_SECONDS = 0.14
+const LOCAL_X_AXIS = new THREE.Vector3(1, 0, 0)
 
 let laptopModelPromise: Promise<THREE.Group> | null = null
 let environmentTexturePromise: Promise<THREE.DataTexture> | null = null
@@ -23,6 +24,7 @@ type LaptopSceneProps = {
   dragRotation: { x: number; y: number }
   lidOpen: boolean
   onKeyboardPress: () => void
+  onLidToggle: () => void
   theme: SceneTheme
 }
 
@@ -160,6 +162,11 @@ export function KaliLaptopShowcase() {
               suppressNextClickRef.current = true
               pointerRef.current.travel = 999
             }}
+            onLidToggle={() => {
+              suppressNextClickRef.current = true
+              pointerRef.current.travel = 999
+              setLidOpen((current) => !current)
+            }}
             theme={theme}
           />
         </Canvas>
@@ -258,12 +265,13 @@ function ExrEnvironment({ exposure }: { exposure: number }) {
   return null
 }
 
-function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, theme }: LaptopSceneProps) {
+function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, onLidToggle, theme }: LaptopSceneProps) {
   const groupRef = useRef<THREE.Group | null>(null)
   const lidRef = useRef<THREE.Object3D | null>(null)
-  const lidClosedRotationXRef = useRef(0)
+  const lidClosedQuaternionRef = useRef(new THREE.Quaternion())
   const lidAnimationRef = useRef<LidAnimation>({ from: 0, startedAt: 0, to: 0 })
   const lidProgressRef = useRef(0)
+  const lidTargetQuaternionRef = useRef(new THREE.Quaternion())
   const keyPressesRef = useRef<Map<string, KeyPressState>>(new Map())
   const activePointerKeysRef = useRef<Map<number, string>>(new Map())
   const [model, setModel] = useState<THREE.Group | null>(null)
@@ -284,7 +292,7 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
         if (cancelled) return
         const normalized = normalizeLaptopModel(source)
         lidRef.current = normalized.lid
-        lidClosedRotationXRef.current = normalized.lid?.rotation.x ?? 0
+        lidClosedQuaternionRef.current.copy(normalized.lid?.quaternion ?? new THREE.Quaternion())
         setModel(normalized.root)
       })
       .catch((error) => {
@@ -346,14 +354,17 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
     const lid = lidRef.current
     if (lid) {
       const animation = lidAnimationRef.current
-      const closedRotationX = lidClosedRotationXRef.current
       const elapsedSinceToggle = elapsed - animation.startedAt
       const rawProgress = THREE.MathUtils.clamp(elapsedSinceToggle / LID_ANIMATION_SECONDS, 0, 1)
       const easedProgress = smootherstep(rawProgress)
       const lidProgress = THREE.MathUtils.lerp(animation.from, animation.to, easedProgress)
       const idleLidMotion = lidProgress > 0.96 ? Math.sin(elapsed * 0.92) * 0.012 : 0
+      const openDelta = THREE.MathUtils.degToRad(LID_OPEN_DELTA_DEGREES * lidProgress) + idleLidMotion
       lidProgressRef.current = lidProgress
-      lid.rotation.x = closedRotationX + THREE.MathUtils.degToRad(LID_OPEN_DELTA_DEGREES * lidProgress) + idleLidMotion
+      lidTargetQuaternionRef.current
+        .copy(lidClosedQuaternionRef.current)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(LOCAL_X_AXIS, openDelta))
+      lid.quaternion.copy(lidTargetQuaternionRef.current)
     }
 
     for (const [id, press] of keyPressesRef.current) {
@@ -414,10 +425,16 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
             releaseKeyboardKeyForPointer(event.pointerId)
           }}
           onPointerUp={(event: ThreeEvent<PointerEvent>) => {
+            const key = findKeyboardKey(event.object)
             releaseKeyboardKeyForPointer(event.pointerId)
             if (event.target instanceof Element && event.target.hasPointerCapture(event.pointerId)) {
               event.target.releasePointerCapture(event.pointerId)
             }
+            if (key || event.delta >= 6) return
+
+            event.stopPropagation()
+            event.nativeEvent.stopPropagation()
+            onLidToggle()
           }}
         />
       )}
@@ -472,7 +489,7 @@ function findKeyboardKey(object: THREE.Object3D): THREE.Object3D | null {
 
 function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   const model = source.clone(true)
-  const lid = model.getObjectByName('ab面') ?? null
+  const lid = findLaptopLid(model)
   const box = new THREE.Box3().setFromObject(model)
   const size = new THREE.Vector3()
   const center = new THREE.Vector3()
@@ -498,6 +515,25 @@ function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   })
 
   return { lid, root: model }
+}
+
+function findLaptopLid(model: THREE.Group) {
+  const exact = model.getObjectByName('ab面')
+  if (exact) return exact
+
+  const abFaceCandidates: THREE.Object3D[] = []
+  model.traverse((object) => {
+    if (object.name === 'ab面' || object.name.startsWith('ab面.')) {
+      abFaceCandidates.push(object)
+    }
+  })
+
+  return (
+    abFaceCandidates.find((object) => object.children.some((child) => child.name.includes('屏幕') || child.name.toLowerCase().includes('screen'))) ??
+    abFaceCandidates.find((object) => object.children.length > 0) ??
+    abFaceCandidates[0] ??
+    null
+  )
 }
 
 function applyLaptopTheme(model: THREE.Group, theme: SceneTheme) {

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, Paperclip, Shield, Sparkles, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, Paperclip, RotateCcw, Shield, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -234,6 +234,45 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     }
   }
 
+  const regenerateAssistantMessage = async (messageIndex: number) => {
+    if (sending || uploadingAttachment) return
+
+    const previousUserMessage = [...messages.slice(0, messageIndex)].reverse().find((message) => message.role === 'user')
+    const prompt = previousUserMessage?.content.trim()
+    if (!prompt) return
+
+    setSending(true)
+    try {
+      const result = await sendAiChat(prompt, 'student')
+      if (result.quota) setAiQuota(result.quota)
+      setMessages((current) =>
+        current.map((message, index) =>
+          index === messageIndex
+            ? {
+                actions: result.actions,
+                cards: result.cards,
+                content: result.content || '',
+                role: 'assistant',
+              }
+            : message,
+        ),
+      )
+    } catch (error) {
+      setMessages((current) =>
+        current.map((message, index) =>
+          index === messageIndex
+            ? {
+                role: 'assistant',
+                content: error instanceof Error ? error.message : '邮宝暂时不可用，请稍后再试。',
+              }
+            : message,
+        ),
+      )
+    } finally {
+      setSending(false)
+    }
+  }
+
   const handleAttachmentSelected = (file: File | undefined) => {
     if (!file || uploadingAttachment || sending) return
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
@@ -391,7 +430,11 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                           getReportAttachmentFile={(draftId) => reportAttachmentFilesRef.current[draftId]}
                           reportDrafts={message.reportDrafts}
                         />
-                        <MessageCopyButton align="left" content={message.content} />
+                        <AssistantMessageActions
+                          content={message.content}
+                          disabled={sending || uploadingAttachment}
+                          onRegenerate={() => void regenerateAssistantMessage(index)}
+                        />
                       </>
                     )}
                   </div>
@@ -527,6 +570,104 @@ function MessageCopyButton({ align, content }: { align: 'left' | 'right'; conten
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  )
+}
+
+function AssistantMessageActions({
+  content,
+  disabled,
+  onRegenerate,
+}: {
+  content: string
+  disabled?: boolean
+  onRegenerate: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const [feedback, setFeedback] = useState<'down' | 'up' | null>(null)
+  const copyDisabled = !content.trim()
+
+  const handleCopy = async () => {
+    if (copyDisabled) return
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="mt-1.5 flex justify-start">
+      <div className="inline-flex items-center gap-1">
+        <IconActionButton
+          active={copied}
+          ariaLabel={copied ? '已复制本条消息' : '复制本条消息'}
+          disabled={copyDisabled}
+          onClick={handleCopy}
+          title={copied ? '已复制' : '复制'}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </IconActionButton>
+        <IconActionButton
+          active={feedback === 'up'}
+          ariaLabel="点赞"
+          onClick={() => setFeedback((current) => (current === 'up' ? null : 'up'))}
+          title="点赞"
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </IconActionButton>
+        <IconActionButton
+          active={feedback === 'down'}
+          ariaLabel="点坏"
+          onClick={() => setFeedback((current) => (current === 'down' ? null : 'down'))}
+          title="点坏"
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </IconActionButton>
+        <IconActionButton
+          ariaLabel="重新生成"
+          disabled={disabled}
+          onClick={onRegenerate}
+          title="重新生成"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </IconActionButton>
+      </div>
+    </div>
+  )
+}
+
+function IconActionButton({
+  active,
+  ariaLabel,
+  children,
+  disabled,
+  onClick,
+  title,
+}: {
+  active?: boolean
+  ariaLabel: string
+  children: ReactNode
+  disabled?: boolean
+  onClick: () => void
+  title: string
+}) {
+  return (
+    <button
+      aria-label={ariaLabel}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
+        active
+          ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-green-300'
+          : 'text-slate-400 hover:bg-black/[0.04] hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200'
+      }`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      type="button"
+    >
+      {children}
+    </button>
   )
 }
 

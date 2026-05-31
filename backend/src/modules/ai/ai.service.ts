@@ -383,9 +383,10 @@ export class AiService {
     const parsedStructured = fallbackResponse
       ? { actions: fallbackResponse.actions ?? [], cards: fallbackResponse.cards ?? [] }
       : parseStructuredResponse(finalContent)
-    const structured = fallbackResponse
+    const filteredStructured = fallbackResponse
       ? parsedStructured
       : this.dataRequests.filterStructuredOutput(parsedStructured.cards, parsedStructured.actions, context, dataRequestResults)
+    const structured = completeStructuredFromBackend(safeMessage, filteredStructured, context, dataRequestResults)
     const displayContent = fallbackResponse ? fallbackResponse.content : stripJsonBlock(finalContent) || finalContent
 
     // 7. 写审计日志
@@ -1301,9 +1302,27 @@ function enrichCardsFromContext(
   actions: AiPendingAction[],
   context: UserContextSnapshot | null,
 ): AiCard[] {
-  if (!context || actions.length === 0) return cards
+  if (!context) return cards
 
-  const enriched = [...cards]
+  const enriched = cards.map((card) => {
+    if (card.type !== 'MALL_PRODUCT') return card
+
+    const match = context.mallSuggestions.find((product) => product.id === card.id)
+    if (!match) return card
+
+    return {
+      ...card,
+      canRedeem: match.canRedeem,
+      description: match.description,
+      imageUrl: match.imageUrl,
+      perUserLimit: match.perUserLimit,
+      pointsCost: match.pointsCost,
+      stock: match.stock,
+      userBalance: context.points.balance,
+    }
+  })
+  if (actions.length === 0) return enriched
+
   const existingIds = new Set(cards.map((c) => c.type + ':' + c.id))
 
   for (const action of actions) {
@@ -1373,4 +1392,87 @@ function enrichCardsFromContext(
   }
 
   return enriched
+}
+
+function completeStructuredFromBackend(
+  message: string,
+  structured: { actions: AiPendingAction[]; cards: AiCard[] },
+  context: UserContextSnapshot,
+  dataRequestResults: Array<{ ok: boolean; result?: unknown; tool: string }>,
+) {
+  const cards = [...structured.cards]
+  const actions = [...structured.actions]
+  const existingCardIds = new Set(cards.map((card) => `${card.type}:${card.id}`))
+  const existingActionIds = new Set(actions.map((action) => action.id))
+
+  if (hasMallIntent(message, context)) {
+    const products = selectMallProductsForBackendCompletion(message, context, dataRequestResults)
+
+    for (const product of products.slice(0, 6)) {
+      if (!existingCardIds.has(`MALL_PRODUCT:${product.id}`)) {
+        cards.push(buildMallProductCard(product, context))
+        existingCardIds.add(`MALL_PRODUCT:${product.id}`)
+      }
+
+      const actionId = `redeem_${product.id}`
+      if (product.canRedeem && !existingActionIds.has(actionId)) {
+        actions.push({
+          expiresIn: 300,
+          id: actionId,
+          label: '立即兑换',
+          payload: { productId: product.id },
+          type: 'MALL_REDEEM',
+        })
+        existingActionIds.add(actionId)
+      }
+    }
+  }
+
+  return { actions, cards }
+}
+
+function selectMallProductsForBackendCompletion(
+  message: string,
+  context: UserContextSnapshot,
+  dataRequestResults: Array<{ ok: boolean; result?: unknown; tool: string }>,
+) {
+  const productIdsFromTools = getMallProductIdsFromToolResults(dataRequestResults)
+  const productsFromTools = productIdsFromTools
+    .map((id) => context.mallSuggestions.find((product) => product.id === id))
+    .filter((product): product is UserContextSnapshot['mallSuggestions'][number] => Boolean(product))
+
+  if (productsFromTools.length > 0) {
+    return productsFromTools.sort((a, b) => Number(b.canRedeem) - Number(a.canRedeem) || a.pointsCost - b.pointsCost)
+  }
+
+  return filterMallProducts(message, context)
+}
+
+function getMallProductIdsFromToolResults(dataRequestResults: Array<{ ok: boolean; result?: unknown; tool: string }>) {
+  const ids: string[] = []
+  const seen = new Set<string>()
+
+  for (const result of dataRequestResults) {
+    if (!result.ok || !['get_redeem_eligibility', 'search_mall_products'].includes(result.tool)) continue
+    collectMallProductIds(result.result, ids, seen)
+  }
+
+  return ids
+}
+
+function collectMallProductIds(value: unknown, ids: string[], seen: Set<string>) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectMallProductIds(item, ids, seen))
+    return
+  }
+  if (!isRecord(value)) return
+
+  const id = typeof value.id === 'string' ? value.id : ''
+  const looksLikeProduct = typeof value.name === 'string' && ('pointsCost' in value || 'stock' in value)
+  if (id && looksLikeProduct && !seen.has(id)) {
+    ids.push(id)
+    seen.add(id)
+  }
+
+  for (const child of Object.values(value)) collectMallProductIds(child, ids, seen)
 }
