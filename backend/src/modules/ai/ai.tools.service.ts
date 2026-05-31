@@ -90,7 +90,7 @@ export class AiToolsService {
 
     // 学习建议：优先注入靶场，避免用户明确要靶场时被普通工具资料挤占上下文。
     const learningResult = hasLearning ? await this.learning.listVisibleResources() : { items: [] }
-    const learningItems = selectLearningSuggestions(learningResult.items, 8)
+    const learningItems = selectLearningSuggestions(learningResult.items, 12)
 
     // 商城建议：只在商城/兑换意图时注入，避免每轮把完整商品列表塞进 prompt。
     const mallResult = hasMall ? await this.pointsMall.listVisibleProducts(user) : { items: [] }
@@ -497,11 +497,11 @@ function sampleDiverse<T>(items: T[], n: number, keyFn: (item: T) => string): T[
 }
 
 function selectLearningSuggestions<T extends { id: string; category: string; kind: LearningResourceKind }>(items: T[], n: number): T[] {
-  const ranges = sampleDiverse(items.filter((item) => item.kind === LearningResourceKind.RANGE), Math.ceil(n * 0.75), (item) => item.category)
+  const ranges = items.filter((item) => item.kind === LearningResourceKind.RANGE)
   const selectedIds = new Set(ranges.map((item) => item.id))
   const resources = sampleDiverse(
     items.filter((item) => item.kind === LearningResourceKind.RESOURCE && !selectedIds.has(item.id)),
-    n - ranges.length,
+    Math.max(0, n - ranges.length),
     (item) => item.category,
   )
   return [...ranges, ...resources].slice(0, n)

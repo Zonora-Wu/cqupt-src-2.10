@@ -40,7 +40,7 @@ type UserContextDomain = 'points' | 'mall' | 'vulnerabilities' | 'learning'
 | `points` | 询问“我的积分/余额/够不够”等 | balance、earned、spent、pendingRedemptions | 1 份摘要 |
 | `mall` | 询问商城、兑换、商品、价格过滤、具体商品关键词 | 可见商品、真实商品 ID、价格、库存、限购、canRedeem、hasImage | 20 个商品 |
 | `vulnerabilities` | 询问“我的漏洞/我的报告/待补充/审核状态/证书”等 | 当前用户漏洞统计与近期报告真实 ID | 10 条近期报告 |
-| `learning` | 询问平台内学习资源、靶场、教程、资料、课程 | 平台可见学习资源真实 ID、标题、分类、kind | 8 个资源 |
+| `learning` | 询问平台内学习资源、靶场、教程、资料、课程 | 平台可见学习资源真实 ID、标题、分类、kind、description 摘要 | 12 个资源（优先完整覆盖靶场） |
 
 `mall` 会同时查询积分，因为兑换卡片需要 `userBalance` 与 `remainingAfterRedeem`。完整 `imageUrl`（尤其是 data URL / base64 图片）不得进入模型 prompt 或 `platformToolResults`；模型只看到 `hasImage`，最终 API 响应中的商品图片由后端按真实商品 ID 在卡片补全阶段回填。
 
@@ -59,14 +59,14 @@ type UserContextDomain = 'points' | 'mall' | 'vulnerabilities' | 'learning'
 当前分类由 `backend/src/modules/ai/ai.service.ts` 的 `selectContextDomains()` 完成：
 
 - `hasPersonalPointIntent()` -> `points`
-- `hasMallBrowseIntent()` / `hasPriceFilterIntent()` / `extractProductKeywords()` -> `points + mall`
+- `hasMallBrowseIntent()` / `hasPriceFilterIntent()` / `extractProductKeywords()` -> `points + mall`，但明确靶场/学习意图优先，不把“SQL 注入靶场”等关键词误判为商品搜索
 - `hasUserVulnerabilityListIntent()` -> `vulnerabilities`
 - `hasLearningResourceIntent()` -> `learning`
 - `hasUserSummaryIntent()` -> `points + vulnerabilities`
 - `hasAttachmentContext` -> `[]`
 - `forceFullContext`（Direct Response 兼容开关）-> 全部模块
 
-这层分类只做粗粒度模块选择，不做最终业务判断；最终回复仍由 Agent 基于已注入数据和 skill prompt 生成。
+这层分类只做粗粒度模块选择，不做最终业务判断；最终回复仍由 Agent 基于已注入数据和 skill prompt 生成。对于平台内靶场推荐，后端还会在结构化补全阶段按真实学习资源 ID 兜底补齐 `LEARNING_RESOURCE` 卡片和 `OPEN_LEARNING_RESOURCE` action，避免模型漏卡片、混入资料类资源或输出前端无法绑定的 action payload。
 
 ## 5. Prompt 与 dataRequests 约束
 
@@ -116,6 +116,8 @@ cd backend && npm run build
 | `推荐 400 积分以下商品` | `['points','mall']` |
 | `我有哪些待补充漏洞` | `['vulnerabilities']` |
 | `推荐平台靶场` | `['learning']` |
+| `推荐一个SQL注入靶场` | `['learning']`，返回 sqli-labs 等 RANGE 卡片 |
+| `我想练习XSS靶场` | `['learning']`，返回包含 XSS 模块的 RANGE 卡片 |
 | `我的平台概览` | `['points','vulnerabilities']` |
 | 带 PDF 附件的“帮我总结这份报告” | `[]`，仅使用附件上下文 |
 

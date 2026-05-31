@@ -682,16 +682,17 @@ function selectContextDomains(options: {
 
   const message = options.input.message
   const normalized = normalizeIntentText(message)
+  const learningIntent = hasLearningResourceIntent(message)
   const domains = new Set<UserContextDomain>()
 
   if (options.input.mode === 'student') {
     if (hasPersonalPointIntent(message)) domains.add('points')
-    if (hasMallBrowseIntent(normalized) || hasPriceFilterIntent(normalized) || extractProductKeywords(message).length > 0) {
+    if (!learningIntent && (hasMallBrowseIntent(normalized) || hasPriceFilterIntent(normalized) || extractProductKeywords(message).length > 0)) {
       domains.add('points')
       domains.add('mall')
     }
     if (hasUserVulnerabilityListIntent(message)) domains.add('vulnerabilities')
-    if (hasLearningResourceIntent(message)) domains.add('learning')
+    if (learningIntent) domains.add('learning')
     if (hasUserSummaryIntent(message)) {
       domains.add('points')
       domains.add('vulnerabilities')
@@ -1068,7 +1069,7 @@ function hasGreetingIntent(message: string): boolean {
 
 function hasLearningResourceIntent(message: string): boolean {
   const normalized = message.toLowerCase().replace(/\s+/g, '')
-  return /(?:平台|src|学习中心|资源库|站内|校内).{0,12}(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线)|(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线).{0,12}(?:平台|src|学习中心|资源库|站内|校内)|(?:推荐|找|有没有|查看|看看).{0,10}(?:靶场|学习资源|教程|资料|课程)/.test(normalized)
+  return /(?:平台|src|学习中心|资源库|站内|校内).{0,12}(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线)|(?:学习|资源|教程|资料|靶场|练习|实操|课程|路线).{0,12}(?:平台|src|学习中心|资源库|站内|校内)|(?:推荐|找|有没有|查看|看看|我想|想要|想练|练习|实操|入门|学习|想学|怎么学).{0,12}(?:靶场|学习资源|教程|资料|课程|练习环境|lab|range)|(?:靶场|练习环境|实操环境|lab|range)/.test(normalized)
 }
 
 function hasUserSummaryIntent(message: string): boolean {
@@ -1401,7 +1402,15 @@ function completeStructuredFromBackend(
   dataRequestResults: Array<{ ok: boolean; result?: unknown; tool: string }>,
 ) {
   const cards = [...structured.cards]
-  const actions = [...structured.actions]
+  const actions = structured.actions.map((action) => {
+    if (action.type !== 'OPEN_LEARNING_RESOURCE') return action
+    const resourceId = typeof action.payload?.resourceId === 'string'
+      ? action.payload.resourceId
+      : typeof action.payload?.id === 'string'
+        ? action.payload.id
+        : ''
+    return resourceId ? { ...action, payload: { ...action.payload, resourceId } } : action
+  })
   const existingCardIds = new Set(cards.map((card) => `${card.type}:${card.id}`))
   const existingActionIds = new Set(actions.map((action) => action.id))
 
@@ -1428,7 +1437,97 @@ function completeStructuredFromBackend(
     }
   }
 
+  if (hasLearningResourceIntent(message)) {
+    const resources = filterLearningResources(message, context)
+    const existingLearningActionResourceIds = new Set(
+      actions
+        .filter((action) => action.type === 'OPEN_LEARNING_RESOURCE')
+        .map((action) => action.payload?.resourceId)
+        .filter((resourceId): resourceId is string => typeof resourceId === 'string'),
+    )
+    for (const resource of resources.slice(0, 6)) {
+      if (!existingCardIds.has(`LEARNING_RESOURCE:${resource.id}`)) {
+        cards.push(buildLearningResourceCard(resource))
+        existingCardIds.add(`LEARNING_RESOURCE:${resource.id}`)
+      }
+
+      const actionId = `open_learning_${resource.id}`
+      if (!existingActionIds.has(actionId) && !existingLearningActionResourceIds.has(resource.id)) {
+        actions.push({
+          expiresIn: 300,
+          id: actionId,
+          label: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
+          payload: { resourceId: resource.id },
+          type: 'OPEN_LEARNING_RESOURCE',
+        })
+        existingActionIds.add(actionId)
+        existingLearningActionResourceIds.add(resource.id)
+      }
+    }
+  }
+
   return { actions, cards }
+}
+
+function buildLearningResourceCard(resource: UserContextSnapshot['learningSuggestions'][number]): AiCard {
+  return {
+    actionLabel: resource.kind === 'RANGE' ? '进入靶场' : '查看资源',
+    category: resource.category,
+    description: resource.description,
+    id: resource.id,
+    kind: resource.kind,
+    title: resource.title,
+    type: 'LEARNING_RESOURCE',
+  }
+}
+
+function filterLearningResources(message: string, context: UserContextSnapshot) {
+  const normalized = normalizeIntentText(message)
+  const keywords = extractLearningKeywords(message)
+  const wantsRange = /靶场|练习环境|实操环境|实操|练习|lab|range/.test(normalized)
+  const wantsResource = /教程|资料|文档|工具|课程/.test(normalized) && !wantsRange
+  let resources = context.learningSuggestions
+
+  if (wantsRange) resources = resources.filter((resource) => resource.kind === 'RANGE')
+  if (wantsResource) resources = resources.filter((resource) => resource.kind === 'RESOURCE')
+
+  if (keywords.length > 0) {
+    const matched = resources.filter((resource) => learningResourceMatchesKeywords(resource, keywords))
+    if (matched.length > 0) resources = matched
+  }
+
+  return resources
+}
+
+function learningResourceMatchesKeywords(resource: UserContextSnapshot['learningSuggestions'][number], keywords: string[]) {
+  const haystack = normalizeLearningSearchText(`${resource.title} ${resource.category} ${resource.description ?? ''}`)
+  return keywords.some((keyword) => haystack.includes(normalizeLearningSearchText(keyword)))
+}
+
+function extractLearningKeywords(message: string): string[] {
+  const normalized = message.toLowerCase()
+  const keywords: string[] = []
+  const keywordPatterns = [
+    /sql\s*注入|sqli|sql/i,
+    /xss|跨站/i,
+    /文件上传|上传/i,
+    /ssrf/i,
+    /csrf/i,
+    /越权|权限控制/i,
+    /代码审计/i,
+    /web/i,
+    /综合|cve|漏洞复现/i,
+  ]
+
+  for (const pattern of keywordPatterns) {
+    const match = normalized.match(pattern)
+    if (match?.[0]) keywords.push(match[0])
+  }
+  return [...new Set(keywords)]
+}
+
+function normalizeLearningSearchText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, '').replace(/sql注入|sql-injection/g, 'sqli')
 }
 
 function selectMallProductsForBackendCompletion(

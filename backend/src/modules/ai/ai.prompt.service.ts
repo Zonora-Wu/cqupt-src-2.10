@@ -65,7 +65,7 @@ function buildContextPrompt(context: UserContextSnapshot): string {
   // 学习推荐 — 包含 ID
   if (injected.has('learning') && context.learningSuggestions.length > 0) {
     const items = context.learningSuggestions
-      .map((r) => `{id:"${r.id}",title:"${r.title}",category:"${r.category}",kind:"${r.kind}"}`)
+      .map((r) => `{id:"${r.id}",title:"${r.title}",category:"${r.category}",kind:"${r.kind}",description:"${(r.description ?? '').slice(0, 160)}"}`)
       .join(', ')
     parts.push(`- 学习资源[JSON]（共 ${context.learningSuggestions.length} 个推荐）：${items}`)
   }
