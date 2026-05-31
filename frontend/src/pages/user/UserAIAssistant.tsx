@@ -7,6 +7,7 @@ import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
 import { getAiAppearance, getAiQuota, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
+import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
 
@@ -1344,7 +1345,37 @@ function AiCardRenderer({
   }
 }
 
-function LearningResourceCard({ card }: { card: AiCard & { type: 'LEARNING_RESOURCE' }; action?: AiPendingAction }) {
+function LearningResourceCard({ action, card }: { card: AiCard & { type: 'LEARNING_RESOURCE' }; action?: AiPendingAction }) {
+  const [openState, setOpenState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [openError, setOpenError] = useState('')
+  const resourceId = typeof action?.payload?.resourceId === 'string' ? action.payload.resourceId : card.id
+  const actionLabel = card.kind === 'RANGE' ? '进入靶场' : card.actionLabel || '查看资源'
+
+  const handleOpen = async () => {
+    setOpenState('loading')
+    setOpenError('')
+    const popup = window.open('about:blank', '_blank')
+    if (popup) {
+      popup.opener = null
+      popup.document.title = card.kind === 'RANGE' ? '正在进入靶场...' : '正在访问资源...'
+      popup.document.body.innerHTML = '<p style="font-family: system-ui, sans-serif; padding: 24px; color: #475569;">正在打开资源，请稍候...</p>'
+    }
+
+    try {
+      const result = await clickLearningResource(resourceId)
+      if (popup) {
+        popup.location.href = result.url
+      } else {
+        window.open(result.url, '_blank', 'noopener,noreferrer')
+      }
+      setOpenState('idle')
+    } catch (error) {
+      popup?.close()
+      setOpenError(error instanceof Error ? error.message : '资源访问失败，请稍后重试')
+      setOpenState('error')
+    }
+  }
+
   return (
     <div className="flex h-full flex-col rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex flex-1 items-start gap-3">
@@ -1362,16 +1393,19 @@ function LearningResourceCard({ card }: { card: AiCard & { type: 'LEARNING_RESOU
         </div>
       </div>
       <div className="mt-auto flex gap-2 pt-3">
-        <a
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
-          href={`/learning/${card.id}`}
-          rel="noreferrer"
-          target="_blank"
+        <button
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+          disabled={openState === 'loading'}
+          onClick={() => void handleOpen()}
+          type="button"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          {card.actionLabel || '进入靶场'}
-        </a>
+          {openState === 'loading' ? '打开中...' : actionLabel}
+        </button>
       </div>
+      {openState === 'error' && openError && (
+        <p className="mt-2 text-xs leading-5 text-red-500 dark:text-red-300">{openError}</p>
+      )}
     </div>
   )
 }

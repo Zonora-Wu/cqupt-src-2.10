@@ -24,7 +24,6 @@ type LaptopSceneProps = {
   dragRotation: { x: number; y: number }
   lidOpen: boolean
   onKeyboardPress: () => void
-  onLidToggle: () => void
   theme: SceneTheme
 }
 
@@ -110,6 +109,12 @@ export function KaliLaptopShowcase() {
       <div
         aria-label="ROG 笔记本电脑 3D 模型展示，可拖动查看"
         className="absolute -inset-x-20 z-[90] cursor-grab touch-none select-none active:cursor-grabbing md:-inset-x-36"
+        onClick={() => {
+          const shouldToggleLid = pointerRef.current.travel < 6 && !suppressNextClickRef.current
+          suppressNextClickRef.current = false
+          pointerRef.current.travel = 0
+          if (shouldToggleLid) setLidOpen((current) => !current)
+        }}
         onPointerCancel={stopDragging}
         onPointerDown={(event) => {
           pointerRef.current = { dragging: true, lastX: event.clientX, lastY: event.clientY, travel: 0 }
@@ -134,11 +139,7 @@ export function KaliLaptopShowcase() {
           }))
         }}
         onPointerUp={(event) => {
-          const wasClick = pointerRef.current.travel < 6
-          const shouldToggleLid = wasClick && !suppressNextClickRef.current
-          suppressNextClickRef.current = false
           stopDragging(event)
-          if (shouldToggleLid) setLidOpen((current) => !current)
         }}
         style={{ bottom: -canvasBounds.bottom, top: -canvasBounds.top }}
       >
@@ -161,11 +162,6 @@ export function KaliLaptopShowcase() {
             onKeyboardPress={() => {
               suppressNextClickRef.current = true
               pointerRef.current.travel = 999
-            }}
-            onLidToggle={() => {
-              suppressNextClickRef.current = true
-              pointerRef.current.travel = 999
-              setLidOpen((current) => !current)
             }}
             theme={theme}
           />
@@ -265,7 +261,7 @@ function ExrEnvironment({ exposure }: { exposure: number }) {
   return null
 }
 
-function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, onLidToggle, theme }: LaptopSceneProps) {
+function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, theme }: LaptopSceneProps) {
   const groupRef = useRef<THREE.Group | null>(null)
   const lidRef = useRef<THREE.Object3D | null>(null)
   const lidClosedQuaternionRef = useRef(new THREE.Quaternion())
@@ -425,16 +421,10 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
             releaseKeyboardKeyForPointer(event.pointerId)
           }}
           onPointerUp={(event: ThreeEvent<PointerEvent>) => {
-            const key = findKeyboardKey(event.object)
             releaseKeyboardKeyForPointer(event.pointerId)
             if (event.target instanceof Element && event.target.hasPointerCapture(event.pointerId)) {
               event.target.releasePointerCapture(event.pointerId)
             }
-            if (key || event.delta >= 6) return
-
-            event.stopPropagation()
-            event.nativeEvent.stopPropagation()
-            onLidToggle()
           }}
         />
       )}
@@ -518,8 +508,8 @@ function normalizeLaptopModel(source: THREE.Group): LaptopModel {
 }
 
 function findLaptopLid(model: THREE.Group) {
-  const exact = model.getObjectByName('ab面')
-  if (exact) return exact
+  const knownLid = model.getObjectByName('ab面') ?? model.getObjectByName('ab面.001')
+  if (knownLid) return knownLid
 
   const abFaceCandidates: THREE.Object3D[] = []
   model.traverse((object) => {
