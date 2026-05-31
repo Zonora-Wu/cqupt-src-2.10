@@ -106,10 +106,11 @@ export class AiDataRequestService {
   }
 
   buildResultPrompt(results: AiDataRequestResult[]): string {
+    const promptSafeResults = stripPromptUnsafeMediaFields(results)
     return [
       '【platformToolResults】',
-      '以下 JSON 是 NestJS 后端基于当前登录用户 JWT/RBAC 执行只读平台数据请求后的结果。只能使用这些结果和上一轮上下文回答；不要编造未返回的数据。',
-      JSON.stringify(results, null, 2),
+      '以下 JSON 是 NestJS 后端基于当前登录用户 JWT/RBAC 执行只读平台数据请求后的结果。只能使用这些结果和上一轮上下文回答；不要编造未返回的数据。图片字段不会进入模型上下文，商品卡片图片会由后端按真实 id 在最终响应阶段补全。',
+      JSON.stringify(promptSafeResults, null, 2),
       '请现在生成最终中文回复。如果需要商品/学习资源/漏洞卡片，只能引用 platformToolResults 或已注入上下文中的真实 id。最终回复末尾可输出 cards/actions JSON，但不要再输出 dataRequests。',
     ].join('\n')
   }
@@ -177,6 +178,21 @@ function safeParseJson(value: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stripPromptUnsafeMediaFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripPromptUnsafeMediaFields)
+  if (!isRecord(value)) return value
+
+  const next: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'imageUrl') {
+      next.hasImage = typeof child === 'string' && child.length > 0
+      continue
+    }
+    next[key] = stripPromptUnsafeMediaFields(child)
+  }
+  return next
 }
 
 function buildAllowedIdSet(context: UserContextSnapshot, results: AiDataRequestResult[]) {

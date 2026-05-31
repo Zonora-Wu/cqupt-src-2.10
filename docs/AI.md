@@ -352,9 +352,11 @@ export type UserContextSnapshot = {
       stock: number
       perUserLimit?: number | null
       canRedeem: boolean
-      imageUrl?: string | null
+      hasImage?: boolean
     }>
   }
+
+  // 注意：完整 imageUrl 不进入模型上下文；商品卡片图片由后端按真实 ID 在最终响应阶段补全。
 
   vulnerabilities?: {
     total: number

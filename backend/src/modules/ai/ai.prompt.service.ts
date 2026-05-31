@@ -70,25 +70,11 @@ function buildContextPrompt(context: UserContextSnapshot): string {
     parts.push(`- 学习资源[JSON]（共 ${context.learningSuggestions.length} 个推荐）：${items}`)
   }
 
-  // 商城推荐 — 包含 ID
+  // 商城结构化列表放在 user prompt 的 platformRuntimeData，避免 system prompt 与 user prompt 重复注入。
   if (injected.has('mall') && context.mallSuggestions.length > 0) {
-    parts.push(`- 积分商城商品完整列表[JSONL]（平台当前共 ${context.mallSuggestions.length} 个可见商品，以下逐条完整列出）：`)
-    for (const p of context.mallSuggestions) {
-      parts.push(
-        `  ${JSON.stringify({
-          canRedeem: p.canRedeem,
-          category: p.category,
-          description: p.description ?? '',
-          id: p.id,
-          imageUrl: p.imageUrl,
-          name: p.name,
-          perUserLimit: p.perUserLimit,
-          points: p.pointsCost,
-          remainingAfterRedeem: p.remainingAfterRedeem,
-          stock: p.stock,
-        })}`,
-      )
-    }
+    parts.push(
+      `- 积分商城：本轮已注入 ${context.mallSuggestions.length} 个可见商品，结构化详情见附加上下文 platformRuntimeData.mallProducts；图片字段不进入模型上下文。`,
+    )
   }
 
   parts.push(
@@ -118,7 +104,7 @@ function getCardOutputRules(): string {
 ` + '```json' + `
 {"cards":[{"type":"LEARNING_RESOURCE|MALL_PRODUCT|VULNERABILITY",...}],"actions":[{"type":"MALL_REDEEM|OPEN_LEARNING_RESOURCE|VIEW_VULNERABILITY","label":"按钮文字","id":"act_xxx","payload":{}}]}
 ` + '```' + `
-MALL_PRODUCT 必填: type,id,name,pointsCost,stock,userBalance,canRedeem,imageUrl(可为null)
+MALL_PRODUCT 必填: type,id,name,pointsCost,stock,userBalance,canRedeem；不要输出 imageUrl，后端会按真实 id 补全图片
 用户询问商品/兑换结果时，应尽量输出 MALL_PRODUCT 卡片。可兑换列表只放 canRedeem=true；不可兑换列表只放 canRedeem=false
 LEARNING_RESOURCE 必填: type,id,title,category,kind,actionLabel。平台资源卡片只能引用上下文里的真实资源。用户要求平台靶场时，LEARNING_RESOURCE.kind 必须为 RANGE，按钮文案用“进入靶场”；RESOURCE 只能在用户要求资料/教程/文档时推荐。用户要求全网/热门/公开靶场且平台上下文没有全网热度数据时，不要输出平台资源卡片，只给文本建议
 VULNERABILITY 必填: type,id,reportNo,title,status,severity,needsSupplement

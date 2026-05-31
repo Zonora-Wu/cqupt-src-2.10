@@ -38,11 +38,11 @@ type UserContextDomain = 'points' | 'mall' | 'vulnerabilities' | 'learning'
 | 模块 | 触发场景 | 注入数据 | 当前上限 |
 |---|---|---|---|
 | `points` | 询问“我的积分/余额/够不够”等 | balance、earned、spent、pendingRedemptions | 1 份摘要 |
-| `mall` | 询问商城、兑换、商品、价格过滤、具体商品关键词 | 可见商品、真实商品 ID、价格、库存、限购、canRedeem、imageUrl | 20 个商品 |
+| `mall` | 询问商城、兑换、商品、价格过滤、具体商品关键词 | 可见商品、真实商品 ID、价格、库存、限购、canRedeem、hasImage | 20 个商品 |
 | `vulnerabilities` | 询问“我的漏洞/我的报告/待补充/审核状态/证书”等 | 当前用户漏洞统计与近期报告真实 ID | 10 条近期报告 |
 | `learning` | 询问平台内学习资源、靶场、教程、资料、课程 | 平台可见学习资源真实 ID、标题、分类、kind | 8 个资源 |
 
-`mall` 会同时查询积分，因为兑换卡片需要 `userBalance` 与 `remainingAfterRedeem`。
+`mall` 会同时查询积分，因为兑换卡片需要 `userBalance` 与 `remainingAfterRedeem`。完整 `imageUrl`（尤其是 data URL / base64 图片）不得进入模型 prompt 或 `platformToolResults`；模型只看到 `hasImage`，最终 API 响应中的商品图片由后端按真实商品 ID 在卡片补全阶段回填。
 
 ## 3. 不注入规则
 
