@@ -12,7 +12,6 @@ const LID_ANIMATION_SECONDS = 1.05
 const KEY_PRESS_DEPTH = 0.0025
 const KEY_PRESS_DOWN_SECONDS = 0.07
 const KEY_RELEASE_SECONDS = 0.14
-const LOCAL_X_AXIS = new THREE.Vector3(1, 0, 0)
 
 let laptopModelPromise: Promise<THREE.Group> | null = null
 let environmentTexturePromise: Promise<THREE.DataTexture> | null = null
@@ -109,12 +108,6 @@ export function KaliLaptopShowcase() {
       <div
         aria-label="ROG 笔记本电脑 3D 模型展示，可拖动查看"
         className="absolute -inset-x-20 z-[90] cursor-grab touch-none select-none active:cursor-grabbing md:-inset-x-36"
-        onClick={() => {
-          const shouldToggleLid = pointerRef.current.travel < 6 && !suppressNextClickRef.current
-          suppressNextClickRef.current = false
-          pointerRef.current.travel = 0
-          if (shouldToggleLid) setLidOpen((current) => !current)
-        }}
         onPointerCancel={stopDragging}
         onPointerDown={(event) => {
           pointerRef.current = { dragging: true, lastX: event.clientX, lastY: event.clientY, travel: 0 }
@@ -139,7 +132,11 @@ export function KaliLaptopShowcase() {
           }))
         }}
         onPointerUp={(event) => {
+          const shouldToggleLid = pointerRef.current.travel < 6 && !suppressNextClickRef.current
           stopDragging(event)
+          suppressNextClickRef.current = false
+          pointerRef.current.travel = 0
+          if (shouldToggleLid) setLidOpen((current) => !current)
         }}
         style={{ bottom: -canvasBounds.bottom, top: -canvasBounds.top }}
       >
@@ -261,13 +258,18 @@ function ExrEnvironment({ exposure }: { exposure: number }) {
   return null
 }
 
-function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress, theme }: LaptopSceneProps) {
+function LaptopScene({
+  baseCanvasHeight,
+  dragRotation,
+  lidOpen,
+  onKeyboardPress,
+  theme,
+}: LaptopSceneProps) {
   const groupRef = useRef<THREE.Group | null>(null)
   const lidRef = useRef<THREE.Object3D | null>(null)
-  const lidClosedQuaternionRef = useRef(new THREE.Quaternion())
+  const lidClosedRotationXRef = useRef(0)
   const lidAnimationRef = useRef<LidAnimation>({ from: 0, startedAt: 0, to: 0 })
   const lidProgressRef = useRef(0)
-  const lidTargetQuaternionRef = useRef(new THREE.Quaternion())
   const keyPressesRef = useRef<Map<string, KeyPressState>>(new Map())
   const activePointerKeysRef = useRef<Map<number, string>>(new Map())
   const [model, setModel] = useState<THREE.Group | null>(null)
@@ -288,7 +290,7 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
         if (cancelled) return
         const normalized = normalizeLaptopModel(source)
         lidRef.current = normalized.lid
-        lidClosedQuaternionRef.current.copy(normalized.lid?.quaternion ?? new THREE.Quaternion())
+        lidClosedRotationXRef.current = normalized.lid?.rotation.x ?? 0
         setModel(normalized.root)
       })
       .catch((error) => {
@@ -357,10 +359,7 @@ function LaptopScene({ baseCanvasHeight, dragRotation, lidOpen, onKeyboardPress,
       const idleLidMotion = lidProgress > 0.96 ? Math.sin(elapsed * 0.92) * 0.012 : 0
       const openDelta = THREE.MathUtils.degToRad(LID_OPEN_DELTA_DEGREES * lidProgress) + idleLidMotion
       lidProgressRef.current = lidProgress
-      lidTargetQuaternionRef.current
-        .copy(lidClosedQuaternionRef.current)
-        .multiply(new THREE.Quaternion().setFromAxisAngle(LOCAL_X_AXIS, openDelta))
-      lid.quaternion.copy(lidTargetQuaternionRef.current)
+      lid.rotation.x = lidClosedRotationXRef.current + openDelta
     }
 
     for (const [id, press] of keyPressesRef.current) {
@@ -508,7 +507,7 @@ function normalizeLaptopModel(source: THREE.Group): LaptopModel {
 }
 
 function findLaptopLid(model: THREE.Group) {
-  const knownLid = model.getObjectByName('ab面') ?? model.getObjectByName('ab面.001')
+  const knownLid = model.getObjectByName('ab面') ?? model.getObjectByName('ab面.001') ?? model.getObjectByName('ab面001')
   if (knownLid) return knownLid
 
   const abFaceCandidates: THREE.Object3D[] = []

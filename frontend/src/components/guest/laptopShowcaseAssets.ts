@@ -1,5 +1,5 @@
 export const ENVIRONMENT_MAP_URL = '/hdr/sunset_2K_65d6cbb9-5c06-44f8-9be3-41df7a99f52a.exr'
-export const LAPTOP_MODEL_URL = '/models/幻14笔记本电脑添加贴纸，去镭射孔版.glb?v=20260531-sticker-cover'
+export const LAPTOP_MODEL_URL = '/models/幻14笔记本电脑，整理后，去镭射孔.glb?v=20260531-cleaned-no-laser-holes'
 
 let preloaded = false
 

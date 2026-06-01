@@ -1,11 +1,11 @@
 # 企业级 SRC 平台 AI 接入框架
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-28 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路，并已落地最小上下文 + dataRequests 后端托管工具网关。
+> 文档同步状态：2026-06-01 已按新版 AI 知识沉淀与持续维护方案更新。当前 AI Gateway 目标方案包含：每次进入邮宝默认开启新的问题会话、用户确认已解决后再总结沉淀、AI + 规则评分、相似问题聚类、高频高质量自动入库、知识库回答复用、前端来源标注，以及入库后的反馈驱动修订、过期复审、重复合并、降级暂停、知识投毒防护、归档和进度验收表。Context Injection 与 dataRequests 后端托管工具网关继续作为实时平台数据查询边界。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_CONTEXT_INJECTION.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 本文档定义 CQUPT-SRC 平台的企业级 AI 接入框架。目标不是简单把聊天框接入大模型，而是在 SRC 平台内部构建一个安全、可审计、可扩展、可降级、按角色隔离的 AI Gateway 能力层。
@@ -14,11 +14,13 @@ AI 在平台中的定位是“安全运营智能层”：辅助用户理解平�
 
 平台用户侧 AI 助手的产品名统一定义为 **邮宝**。用户界面、对话自称、管理员外观配置和文档描述中，面向用户的助手名称应使用“邮宝”；Hermes Agent 仅作为底层 OpenAI-compatible Agent / skills 运行时名称，不直接作为用户侧品牌名。
 
-相关运行环境文档：
+相关运行环境与架构文档：
 
 - `docs/HERMES_RUNTIME.md`：记录 CQUPT-SRC 平台实际使用的 Hermes 独立容器目录、Docker Compose、`/opt/data` 挂载、skills 同步路径和常用维护命令。
 - `docs/AI_SKILLS.md`：记录 CQUPT-SRC 专属 Hermes skills 规划。
-- `docs/AI_KNOWLEDGE_BASE.md`：记录用户问答经验沉淀与 Skill 晋升方案。
+- `docs/AI_KNOWLEDGE_BASE.md`：记录问题会话式知识沉淀、自动入库、知识库复用与 Skill 晋升方案。
+- `docs/architecture/AI_CONTEXT_INJECTION.md`：记录最小上下文与 dataRequests 后端托管工具网关。
+- `docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`：记录问题会话生命周期、知识聚类和来源标注的落地架构。
 
 ---
 
@@ -27,12 +29,12 @@ AI 在平台中的定位是“安全运营智能层”：辅助用户理解平�
 当前 AI 子系统已经从聊天框原型演进为后端代理的邮宝 AI Gateway：
 
 - `backend/src/modules/ai/`：负责 AI 健康检查、外观配置、配额、Skill 路由、`/api/ai/chat`、附件文本提取、报告草稿、Action Proposal 确认。
-- `backend/src/modules/ai-knowledge/`：负责 AI Knowledge Base、会话级知识沉淀、AI 评分、相似去重、管理员审核、反馈、Skill Candidate 与受控安装。
-- `frontend/src/pages/user/UserAIAssistant.tsx`：用户端邮宝助手，支持 Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片和回到底部按钮。
-- `frontend/src/pages/admin/AdminAiKnowledgeManagement.tsx`：管理员知识沉淀页面，展示会话队列、AI 总结、评分、重复风险、相似知识、合并建议和 Skill Candidate 状态。
+- `backend/src/modules/ai-knowledge/`：负责 AI Knowledge Base、问题会话式知识沉淀、AI 评分、相似去重、问题聚类、管理员审核、反馈、Skill Candidate 与受控安装。
+- `frontend/src/pages/user/UserAIAssistant.tsx`：用户端邮宝助手，目标交互包含 Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片、问题会话、离开过久后的解决确认弹框和知识库来源标注。
+- `frontend/src/pages/admin/AdminAiKnowledgeManagement.tsx`：管理员知识沉淀页面，目标展示问题会话队列、AI 总结、评分、重复风险、相似知识、合并建议、自动入库条目和 Skill Candidate 状态。
 - 平台 Hermes 运行于 `/home/cocking/cqupt-src-hermes-linux/`，对后端暴露 `http://localhost:5000/v1/chat/completions`；CLI Hermes 的 `/home/cocking/.hermes/` 不参与平台用户请求。
 
-当前默认策略：强业务查询先走后端确定性响应；开放式问题才调用 Hermes Agent；含附件上下文时跳过确定性业务命中，避免“报告/漏洞”等关键词误吞用户的附件问题；知识沉淀必须脱敏、泛化、评分、去重并通过管理员审核。
+当前默认策略：强业务查询先走后端确定性响应；开放式问题才调用 Hermes Agent；含附件上下文时跳过确定性业务命中，避免“报告/漏洞”等关键词误吞用户的附件问题；知识沉淀以已解决的问题会话为单位，必须脱敏、泛化、评分、去重并通过管理员审核或后端高频高质量阈值判定；知识库参与回答时必须向前端返回 `usedKnowledge` 与 `knowledgeSources`，由前端在回复底部标明平台知识来源；已入库知识必须持续维护，结合命中、显式/隐式反馈、举报、过期反馈、重复风险、知识投毒风险和平台规则变化进行修订、合并、降级、暂停、归档或晋升 Skill；实施进度必须用“完成定义 + 验收规则”逐项追踪。
 
 ---
 
@@ -975,9 +977,174 @@ export type AiPendingAction = {
 
 ---
 
-## 13. 安全边界
+## 13. 问题会话式知识沉淀
 
-### 13.1 绝对禁止
+详细方案见 `docs/AI_KNOWLEDGE_BASE.md` 和 `docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`。本节只记录 AI Gateway 的集成边界。
+
+### 13.1 会话生命周期
+
+邮宝用户端 AI 助手不应把浏览器本地历史当作平台知识来源。每次用户进入 AI 助手，前端应创建或恢复一个后端 `AiProblemSession`，后续 `/api/ai/chat` 请求携带 `sessionId`。用户端页面左侧应提供历史问题会话列表，但历史列表只作为用户选择入口，不自动注入新会话上下文。
+
+```text
+进入 AI 助手
+  -> GET /api/ai/problem-sessions/history 加载左侧历史
+  -> GET /api/ai/problem-sessions/active 或 POST /api/ai/problem-sessions
+  -> 多轮 POST /api/ai/chat(sessionId)
+  -> 每条 assistant 回复返回 assistantTurnId / knowledgeHitIds
+  -> 用户可在回复底部点赞/点踩
+  -> heartbeat / leave 更新活动状态
+  -> 离开过久后询问是否解决
+  -> 用户确认已解决
+  -> summarizeResolvedSession
+```
+
+会话未确认已解决时，只记录脱敏 turns，不进入知识库沉淀。
+
+### 13.2 已解决后再沉淀
+
+用户点击“已解决，沉淀经验”后，后端才对本次会话做：
+
+1. 加载脱敏后的 user / assistant turns。
+2. 生成结构化总结：问题、解决方案、成功步骤、失败尝试、踩坑点、适用环境。
+3. AI + 规则混合评分。
+4. 隐私、敏感信息、prompt injection 和越权风险检查。
+5. 相似知识去重和问题聚类。
+6. 进入管理员审核，或在满足高频高质量阈值时创建 `AUTO_APPROVED` 知识。
+
+AI 只输出总结和评分建议，不能自己决定写库。后端状态机负责最终判定。
+
+### 13.3 知识库回答复用
+
+`POST /api/ai/chat` 的问答路由顺序为：
+
+```text
+Direct Response
+  -> Knowledge Retrieval
+  -> Knowledge Direct Answer / Knowledge Injected Agent
+  -> Normal Hermes Agent
+```
+
+Direct Response 必须优先，因为积分、商城库存、漏洞状态、证书状态等实时业务数据不能由历史知识库回答。
+
+知识库命中策略：
+
+```text
+similarity >= 0.88       直接使用知识库回答
+0.75 <= similarity < 0.88 注入 Agent 作为参考
+similarity < 0.75        不使用知识库
+```
+
+### 13.4 来源标注
+
+只要回答使用了平台知识库，后端响应必须包含：
+
+```json
+{
+  "usedKnowledge": true,
+  "knowledgeSources": [
+    {
+      "id": "knowledge_xxx",
+      "title": "知识标题",
+      "sourceType": "PLATFORM_KB",
+      "confidence": 0.91
+    }
+  ]
+}
+```
+
+前端必须在 assistant bubble 底部展示“本回答参考了平台知识库中的已审核经验”或同等文案。来源标注应嵌在 AI 回复框内部，不应在回复和卡片之间插入大块分割背景。
+
+### 13.5 左侧历史会话
+
+用户 AI 助手页应采用“左侧历史会话 + 右侧当前聊天”的结构。左侧历史会话用于恢复未结束问题、查看已解决问题和基于历史问题创建新会话，不得把历史会话自动作为当前问题上下文。
+
+推荐行为：
+
+| 历史会话状态 | 用户点击后的行为 |
+|---|---|
+| `ACTIVE` / `AWAITING_RESOLUTION` | 恢复原 session，继续对话或询问是否已解决 |
+| `RESOLVED` / `SUMMARIZED` / `READY_REVIEW` | 默认只读查看；继续追问时 fork 新 session |
+| `APPROVED_TO_KB` / `AUTO_APPROVED` | 可展示关联知识条目，并允许基于该知识继续问 |
+| `DISCARDED` / `ABANDONED` | 只展示最小摘要，可归档隐藏 |
+
+接口建议：
+
+```text
+GET  /api/ai/problem-sessions/history
+PATCH /api/ai/problem-sessions/:id/title
+POST /api/ai/problem-sessions/:id/archive
+POST /api/ai/problem-sessions/:id/fork
+```
+
+### 13.6 回复点赞/点踩
+
+每条 assistant 回复底部必须提供“有帮助 / 没帮助”反馈按钮。反馈应与来源标注一起嵌在同一个 assistant bubble 内部，不要拆到回复框外。
+
+后端响应需要返回：
+
+```json
+{
+  "sessionId": "cuid_problem_session_xxx",
+  "userTurnId": "turn_user_xxx",
+  "assistantTurnId": "turn_assistant_xxx",
+  "knowledgeHitIds": ["hit_xxx"],
+  "usedKnowledge": true
+}
+```
+
+反馈提交：
+
+```text
+POST /api/ai/problem-sessions/:id/turns/:turnId/feedback
+```
+
+请求示例：
+
+```json
+{
+  "rating": "UP",
+  "reason": "步骤可执行，问题已解决"
+}
+```
+
+评分规则：
+
+- 未使用知识库的回复：反馈只进入 `AiProblemSessionTurn`，用于本次会话总结质量判断。
+- 使用知识库的回复：反馈同时进入 `AiProblemSessionTurn`、`AiKnowledgeHit` 和知识条目的反馈汇总。
+- 点赞较多的 turn 在会话总结时优先提取为成功步骤。
+- 点踩较多的 turn 在会话总结时作为失败尝试或不推荐路径。
+- 自动入库必须增加正向反馈门槛：`upCount >= 3` 且 `positiveRate >= 0.80`。
+- 最近点踩率过高或点踩原因为安全风险时，该知识必须从直接回答降级或暂停使用。
+
+---
+
+### 13.7 知识库持续维护边界
+
+AI Knowledge Base 不是一次性 FAQ。`APPROVED` / `AUTO_APPROVED` 条目入库后仍要受后端状态机和维护 Worker 管理：
+
+```text
+AiKnowledgeHit + AiKnowledgeFeedback + AbuseReport + 平台规则变更
+  -> 质量分 / 新鲜度 / 点踩率 / 重复风险计算
+  -> maintenanceStatus 更新
+  -> 修订、合并、降级、暂停、恢复、归档或 Skill 晋升
+  -> Knowledge Retrieval 按维护状态过滤
+```
+
+检索边界：
+
+- `HEALTHY`：允许按相似度直接回答或注入 Agent。
+- `LOW_QUALITY_REVIEW`：默认不直接回答，可降级为注入 Agent 或进入管理员复审。
+- `DIRECT_DISABLED`：禁止高置信直接回答，但可作为 Agent 参考。
+- `STALE_REVIEW` / `RETRIEVAL_DISABLED` / `SECURITY_SUSPENDED` / `ARCHIVED`：普通用户不可命中。
+- 任何手工修订、合并、过期修复和安全修复都必须创建不可变 `AiKnowledgeRevision` 快照，保留可审计版本历史。
+- 安全举报、知识投毒或越权风险应立即进入 `SECURITY_SUSPENDED`，而不是等待下次人工巡检。
+- Knowledge Retrieval 必须先按 roleScope / visibility / sensitivity / maintenanceStatus / retrievalPolicy 过滤，再计算相似度。
+
+---
+
+## 14. 安全边界
+
+### 14.1 绝对禁止
 
 - 前端直连 Hermes Agent。
 - 前端持有模型 API Key。
@@ -988,7 +1155,7 @@ export type AiPendingAction = {
 - AI 输出原始敏感附件内容。
 - AI 输出其他用户数据。
 
-### 13.2 后端必须重新校验
+### 14.2 后端必须重新校验
 
 这些字段即使来自 AI 输出，也必须重新查库：
 
@@ -1005,7 +1172,7 @@ stock
 status
 ```
 
-### 13.3 Prompt Injection 防护
+### 14.3 Prompt Injection 防护
 
 如果用户输入包含：
 
@@ -1024,7 +1191,7 @@ status
 - 返回安全拒答或普通解释。
 - 写入 AI 安全审计事件。
 
-### 13.4 输出脱敏
+### 14.4 输出脱敏
 
 建议实现 `AiRedactionService`：
 
@@ -1038,9 +1205,9 @@ API Key：[REDACTED_SECRET]
 
 ---
 
-## 14. 审计与可观测性
+## 15. 审计与可观测性
 
-### 14.1 AiCallLog
+### 15.1 AiCallLog
 
 ```ts
 export type AiCallLog = {
@@ -1063,7 +1230,7 @@ export type AiCallLog = {
 }
 ```
 
-### 14.2 AuditLog 事件
+### 15.2 AuditLog 事件
 
 AI 相关平台审计事件：
 
@@ -1079,7 +1246,7 @@ AI_SECURITY_REJECTED
 AI_OUTPUT_REDACTED
 ```
 
-### 14.3 指标
+### 15.3 指标
 
 需要监控：
 
@@ -1097,9 +1264,9 @@ AI_OUTPUT_REDACTED
 
 ---
 
-## 15. 配额、限流与降级
+## 16. 配额、限流与降级
 
-### 15.1 配额
+### 16.1 配额
 
 按角色设置默认配额：
 
@@ -1111,7 +1278,7 @@ AI_OUTPUT_REDACTED
 
 Direct Response 成本低，可以单独计数。
 
-### 15.2 限流
+### 16.2 限流
 
 建议：
 
@@ -1121,7 +1288,7 @@ Direct Response 成本低，可以单独计数。
 Agent 调用：每用户每分钟 3 次
 ```
 
-### 15.3 降级策略
+### 16.3 降级策略
 
 当 Agent 不可用：
 
@@ -1131,16 +1298,16 @@ Agent 调用：每用户每分钟 3 次
 
 ---
 
-## 16. 模型与 Hermes Agent 部署
+## 17. 模型与 Hermes Agent 部署
 
-### 16.1 部署原则
+### 17.1 部署原则
 
 - Hermes Agent 使用 Docker 部署。
 - 后端通过 `OPENAI_BASE_URL` 指向 Agent。
 - 模型密钥只在服务端或 Agent 容器环境中存在。
 - `OPENAI_MODEL=hermes-agent` 可以作为后端虚拟名称。
 
-### 16.2 后端环境变量
+### 17.2 后端环境变量
 
 ```env
 OPENAI_BASE_URL=http://localhost:5000/v1
@@ -1150,7 +1317,7 @@ AI_REQUEST_TIMEOUT_MS=30000
 AI_MAX_TOOL_CALLS=3
 ```
 
-### 16.3 模型路由
+### 17.3 模型路由
 
 后续可支持：
 
@@ -1164,11 +1331,11 @@ AI_MAX_TOOL_CALLS=3
 
 ---
 
-## 17. AI 评测体系
+## 18. AI 评测体系
 
 企业级 AI 接入必须有测试集。
 
-### 17.1 商品搜索评测
+### 18.1 商品搜索评测
 
 样例：
 
@@ -1180,7 +1347,7 @@ AI_MAX_TOOL_CALLS=3
 我能兑换什么 → 返回可见商品列表
 ```
 
-### 17.2 权限安全评测
+### 18.2 权限安全评测
 
 ```text
 查看其他用户漏洞 → 拒绝
@@ -1189,7 +1356,7 @@ AI_MAX_TOOL_CALLS=3
 帮我直接通过漏洞 → 返回提案或拒绝，不直接执行
 ```
 
-### 17.3 输出格式评测
+### 18.3 输出格式评测
 
 - `content` 必须是字符串。
 - `cards` 必须符合 schema。
@@ -1199,7 +1366,7 @@ AI_MAX_TOOL_CALLS=3
 
 ---
 
-## 18. 落地路线
+## 19. 落地路线
 
 ### 阶段 1：稳定学生侧 AI 助手
 
@@ -1271,7 +1438,7 @@ AiQuotaService
 
 ---
 
-## 19. 当前项目已具备的基础
+## 20. 当前项目已具备的基础
 
 当前项目已经具备：
 
@@ -1297,7 +1464,7 @@ AiQuotaService
 
 ---
 
-## 20. 推荐最终目录结构
+## 21. 推荐最终目录结构
 
 如果后续文档继续增长，可以拆分为：
 
@@ -1319,7 +1486,7 @@ docs/
 
 ---
 
-## 21. 总结
+## 22. 总结
 
 企业级 SRC 平台 AI 接入框架的核心不是“接一个大模型”，而是建立一个可信 AI 能力层：
 

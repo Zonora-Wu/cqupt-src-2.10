@@ -1,16 +1,16 @@
 # API Docs
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-05-31 已按新版 AI 知识沉淀方案更新，并补充用户端历史会话侧栏与 AI 回复点赞/点踩反馈。AI Gateway API 目标方案新增问题会话生命周期接口、历史会话接口、`POST /api/ai/chat` 的 `sessionId`/`assistantTurnId` 字段、知识库命中响应字段 `usedKnowledge/knowledgeSources/knowledgeHitIds`，以及知识聚类、自动入库和反馈评分管理接口。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
-API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway、AI 助手外观/配额/Skill 路由、安全答题题库、AI Knowledge Base 与 Skill Candidate 接口。
+API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway、AI 助手外观/配额/Skill 路由、安全答题题库、AI Knowledge Base 与 Skill Candidate 接口。新版目标方案将 AI 知识沉淀升级为问题会话式链路：问题会话 API、历史会话侧栏、已解决确认、AI 回复点赞/点踩、知识聚类、自动入库和知识库来源标注均在本文件给出目标契约。
 
-## 当前接口索引（2026-05-21）
+## 当前接口索引（2026-05-31）
 
 | 模块 | 主要接口 |
 |---|---|
@@ -24,7 +24,8 @@ API 文档目录。当前已完成健康检查、认证注册、账号中心、�
 | 证书 | `GET /api/certificates/my`、`GET /api/certificates/manage`、`POST /api/certificates`、`POST /api/certificates/:certificateId/revoke`、`GET /api/certificates/:certificateId/preview`、`GET /api/certificates/public/:certificateNo` |
 | 公告/学习/商城 | `/api/announcements/*`、`/api/learning/*`、`/api/points/*`、`/api/mall/*` |
 | AI Gateway | `GET /api/ai/health`、`GET /api/ai/appearance`、`GET /api/ai/quota`、`GET /api/ai/skills`、`POST /api/ai/chat`、`POST /api/ai/report-drafts`、`POST /api/ai/attachments/text`、`POST /api/ai/actions/:actionId/confirm` |
-| AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback` |
+| AI 问题会话 | `POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/discard`、`POST /api/ai/problem-sessions/:id/fork`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback` |
+| AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`GET /api/ai/knowledge/clusters`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback`、`POST /api/ai/knowledge/:id/merge` |
 | Skill Candidate | `GET /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates/:id/review`、`POST /api/ai/knowledge/skill-candidates/:id/install` |
 | 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
 
@@ -541,6 +542,7 @@ POST /api/ai/chat
 ```json
 {
   "mode": "student",
+  "sessionId": "cuid_problem_session_xxx",
   "message": "帮我检查这份漏洞报告还缺什么材料",
   "context": {
     "source": "user-ai-assistant"
@@ -548,12 +550,33 @@ POST /api/ai/chat
 }
 ```
 
+说明：
+
+- `sessionId` 是新版问题会话式知识沉淀的会话 ID。
+- 用户每次进入 AI 助手默认创建新的问题会话。
+- 后端必须校验 `sessionId` 属于当前 JWT 用户。
+- 未带 `sessionId` 时，后端可以为兼容旧前端临时创建会话，但正式前端应始终传入。
+
 返回示例：
 
 ```json
 {
   "mode": "student",
+  "sessionId": "cuid_problem_session_xxx",
+  "userTurnId": "turn_user_xxx",
+  "assistantTurnId": "turn_assistant_xxx",
   "content": "这份报告建议补充影响范围、复现截图和修复建议。",
+  "usedKnowledge": true,
+  "knowledgeSources": [
+    {
+      "id": "knowledge_xxx",
+      "title": "漏洞报告补充材料写作清单",
+      "sourceType": "PLATFORM_KB",
+      "confidence": 0.91,
+      "status": "APPROVED"
+    }
+  ],
+  "knowledgeHitIds": ["hit_xxx"],
   "response": {
     "id": "chatcmpl_xxx",
     "object": "chat.completion",
@@ -576,8 +599,203 @@ admin: ai:use_admin
 - 后端本机运行默认使用 `OPENAI_BASE_URL=http://localhost:5000/v1`。
 - 若后端也运行在 Docker 容器中，应使用 Docker 网络服务名，例如 `OPENAI_BASE_URL=http://hermes-agent:5000/v1`。
 - 默认模型为 `hermes-agent`，对应 `OPENAI_MODEL=hermes-agent`。
-- 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 `CALL_AI` 审计日志。
-- 前端会按当前登录用户在浏览器本地保存最近 80 条 AI 对话，用于刷新页面或切换菜单后恢复展示；该历史记录当前不上传后端。
+- 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 AI 审计日志。
+- 新版知识沉淀不依赖浏览器本地聊天历史。前端可以继续本地缓存最近消息用于显示恢复，但平台知识沉淀以后端 `AiProblemSession` 和脱敏 turns 为准。
+- 如果 `usedKnowledge=true`，前端必须在 AI 回复框底部展示“本回答参考了平台知识库”的来源标注。
+- 每条 assistant 回复必须返回 `assistantTurnId`，用于回复底部点赞/点踩反馈。
+- 如果回答使用了知识库，后端还应返回 `knowledgeHitIds`；前端不直接传 knowledgeId 作为可信评分对象。
+
+### AI 问题会话
+
+创建新的问题会话：
+
+```text
+POST /api/ai/problem-sessions
+```
+
+请求示例：
+
+```json
+{
+  "mode": "student",
+  "initialQuestion": "SQL 注入靶场启动失败怎么办？"
+}
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_problem_session_xxx",
+  "status": "ACTIVE",
+  "startedAt": "2026-05-31T10:00:00.000Z"
+}
+```
+
+查询当前用户历史问题会话，用于 AI 助手左侧侧栏：
+
+```text
+GET /api/ai/problem-sessions/history?limit=30&cursor=xxx&q=端口&status=ACTIVE,RESOLVED
+```
+
+返回示例：
+
+```json
+{
+  "items": [
+    {
+      "sessionId": "cuid_problem_session_xxx",
+      "title": "SQL 注入靶场启动失败排查",
+      "status": "RESOLVED",
+      "preview": "最后通过更换 8080 端口解决",
+      "lastActiveAt": "2026-05-31T10:18:00.000Z",
+      "turnCount": 8,
+      "usedKnowledge": true,
+      "feedbackSummary": {
+        "upCount": 3,
+        "downCount": 0
+      },
+      "knowledgeEntryId": "knowledge_xxx"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+说明：
+
+- 后端按当前 JWT 用户过滤，前端不得传 `userId`。
+- 历史列表只返回轻量摘要，不返回完整 turns。
+- 左侧历史会话只作为恢复/查看入口，不自动注入当前新会话上下文。
+- 已结束会话如果继续追问，必须 fork 新 session。
+
+查询当前活跃或等待确认的问题会话：
+
+```text
+GET /api/ai/problem-sessions/active
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_problem_session_xxx",
+  "status": "AWAITING_RESOLUTION",
+  "shouldAskResolution": true,
+  "inactiveMinutes": 18,
+  "previewTitle": "SQL 注入靶场启动失败排查"
+}
+```
+
+心跳：
+
+```text
+POST /api/ai/problem-sessions/:id/heartbeat
+```
+
+离开 AI 页面：
+
+```text
+POST /api/ai/problem-sessions/:id/leave
+```
+
+确认问题已解决：
+
+```text
+POST /api/ai/problem-sessions/:id/resolve
+```
+
+请求示例：
+
+```json
+{
+  "resolved": true,
+  "allowKnowledgeCapture": true,
+  "userOutcomeNote": "最后发现是 8080 端口被占用了，换端口后解决"
+}
+```
+
+说明：
+
+- 只有当前 JWT 用户自己的 session 可以 resolve。
+- `allowKnowledgeCapture=true` 才进入知识沉淀候选。
+- 后端会脱敏 `userOutcomeNote`。
+- resolve 后触发会话总结、AI + 规则评分、相似知识去重和管理员审核或自动入库判定。
+
+丢弃本次会话：
+
+```text
+POST /api/ai/problem-sessions/:id/discard
+```
+
+请求示例：
+
+```json
+{
+  "reason": "问题未解决，不沉淀"
+}
+```
+
+基于历史会话创建新问题会话：
+
+```text
+POST /api/ai/problem-sessions/:id/fork
+```
+
+请求示例：
+
+```json
+{
+  "message": "我想基于上次端口占用的问题继续问 Docker 场景",
+  "mode": "student"
+}
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_new_problem_session_xxx",
+  "forkedFromSessionId": "cuid_problem_session_xxx",
+  "status": "ACTIVE"
+}
+```
+
+提交某条 AI 回复的点赞/点踩：
+
+```text
+POST /api/ai/problem-sessions/:id/turns/:turnId/feedback
+```
+
+请求示例：
+
+```json
+{
+  "rating": "DOWN",
+  "reasonCode": "OUTDATED",
+  "reasonText": "这个靶场现在已经不用 docker-compose 这个命令启动了"
+}
+```
+
+返回示例：
+
+```json
+{
+  "turnId": "turn_assistant_xxx",
+  "rating": "DOWN",
+  "knowledgeHitIds": ["hit_xxx"],
+  "knowledgeFeedbackUpdated": true,
+  "requiresReview": true
+}
+```
+
+说明：
+
+- `rating` 可取 `UP`、`DOWN`、`CLEARED`。
+- 后端必须校验 session 和 turn 属于当前用户，且 turn.role 为 assistant。
+- 使用平台知识库的回复，反馈应同步到 `AiKnowledgeHit` 和知识条目反馈汇总。
+- 未使用知识库的回复，反馈只作为本次问题会话质量信号。
+- 安全风险类点踩应触发知识条目暂停直接回答或进入安全复核。
 
 ### 提交漏洞
 

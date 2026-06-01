@@ -1,7 +1,7 @@
 # CQUPT-SRC AI Knowledge Base 与 Skill 晋升落地实施方案
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-01 已补充知识库持续维护、知识投毒防护和进度验收要求。当前项目 AI 知识体系目标包含：问题会话式知识沉淀、AI 评分自动流转、相似知识去重、自动入库、知识库复用、反馈质量评分、入库后的修订/合并/降级/暂停/归档、逐项进度验收，以及 Skill Candidate 审核与 Hermes Skill 受控安装链路。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
@@ -10,9 +10,9 @@
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
-**Goal:** 在 CQUPT-SRC 中落地企业级“AI 知识沉淀 + Hermes Skill 晋升”体系，让邮宝能复用高质量通用安全问答、减少重复 token，同时避免隐私泄露、恶意投毒和 skill 污染。
+**Goal:** 在 CQUPT-SRC 中落地企业级“AI 知识沉淀 + 持续维护 + Hermes Skill 晋升”体系，让邮宝能复用高质量通用安全问答、减少重复 token，同时避免隐私泄露、恶意投毒、知识过期和 skill 污染。
 
-**Architecture:** 采用三层治理：PostgreSQL 中的 AI Knowledge Base 负责动态、可审核、可检索的问答经验；NestJS AI Gateway 负责路由、脱敏、审核、检索、审计和权限；平台 Hermes 容器 `/home/cocking/cqupt-src-hermes-linux` 只承载少量管理员批准后的长期稳定 class-level skills。普通用户问答永远不直接写入 Hermes skill。
+**Architecture:** 采用三层治理：PostgreSQL 中的 AI Knowledge Base 负责动态、可审核、可检索、可修订、可归档的问答经验；NestJS AI Gateway 负责路由、脱敏、审核、检索、审计、权限和维护状态机；平台 Hermes 容器 `/home/cocking/cqupt-src-hermes-linux` 只承载少量管理员批准后的长期稳定 class-level skills。普通用户问答永远不直接写入 Hermes skill，已入库知识也不能一次入库后长期不管。
 
 **Tech Stack:** NestJS 11, Prisma 6, PostgreSQL, optional pgvector/pg_trgm, Hermes Agent OpenAI-compatible API, React 19 + TypeScript + Tailwind CSS 4.
 
@@ -96,7 +96,7 @@ docker restart hermes-agent
 - 已脱敏、已泛化。
 - 不依赖当前用户实时数据。
 - 可被后续相似问题复用。
-- 状态可审核、可撤回、可归档。
+- 状态可审核、可撤回、可归档、可修订、可合并、可降级或暂停检索。
 
 ### 0.3 何时创建 / 晋升 Hermes Skill
 
@@ -144,6 +144,31 @@ Skill 必须通过 `AiSkillCandidate` 审核流生成，不允许用户聊天自
 
 拒绝记录要留痕，但只保存最小化摘要和拒绝原因，不保存敏感原文。
 
+### 0.5 入库后的持续维护
+
+知识条目进入 `APPROVED` / `AUTO_APPROVED` 后仍需持续维护。入库只代表当前版本可用，不代表永久有效。
+
+维护触发信号：
+
+- 命中后用户点踩、举报、隐式失败或标记“知识过期”。
+- 同类问题新总结与已有知识冲突或重复。
+- 平台规则、审核标准、学习资源或工具版本变化。
+- 长期无命中，或存在更新、更高质量的替代条目。
+- 安全复核发现越权、敏感信息残留、危险指导或知识投毒风险。
+
+维护动作：
+
+```text
+修订 -> 创建 AiKnowledgeRevision
+合并 -> 保留来源和变更原因
+降级 -> 从直接回答降为注入 Agent
+暂停 -> SECURITY_SUSPENDED / RETRIEVAL_DISABLED，普通用户不可检索
+归档 -> ARCHIVED，仅保留审计和历史引用
+晋升 -> 通过 Skill Candidate 二次审批后安装为 Hermes Skill
+```
+
+Knowledge Retrieval 必须在相似度计算前过滤维护状态和 retrievalPolicy，避免过期、暂停、归档、安全复核或知识投毒中的知识继续污染后续回答。每个实施项必须在进度表中声明完成定义和验收规则，不能只以“代码写完”作为完成依据。
+
 ---
 
 ## 1. 总体链路
@@ -162,6 +187,7 @@ POST /api/ai/chat
   -> AiCallLog + AuditLog
   -> enqueue AiKnowledgeCaptureJob
   -> 后台捕获任务：分析、脱敏、评分、入库/拒绝
+  -> 入库后维护任务：命中/反馈/过期/重复/安全风险检查
 ```
 
 关键顺序不可变：
