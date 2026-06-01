@@ -20,6 +20,7 @@ export type AiKnowledgeSensitivity = 'PUBLIC' | 'INTERNAL' | 'SENSITIVE' | 'REJE
 export type AiKnowledgeStatus = 'CANDIDATE' | 'AUTO_APPROVED' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'ARCHIVED' | 'PROMOTED_TO_SKILL'
 export type AiKnowledgeJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'DISCARDED'
 export type AiKnowledgeConversationStatus = 'ACTIVE' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'
+export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'
 export type AiSkillCandidateStatus = 'DRAFT' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'INSTALLED' | 'FAILED'
 export type AiSpace = 'STUDENT' | 'AUDITOR' | 'ADMIN'
 
@@ -120,6 +121,49 @@ export type AiKnowledgeConversation = {
   updatedAt: string
 }
 
+export type AiProblemSessionSummary = {
+  problem: string
+  environment: string[]
+  successfulSteps: string[]
+  failedAttempts: string[]
+  pitfalls: string[]
+  applicableScope: string[]
+  nonApplicableScope: string[]
+  resolution: string
+  scores: {
+    confidence: number
+    poisoningRisk: number
+    privacy: number
+    quality: number
+    reuse: number
+    safety: number
+  }
+  recommendation: 'KB' | 'SKILL' | 'DISCARD'
+  rejectionReason?: string
+  similarKnowledgeMatches: Array<{
+    id: string
+    similarity: number
+    status: AiKnowledgeStatus
+    title: string
+  }>
+  mergeSuggestion?: string
+}
+
+export type AiProblemSession = {
+  id: string
+  knowledgeEntryId?: string | null
+  mode: string
+  status: AiProblemSessionStatus
+  title: string | null
+  initialQuestion: string
+  summaryJson?: AiProblemSessionSummary | null
+  turnCount: number
+  userOutcomeNote?: string | null
+  turns?: AiKnowledgeConversationTurn[]
+  createdAt: string
+  updatedAt: string
+}
+
 export type AiSkillCandidate = {
   id: string
   name: string
@@ -158,6 +202,22 @@ export function listAiKnowledgeConversations(params: { page?: number; pageSize?:
     if (value !== undefined && String(value) !== '') search.set(key, String(value))
   })
   return apiRequest<{ items: AiKnowledgeConversation[]; pagination: Pagination }>(`/ai/knowledge/conversations${search.size ? `?${search}` : ''}`, { auth: true, method: 'GET' })
+}
+
+export function listAiProblemSessionsForReview(params: { page?: number; pageSize?: number; status?: AiProblemSessionStatus } = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && String(value) !== '') search.set(key, String(value))
+  })
+  return apiRequest<{ items: AiProblemSession[]; pagination: Pagination }>(`/ai/problem-sessions/review-queue${search.size ? `?${search}` : ''}`, { auth: true, method: 'GET' })
+}
+
+export function summarizeAiProblemSession(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/summarize`, { auth: true, method: 'POST' })
+}
+
+export function reviewAiProblemSession(id: string, status: Extract<AiProblemSessionStatus, 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'>, note?: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/review`, { auth: true, body: { note, status }, method: 'POST' })
 }
 
 export function summarizeAiKnowledgeConversation(id: string) {

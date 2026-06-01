@@ -85,8 +85,38 @@ export type AiChatResponse = {
   mode: AiChatMode
   cards?: AiCard[]
   actions?: AiPendingAction[]
+  assistantTurnId?: string
   quota?: AiQuota
+  sessionId?: string
   toolCalls?: Array<{ name: string }>
+}
+
+export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'
+
+export type AiProblemSessionTurn = {
+  content: string
+  createdAt: string
+  id: string
+  role: 'assistant' | 'user' | string
+}
+
+export type AiProblemSession = {
+  closedAt: string | null
+  createdAt: string
+  id: string
+  initialQuestion: string
+  knowledgeEntryId?: string | null
+  lastActiveAt: string
+  leftAt: string | null
+  mode: AiChatMode
+  resolvedAt: string | null
+  shouldAskResolution: boolean
+  startedAt: string
+  status: AiProblemSessionStatus
+  title: string | null
+  turnCount: number
+  turns?: AiProblemSessionTurn[]
+  updatedAt: string
 }
 
 export type AiAppearance = {
@@ -121,14 +151,73 @@ export type AiSkillLibraryResponse = {
   skills: AiSkillLibraryItem[]
 }
 
-export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>) {
+export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>, sessionId?: string) {
   return apiRequest<AiChatResponse>('/ai/chat', {
     auth: true,
     body: {
       context,
       message,
       mode,
+      sessionId,
     },
+    method: 'POST',
+  })
+}
+
+export function createAiProblemSession(mode: AiChatMode = 'student', initialQuestion?: string) {
+  return apiRequest<AiProblemSession>('/ai/problem-sessions', {
+    auth: true,
+    body: { initialQuestion, mode },
+    method: 'POST',
+  })
+}
+
+export function getActiveAiProblemSession(mode: AiChatMode = 'student') {
+  return apiRequest<AiProblemSession | null>(`/ai/problem-sessions/active?mode=${encodeURIComponent(mode)}`, {
+    auth: true,
+    method: 'GET',
+  })
+}
+
+export function getAiProblemSession(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}`, {
+    auth: true,
+    method: 'GET',
+  })
+}
+
+export function listAiProblemSessions(limit = 30) {
+  return apiRequest<AiProblemSession[]>(`/ai/problem-sessions/history?limit=${encodeURIComponent(String(limit))}`, {
+    auth: true,
+    method: 'GET',
+  })
+}
+
+export function heartbeatAiProblemSession(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/heartbeat`, {
+    auth: true,
+    method: 'POST',
+  })
+}
+
+export function leaveAiProblemSession(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/leave`, {
+    auth: true,
+    method: 'POST',
+  })
+}
+
+export function resolveAiProblemSession(id: string, note?: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/resolve`, {
+    auth: true,
+    body: { note },
+    method: 'POST',
+  })
+}
+
+export function discardAiProblemSession(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/discard`, {
+    auth: true,
     method: 'POST',
   })
 }

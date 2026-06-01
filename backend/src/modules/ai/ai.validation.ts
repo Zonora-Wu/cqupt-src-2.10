@@ -11,6 +11,7 @@ export function normalizeAiChatBody(body: AiChatBody): NormalizedAiChatInput {
     context: normalizeContext(body.context),
     message,
     mode,
+    sessionId: normalizeOptionalId(body.sessionId, '问题会话 ID'),
   }
 }
 
@@ -59,4 +60,18 @@ function normalizeContext(value: unknown) {
   }
 
   return value as Record<string, unknown>
+}
+
+function normalizeOptionalId(value: unknown, label: string) {
+  if (value === undefined || value === null || value === '') return undefined
+
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`${label}格式不正确`)
+  }
+
+  const id = value.trim()
+  if (!/^[a-z0-9_-]{8,80}$/i.test(id)) {
+    throw new BadRequestException(`${label}格式不正确`)
+  }
+  return id
 }

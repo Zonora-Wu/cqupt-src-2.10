@@ -222,6 +222,17 @@ enum AiKnowledgeConversationStatus {
   DISCARDED
 }
 
+enum AiProblemSessionStatus {
+  ACTIVE
+  AWAITING_RESOLUTION
+  RESOLVED
+  READY_REVIEW
+  APPROVED_TO_KB
+  SKILL_CANDIDATE
+  DISCARDED
+  ARCHIVED
+}
+
 enum AiSkillCandidateStatus {
   DRAFT
   NEEDS_REVIEW
@@ -309,6 +320,7 @@ model User {
   knowledgeFeedbacks    AiKnowledgeFeedback[]       @relation("AiKnowledgeFeedbackUser")
   aiKnowledgeConversations AiKnowledgeConversation[] @relation("AiKnowledgeConversationUser")
   reviewedAiKnowledgeConversations AiKnowledgeConversation[] @relation("AiKnowledgeConversationReviewer")
+  aiProblemSessions     AiProblemSession[]           @relation("AiProblemSessionUser")
   reviewedSkillCandidates AiSkillCandidate[]         @relation("AiSkillCandidateReviewer")
   operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
   auditLogs             AuditLog[]                  @relation("AuditActor")
@@ -995,6 +1007,55 @@ model AiKnowledgeConversationTurn {
   @@index([conversationId, createdAt])
   @@index([contentHash])
   @@unique([conversationId, contentHash])
+}
+
+model AiProblemSession {
+  id                 String                 @id @default(cuid())
+  userId             String?
+  aiSpace            AiSpace
+  mode               String
+  title              String?
+  topicKey           String?
+  initialQuestion    String                 @db.Text
+  status             AiProblemSessionStatus @default(ACTIVE)
+  startedAt          DateTime               @default(now())
+  lastActiveAt       DateTime               @default(now())
+  leftAt             DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  resolutionByUser   Boolean?
+  userOutcomeNote    String?                @db.Text
+  turnCount          Int                    @default(0)
+  tokenEstimate      Int                    @default(0)
+  summaryJson        Json?
+  knowledgeEntryId   String?
+  duplicateRiskScore Float                  @default(0)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  user               User?                  @relation("AiProblemSessionUser", fields: [userId], references: [id])
+  turns              AiProblemSessionTurn[]
+
+  @@index([userId, status, updatedAt])
+  @@index([topicKey, status])
+  @@index([status, lastActiveAt])
+}
+
+model AiProblemSessionTurn {
+  id            String           @id @default(cuid())
+  sessionId     String
+  role          String
+  contentHash   String?
+  sanitizedText String           @db.Text
+  sourceCallId  String?
+  hasAttachment Boolean          @default(false)
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+
+  session       AiProblemSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([contentHash])
 }
 
 model AiKnowledgeEntry {

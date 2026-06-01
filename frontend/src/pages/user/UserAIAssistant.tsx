@@ -1,11 +1,11 @@
-import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, Paperclip, RotateCcw, Shield, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Shield, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { getAiAppearance, getAiQuota, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
+import { createAiProblemSession, discardAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, resolveAiProblemSession, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiProblemSession, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
@@ -36,6 +36,11 @@ type ChatAttachment = {
 }
 
 const MAX_STORED_MESSAGES = 80
+const CONTINUABLE_SESSION_STATUSES = new Set(['ACTIVE', 'AWAITING_RESOLUTION'])
+const HISTORY_PANEL_DEFAULT_WIDTH = 264
+const HISTORY_PANEL_MAX_WIDTH = 420
+const HISTORY_PANEL_MIN_WIDTH = 220
+const HISTORY_PANEL_WIDTH_STORAGE_KEY = 'cqupt-src-ai-history-panel-width'
 
 export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
   const storageKeyRef = useRef(getConversationStorageKey())
@@ -53,11 +58,24 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const reportFileInputRef = useRef<HTMLInputElement | null>(null)
   const reportAttachmentFilesRef = useRef<Record<string, File>>({})
   const consumedInitialPromptRef = useRef<string | null>(null)
+  const problemSessionIdRef = useRef<string | null>(null)
+  const hasProblemContentRef = useRef(messages.length > 0)
   const [bottomInset, setBottomInset] = useState(156)
   const [showScrollDown, setShowScrollDown] = useState(false)
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [problemSession, setProblemSession] = useState<AiProblemSession | null>(null)
+  const [historySessions, setHistorySessions] = useState<AiProblemSession[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyCollapsed, setHistoryCollapsed] = useState(false)
+  const [historyPanelWidth, setHistoryPanelWidth] = useState(loadHistoryPanelWidth)
+  const [readOnlyHistory, setReadOnlyHistory] = useState(false)
+  const [resolutionPrompt, setResolutionPrompt] = useState<AiProblemSession | null>(null)
   const hasStarted = messages.length > 0
+
+  useEffect(() => {
+    saveHistoryPanelWidth(historyPanelWidth)
+  }, [historyPanelWidth])
 
   useEffect(() => {
     let active = true
@@ -85,12 +103,78 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   }, [])
 
   useEffect(() => {
+    let active = true
+
+    getActiveAiProblemSession('student')
+      .then(async (session) => {
+        if (!active) return
+        const current = session ?? await createAiProblemSession('student')
+        const detailed = await getAiProblemSession(current.id).catch(() => current)
+        if (!active) return
+        problemSessionIdRef.current = detailed.id
+        setProblemSession(detailed)
+        setResolutionPrompt(detailed.shouldAskResolution ? detailed : null)
+        if (detailed.turns?.length) {
+          setMessages(messagesFromProblemSession(detailed))
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      active = false
+      const id = problemSessionIdRef.current
+      if (id && hasProblemContentRef.current) void leaveAiProblemSession(id).catch(() => undefined)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshHistorySessions()
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const id = problemSessionIdRef.current
+      if (!id || document.visibilityState !== 'visible') return
+      void heartbeatAiProblemSession(id)
+        .then((session) => {
+          setProblemSession(session)
+          if (session.shouldAskResolution) setResolutionPrompt(session)
+        })
+        .catch(() => undefined)
+    }, 30_000)
+
+    const handleVisibilityChange = () => {
+      const id = problemSessionIdRef.current
+      if (!id) return
+      if (document.visibilityState === 'hidden') {
+        if (hasProblemContentRef.current) void leaveAiProblemSession(id).catch(() => undefined)
+      } else {
+        void getActiveAiProblemSession('student')
+          .then((session) => {
+            if (!session) return
+            problemSessionIdRef.current = session.id
+            setProblemSession(session)
+            setResolutionPrompt(session.shouldAskResolution ? session : null)
+          })
+          .catch(() => undefined)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
+  useEffect(() => {
     scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, sending])
 
   useEffect(() => {
-    saveStoredMessages(storageKeyRef.current, messages)
-  }, [messages])
+    if (!readOnlyHistory) saveStoredMessages(storageKeyRef.current, messages)
+    hasProblemContentRef.current = messages.length > 0
+  }, [messages, readOnlyHistory])
 
   useEffect(() => {
     const textarea = inputTextareaRef.current
@@ -146,6 +230,100 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     return () => observer.disconnect()
   }, [hasStarted])
 
+  const ensureProblemSession = async (initialQuestion?: string) => {
+    if (resolutionPrompt) setResolutionPrompt(null)
+    if (readOnlyHistory) {
+      const session = await createAiProblemSession('student', initialQuestion)
+      problemSessionIdRef.current = session.id
+      setProblemSession(session)
+      setReadOnlyHistory(false)
+      setMessages([])
+      await refreshHistorySessions()
+      return session.id
+    }
+    const existingId = problemSessionIdRef.current
+    if (existingId) return existingId
+
+    const session = await createAiProblemSession('student', initialQuestion)
+    problemSessionIdRef.current = session.id
+    setProblemSession(session)
+    setReadOnlyHistory(false)
+    await refreshHistorySessions()
+    return session.id
+  }
+
+  const startFreshProblemSession = async () => {
+    const currentId = problemSessionIdRef.current
+    if (currentId && hasProblemContentRef.current) {
+      await leaveAiProblemSession(currentId).catch(() => undefined)
+    }
+    const session = await createAiProblemSession('student')
+    problemSessionIdRef.current = session.id
+    setProblemSession(session)
+    setReadOnlyHistory(false)
+    setResolutionPrompt(null)
+    setMessages([])
+    localStorage.removeItem(storageKeyRef.current)
+    await refreshHistorySessions()
+    return session.id
+  }
+
+  const refreshHistorySessions = async () => {
+    setHistoryLoading(true)
+    try {
+      const sessions = await listAiProblemSessions(30)
+      setHistorySessions(sessions)
+    } catch {
+      setHistorySessions([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const openHistorySession = async (id: string) => {
+    if (sending || uploadingAttachment) return
+    const currentId = problemSessionIdRef.current
+    if (currentId && currentId !== id && hasProblemContentRef.current && !readOnlyHistory) {
+      await leaveAiProblemSession(currentId).catch(() => undefined)
+    }
+    const session = await getAiProblemSession(id)
+    const canContinue = CONTINUABLE_SESSION_STATUSES.has(session.status)
+    problemSessionIdRef.current = canContinue ? session.id : null
+    setProblemSession(session)
+    setReadOnlyHistory(!canContinue)
+    setResolutionPrompt(session.shouldAskResolution ? session : null)
+    setMessages(messagesFromProblemSession(session))
+  }
+
+  const continueProblemSession = async () => {
+    const id = resolutionPrompt?.id ?? problemSessionIdRef.current
+    if (!id) return
+    const session = await heartbeatAiProblemSession(id)
+    problemSessionIdRef.current = session.id
+    setProblemSession(session)
+    setResolutionPrompt(null)
+  }
+
+  const resolveProblemSession = async () => {
+    const id = resolutionPrompt?.id ?? problemSessionIdRef.current
+    if (!id) return
+    await resolveAiProblemSession(id)
+    problemSessionIdRef.current = null
+    setReadOnlyHistory(false)
+    await refreshHistorySessions()
+    await startFreshProblemSession()
+  }
+
+  const discardProblemSession = async () => {
+    const id = resolutionPrompt?.id ?? problemSessionIdRef.current
+    if (!id) return
+    await discardAiProblemSession(id)
+    problemSessionIdRef.current = null
+    setReadOnlyHistory(false)
+    await refreshHistorySessions()
+    await startFreshProblemSession()
+  }
+
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? input).trim()
     const attachment = pendingAttachment
@@ -190,6 +368,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     setUploadingAttachment(Boolean(attachment))
 
     try {
+      const activeSessionId = await ensureProblemSession(effectiveContent)
       const attachmentContext = attachment ? await uploadAiAttachmentText(attachment.file) : null
       const result = await sendAiChat(
         effectiveContent,
@@ -209,7 +388,12 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
               attachmentUsePolicy: '附件是用户本轮提问的上下文。不要默认把附件当作要提交的漏洞报告；只有用户明确要求生成/提交漏洞报告时才引导提交，否则按用户输入提供修改、总结、检查或建议。',
             }
           : undefined,
+        activeSessionId,
       )
+      if (result.sessionId) {
+        problemSessionIdRef.current = result.sessionId
+        setProblemSession((current) => current ? { ...current, id: result.sessionId ?? current.id, status: 'ACTIVE', shouldAskResolution: false } : current)
+      }
       if (result.quota) setAiQuota(result.quota)
       setMessages((current) => [
         ...current,
@@ -232,6 +416,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
       setSending(false)
       setUploadingAttachment(false)
       if (reportFileInputRef.current) reportFileInputRef.current.value = ''
+      void refreshHistorySessions()
     }
   }
 
@@ -244,7 +429,9 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
     setSending(true)
     try {
-      const result = await sendAiChat(prompt, 'student')
+      const activeSessionId = await ensureProblemSession(prompt)
+      const result = await sendAiChat(prompt, 'student', undefined, activeSessionId)
+      if (result.sessionId) problemSessionIdRef.current = result.sessionId
       if (result.quota) setAiQuota(result.quota)
       setMessages((current) =>
         current.map((message, index) =>
@@ -271,6 +458,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
       )
     } finally {
       setSending(false)
+      void refreshHistorySessions()
     }
   }
 
@@ -353,7 +541,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
           <button
             aria-label="发送"
             className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-            disabled={(!input.trim() && !pendingAttachment) || sending || uploadingAttachment || aiQuota?.enabled === false || aiQuota?.remaining === 0}
+            disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || aiQuota?.enabled === false || aiQuota?.remaining === 0}
             onClick={() => void sendMessage()}
             type="button"
           >
@@ -365,11 +553,37 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   )
 
   return (
+    <>
+    {resolutionPrompt && (
+      <ProblemSessionResolutionModal
+        onContinue={() => void continueProblemSession()}
+        onDiscard={() => void discardProblemSession()}
+        onResolve={() => void resolveProblemSession()}
+      />
+    )}
+    <AiHistoryPanel
+      activeId={problemSession?.id ?? null}
+      collapsed={historyCollapsed}
+      loading={historyLoading}
+      sessions={historySessions}
+      width={historyPanelWidth}
+      onCollapsedChange={setHistoryCollapsed}
+      onNew={() => void startFreshProblemSession()}
+      onOpen={(id) => void openHistorySession(id)}
+      onWidthChange={setHistoryPanelWidth}
+    />
     <section
       className={`relative z-10 mx-auto flex min-h-screen max-w-[980px] flex-col px-5 pb-6 md:px-8 ${
         hasStarted ? 'pt-24' : 'pt-16'
       }`}
     >
+      <MobileHistoryBar
+        activeId={problemSession?.id ?? null}
+        loading={historyLoading}
+        sessions={historySessions}
+        onNew={() => void startFreshProblemSession()}
+        onOpen={(id) => void openHistorySession(id)}
+      />
       <AnimatePresence mode="wait">
         {!hasStarted && (
           <motion.div
@@ -491,12 +705,13 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
               )}
             </AnimatePresence>
             {inputBox}
-            <p className="mt-2 text-center text-xs text-slate-400">邮宝回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。</p>
+            <p className="mt-2 text-center text-xs text-slate-400">{readOnlyHistory ? '当前为历史会话只读查看。点击新对话继续提问。' : '邮宝回复仅作辅助，漏洞提交与安全测试仍需人工核实并遵守授权边界。'}</p>
           </motion.div>
           </>
         )}
       </AnimatePresence>
     </section>
+    </>
   )
 }
 
@@ -526,6 +741,236 @@ function PendingAttachmentPreview({
         variant="input"
       />
     </motion.div>
+  )
+}
+
+function AiHistoryPanel({
+  activeId,
+  collapsed,
+  loading,
+  sessions,
+  width,
+  onCollapsedChange,
+  onNew,
+  onOpen,
+  onWidthChange,
+}: {
+  activeId: string | null
+  collapsed: boolean
+  loading: boolean
+  sessions: AiProblemSession[]
+  width: number
+  onCollapsedChange: (collapsed: boolean) => void
+  onNew: () => void
+  onOpen: (id: string) => void
+  onWidthChange: (width: number) => void
+}) {
+  const startResizing = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = width
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      onWidthChange(clampHistoryPanelWidth(startWidth + moveEvent.clientX - startX))
+    }
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }
+
+  if (collapsed) {
+    return (
+      <button
+        aria-label="展开历史对话"
+        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[#f7f9f7]/95 text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:bg-[#0f1511]/95 dark:text-slate-300 dark:hover:bg-[#18211b] dark:hover:text-white lg:inline-flex"
+        onClick={() => onCollapsedChange(false)}
+        title="展开历史对话"
+        type="button"
+      >
+        <PanelLeftOpen className="h-4 w-4" />
+      </button>
+    )
+  }
+
+  return (
+    <aside
+      className="fixed bottom-4 left-4 top-20 z-30 hidden flex-col rounded-lg border border-black/10 bg-[#f7f9f7]/95 px-3 pb-3 pt-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95 lg:flex"
+      style={{ width }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+          <History className="h-4 w-4 text-brand-700 dark:text-green-300" />
+          历史对话
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            aria-label="新对话"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-slate-600 transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+            onClick={onNew}
+            title="新对话"
+            type="button"
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+          </button>
+          <button
+            aria-label="折叠历史对话"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-slate-600 transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+            onClick={() => onCollapsedChange(true)}
+            title="折叠历史对话"
+            type="button"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="ai-chat-input-scroll mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+        {loading ? <p className="px-2 py-3 text-xs text-slate-500 dark:text-slate-400">正在加载...</p> : null}
+        {!loading && sessions.length === 0 ? <p className="px-2 py-3 text-xs text-slate-500 dark:text-slate-400">暂无历史对话</p> : null}
+        {sessions.map((session) => {
+          const active = activeId === session.id
+          return (
+            <button
+              className={`w-full rounded-lg px-3 py-2 text-left transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-white/10'}`}
+              key={session.id}
+              onClick={() => onOpen(session.id)}
+              type="button"
+            >
+              <span className="block truncate text-sm font-medium">{session.title || session.initialQuestion || '新问题会话'}</span>
+              <span className={`mt-1 block text-xs ${active ? 'text-white/75' : 'text-slate-400'}`}>
+                {formatSessionStatus(session.status)} · {formatHistoryTime(session.updatedAt)}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <div
+        aria-label="调整历史对话宽度"
+        className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize touch-none items-center justify-center text-slate-400 transition hover:bg-black/[0.04] hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+        onPointerDown={startResizing}
+        role="separator"
+        title="拖动调整宽度"
+      >
+        <GripVertical className="h-4 w-4" />
+      </div>
+    </aside>
+  )
+}
+
+function MobileHistoryBar({
+  activeId,
+  loading,
+  sessions,
+  onNew,
+  onOpen,
+}: {
+  activeId: string | null
+  loading: boolean
+  sessions: AiProblemSession[]
+  onNew: () => void
+  onOpen: (id: string) => void
+}) {
+  return (
+    <div className="mb-4 lg:hidden">
+      <div className="flex items-center gap-2">
+        <button
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-white/75 px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+          onClick={onNew}
+          type="button"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          新对话
+        </button>
+        <div className="ai-chat-input-scroll flex min-w-0 flex-1 gap-2 overflow-x-auto">
+          {loading ? <span className="shrink-0 rounded-lg bg-black/[0.04] px-3 py-2 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">加载中</span> : null}
+          {sessions.slice(0, 12).map((session) => (
+            <button
+              className={`max-w-48 shrink-0 truncate rounded-lg px-3 py-2 text-xs ${activeId === session.id ? 'bg-brand-600 text-white' : 'bg-black/[0.04] text-slate-600 dark:bg-white/[0.06] dark:text-slate-300'}`}
+              key={session.id}
+              onClick={() => onOpen(session.id)}
+              type="button"
+            >
+              {session.title || session.initialQuestion || '历史对话'}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatSessionStatus(status: AiProblemSession['status']) {
+  const labels: Record<string, string> = {
+    ACTIVE: '进行中',
+    APPROVED_TO_KB: '已入库',
+    ARCHIVED: '已归档',
+    AWAITING_RESOLUTION: '待确认',
+    DISCARDED: '已丢弃',
+    READY_REVIEW: '待审核',
+    RESOLVED: '已解决',
+    SKILL_CANDIDATE: 'Skill 候选',
+  }
+  return labels[status] ?? status
+}
+
+function formatHistoryTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('zh-CN', { day: '2-digit', hour: '2-digit', minute: '2-digit', month: '2-digit' })
+}
+
+function ProblemSessionResolutionModal({
+  onContinue,
+  onDiscard,
+  onResolve,
+}: {
+  onContinue: () => void
+  onDiscard: () => void
+  onResolve: () => void
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-lg border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-950 dark:text-white">这个问题解决了吗？</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              邮宝会根据你的选择处理本次问题会话。确认已解决后，后续阶段才会进入总结和知识沉淀审核。
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          <button
+            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            onClick={onResolve}
+            type="button"
+          >
+            已解决
+          </button>
+          <button
+            className="inline-flex items-center justify-center rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
+            onClick={onContinue}
+            type="button"
+          >
+            继续这个问题
+          </button>
+          <button
+            className="inline-flex items-center justify-center rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 dark:text-red-200 dark:hover:bg-red-950/30"
+            onClick={onDiscard}
+            type="button"
+          >
+            不沉淀
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1740,6 +2185,27 @@ function getConversationStorageKey() {
   return `cqupt-src-ai-conversation:${id}`
 }
 
+function clampHistoryPanelWidth(width: number) {
+  return Math.min(HISTORY_PANEL_MAX_WIDTH, Math.max(HISTORY_PANEL_MIN_WIDTH, width))
+}
+
+function loadHistoryPanelWidth() {
+  try {
+    const storedWidth = Number(localStorage.getItem(HISTORY_PANEL_WIDTH_STORAGE_KEY))
+    return Number.isFinite(storedWidth) && storedWidth > 0 ? clampHistoryPanelWidth(storedWidth) : HISTORY_PANEL_DEFAULT_WIDTH
+  } catch {
+    return HISTORY_PANEL_DEFAULT_WIDTH
+  }
+}
+
+function saveHistoryPanelWidth(width: number) {
+  try {
+    localStorage.setItem(HISTORY_PANEL_WIDTH_STORAGE_KEY, String(clampHistoryPanelWidth(width)))
+  } catch {
+    // localStorage unavailable - keep the current in-memory width
+  }
+}
+
 function loadStoredMessages(key: string): ChatMessage[] {
   try {
     const raw = localStorage.getItem(key)
@@ -1759,4 +2225,13 @@ function saveStoredMessages(key: string, messages: ChatMessage[]) {
   } catch {
     // localStorage full — ignore
   }
+}
+
+function messagesFromProblemSession(session: AiProblemSession): ChatMessage[] {
+  return (session.turns ?? [])
+    .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
+    .map((turn) => ({
+      content: turn.content,
+      role: turn.role === 'user' ? 'user' : 'assistant',
+    }))
 }

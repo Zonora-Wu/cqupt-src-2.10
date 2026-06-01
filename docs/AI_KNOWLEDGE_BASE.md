@@ -1517,12 +1517,12 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
-| KB-01 | 问题会话生命周期 | 待代码确认 | 用户进入邮宝创建/恢复 `AiProblemSession`，`/api/ai/chat` 全程携带 `sessionId`，turn 写入脱敏文本 | E2E：新建、刷新恢复、heartbeat、leave、resolve、discard 全流程通过；用户 A 不能访问用户 B session |
-| KB-02 | 解决确认与沉淀触发 | 待代码确认 | 只有用户确认已解决或管理员标记有价值时才触发总结 | 单测/E2E：未确认解决的 session 不生成 KB 候选；寒暄、积分、商品、漏洞实时查询不触发沉淀 |
-| KB-03 | 结构化总结 | 待代码确认 | `summarizeResolvedSession()` 输出问题、环境、成功步骤、失败尝试、坑点、适用范围、不适用范围 | JSON schema 校验通过；缺字段或含敏感原文时拒绝；总结不包含 Token、Cookie、真实资产和附件原文 |
-| KB-04 | AI + 规则评分 | 待代码确认 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | 单测覆盖高隐私、高安全风险、prompt injection、低质量回答；AI 高分但规则命中时仍拒绝或复审 |
-| KB-05 | 脱敏与拒绝策略 | 待代码确认 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | 用含敏感信息样例提交后，知识条目不保存敏感原文；拒绝记录只保留最小摘要和原因 |
-| KB-06 | 相似聚类与去重 | 待代码确认 | 相似问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | duplicateRiskScore >= 0.72 时不自动入库；管理员页展示相似知识、新增步骤、新增坑点和合并目标 |
+| KB-01 | 问题会话生命周期 | 已完成 | 用户进入邮宝创建/恢复 `AiProblemSession`，`/api/ai/chat` 全程携带 `sessionId`，turn 写入脱敏文本 | E2E：新建、刷新恢复、heartbeat、leave、resolve、discard 全流程通过；用户 A 不能访问用户 B session |
+| KB-02 | 解决确认与沉淀触发 | 已完成 | 只有用户确认已解决或管理员标记有价值时才触发总结 | 单测/E2E：未确认解决的 session 不生成 KB 候选；寒暄、积分、商品、漏洞实时查询不触发沉淀 |
+| KB-03 | 结构化总结 | 已完成 | `summarizeResolvedSession()` 输出问题、环境、成功步骤、失败尝试、坑点、适用范围、不适用范围 | JSON schema 校验通过；缺字段或含敏感原文时拒绝；总结不包含 Token、Cookie、真实资产和附件原文 |
+| KB-04 | AI + 规则评分 | 进行中 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | 单测覆盖高隐私、高安全风险、prompt injection、低质量回答；AI 高分但规则命中时仍拒绝或复审 |
+| KB-05 | 脱敏与拒绝策略 | 进行中 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | 用含敏感信息样例提交后，知识条目不保存敏感原文；拒绝记录只保留最小摘要和原因 |
+| KB-06 | 相似聚类与去重 | 进行中 | 相似问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | duplicateRiskScore >= 0.72 时不自动入库；管理员页展示相似知识、新增步骤、新增坑点和合并目标 |
 | KB-07 | 高频高质自动入库 | 待代码确认 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED` | 构造 3 个已解决会话 + 5 次询问信号后自动入库；低反馈或安全风险时不入库 |
 | KB-08 | Knowledge Retrieval | 待代码确认 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent | “我多少积分”不被 KB 抢答；相似安全问答返回 `usedKnowledge=true`；中置信注入后来源仍被记录 |
 | KB-09 | 角色与权限过滤 | 待代码确认 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | student 不能命中 auditor/admin 知识；auditor 不能看到 admin scoped 知识；管理员预览有审计记录 |
@@ -1544,24 +1544,24 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 ### 18.1 用户会话生命周期
 
-- [ ] 用户进入 AI 助手默认创建新 `AiProblemSession`。
-- [ ] `/api/ai/chat` 请求携带 `sessionId`。
-- [ ] 每轮对话写入 `AiProblemSessionTurn` 脱敏文本。
-- [ ] 前端 heartbeat 更新 `lastActiveAt`。
-- [ ] 离开 AI 页面过久后弹框询问是否解决。
-- [ ] 用户点击“已解决”后触发总结。
-- [ ] 用户点击“还没解决”后继续当前会话。
-- [ ] 用户点击“不沉淀”后不进入知识库。
+- [x] 用户进入 AI 助手默认创建新 `AiProblemSession`。
+- [x] `/api/ai/chat` 请求携带 `sessionId`。
+- [x] 每轮对话写入 `AiProblemSessionTurn` 脱敏文本。
+- [x] 前端 heartbeat 更新 `lastActiveAt`。
+- [x] 离开 AI 页面过久后弹框询问是否解决。
+- [x] 用户点击“已解决”后触发总结。
+- [x] 用户点击“还没解决”后继续当前会话。
+- [x] 用户点击“不沉淀”后不进入知识库。
 
 ### 18.2 总结、评分、去重
 
-- [ ] 已解决会话生成结构化 JSON 总结。
-- [ ] 总结包含 problem、resolution、steps、pitfalls、failedAttempts。
+- [x] 已解决会话生成结构化 JSON 总结。
+- [x] 总结包含 problem、resolution、steps、pitfalls、failedAttempts。
 - [ ] AI 评分字段完整。
-- [ ] 规则评分兜底生效。
-- [ ] 敏感内容被拒绝或脱敏。
+- [x] 规则评分兜底生效。
+- [x] 敏感内容被拒绝或脱敏。
 - [ ] duplicateRiskScore >= 0.72 阻断自动入库。
-- [ ] 管理端可查看相似知识和合并建议。
+- [x] 管理端可查看相似知识和合并建议。
 
 ### 18.3 高频自动入库
 

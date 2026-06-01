@@ -2,6 +2,7 @@ import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } f
 import { AiCallPurpose, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
+import { AiProblemSessionService } from '../ai-knowledge/ai-problem-session.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { parseStructuredResponse, stripJsonBlock } from './ai.response.service'
 import { buildSystemPrompt, buildUserPrompt } from './ai.prompt.service'
@@ -76,6 +77,7 @@ export class AiService {
     @Inject(AiSkillRouterService) private readonly skillRouter: AiSkillRouterService,
     @Inject(AiDataRequestService) private readonly dataRequests: AiDataRequestService,
     @Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService,
+    @Inject(AiProblemSessionService) private readonly problemSessions: AiProblemSessionService,
   ) {}
 
   async checkAgentHealth() {
@@ -198,10 +200,20 @@ export class AiService {
         })
       })
 
+      const sessionTurn = await this.problemSessions.recordChatTurnPair({
+        answer: directResponse.content,
+        hasAttachment: false,
+        question: safeMessage,
+        sessionId: input.sessionId,
+        user,
+      })
+
       return {
         ...directResponse,
+        assistantTurnId: sessionTurn?.assistantTurnId,
         mode: input.mode,
         quota: await this.buildQuotaSummary(user.id),
+        sessionId: sessionTurn?.sessionId ?? input.sessionId,
         skillRoute: serializeSkillRoute(skillRoute),
         toolCalls: [],
       }
@@ -259,12 +271,22 @@ export class AiService {
         })
       })
 
+      const sessionTurn = await this.problemSessions.recordChatTurnPair({
+        answer: knowledgeContent,
+        hasAttachment: false,
+        question: safeMessage,
+        sessionId: input.sessionId,
+        user,
+      })
+
       return {
         actions: [],
+        assistantTurnId: sessionTurn?.assistantTurnId,
         cards: [],
         content: knowledgeContent,
         mode: input.mode,
         quota: await this.buildQuotaSummary(user.id),
+        sessionId: sessionTurn?.sessionId ?? input.sessionId,
         skillRoute: serializeSkillRoute(skillRoute),
         toolCalls: [],
       }
@@ -454,15 +476,25 @@ export class AiService {
       userId: user.id,
     }).catch(() => undefined)
 
+    const sessionTurn = await this.problemSessions.recordChatTurnPair({
+      answer: displayContent,
+      hasAttachment: hasAttachmentContext,
+      question: safeMessage,
+      sessionId: input.sessionId,
+      user,
+    })
+
     // 7. 兜底：action 存在但 card 缺失时，从上下文补全
     const enrichedCards = enrichCardsFromContext(structured.cards, structured.actions, context)
 
     return {
       actions: structured.actions,
+      assistantTurnId: sessionTurn?.assistantTurnId,
       cards: enrichedCards,
       content: displayContent,
       mode: input.mode,
       quota: await this.buildQuotaSummary(user.id),
+      sessionId: sessionTurn?.sessionId ?? input.sessionId,
       skillRoute: serializeSkillRoute(skillRoute),
       toolCalls: [
         ...toolCallsMade.map((tc) => ({ name: tc.name })),

@@ -5,11 +5,13 @@ import { RbacModule } from '../rbac/rbac.module'
 import { AiKnowledgeController } from './ai-knowledge.controller'
 import { AiKnowledgeService } from './ai-knowledge.service'
 import { AiKnowledgeWorker } from './ai-knowledge.worker'
+import { AiProblemSessionController } from './ai-problem-session.controller'
+import { AiProblemSessionService } from './ai-problem-session.service'
 
 @Module({
-  controllers: [AiKnowledgeController],
+  controllers: [AiKnowledgeController, AiProblemSessionController],
   imports: [PrismaModule, AuthModule, RbacModule],
-  providers: [AiKnowledgeService, AiKnowledgeWorker],
-  exports: [AiKnowledgeService],
+  providers: [AiKnowledgeService, AiKnowledgeWorker, AiProblemSessionService],
+  exports: [AiKnowledgeService, AiProblemSessionService],
 })
 export class AiKnowledgeModule {}

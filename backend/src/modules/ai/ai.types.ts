@@ -41,12 +41,14 @@ export type AiChatBody = {
   context?: unknown
   message?: unknown
   mode?: unknown
+  sessionId?: unknown
 }
 
 export type NormalizedAiChatInput = {
   context?: Record<string, unknown>
   message: string
   mode: 'student' | 'auditor' | 'admin'
+  sessionId?: string
 }
 
 // ── OpenAI Chat 协议扩展 ──
@@ -245,7 +247,9 @@ export type AiChatResponse = {
   mode: 'student' | 'auditor' | 'admin'
   cards?: AiCard[]
   actions?: AiPendingAction[]
+  assistantTurnId?: string
   quota?: AiQuotaSummary
+  sessionId?: string
   skillRoute?: {
     active: string[]
     available: string[]
