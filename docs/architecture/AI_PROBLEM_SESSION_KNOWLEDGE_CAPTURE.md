@@ -1,11 +1,13 @@
 # AI 问题会话式知识沉淀架构
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 补充知识库持续更新机制、检索策略和进度验收表。本文是 `docs/AI_KNOWLEDGE_BASE.md` 的架构落地说明，聚焦 Problem Session、历史会话恢复、turn 级反馈、知识聚类、自动入库、知识库回答复用、前端来源标注，以及入库后的修订、降级、暂停、合并、归档、知识投毒防护和健康检查。
+> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 本文说明新版 AI Knowledge Base 的技术落地边界。完整产品和治理方案见 `../AI_KNOWLEDGE_BASE.md`。
@@ -52,7 +54,7 @@ UserAIAssistant
 
 ## 3. 后端组件
 
-建议在现有 `backend/src/modules/ai-knowledge/` 内继续扩展，避免新增分散模块。
+当前在现有 `backend/src/modules/ai-knowledge/` 内落地，避免新增分散模块。
 
 ```text
 backend/src/modules/ai-knowledge/
@@ -61,13 +63,17 @@ backend/src/modules/ai-knowledge/
 ├── ai-knowledge.service.ts
 ├── ai-knowledge.types.ts
 ├── ai-knowledge.validation.ts
-├── ai-problem-session.service.ts       # 新增：问题会话生命周期
-├── ai-knowledge-cluster.service.ts     # 新增：相似问题聚类与自动入库判定
-├── ai-knowledge-retrieval.service.ts   # 新增：知识检索、命中记录、来源输出
-└── ai-knowledge-feedback.service.ts    # 新增：点赞/点踩反馈、知识质量分滚动计算
+├── ai-problem-session.controller.ts    # 已实现：问题会话 HTTP API
+└── ai-problem-session.service.ts       # 已实现：生命周期、turn 写入、总结、聚类、自动入库
 ```
 
-也可以先不拆新文件，在 `AiKnowledgeService` 中落地 Phase 1 / Phase 2；当方法超过清晰边界后再拆服务。
+后续如果继续实现 Knowledge Retrieval、turn 级反馈持久化和维护 Worker，可再拆：
+
+```text
+ai-knowledge-retrieval.service.ts       # 目标态：知识检索、命中记录、来源输出
+ai-knowledge-feedback.service.ts        # 目标态：点赞/点踩反馈、知识质量分滚动计算
+ai-knowledge-maintenance.service.ts     # 目标态：维护状态、任务、revision、投毒暂停
+```
 
 ## 4. 数据流
 
@@ -88,7 +94,7 @@ UserAIAssistant mounted
 历史列表必须由后端按当前 JWT 用户过滤，前端不得传 userId。列表只返回标题、状态、摘要、更新时间、反馈概览等轻量字段，不返回完整 turns。点击历史项后：
 
 - 未结束会话：继续使用原 `sessionId`。
-- 已结束会话：默认只读查看；如果用户继续追问，调用 `POST /api/ai/problem-sessions/:id/fork` 创建新会话。
+- 已结束会话：默认只读查看；如果用户继续追问，目标态调用 `POST /api/ai/problem-sessions/:id/fork` 创建新会话，当前后端 fork 接口尚未实现。
 - 已丢弃/归档会话：只展示最小摘要，不参与上下文。
 
 ### 4.2 对话写入会话 turn
@@ -147,7 +153,7 @@ summarizeResolvedSession
 
 若评分高但重复风险高，状态应为 `READY_REVIEW`，不能自动入库。
 
-### 4.6 点赞/点踩反馈
+### 4.6 点赞/点踩反馈（目标态，当前未完整落地）
 
 ```text
 POST /api/ai/problem-sessions/:id/turns/:turnId/feedback
@@ -225,19 +231,20 @@ PROMOTED_TO_SKILL
 
 ### 5.1 AiProblemSessionStatus
 
+当前 Prisma enum：
+
 ```text
 ACTIVE
 AWAITING_RESOLUTION
 RESOLVED
-UNRESOLVED
-ABANDONED
-SUMMARIZED
 READY_REVIEW
-AUTO_APPROVED
 APPROVED_TO_KB
 SKILL_CANDIDATE
 DISCARDED
+ARCHIVED
 ```
+
+当前实现把结构化总结完成后的会话保持在 `READY_REVIEW` 或由管理员流转到 `APPROVED_TO_KB` / `SKILL_CANDIDATE` / `DISCARDED`；没有 `UNRESOLVED`、`ABANDONED`、`SUMMARIZED`、`AUTO_APPROVED` 这些 session status。自动入库结果体现在 `AiKnowledgeEntry.status=AUTO_APPROVED` 和 `AiKnowledgeCluster.promotedKnowledgeId`。
 
 推荐转换：
 
@@ -246,13 +253,11 @@ ACTIVE -> AWAITING_RESOLUTION    离开过久
 AWAITING_RESOLUTION -> ACTIVE    用户选择继续对话
 AWAITING_RESOLUTION -> RESOLVED  用户确认已解决
 ACTIVE -> RESOLVED               用户主动结束并确认解决
-RESOLVED -> SUMMARIZED           总结成功
-SUMMARIZED -> READY_REVIEW       需管理员审核
-SUMMARIZED -> AUTO_APPROVED      高频高质自动入库
+RESOLVED -> READY_REVIEW         总结成功，等待管理员审核
 READY_REVIEW -> APPROVED_TO_KB   管理员批准
 READY_REVIEW -> SKILL_CANDIDATE  管理员标为 skill 候选
 READY_REVIEW -> DISCARDED        管理员丢弃
-ACTIVE -> ABANDONED              长时间无活动
+ACTIVE/RESOLVED -> ARCHIVED      目标态：归档历史会话
 ```
 
 ## 6. 自动入库判定
@@ -284,7 +289,7 @@ if (hasPromptInjection || hasSecret || hasCrossUserData) return reject('安全�
 return approve('高频、高质量、低风险问题')
 ```
 
-## 7. Knowledge Retrieval
+## 7. Knowledge Retrieval（目标态，当前待实现/待验收）
 
 `/api/ai/chat` 中的检索顺序：
 
@@ -323,7 +328,7 @@ similarity < 0.75
 
 ## 8. 前端要求
 
-`UserAIAssistant.tsx` 需要新增：
+`UserAIAssistant.tsx` 当前已接入 sessionId、历史侧栏、heartbeat/leave、解决确认和本地点赞按钮。以下要求中，来源标注、Knowledge Retrieval 命中记录和 turn 级反馈持久化仍属目标态：
 
 - `sessionId` 状态。
 - 左侧历史会话侧栏：搜索、时间分组、状态标签、重命名、归档、点击恢复或 fork。

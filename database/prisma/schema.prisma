@@ -1058,6 +1058,9 @@ model AiKnowledgeCluster {
   duplicateRiskScore       Float              @default(0)
   similarKnowledgeMatches  Json?
   mergeSuggestion          String?            @db.Text
+  status                   String             @default("TRACKING")
+  promotedKnowledgeId      String?
+  autoApprovalReason       String?            @db.Text
   lastResolvedAt           DateTime?
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
@@ -1102,6 +1105,8 @@ model AiKnowledgeEntry {
   sourceCallId           String?
   sourceConversationId   String?
   sourceUserId           String?
+  sourceSessionIds        String[]                @default([])
+  sourceClusterId         String?
   sourceHash             String                  @unique
   sanitizedInputHash     String?
   similarityKey          String?
@@ -1120,6 +1125,9 @@ model AiKnowledgeEntry {
   helpfulCount           Int                     @default(0)
   unhelpfulCount         Int                     @default(0)
   abuseReportCount       Int                     @default(0)
+  resolvedSessionCount   Int                     @default(1)
+  askCount               Int                     @default(0)
+  autoApprovalReason     String?                 @db.Text
   promotedSkillId        String?
   reviewedById           String?
   reviewedAt             DateTime?
@@ -1141,6 +1149,7 @@ model AiKnowledgeEntry {
   @@index([sourceCallId])
   @@index([sourceConversationId])
   @@index([sourceUserId])
+  @@index([sourceClusterId])
   @@index([similarityKey])
 }
 

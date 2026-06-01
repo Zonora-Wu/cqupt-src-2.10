@@ -1,11 +1,13 @@
 # CQUPT-SRC AI 问题会话式知识沉淀与 Skill 晋升方案
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按专家评审建议补充知识库持续更新、检索策略、知识投毒防护和进度验收表。本文描述目标架构：用户每次进入邮宝 AI 助手默认开启新的“问题会话”；用户围绕同一问题多轮对话并确认“已解决”后，系统再对本次会话做脱敏、总结、评分、去重、聚类和管理员审核；用户端 AI 助手左侧提供历史问题会话列表，支持恢复未结束会话、查看已结束会话、基于历史问题开启新会话；AI 回复底部提供点赞/点踩反馈，反馈写入会话 turn、知识命中和知识质量评分；高频高质量、低隐私风险且用户反馈良好的同类问题可由后端根据 AI 建议自动沉淀为 `AUTO_APPROVED` 知识条目；已入库知识必须持续维护，基于命中、显式/隐式反馈、过期、重复、规则变更和知识投毒风险进入修订、合并、降级、暂停、归档或 Skill 晋升流程，不能一次入库后长期不管；每个实施项必须有完成定义和验收规则；后续回答使用平台知识库时，前端必须在 AI 回复框底部标明“参考平台知识库”。
+> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_CONTEXT_INJECTION.md`、`database/prisma/schema.prisma`。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 本文档是 CQUPT-SRC 平台“邮宝”AI 知识沉淀、知识库复用、管理员审核、自动入库、相似知识聚类和 Hermes Skill 晋升的目标方案。
@@ -1515,6 +1517,8 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
+当前本地验收证据：`cd backend && npm run test:ai-problem-session` 已通过 `14/14`，覆盖 KB-01 到 KB-07 的核心验收；最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpv4z6c3_76933c.json`。后端 `npm run build`、`npm run prisma:validate`、前端 `npm run build`、`/api/health` 和 Hermes `/health` 也已通过。
+
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
 | KB-01 | 问题会话生命周期 | 已完成 | 用户进入邮宝创建/恢复 `AiProblemSession`，`/api/ai/chat` 全程携带 `sessionId`，turn 写入脱敏文本 | E2E：新建、刷新恢复、heartbeat、leave、resolve、discard 全流程通过；用户 A 不能访问用户 B session |
@@ -1523,7 +1527,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-04 | AI + 规则评分 | 已完成 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | E2E：高安全风险 prompt injection 被拒绝；低质量回答进入 `DISCARD`；评分字段和 `scoreDetails.scoringVersion` 完整 |
 | KB-05 | 脱敏与拒绝策略 | 已完成 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | E2E：Authorization、Cookie、手机号、邮箱、真实资产 URL、原始请求包样例均拒绝总结/入库；拒绝会话不生成知识条目 |
 | KB-06 | 相似聚类与去重 | 已完成 | 相似问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | E2E：相同问题两次已解决后累计 cluster 计数；duplicateRiskScore >= 0.72；返回相似知识和 mergeSuggestion，自动入库前被阻断 |
-| KB-07 | 高频高质自动入库 | 待代码确认 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED` | 构造 3 个已解决会话 + 5 次询问信号后自动入库；低反馈或安全风险时不入库 |
+| KB-07 | 高频高质自动入库 | 已完成 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED`；旧单轮 capture/conversation 链路不再由 `/api/ai/chat` 触发 | E2E：构造 3 个已解决会话 + 5 次询问信号后自动入库；低质量或安全风险时不入库；单次聊天只写 `AiProblemSessionTurn`，不创建知识条目、capture job 或 legacy knowledge conversation |
 | KB-08 | Knowledge Retrieval | 待代码确认 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent | “我多少积分”不被 KB 抢答；相似安全问答返回 `usedKnowledge=true`；中置信注入后来源仍被记录 |
 | KB-09 | 角色与权限过滤 | 待代码确认 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | student 不能命中 auditor/admin 知识；auditor 不能看到 admin scoped 知识；管理员预览有审计记录 |
 | KB-10 | 来源标注与反馈 | 待代码确认 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | 使用 KB 的回复必须有 `knowledgeSources` 和 `knowledgeHitIds`；反馈写入 turn、hit 和知识反馈汇总 |
@@ -1567,8 +1571,8 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 - [x] 同类问题进入 `AiKnowledgeCluster`。
 - [x] resolvedSessionCount / totalAskCount 正确累计。
-- [ ] 达到阈值后创建 `AUTO_APPROVED` 知识。
-- [ ] 自动入库原因写入 `autoApprovalReason`。
+- [x] 达到阈值后创建 `AUTO_APPROVED` 知识。
+- [x] 自动入库原因写入 `autoApprovalReason`。
 - [ ] 管理员可撤回或归档自动入库条目。
 
 ### 18.4 知识库回答复用
@@ -1579,7 +1583,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [ ] 命中写入 `AiKnowledgeHit`。
 - [ ] 响应返回 `usedKnowledge` 和 `knowledgeSources`。
 - [ ] 前端在 AI 回复框底部显示平台知识库来源。
-- [ ] 用户可反馈有用、无用、举报。
+- [ ] 用户可反馈有用、无用、举报；当前前端已有本地按钮状态，后端 turn 级持久化接口和知识命中汇总仍待实现。
 
 ### 18.5 知识库持续维护
 

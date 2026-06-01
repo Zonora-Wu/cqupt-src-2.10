@@ -462,20 +462,6 @@ export class AiService {
       })
     })
 
-    await this.knowledge.enqueueCapture({
-      aiSpace: getAiSpace(input.mode),
-      answer: displayContent,
-      question: safeMessage,
-      userId: user.id,
-    })
-
-    await this.knowledge.recordConversationTurn({
-      aiSpace: getAiSpace(input.mode),
-      answer: displayContent,
-      question: safeMessage,
-      userId: user.id,
-    }).catch(() => undefined)
-
     const sessionTurn = await this.problemSessions.recordChatTurnPair({
       answer: displayContent,
       hasAttachment: hasAttachmentContext,

@@ -1,11 +1,13 @@
 # CQUPT-SRC
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-21 已按当前代码与运行环境更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`database/prisma/schema.prisma`。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 校园漏洞响应与安全学习平台。项目连接学生、审核员、管理员与校园资产责任单位，形成从漏洞提交、审核、修复、复测、归档、证书、积分、学习资源到 AI 辅助的完整闭环。
@@ -186,8 +188,8 @@ curl -s http://localhost:5000/health
 - 漏洞支持草稿，提交后不可撤回；一个漏洞只分配一个审核员；一个漏洞最多一张证书。
 - 附件只允许 PDF，单文件 10MB，访问必须鉴权并写审计日志。
 - 安全答题准入使用 `SecurityQuestion` 与 `SecurityExamAttempt`。
-- AI 知识沉淀使用 `AiKnowledgeConversation`、`AiKnowledgeConversationTurn`、`AiKnowledgeEntry` 与 Skill Candidate 状态字段。
-- AI 原始对话不作为长期知识直接复用，只保存脱敏、泛化、审核后的总结和候选 Skill。
+- AI 知识沉淀使用 `AiProblemSession`、`AiProblemSessionTurn`、`AiKnowledgeCluster`、`AiKnowledgeEntry`、`AiKnowledgeConversation`、`AiKnowledgeConversationTurn` 与 Skill Candidate 状态字段。
+- AI 原始对话不作为长期知识直接复用；先按问题会话保存脱敏 turns，用户确认解决后再生成脱敏、泛化、审核后的知识条目或候选 Skill。
 
 ## 安全原则
 
@@ -202,4 +204,4 @@ curl -s http://localhost:5000/health
 
 1. 生产部署时复核 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src` 是否保持 `cocking:cocking` 与 `775`，且 Docker Compose 是否把它挂载到容器 `/opt/data/skills/cqupt-src`；后端 `CQUPT_HERMES_SKILLS_ROOT` 应指向该宿主目录。
 2. 在生产数据规模下继续观察 AI 知识沉淀去重效果、评分阈值和审核工作量。
-3. 生产部署后复跑 `cd backend && npm run test:core-e2e`，确认安全答题、附件、报告草稿、知识沉淀和 Skill 安装链路在服务器拓扑下仍通过。
+3. 生产部署后复跑 `cd backend && npm run test:core-e2e` 与 `npm run test:ai-problem-session`，确认安全答题、附件、报告草稿、知识沉淀、问题会话和 Skill 安装链路在服务器拓扑下仍通过。

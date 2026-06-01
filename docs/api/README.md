@@ -1,11 +1,13 @@
 # API Docs
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-05-31 已按新版 AI 知识沉淀方案更新，并补充用户端历史会话侧栏与 AI 回复点赞/点踩反馈。AI Gateway API 目标方案新增问题会话生命周期接口、历史会话接口、`POST /api/ai/chat` 的 `sessionId`/`assistantTurnId` 字段、知识库命中响应字段 `usedKnowledge/knowledgeSources/knowledgeHitIds`，以及知识聚类、自动入库和反馈评分管理接口。
+> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型配置为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway、AI 助手外观/配额/Skill 路由、安全答题题库、AI Knowledge Base 与 Skill Candidate 接口。新版目标方案将 AI 知识沉淀升级为问题会话式链路：问题会话 API、历史会话侧栏、已解决确认、AI 回复点赞/点踩、知识聚类、自动入库和知识库来源标注均在本文件给出目标契约。
@@ -24,7 +26,7 @@ API 文档目录。当前已完成健康检查、认证注册、账号中心、�
 | 证书 | `GET /api/certificates/my`、`GET /api/certificates/manage`、`POST /api/certificates`、`POST /api/certificates/:certificateId/revoke`、`GET /api/certificates/:certificateId/preview`、`GET /api/certificates/public/:certificateNo` |
 | 公告/学习/商城 | `/api/announcements/*`、`/api/learning/*`、`/api/points/*`、`/api/mall/*` |
 | AI Gateway | `GET /api/ai/health`、`GET /api/ai/appearance`、`GET /api/ai/quota`、`GET /api/ai/skills`、`POST /api/ai/chat`、`POST /api/ai/report-drafts`、`POST /api/ai/attachments/text`、`POST /api/ai/actions/:actionId/confirm` |
-| AI 问题会话 | `POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/discard`、`POST /api/ai/problem-sessions/:id/fork`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback` |
+| AI 问题会话 | 已实现：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`；目标态：title/archive/fork/turn feedback |
 | AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`GET /api/ai/knowledge/clusters`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback`、`POST /api/ai/knowledge/:id/merge` |
 | Skill Candidate | `GET /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates/:id/review`、`POST /api/ai/knowledge/skill-candidates/:id/install` |
 | 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
@@ -602,10 +604,14 @@ admin: ai:use_admin
 - 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 AI 审计日志。
 - 新版知识沉淀不依赖浏览器本地聊天历史。前端可以继续本地缓存最近消息用于显示恢复，但平台知识沉淀以后端 `AiProblemSession` 和脱敏 turns 为准。
 - 如果 `usedKnowledge=true`，前端必须在 AI 回复框底部展示“本回答参考了平台知识库”的来源标注。
-- 每条 assistant 回复必须返回 `assistantTurnId`，用于回复底部点赞/点踩反馈。
-- 如果回答使用了知识库，后端还应返回 `knowledgeHitIds`；前端不直接传 knowledgeId 作为可信评分对象。
+- 当前已实现的 `/api/ai/chat` 会返回 `sessionId`、`userTurnId`、`assistantTurnId` 和脱敏后的 turn 记录，用于问题会话沉淀。
+- `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds` 与 turn 级点赞/点踩持久化属于 Knowledge Retrieval / Feedback 目标态；前端不应把 knowledgeId 当作可信评分对象。
 
 ### AI 问题会话
+
+当前已实现接口：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`。
+
+目标态但当前未实现或未验收接口：`PATCH /api/ai/problem-sessions/:id/title`、`POST /api/ai/problem-sessions/:id/archive`、`POST /api/ai/problem-sessions/:id/fork`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback`。
 
 创建新的问题会话：
 
@@ -635,7 +641,7 @@ POST /api/ai/problem-sessions
 查询当前用户历史问题会话，用于 AI 助手左侧侧栏：
 
 ```text
-GET /api/ai/problem-sessions/history?limit=30&cursor=xxx&q=端口&status=ACTIVE,RESOLVED
+GET /api/ai/problem-sessions/history?limit=30
 ```
 
 返回示例：
@@ -666,8 +672,9 @@ GET /api/ai/problem-sessions/history?limit=30&cursor=xxx&q=端口&status=ACTIVE,
 
 - 后端按当前 JWT 用户过滤，前端不得传 `userId`。
 - 历史列表只返回轻量摘要，不返回完整 turns。
+- 当前实现支持 `limit`；`cursor`、`q`、多状态过滤属于目标态。
 - 左侧历史会话只作为恢复/查看入口，不自动注入当前新会话上下文。
-- 已结束会话如果继续追问，必须 fork 新 session。
+- 已结束会话如果继续追问，目标态应 fork 新 session；当前后端 fork 接口尚未实现。
 
 查询当前活跃或等待确认的问题会话：
 
@@ -736,7 +743,7 @@ POST /api/ai/problem-sessions/:id/discard
 }
 ```
 
-基于历史会话创建新问题会话：
+目标态：基于历史会话创建新问题会话：
 
 ```text
 POST /api/ai/problem-sessions/:id/fork
@@ -761,7 +768,7 @@ POST /api/ai/problem-sessions/:id/fork
 }
 ```
 
-提交某条 AI 回复的点赞/点踩：
+目标态：提交某条 AI 回复的点赞/点踩：
 
 ```text
 POST /api/ai/problem-sessions/:id/turns/:turnId/feedback

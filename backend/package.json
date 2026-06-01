@@ -10,6 +10,7 @@
     "start": "node dist/main.js",
     "test:core-api": "node ../tests/api/core-api-smoke.mjs",
     "test:core-e2e": "node ../tests/e2e/core-e2e.mjs",
+    "test:ai-problem-session": "node ../tests/e2e/ai-problem-session-phase2.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:validate": "prisma validate --schema ../database/prisma/schema.prisma",
     "prisma:generate": "node scripts/prisma-generate.cjs",

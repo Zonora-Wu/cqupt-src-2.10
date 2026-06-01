@@ -25,6 +25,7 @@ const accounts = {
 const state = {
   adminToken: null,
   approvedKnowledgeId: null,
+  autoApprovedKnowledgeId: null,
   discardedSessionId: null,
   duplicateKnowledgeId: null,
   lifecycleSessionId: null,
@@ -89,6 +90,9 @@ async function main() {
   })
 
   await step('KB-01 chat writes sanitized turn pair with sessionId', async () => {
+    const captureJobsBeforeChat = await prisma.aiKnowledgeCaptureJob.count()
+    const conversationsBeforeChat = await prisma.aiKnowledgeConversation.count()
+    const knowledgeBeforeChat = await prisma.aiKnowledgeEntry.count()
     const result = await request('/ai/chat', {
       body: { message: '我当前多少积分？', mode: 'student', sessionId: state.lifecycleSessionId },
       method: 'POST',
@@ -102,6 +106,12 @@ async function main() {
     })
     assert(turns.some((turn) => turn.role === 'user' && turn.sanitizedText.includes('积分')), 'user turn should be persisted')
     assert(turns.some((turn) => turn.id === result.assistantTurnId && turn.role === 'assistant'), 'assistant turn should be persisted')
+    const knowledgeAfterChat = await prisma.aiKnowledgeEntry.count()
+    const captureJobsAfterChat = await prisma.aiKnowledgeCaptureJob.count()
+    const conversationsAfterChat = await prisma.aiKnowledgeConversation.count()
+    assert(knowledgeAfterChat === knowledgeBeforeChat, 'single chat turn should not create knowledge entry')
+    assert(captureJobsAfterChat === captureJobsBeforeChat, 'single chat turn should not enqueue legacy capture job')
+    assert(conversationsAfterChat === conversationsBeforeChat, 'single chat turn should not create legacy knowledge conversation')
 
     const history = await request('/ai/problem-sessions/history?limit=10', { token: state.studentToken })
     assert(Array.isArray(history) && history.some((item) => item.id === state.lifecycleSessionId), 'history should include chat session')
@@ -312,6 +322,95 @@ async function main() {
     assert(cluster?.duplicateRiskScore >= 0.72, 'cluster should retain duplicate risk')
   })
 
+  await step('KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve', async () => {
+    const question = `${marker} Pikachu XSS 靶场提交 payload 后没有弹窗怎么排查？`
+    const answer = [
+      `${marker} 执行第一步：检查浏览器弹窗是否被拦截，并确认页面允许 alert。`,
+      '修改 payload 编码，检查输入点是否被过滤，再重新提交验证。',
+      '重启靶场服务后访问 XSS 页面，确认弹窗可以正常触发。',
+      '注意浏览器策略、过滤规则和靶场缓存这几个坑。',
+    ].join('\n')
+
+    for (let index = 0; index < 5; index += 1) {
+      const session = await request('/ai/problem-sessions', {
+        body: { initialQuestion: `${question} ask-${index}`, mode: 'student' },
+        method: 'POST',
+        token: state.studentToken,
+      })
+      await request('/ai/chat', {
+        body: { message: question, mode: 'student', sessionId: session.id },
+        method: 'POST',
+        token: state.studentToken,
+      })
+      await request(`/ai/problem-sessions/${session.id}/discard`, {
+        method: 'POST',
+        token: state.studentToken,
+      })
+    }
+
+    const before = await prisma.aiKnowledgeEntry.count({
+      where: { canonicalQuestion: { contains: question }, status: 'AUTO_APPROVED' },
+    })
+    assert(before === 0, 'ask signals alone should not create AUTO_APPROVED knowledge')
+
+    let lastSummary = null
+    for (let index = 0; index < 3; index += 1) {
+      const session = await createResolvedProblemSession({ answer, question })
+      lastSummary = await request(`/ai/problem-sessions/${session.id}/summarize`, {
+        method: 'POST',
+        token: state.adminToken,
+      })
+    }
+    assert(lastSummary?.clusterId, 'auto-approved summary should attach clusterId')
+    const cluster = await prisma.aiKnowledgeCluster.findUnique({ where: { id: lastSummary.clusterId } })
+    assert(cluster?.resolvedSessionCount >= 3, 'auto cluster should count resolved sessions')
+    assert(cluster?.totalAskCount >= 5, 'auto cluster should count ask signals')
+    assert(cluster?.promotedKnowledgeId, 'cluster should point to promoted auto-approved knowledge')
+
+    const entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: cluster.promotedKnowledgeId } })
+    state.autoApprovedKnowledgeId = entry?.id ?? null
+    assert(entry?.status === 'AUTO_APPROVED', 'cluster should create AUTO_APPROVED knowledge')
+    assert(entry?.autoApprovalReason?.includes('同类问题已解决'), 'autoApprovalReason should explain thresholds')
+    assert(entry?.sourceClusterId === cluster.id, 'auto knowledge should retain sourceClusterId')
+    assert((entry?.sourceSessionIds?.length ?? 0) >= 3, 'auto knowledge should retain sourceSessionIds')
+    assert(entry?.resolvedSessionCount >= 3, 'auto knowledge should store resolvedSessionCount')
+    assert(entry?.askCount >= 5, 'auto knowledge should store askCount')
+  })
+
+  await step('KB-07 refuses low-quality or risky clusters', async () => {
+    const lowQuestion = `${marker} 低质量自动入库阻断测试`
+    for (let index = 0; index < 5; index += 1) {
+      const session = await request('/ai/problem-sessions', {
+        body: { initialQuestion: `${lowQuestion} ask-${index}`, mode: 'student' },
+        method: 'POST',
+        token: state.studentToken,
+      })
+      await request('/ai/chat', {
+        body: { message: lowQuestion, mode: 'student', sessionId: session.id },
+        method: 'POST',
+        token: state.studentToken,
+      })
+      await request(`/ai/problem-sessions/${session.id}/discard`, {
+        method: 'POST',
+        token: state.studentToken,
+      })
+    }
+    for (let index = 0; index < 3; index += 1) {
+      const session = await createResolvedProblemSession({
+        answer: '可能是环境问题，你再看看。',
+        question: lowQuestion,
+      })
+      await request(`/ai/problem-sessions/${session.id}/summarize`, {
+        method: 'POST',
+        token: state.adminToken,
+      })
+    }
+    const entryCount = await prisma.aiKnowledgeEntry.count({
+      where: { canonicalQuestion: { contains: lowQuestion }, status: 'AUTO_APPROVED' },
+    })
+    assert(entryCount === 0, 'low-quality cluster should not auto-approve')
+  })
+
   await step('KB-02 discard does not create knowledge candidate', async () => {
     const session = await request('/ai/problem-sessions', {
       body: { initialQuestion: `${marker} 不沉淀测试`, mode: 'student' },
@@ -333,7 +432,7 @@ async function main() {
 
   await step('KB-02/KB-03 admin review creates knowledge only after approval', async () => {
     const before = await prisma.aiKnowledgeEntry.count({
-      where: { canonicalQuestion: { contains: marker }, id: state.duplicateKnowledgeId ? { not: state.duplicateKnowledgeId } : undefined },
+      where: { canonicalQuestion: { contains: marker }, id: { notIn: [state.duplicateKnowledgeId, state.autoApprovedKnowledgeId].filter(Boolean) } },
     })
     assert(before === 0, 'no knowledge should be created before admin approval')
 
@@ -395,6 +494,14 @@ async function createTempStudent(code = state.studentCode, suffix = 'main') {
       status: 'ACTIVE',
       studentNo: `${runId}-${suffix}`.slice(0, 32),
       unifiedCode: code,
+    },
+  })
+  await prisma.aiUserQuota.create({
+    data: {
+      dailyLimit: 200000,
+      monthlyLimit: 200000,
+      userId: user.id,
+      weeklyLimit: 200000,
     },
   })
   return user.id
@@ -500,6 +607,10 @@ async function cleanupArtifacts() {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.approvedKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.approvedKnowledgeId } })
   }
+  if (state.autoApprovedKnowledgeId) {
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.autoApprovedKnowledgeId } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.autoApprovedKnowledgeId } })
+  }
   if (state.duplicateKnowledgeId) {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.duplicateKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.duplicateKnowledgeId } })
@@ -509,11 +620,13 @@ async function cleanupArtifacts() {
   await prisma.aiKnowledgeCluster.deleteMany({ where: { representativeProblem: { contains: marker } } })
   if (state.studentId) {
     await prisma.auditLog.deleteMany({ where: { actorId: state.studentId } })
+    await prisma.aiUserQuota.deleteMany({ where: { userId: state.studentId } })
     await prisma.refreshToken.deleteMany({ where: { userId: state.studentId } })
     await prisma.user.deleteMany({ where: { id: state.studentId } })
   }
   if (state.otherStudentId) {
     await prisma.auditLog.deleteMany({ where: { actorId: state.otherStudentId } })
+    await prisma.aiUserQuota.deleteMany({ where: { userId: state.otherStudentId } })
     await prisma.refreshToken.deleteMany({ where: { userId: state.otherStudentId } })
     await prisma.user.deleteMany({ where: { id: state.otherStudentId } })
   }

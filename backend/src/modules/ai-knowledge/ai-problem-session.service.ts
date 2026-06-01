@@ -69,6 +69,15 @@ const CONTINUABLE_STATUSES = new Set<AiProblemSessionStatus>([
 ])
 
 const DUPLICATE_REVIEW_THRESHOLD = 0.72
+const AUTO_APPROVAL_THRESHOLDS = {
+  maxDuplicateRisk: 0.72,
+  maxPrivacyRisk: 0.1,
+  minAskCount: 5,
+  minQualityScore: 0.72,
+  minResolvedSessionCount: 3,
+  minReuseScore: 0.82,
+  minSafetyScore: 0.9,
+}
 
 @Injectable()
 export class AiProblemSessionService {
@@ -234,6 +243,7 @@ export class AiProblemSessionService {
       include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
       where: { id },
     })
+    await this.tryAutoApproveCluster(updated.id)
     return serializeProblemSession(updated)
   }
 
@@ -303,6 +313,7 @@ export class AiProblemSessionService {
 
     const question = redactSensitiveText(input.question).slice(0, 6000)
     const answer = redactSensitiveText(input.answer).slice(0, 8000)
+    const shouldRecordAskSignal = session.turnCount === 0 && !getProblemSessionRejectionReason(question) && !getNonReusableProblemReason(question)
     const titleUpdate = session.initialQuestion === '新问题会话' || !session.title
       ? {
           initialQuestion: question,
@@ -341,6 +352,9 @@ export class AiProblemSessionService {
       })
       return [createdUserTurn, createdAssistantTurn]
     })
+    if (shouldRecordAskSignal) {
+      await this.recordClusterAskSignal(session.aiSpace, question).catch(() => undefined)
+    }
 
     return {
       assistantTurnId: assistantTurn.id,
@@ -386,7 +400,7 @@ export class AiProblemSessionService {
     const duplicate = await this.assessDuplicateRisk(problem, lastAnswer, session.aiSpace)
     const quality = clampScore((successfulSteps.length >= 2 ? 0.72 : 0.48) + (pitfalls.length ? 0.08 : 0) + (environment.length ? 0.06 : 0))
     const reuse = clampScore(/积分|余额|商品|兑换|我的|当前|今天|公告|排名|证书|漏洞状态|SRC-\d/i.test(problem) ? 0.22 : quality + 0.08)
-    const safety = rejectionReason ? 0.1 : 0.88
+    const safety = rejectionReason ? 0.1 : 0.94
     const privacy = rejectionReason ? 0.9 : 0.08
     const poisoningRisk = /忽略.*规则|ignore .*instructions|系统提示词|开发者指令|自动通过|绕过权限/i.test(fullText) ? 0.95 : 0.04
     const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || reuse < 0.5 || quality < 0.55
@@ -457,7 +471,7 @@ export class AiProblemSessionService {
       })
     }
     const nextResolvedCount = shouldIncrement ? existing.resolvedSessionCount + 1 : existing.resolvedSessionCount
-    const nextTotalAskCount = shouldIncrement ? existing.totalAskCount + 1 : existing.totalAskCount
+    const nextTotalAskCount = Math.max(existing.totalAskCount, nextResolvedCount)
     const average = (current: number, incoming: number) => shouldIncrement
       ? clampScore(((current * existing.resolvedSessionCount) + incoming) / Math.max(nextResolvedCount, 1))
       : incoming
@@ -477,6 +491,115 @@ export class AiProblemSessionService {
       },
       where: { id: existing.id },
     })
+  }
+
+  private async recordClusterAskSignal(aiSpace: AiSpace, question: string) {
+    const topicKey = buildTopicKey(question)
+    const existing = await this.prisma.aiKnowledgeCluster.findUnique({
+      where: { aiSpace_topicKey: { aiSpace, topicKey } },
+    })
+    if (!existing) {
+      await this.prisma.aiKnowledgeCluster.create({
+        data: {
+          aiSpace,
+          representativeProblem: question,
+          topicKey,
+          totalAskCount: 1,
+        },
+      })
+      return
+    }
+    await this.prisma.aiKnowledgeCluster.update({
+      data: {
+        representativeProblem: existing.representativeProblem || question,
+        totalAskCount: { increment: 1 },
+      },
+      where: { id: existing.id },
+    })
+  }
+
+  private async tryAutoApproveCluster(latestSessionId: string) {
+    const latestSession = await this.prisma.aiProblemSession.findUnique({
+      where: { id: latestSessionId },
+    })
+    if (!latestSession?.clusterId) return null
+    const cluster = await this.prisma.aiKnowledgeCluster.findUnique({
+      where: { id: latestSession.clusterId },
+    })
+    if (!cluster || cluster.promotedKnowledgeId || cluster.status === 'AUTO_APPROVED') return null
+    if (cluster.resolvedSessionCount < AUTO_APPROVAL_THRESHOLDS.minResolvedSessionCount) return null
+    if (cluster.totalAskCount < AUTO_APPROVAL_THRESHOLDS.minAskCount) return null
+    if (cluster.avgQualityScore < AUTO_APPROVAL_THRESHOLDS.minQualityScore) return null
+    if (cluster.avgReuseScore < AUTO_APPROVAL_THRESHOLDS.minReuseScore) return null
+    if (cluster.avgSafetyScore < AUTO_APPROVAL_THRESHOLDS.minSafetyScore) return null
+    if (cluster.duplicateRiskScore >= AUTO_APPROVAL_THRESHOLDS.maxDuplicateRisk) return null
+
+    const sessions = await this.prisma.aiProblemSession.findMany({
+      orderBy: [{ resolvedAt: 'desc' }, { updatedAt: 'desc' }],
+      take: 10,
+      where: {
+        clusterId: cluster.id,
+        resolutionByUser: true,
+        status: AiProblemSessionStatus.READY_REVIEW,
+      },
+    })
+    const summaries = sessions
+      .map((session) => ({ id: session.id, summary: parseProblemSessionSummary(session.summaryJson) }))
+      .filter((item) => item.summary.recommendation !== 'DISCARD' && !item.summary.rejectionReason)
+    if (summaries.length < AUTO_APPROVAL_THRESHOLDS.minResolvedSessionCount) return null
+    if (summaries.some((item) => item.summary.scores.privacy > AUTO_APPROVAL_THRESHOLDS.maxPrivacyRisk)) return null
+    const best = summaries
+      .slice()
+      .sort((a, b) => b.summary.scores.confidence - a.summary.scores.confidence)[0]
+    if (!best) return null
+
+    const autoApprovalReason = [
+      `同类问题已解决 ${cluster.resolvedSessionCount} 次`,
+      `询问信号 ${cluster.totalAskCount} 次`,
+      `平均质量 ${cluster.avgQualityScore.toFixed(2)}`,
+      `平均复用 ${cluster.avgReuseScore.toFixed(2)}`,
+      `平均安全 ${cluster.avgSafetyScore.toFixed(2)}`,
+      `重复风险 ${cluster.duplicateRiskScore.toFixed(2)}`,
+    ].join('；')
+    const knowledge = await this.createKnowledgeEntryFromProblemSession(
+      {
+        aiSpace: latestSession.aiSpace,
+        clusterId: cluster.id,
+        id: best.id,
+        sourceSessionIds: summaries.map((item) => item.id).slice(0, 10),
+        userId: latestSession.userId,
+      },
+      best.summary,
+      null,
+      autoApprovalReason,
+      AiKnowledgeStatus.AUTO_APPROVED,
+      {
+        askCount: cluster.totalAskCount,
+        autoApprovalReason,
+        resolvedSessionCount: cluster.resolvedSessionCount,
+      },
+    )
+    await this.prisma.$transaction([
+      this.prisma.aiKnowledgeCluster.update({
+        data: {
+          autoApprovalReason,
+          promotedKnowledgeId: knowledge.id,
+          status: 'AUTO_APPROVED',
+        },
+        where: { id: cluster.id },
+      }),
+      this.prisma.aiProblemSession.updateMany({
+        data: {
+          knowledgeEntryId: knowledge.id,
+          status: AiProblemSessionStatus.APPROVED_TO_KB,
+        },
+        where: {
+          id: { in: summaries.map((item) => item.id) },
+          status: AiProblemSessionStatus.READY_REVIEW,
+        },
+      }),
+    ])
+    return knowledge
   }
 
   private async assessDuplicateRisk(problem: string, answer: string, aiSpace: AiSpace) {
@@ -517,9 +640,15 @@ export class AiProblemSessionService {
 
   private async createKnowledgeEntryFromProblemSession(session: {
     aiSpace: AiSpace
+    clusterId?: string | null
     id: string
+    sourceSessionIds?: string[]
     userId: string | null
-  }, summary: ProblemSessionSummary, reviewerId: string, reviewNote?: string) {
+  }, summary: ProblemSessionSummary, reviewerId: string | null, reviewNote?: string, status: AiKnowledgeStatus = AiKnowledgeStatus.APPROVED, autoApproval?: {
+    askCount: number
+    autoApprovalReason: string
+    resolvedSessionCount: number
+  }) {
     const question = redactSensitiveText(summary.problem)
     const answer = redactSensitiveText(renderProblemSessionKnowledgeAnswer(summary))
     const rejectionReason = getProblemSessionRejectionReason(`${question}\n${answer}`)
@@ -542,7 +671,7 @@ export class AiProblemSessionService {
           privacyRiskScore: summary.scores.privacy,
           reuseValueScore: summary.scores.reuse,
           reviewedAt: new Date(),
-          reviewedById: reviewerId,
+          reviewedById: reviewerId ?? undefined,
           reviewNote,
           roleScope,
           safetyScore: summary.scores.safety,
@@ -550,13 +679,22 @@ export class AiProblemSessionService {
           sensitivity: AiKnowledgeSensitivity.INTERNAL,
           similarityKey: buildTopicKey(question),
           source: AiKnowledgeSource.USER_CHAT,
+          sourceClusterId: session.clusterId ?? undefined,
           sourceHash,
+          sourceSessionIds: session.sourceSessionIds ?? [session.id],
           sourceUserId: session.userId ?? undefined,
-          status: AiKnowledgeStatus.APPROVED,
+          status,
           summary: summary.resolution,
           tags: tokenizeForSearch(`${question}\n${answer}`).slice(0, 8),
           title: buildProblemSessionTitle(question),
           visibility: AiKnowledgeVisibility.ROLE_ONLY,
+          ...(autoApproval
+            ? {
+                askCount: autoApproval.askCount,
+                autoApprovalReason: autoApproval.autoApprovalReason,
+                resolvedSessionCount: autoApproval.resolvedSessionCount,
+              }
+            : {}),
         },
       })
     } catch (error) {
