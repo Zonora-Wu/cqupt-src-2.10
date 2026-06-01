@@ -47,6 +47,11 @@ type ProblemSessionSummary = {
     reuse: number
     safety: number
   }
+  scoreDetails: {
+    modelSuggested: boolean
+    ruleFlags: string[]
+    scoringVersion: string
+  }
   recommendation: 'KB' | 'SKILL' | 'DISCARD'
   rejectionReason?: string
   similarKnowledgeMatches: Array<{
@@ -215,12 +220,15 @@ export class AiProblemSessionService {
 
     const summary = await this.buildResolvedSessionSummary(session)
     validateProblemSessionSummary(summary)
+    const topicKey = buildTopicKey(summary.problem)
+    const cluster = await this.updateKnowledgeCluster(session, summary, topicKey)
     const updated = await this.prisma.aiProblemSession.update({
       data: {
+        clusterId: cluster?.id,
         duplicateRiskScore: summary.similarKnowledgeMatches[0]?.similarity ?? 0,
         summaryJson: summary as unknown as Prisma.InputJsonValue,
         title: buildProblemSessionTitle(summary.problem),
-        topicKey: buildTopicKey(summary.problem),
+        topicKey,
         status: AiProblemSessionStatus.READY_REVIEW,
       },
       include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
@@ -357,6 +365,7 @@ export class AiProblemSessionService {
 
   private async buildResolvedSessionSummary(session: {
     aiSpace: AiSpace
+    clusterId?: string | null
     initialQuestion: string
     turns: Array<{ role: string; sanitizedText: string }>
   }): Promise<ProblemSessionSummary> {
@@ -366,7 +375,8 @@ export class AiProblemSessionService {
     const assistantMessages = turns.filter((turn) => turn.role === 'assistant').map((turn) => turn.content)
     const problem = userMessages[0] || session.initialQuestion
     const lastAnswer = assistantMessages.at(-1) ?? ''
-    const rejectionReason = getProblemSessionRejectionReason(fullText) ?? getNonReusableProblemReason(problem)
+    const ruleFlags = getProblemSessionRuleFlags(fullText, problem)
+    const rejectionReason = ruleFlags[0]
     const environment = extractLines(fullText, /(windows|wsl|linux|ubuntu|centos|docker|compose|php\s*\d|mysql|mariadb|nginx|apache|node|npm|python|端口|版本|浏览器|burp|nmap|sqlmap)/i, 8)
     const pitfalls = extractLines(fullText, /(报错|错误|失败|不兼容|permission denied|denied|not found|timeout|端口占用|版本|依赖|乱码|空白页|连接失败|启动失败|越权|403|500)/i, 10)
     const successfulSteps = extractLines(assistantMessages.join('\n'), /(执行|运行|修改|配置|安装|重启|检查|确认|设置|创建|导入|访问|启动|提交|补充|复现|验证)/i, 12)
@@ -398,6 +408,11 @@ export class AiProblemSessionService {
       resolution: successfulSteps.length
         ? `最终有效步骤：${successfulSteps.join('；')}`
         : lastAnswer.slice(0, 1400),
+      scoreDetails: {
+        modelSuggested: false,
+        ruleFlags,
+        scoringVersion: 'problem-session-rules-v2',
+      },
       scores: {
         confidence: clampScore((quality + reuse + safety) / 3),
         poisoningRisk,
@@ -409,6 +424,59 @@ export class AiProblemSessionService {
       similarKnowledgeMatches: duplicate.matches,
       successfulSteps,
     }
+  }
+
+  private async updateKnowledgeCluster(session: {
+    aiSpace: AiSpace
+    clusterId?: string | null
+    id: string
+  }, summary: ProblemSessionSummary, topicKey: string) {
+    if (summary.rejectionReason) return null
+    const duplicateRiskScore = summary.similarKnowledgeMatches[0]?.similarity ?? 0
+    const existing = await this.prisma.aiKnowledgeCluster.findUnique({
+      where: { aiSpace_topicKey: { aiSpace: session.aiSpace, topicKey } },
+    })
+    const shouldIncrement = !session.clusterId || session.clusterId !== existing?.id
+    if (!existing) {
+      return this.prisma.aiKnowledgeCluster.create({
+        data: {
+          aiSpace: session.aiSpace,
+          avgQualityScore: summary.scores.quality,
+          avgReuseScore: summary.scores.reuse,
+          avgSafetyScore: summary.scores.safety,
+          duplicateRiskScore,
+          lastResolvedAt: new Date(),
+          mergeSuggestion: summary.mergeSuggestion,
+          representativeProblem: summary.problem,
+          representativeResolution: summary.resolution,
+          resolvedSessionCount: 1,
+          similarKnowledgeMatches: summary.similarKnowledgeMatches as unknown as Prisma.InputJsonValue,
+          topicKey,
+          totalAskCount: 1,
+        },
+      })
+    }
+    const nextResolvedCount = shouldIncrement ? existing.resolvedSessionCount + 1 : existing.resolvedSessionCount
+    const nextTotalAskCount = shouldIncrement ? existing.totalAskCount + 1 : existing.totalAskCount
+    const average = (current: number, incoming: number) => shouldIncrement
+      ? clampScore(((current * existing.resolvedSessionCount) + incoming) / Math.max(nextResolvedCount, 1))
+      : incoming
+    return this.prisma.aiKnowledgeCluster.update({
+      data: {
+        avgQualityScore: average(existing.avgQualityScore, summary.scores.quality),
+        avgReuseScore: average(existing.avgReuseScore, summary.scores.reuse),
+        avgSafetyScore: average(existing.avgSafetyScore, summary.scores.safety),
+        duplicateRiskScore,
+        lastResolvedAt: new Date(),
+        mergeSuggestion: summary.mergeSuggestion,
+        representativeProblem: summary.problem,
+        representativeResolution: summary.resolution,
+        resolvedSessionCount: nextResolvedCount,
+        similarKnowledgeMatches: summary.similarKnowledgeMatches as unknown as Prisma.InputJsonValue,
+        totalAskCount: nextTotalAskCount,
+      },
+      where: { id: existing.id },
+    })
   }
 
   private async assessDuplicateRisk(problem: string, answer: string, aiSpace: AiSpace) {
@@ -499,8 +567,10 @@ export class AiProblemSessionService {
 }
 
 function serializeProblemSession<T extends {
+  clusterId: string | null
   closedAt: Date | null
   createdAt: Date
+  duplicateRiskScore: number
   id: string
   initialQuestion: string
   knowledgeEntryId: string | null
@@ -519,7 +589,9 @@ function serializeProblemSession<T extends {
 }>(session: T) {
   return {
     closedAt: session.closedAt?.toISOString() ?? null,
+    clusterId: session.clusterId,
     createdAt: session.createdAt.toISOString(),
+    duplicateRiskScore: session.duplicateRiskScore,
     id: session.id,
     initialQuestion: session.initialQuestion,
     knowledgeEntryId: session.knowledgeEntryId,
@@ -596,6 +668,9 @@ function validateProblemSessionSummary(summary: ProblemSessionSummary) {
   if (!summary.problem || !summary.resolution || !summary.recommendation || !summary.scores) {
     throw new BadRequestException('问题会话总结字段不完整')
   }
+  if (!summary.scoreDetails?.scoringVersion || !Array.isArray(summary.scoreDetails.ruleFlags)) {
+    throw new BadRequestException('问题会话评分详情字段不完整')
+  }
   if (requiredArrays.some((key) => !Array.isArray(summary[key]))) {
     throw new BadRequestException('问题会话总结数组字段不完整')
   }
@@ -627,8 +702,19 @@ function getProblemSessionRejectionReason(text: string) {
   if (/authorization\s*:|bearer\s+[a-z0-9._~+/=-]{12,}|cookie\s*:|set-cookie\s*:/i.test(text)) return '包含 Token、Cookie 或 Authorization 信息'
   if (/(password|api[_-]?key|secret|private_key)\s*[=:：]\s*\S+/i.test(text)) return '包含密码、密钥或私钥信息'
   if (/(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}/.test(text)) return '包含内网或真实资产地址'
+  if (/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/i.test(text)) return '包含真实资产 URL'
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text)) return '包含邮箱等个人身份信息'
+  if (/(?:\+?86[-\s]?)?1[3-9]\d{9}\b/.test(text)) return '包含手机号等个人身份信息'
+  if (/(?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01]|Host:\s*[^\s]+|-----BEGIN [A-Z ]+PRIVATE KEY-----/i.test(text)) return '包含原始请求包或私密附件内容'
   if (/忽略.*(规则|指令|系统)|ignore\s+(previous|all)\s+instructions|system\s*prompt|开发者指令|系统提示词|越权|绕过.*(权限|规则)/i.test(text)) return '疑似 prompt injection 或越权指令'
   return undefined
+}
+
+function getProblemSessionRuleFlags(fullText: string, problem: string) {
+  return [
+    getProblemSessionRejectionReason(fullText),
+    getNonReusableProblemReason(problem),
+  ].filter((reason): reason is string => Boolean(reason))
 }
 
 function getNonReusableProblemReason(problem: string) {
@@ -676,10 +762,16 @@ function tokenizeForSearch(text: string) {
 
 function scoreTextSimilarity(source: string, sourceTokens: string[], target: string) {
   const targetLower = target.toLowerCase()
+  const sourceLower = source.toLowerCase()
+  const sourceQuestion = sourceLower.split('\n')[0]?.trim() ?? ''
   const hits = sourceTokens.filter((token) => targetLower.includes(token)).length
   const tokenScore = sourceTokens.length ? hits / sourceTokens.length : 0
-  const containmentScore = targetLower.includes(source.slice(0, 60).toLowerCase()) ? 0.25 : 0
-  return clampScore(tokenScore * 0.75 + containmentScore)
+  const questionTokens = tokenizeForSearch(sourceQuestion)
+  const questionHits = questionTokens.filter((token) => targetLower.includes(token)).length
+  const questionTokenScore = questionTokens.length ? questionHits / questionTokens.length : 0
+  const containmentScore = targetLower.includes(sourceLower.slice(0, 60)) ? 0.25 : 0
+  const questionScore = sourceQuestion.length >= 12 && targetLower.includes(sourceQuestion.slice(0, 60)) ? 0.25 : 0
+  return clampScore(Math.max(tokenScore * 0.75 + containmentScore + questionScore, questionTokenScore * 0.9))
 }
 
 function inferCategory(text: string) {
@@ -715,6 +807,11 @@ function redactSensitiveText(text: string) {
     .replace(/cookie\s*:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
     .replace(/bearer\s+[a-z0-9._~+/=-]{12,}/gi, 'Bearer [REDACTED]')
     .replace(/(password|api[_-]?key|token)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
+    .replace(/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/gi, '[TARGET_URL]')
+    .replace(/([a-z0-9._%+-])[a-z0-9._%+-]*(@[a-z0-9.-]+\.[a-z]{2,})/gi, '$1***$2')
+    .replace(/\b((?:\+?86[-\s]?)?1[3-9]\d{2})\d{4}(\d{4})\b/g, '$1****$2')
+    .replace(/((?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01][\s\S]{0,1200}?)(?=\n\n|$)/gi, '[PRIVATE_REQUEST]')
+    .replace(/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+PRIVATE KEY-----/g, '[PRIVATE_ATTACHMENT]')
     .replace(/\b(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b/g, '[REDACTED_IP]')
     .trim()
 }

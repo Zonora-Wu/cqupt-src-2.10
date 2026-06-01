@@ -1012,6 +1012,7 @@ model AiKnowledgeConversationTurn {
 model AiProblemSession {
   id                 String                 @id @default(cuid())
   userId             String?
+  clusterId          String?
   aiSpace            AiSpace
   mode               String
   title              String?
@@ -1034,11 +1035,38 @@ model AiProblemSession {
   updatedAt          DateTime               @updatedAt
 
   user               User?                  @relation("AiProblemSessionUser", fields: [userId], references: [id])
+  cluster            AiKnowledgeCluster?    @relation(fields: [clusterId], references: [id])
   turns              AiProblemSessionTurn[]
 
   @@index([userId, status, updatedAt])
+  @@index([clusterId])
   @@index([topicKey, status])
   @@index([status, lastActiveAt])
+}
+
+model AiKnowledgeCluster {
+  id                       String             @id @default(cuid())
+  aiSpace                  AiSpace
+  topicKey                 String
+  representativeProblem    String             @db.Text
+  representativeResolution String?            @db.Text
+  resolvedSessionCount     Int                @default(0)
+  totalAskCount            Int                @default(0)
+  avgQualityScore          Float              @default(0)
+  avgReuseScore            Float              @default(0)
+  avgSafetyScore           Float              @default(0)
+  duplicateRiskScore       Float              @default(0)
+  similarKnowledgeMatches  Json?
+  mergeSuggestion          String?            @db.Text
+  lastResolvedAt           DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  sessions                 AiProblemSession[]
+
+  @@unique([aiSpace, topicKey])
+  @@index([aiSpace, updatedAt])
+  @@index([duplicateRiskScore])
 }
 
 model AiProblemSessionTurn {

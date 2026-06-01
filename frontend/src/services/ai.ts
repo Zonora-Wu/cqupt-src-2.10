@@ -96,11 +96,13 @@ export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVE
 export type AiProblemSessionTurn = {
   content: string
   createdAt: string
+  duplicateRiskScore?: number
   id: string
   role: 'assistant' | 'user' | string
 }
 
 export type AiProblemSession = {
+  clusterId?: string | null
   closedAt: string | null
   createdAt: string
   id: string

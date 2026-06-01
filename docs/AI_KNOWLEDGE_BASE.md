@@ -1520,9 +1520,9 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-01 | 问题会话生命周期 | 已完成 | 用户进入邮宝创建/恢复 `AiProblemSession`，`/api/ai/chat` 全程携带 `sessionId`，turn 写入脱敏文本 | E2E：新建、刷新恢复、heartbeat、leave、resolve、discard 全流程通过；用户 A 不能访问用户 B session |
 | KB-02 | 解决确认与沉淀触发 | 已完成 | 只有用户确认已解决或管理员标记有价值时才触发总结 | 单测/E2E：未确认解决的 session 不生成 KB 候选；寒暄、积分、商品、漏洞实时查询不触发沉淀 |
 | KB-03 | 结构化总结 | 已完成 | `summarizeResolvedSession()` 输出问题、环境、成功步骤、失败尝试、坑点、适用范围、不适用范围 | JSON schema 校验通过；缺字段或含敏感原文时拒绝；总结不包含 Token、Cookie、真实资产和附件原文 |
-| KB-04 | AI + 规则评分 | 进行中 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | 单测覆盖高隐私、高安全风险、prompt injection、低质量回答；AI 高分但规则命中时仍拒绝或复审 |
-| KB-05 | 脱敏与拒绝策略 | 进行中 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | 用含敏感信息样例提交后，知识条目不保存敏感原文；拒绝记录只保留最小摘要和原因 |
-| KB-06 | 相似聚类与去重 | 进行中 | 相似问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | duplicateRiskScore >= 0.72 时不自动入库；管理员页展示相似知识、新增步骤、新增坑点和合并目标 |
+| KB-04 | AI + 规则评分 | 已完成 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | E2E：高安全风险 prompt injection 被拒绝；低质量回答进入 `DISCARD`；评分字段和 `scoreDetails.scoringVersion` 完整 |
+| KB-05 | 脱敏与拒绝策略 | 已完成 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | E2E：Authorization、Cookie、手机号、邮箱、真实资产 URL、原始请求包样例均拒绝总结/入库；拒绝会话不生成知识条目 |
+| KB-06 | 相似聚类与去重 | 已完成 | 相似问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | E2E：相同问题两次已解决后累计 cluster 计数；duplicateRiskScore >= 0.72；返回相似知识和 mergeSuggestion，自动入库前被阻断 |
 | KB-07 | 高频高质自动入库 | 待代码确认 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED` | 构造 3 个已解决会话 + 5 次询问信号后自动入库；低反馈或安全风险时不入库 |
 | KB-08 | Knowledge Retrieval | 待代码确认 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent | “我多少积分”不被 KB 抢答；相似安全问答返回 `usedKnowledge=true`；中置信注入后来源仍被记录 |
 | KB-09 | 角色与权限过滤 | 待代码确认 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | student 不能命中 auditor/admin 知识；auditor 不能看到 admin scoped 知识；管理员预览有审计记录 |
@@ -1557,16 +1557,16 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 - [x] 已解决会话生成结构化 JSON 总结。
 - [x] 总结包含 problem、resolution、steps、pitfalls、failedAttempts。
-- [ ] AI 评分字段完整。
+- [x] AI 评分字段完整。
 - [x] 规则评分兜底生效。
 - [x] 敏感内容被拒绝或脱敏。
-- [ ] duplicateRiskScore >= 0.72 阻断自动入库。
+- [x] duplicateRiskScore >= 0.72 阻断自动入库。
 - [x] 管理端可查看相似知识和合并建议。
 
 ### 18.3 高频自动入库
 
-- [ ] 同类问题进入 `AiKnowledgeCluster`。
-- [ ] resolvedSessionCount / totalAskCount 正确累计。
+- [x] 同类问题进入 `AiKnowledgeCluster`。
+- [x] resolvedSessionCount / totalAskCount 正确累计。
 - [ ] 达到阈值后创建 `AUTO_APPROVED` 知识。
 - [ ] 自动入库原因写入 `autoApprovalReason`。
 - [ ] 管理员可撤回或归档自动入库条目。
