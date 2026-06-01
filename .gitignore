@@ -47,3 +47,4 @@ test-results/
 
 # Docker local data
 .docker-data/
+frontend/public/models/*.glb
