@@ -304,10 +304,12 @@ export class AiService {
       ...(hasAttachmentContext ? compactAttachmentContextForAgent(input.context) : (input.context ?? {})),
       ...(knowledgeHits.length > 0 ? { aiKnowledgeBase: formatKnowledgeHitsForPrompt(knowledgeHits) } : {}),
     }
+    const recentConversationTurns = await this.problemSessions.getRecentChatTurnsForPrompt(input.sessionId, user)
 
-    // 5. 初始消息
+    // 5. 初始消息。问题会话内必须携带最近 turns，保证“追问”能看到本次新对话的上下文。
     const messages: OpenAiChatMessage[] = [
       { content: systemPrompt, role: 'system' },
+      ...recentConversationTurns,
       { content: buildUserPrompt(safeMessage, promptContext), role: 'user' },
     ]
 

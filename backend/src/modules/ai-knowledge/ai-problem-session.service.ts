@@ -363,6 +363,27 @@ export class AiProblemSessionService {
     }
   }
 
+  async getRecentChatTurnsForPrompt(sessionId: string | undefined, user: AuthenticatedRequestUser, limit = 12) {
+    if (!sessionId) return []
+    const session = await this.prisma.aiProblemSession.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
+      where: { id: sessionId },
+    })
+    if (!session) throw new NotFoundException('问题会话不存在')
+    if (session.userId !== user.id) throw new ForbiddenException('无权访问该问题会话')
+    if (!CONTINUABLE_STATUSES.has(session.status)) {
+      throw new BadRequestException('当前问题会话已结束，请开启新的对话')
+    }
+
+    return [...session.turns]
+      .slice(-Math.max(0, Math.min(limit, 20)))
+      .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
+      .map((turn) => ({
+        content: turn.sanitizedText.slice(0, turn.role === 'user' ? 3000 : 4000),
+        role: turn.role as 'assistant' | 'user',
+      }))
+  }
+
   private async assertOwnedSession(id: string, userId: string) {
     await this.getOwnedSession(id, userId)
   }

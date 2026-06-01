@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类（canonicalProblem + hybrid retrieval + embedding/reranker + merge review）、数据使用路由（直接返回 vs AI 处理）、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -1027,6 +1027,19 @@ Direct Response
 ```
 
 Direct Response 必须优先，因为积分、商城库存、漏洞状态、证书状态等实时业务数据不能由历史知识库回答。
+
+路由层目标态使用 `AiDataRouteDecision` 作为可审计契约：
+
+```text
+route: DIRECT_RESOURCE_RESPONSE | KNOWLEDGE_DIRECT_ANSWER | KNOWLEDGE_INJECTED_AGENT | AGENT_DATA_REQUEST | NORMAL_AGENT | ACTION_PROPOSAL
+reasonCode: 为什么选择这条路由
+blockedRoutes: 被压制的候选路由及原因
+requiresModelCall: 是否调用 Hermes
+knowledgeHitIds: 本轮使用的知识命中
+contextDomains/toolNames: 本轮注入或查询的数据来源
+```
+
+每轮回复都应能解释：用了哪条 route，为什么没有走其他 route，是否调用模型，是否写入知识命中。
 
 知识库命中策略：
 

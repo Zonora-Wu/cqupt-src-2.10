@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类（canonicalProblem + hybrid retrieval + embedding/reranker + merge review）、数据使用路由（直接返回 vs AI 处理）、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -36,6 +36,71 @@
 - Hermes 可以“请求数据”，但不能“自己取数据”：不能 curl 后端、不能持有 JWT、不能访问数据库。
 - NestJS 后端托管工具执行权，所有数据查询均以当前登录用户 JWT/RBAC 为准。
 - `AI_DIRECT_RESOURCE_RESPONSE=true` 时保留兼容：后端强制构建完整上下文，让旧的 Direct Response 逻辑仍可工作。
+
+### 1.1 数据使用路由：直接返回还是交给 AI
+
+平台数据进入回复前，后端先产出 `AiDataRouteDecision`。这个决策是内部契约，不是模型提示词。模型只能在被允许的路由内工作。
+
+```text
+用户消息
+  -> routeAiDataUsage()
+       A. DIRECT_RESOURCE_RESPONSE  后端确定性直接返回
+       B. KNOWLEDGE_DIRECT_ANSWER   平台知识库高置信直接返回
+       C. KNOWLEDGE_INJECTED_AGENT  知识库作为参考资料注入 Hermes
+       D. AGENT_DATA_REQUEST        Hermes 请求数据，后端查库后再让 Hermes 生成
+       E. NORMAL_AGENT              不使用确定性平台数据
+       F. ACTION_PROPOSAL           写操作只生成提案
+```
+
+决策 DTO 建议：
+
+```ts
+type AiDataRouteDecision = {
+  route: AiDataUsageRoute
+  reasonCode: string
+  confidence: number
+  dataSources: string[]
+  requiresModelCall: boolean
+  requiresKnowledgeHit: boolean
+  requiresSourceBadge: boolean
+  requiresUserConfirmation: boolean
+  allowedContextDomains: UserContextDomain[]
+  blockedRoutes: Array<{ route: AiDataUsageRoute; reason: string }>
+}
+```
+
+决策原则：
+
+| 路由 | 适用数据 | 是否需要 AI 处理 | 原因 |
+|---|---|---|---|
+| `DIRECT_RESOURCE_RESPONSE` | 当前积分、可兑换商品、真实库存、个人漏洞状态、证书状态、学习资源卡片 | 不需要 | 实时业务数据必须由后端查库和格式化，避免模型编造、漏卡片或越权 |
+| `KNOWLEDGE_DIRECT_ANSWER` | 已审核知识库高置信命中，且用户问题只需要标准操作答案 | 不需要或只做模板填充 | 答案已脱敏、泛化、可复用；直接返回更快、更稳定 |
+| `KNOWLEDGE_INJECTED_AGENT` | 中置信知识命中、需要解释、比较、改写、结合用户上下文组织语言 | 需要 | AI 负责表达和推理，后端提供受控参考资料 |
+| `AGENT_DATA_REQUEST` | 初始上下文不足，模型需要更多只读平台数据才能回答 | 需要两轮 | 模型只能声明需要什么数据，后端按 JWT/RBAC 查询后回灌 |
+| `NORMAL_AGENT` | 泛问、方法论、无平台数据依赖的问题 | 需要 | 不消耗实时数据和知识命中 |
+| `ACTION_PROPOSAL` | 兑换、提交、审核、修改等写操作意图 | 需要或不需要 | AI 只生成草稿/提案，最终写入由业务 API 二次确认 |
+
+优先级固定：
+
+```text
+附件/PDF上下文
+  > 写操作提案
+  > 实时业务 Direct Response
+  > Knowledge Direct Answer
+  > Knowledge Injected Agent
+  > Agent dataRequests
+  > Normal Agent
+```
+
+硬性规则：
+
+- 实时个人业务数据优先后端直接返回或后端补卡片，不让知识库抢答。
+- 写操作不能由 AI 直接执行。兑换、提交、审核、修改资料必须走业务 API、二次确认和重新查库。
+- 卡片/action 的真实 ID 只能来自已注入上下文或 `platformToolResults`，不能相信模型生成的 ID。
+- 附件/PDF 场景默认走 `KNOWLEDGE_INJECTED_AGENT` 或 `NORMAL_AGENT` 的附件上下文变体，跳过 Direct Response 和知识库直接回答。
+- 知识库高置信直接回答必须返回 `usedKnowledge=true`、`knowledgeSources`，并写 `AiKnowledgeHit` 或同等审计记录。
+- 每次路由决策都写审计：route、reasonCode、blockedRoutes、contextDomains、knowledgeHitIds、toolNames、latencyMs、tokensUsed。
+
 
 ## 2. 可注入模块
 
@@ -130,6 +195,9 @@ cd backend && npm run build
 | `我想练习XSS靶场` | `['learning']`，返回包含 XSS 模块的 RANGE 卡片 |
 | `我的平台概览` | `['points','vulnerabilities']` |
 | 带 PDF 附件的“帮我总结这份报告” | `[]`，仅使用附件上下文 |
+| `我的积分可以兑换什么` | 后端直接返回或后端补齐商品卡片，不让知识库回答 |
+| `SQL 注入报告影响范围怎么写` | 优先 Knowledge Retrieval；高置信直接返回，中置信注入 Agent |
+| `结合我这份 PDF 帮我改报告` | 附件上下文 + Agent，不走知识库直接回答 |
 
 ## 8. 后续演进
 

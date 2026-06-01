@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类（canonicalProblem + hybrid retrieval + embedding/reranker + merge review）、数据使用路由（直接返回 vs AI 处理）、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -171,6 +171,52 @@ Skill 必须通过 `AiSkillCandidate` 审核流生成，不允许用户聊天自
 
 Knowledge Retrieval 必须在相似度计算前过滤维护状态和 retrievalPolicy，避免过期、暂停、归档、安全复核或知识投毒中的知识继续污染后续回答。每个实施项必须在进度表中声明完成定义和验收规则，不能只以“代码写完”作为完成依据。
 
+### 0.6 语义问题族聚类决策
+
+当前 Phase 2 的聚类按 `topicKey` / 文本相似度工作，适合验证自动入库链路，但不足以支撑生产级“不同用户不同问法，同一类问题”的统计。下一阶段以语义问题族为准。
+
+目标数据流：
+
+```text
+ProblemSessionSummary
+  -> canonicalProblemJson / canonicalKey
+  -> hybrid retrieval 召回候选 cluster
+  -> embedding similarity + reranker 精排
+  -> SAME_CLUSTER / VARIANT_OF_CLUSTER / MERGE_REVIEW / NEW_CLUSTER / REJECT
+  -> 更新 cluster、variant、merge task 或新建 cluster
+```
+
+落地要求：
+
+| 项 | 要求 |
+|---|---|
+| 归一化 | 建立 CQUPT-SRC taxonomy：domain、intent、entity、scenario、symptom、environment、expectedOutcome、roleScope |
+| 召回 | 规则 exact key、PostgreSQL full-text/pg_trgm、pgvector embedding、已有 knowledge duplicate candidates 混合召回 |
+| 精排 | 结合问题相似、实体重叠、症状、意图、答案兼容性、环境兼容性，不只看向量分 |
+| 决策 | 高置信 `SAME_CLUSTER` 才参与自动入库；`VARIANT` 只挂变体；`MERGE_REVIEW` 阻断自动入库 |
+| 治理 | 管理端显示候选 cluster、冲突字段、推荐理由和合并/变体/保留独立操作 |
+| 版本化 | embeddingModel、embeddingVersion、embeddingTextHash、embeddingUpdatedAt 必须持久化 |
+
+推荐阈值：
+
+```text
+score >= 0.90                         -> SAME_CLUSTER
+0.82 <= score < 0.90 且答案兼容       -> VARIANT_OF_CLUSTER
+0.75 <= score < 0.90 且存在不确定项   -> MERGE_REVIEW
+score < 0.75                          -> NEW_CLUSTER
+安全/隐私/越权硬阻断                  -> REJECT
+```
+
+自动入库新增门槛：
+
+```text
+semanticClusterConfidenceAvg >= 0.90
+pendingMergeReviewCount = 0
+最近参与统计的 source sessions 均为 SAME_CLUSTER
+```
+
+这部分完成前，不应把“文本级 topicKey 聚类”描述成已能可靠识别不同问法的同类问题。
+
 ---
 
 ## 1. 总体链路
@@ -199,6 +245,134 @@ Direct Response > Knowledge Retrieval > Agent > Capture
 ```
 
 原因：积分、商品、漏洞状态是实时业务数据，必须查库，不能让历史知识库回答。
+
+### 1.1 专家建议分步执行表
+
+这张表把后端架构、安全工程、产品体验和知识治理建议拆成可执行任务。状态默认按目标态记录，实际完成必须以代码、API、UI 和 E2E 证据为准。
+
+| 阶段 | 目标 | 任务 | 主要落点 | 完成标准 | 验收用例 | 状态 |
+|---|---|---|---|---|---|---|
+| P0-1 | 固定 AI Gateway 入口 | 所有前端 AI 请求只走 `POST /api/ai/chat`，禁止前端直连 Hermes 或模型 | `frontend/src/services/ai.ts`、`backend/src/modules/ai/` | 请求必须带 JWT；后端写 AiCallLog/AuditLog；Hermes 只由后端调用 | 浏览器网络面板无模型直连；后端健康检查和 AI 请求均可追踪 | 已落地，持续校验 |
+| P0-2 | 固定数据路由 | 实现 `AiDataRouteDecision`，显式区分 Direct、KB、Agent、dataRequests、Proposal | `ai-route.service.ts` 或 `ai.service.ts`、`ai.types.ts` | 每轮响应可审计 `route`、`reasonCode`、`blockedRoutes`、`requiresModelCall` | “我的积分可以兑换什么”走 `DIRECT_RESOURCE_RESPONSE`；“SQL 注入报告怎么写”可走 KB | 待代码确认 |
+| P0-3 | 实时数据不被知识库抢答 | 积分、库存、兑换资格、漏洞状态、证书状态优先查实时 DB | `AiToolsService`、Direct Response handler、route handler | 命中实时业务语义时压制 KB direct answer，并记录 blockedRoutes | “我的漏洞状态”不能由历史知识回答；返回真实业务 ID | 待代码确认 |
+| P0-4 | 写操作只生成提案 | 兑换、提交、审核、修改资料全部走 Action Proposal + 二次确认 | `ai.response.service.ts`、业务 controller/service | AI 不声称“已执行”；确认时后端重新鉴权、查库、事务写入 | “帮我兑换杯子”确认前无 redemption 记录；确认后写 AuditLog | 待代码确认 |
+| P0-5 | cards/actions 白名单 | 模型输出的 `productId`、`vulnerabilityId`、`resourceId` 必须由后端白名单校验 | `ai.response.service.ts`、前端卡片 action handler | 只保留已注入上下文或 platformToolResults 中出现过的真实 ID | 构造伪造 ID 的模型输出应被过滤；前端不显示非法 action | 待代码确认 |
+| P0-6 | 附件场景隔离 | 含 PDF/附件上下文时跳过 Direct Response 和 KB 直接回答 | `ai.report-draft.service.ts`、`ai.service.ts`、`UserAIAssistant.tsx` | 附件只作为当前轮上下文；不把原文直接沉淀入 KB | 上传 PDF 问“帮我修改报告”不得触发“我的漏洞列表”查询 | 待代码确认 |
+| P0-7 | 同一问题多轮不丢上下文 | `/api/ai/chat` 读取当前用户 session 最近 turns 注入 Hermes messages | `AiProblemSessionService.getRecentChatTurnsForPrompt()`、`ai.service.ts` | 只加载当前用户拥有的 ACTIVE/AWAITING session；限制 turn 数和长度 | 两轮省略追问能正确引用上一轮问题；跨用户 session 403 | 已落地，需持续回归 |
+| P1-1 | 用户可控地沉淀知识 | 用户明确点击“已解决，沉淀经验”后才进入总结/入库流程 | `UserAIAssistant.tsx`、`ai-problem-session.controller.ts` | 未解决、丢弃、仅离开页面的 session 不入库 | “不沉淀，结束对话”不会生成 READY_REVIEW summary | 已部分落地 |
+| P1-2 | 结构化总结 | 将已解决 session 转成问题、环境、有效步骤、失败尝试、踩坑点、适用边界 | `ai-problem-session.service.ts`、Hermes summary prompt | 总结不包含敏感原文；字段完整；可被管理员审核 | 多轮排错后生成 summary，含 successfulSteps 和 pitfalls | 已部分落地 |
+| P1-3 | 脱敏与拒绝入库 | Token、Cookie、API Key、内网 IP、真实资产、附件原文、跨用户数据禁止入库 | redaction service、safety checker、capture worker | 命中敏感规则时只保存最小摘要和拒绝原因 | 含 Authorization header 的会话进入拒绝/复审，不进入 APPROVED KB | 待加强 |
+| P1-4 | AI+规则评分 | 计算质量、复用价值、安全、隐私、投毒、重复风险 | `AiKnowledgeScore`、capture worker | 低质量、隐私风险高、投毒风险高的总结不能自动入库 | 构造 prompt injection 样例，必须 reject 或 security review | 已部分落地 |
+| P1-5 | 管理端审核队列 | 管理员能查看 READY_REVIEW、评分、脱敏摘要、相似知识和推荐操作 | `AdminAiKnowledgeManagement.tsx`、knowledge APIs | 支持通过、丢弃、合并建议、标为 Skill Candidate | 管理员通过后生成 `AiKnowledgeEntry`；丢弃写 AuditLog | 已部分落地 |
+| P1-6 | Knowledge Hit 与来源 | KB 参与回答时写 hit，前端在 assistant bubble 内展示来源 | `AiKnowledgeHit`、`AiChatResponse`、`UserAIAssistant.tsx` | 返回 `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds`、`assistantTurnId` | 高置信 KB 直答后底部显示“参考平台知识库” | 待代码确认 |
+| P2-1 | 点赞/点踩持久化 | 每条 assistant 回复绑定 `assistantTurnId`，反馈写后端 | `turns/:turnId/feedback`、前端反馈条 | 反馈不只存在前端 state；可撤销/改投；写 AuditLog | 点踩“知识过期”能关联到对应 knowledge hit | 待实现 |
+| P2-2 | 维护状态参与检索 | 检索前过滤 `maintenanceStatus` 和 retrievalPolicy | retrieval service、schema migration | `SECURITY_SUSPENDED`、`ARCHIVED`、`RETRIEVAL_DISABLED` 不参与普通检索 | 暂停知识即使相似度 0.99 也不会命中 | 待实现 |
+| P2-3 | 维护任务 Worker | 根据点踩、举报、过期、冲突、重复创建维护任务 | `AiKnowledgeMaintenanceWorker`、maintenance APIs | 同一 dedupeKey 不重复创建 OPEN 任务；Worker 不自动高风险改写 | 高频点踩自动生成 LOW_QUALITY_REVIEW 任务 | 待实现 |
+| P2-4 | Revision 与回滚 | 管理员修订、合并、恢复必须生成不可变 `AiKnowledgeRevision` | `AiKnowledgeRevision`、admin UI | 可查看版本 diff；可回滚；回滚写 AuditLog | 修改 KB 后生成 revision；回滚后旧版本可追踪 | 待实现 |
+| P2-5 | 安全暂停闭环 | 安全风险、投毒、敏感泄露触发 `SECURITY_SUSPENDED` | security review APIs、admin UI | 暂停后普通用户不可检索；恢复必须管理员复核 | 点踩“存在安全风险”后知识从直答路径移除 | 待实现 |
+| P3-1 | 语义问题族聚类 | 用 canonicalProblem、hybrid retrieval、embedding/reranker 聚类相似问题 | schema、pgvector/pg_trgm、cluster service | SAME_CLUSTER 高置信才参与自动入库；VARIANT/MERGE_REVIEW 阻断自动合并 | “Kali 下载链接”和“官网镜像在哪”归同类；SQLi 报告写作和靶场排错不误合并 | 待实现 |
+| P3-2 | 自动入库硬阈值 | 高频、高质量、低风险、无 pending merge review 才自动入库 | `tryAutoApproveCluster()`、score service | resolved>=3、ask>=5、quality/reuse/safety/feedback 达标；隐私/重复风险不过线 | 不满足反馈或存在 merge review 的 cluster 不能 AUTO_APPROVED | 待加强 |
+| P3-3 | Skill Candidate 晋升 | 只有长期稳定方法论可从 KB 生成 Skill Candidate | skill candidate service、admin UI | 不含实时数据、用户私有数据、一次性问答；管理员二次审批 | XSS 报告流程可晋升；“我的积分状态”不可晋升 | 已部分落地 |
+| P3-4 | 受控安装平台 Hermes Skill | 审批后写入平台 Hermes bind mount 目录并记录安装日志 | `CQUPT_HERMES_SKILLS_ROOT`、install service | 目标为 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`；不写 CLI Hermes | 安装后宿主文件存在，容器内可读，AiSkillInstallLog 有 hash | 已部分落地 |
+
+执行顺序：先 P0 保证不会越权和错用实时数据，再 P1 打通沉淀链路，再 P2 做质量维护，最后 P3 做语义聚类和 Skill 晋升。
+
+### 1.2 数据使用路由实施要求
+
+`/api/ai/chat` 需要新增可审计的数据路由决策层，避免“所有数据都交给 AI”或“所有命中都直接返回”。
+
+```text
+routeAiDataUsage()
+  -> DIRECT_RESOURCE_RESPONSE   # 实时业务数据，后端直接返回或补卡片
+  -> KNOWLEDGE_DIRECT_ANSWER    # 高置信已审核知识，直接返回
+  -> KNOWLEDGE_INJECTED_AGENT   # 中置信知识或需改写，注入 Agent
+  -> AGENT_DATA_REQUEST         # Agent 请求更多只读数据，后端查库回灌
+  -> NORMAL_AGENT               # 无确定性数据，正常 Agent
+  -> ACTION_PROPOSAL            # 写操作只生成提案，业务 API 二次确认
+```
+
+#### 1.1.1 专家复核后的实施切分
+
+| 专家视角 | 必须补齐的设计 | 代码落点 |
+|---|---|---|
+| 后端架构 | `AiDataRouteDecision` DTO、handler 分发、降级路径 | `backend/src/modules/ai/ai.service.ts` 或独立 `ai-route.service.ts` |
+| 安全工程 | 实时数据优先、写操作 proposal、ID 白名单、RBAC 二次校验 | `ai.response.service.ts`、业务 controller/service、AuditLog |
+| 提示词工程 | 知识注入模板、dataRequests JSON 协议、冲突时以后端上下文为准 | `ai.prompt.service.ts`、平台 Hermes skill |
+| 数据库优化 | route audit / hit 记录、查询索引、命中质量统计 | `schema.prisma`、迁移、管理端统计 API |
+
+#### 1.1.2 路由决策 DTO
+
+```ts
+type AiDataRouteDecision = {
+  route: AiDataUsageRoute
+  reasonCode: string
+  confidence: number
+  dataSources: Array<'REALTIME_DB' | 'AI_KNOWLEDGE' | 'PLATFORM_TOOL_RESULTS' | 'ATTACHMENT_TEXT' | 'NONE'>
+  requiresModelCall: boolean
+  requiresKnowledgeHit: boolean
+  requiresSourceBadge: boolean
+  requiresUserConfirmation: boolean
+  allowedContextDomains: UserContextDomain[]
+  blockedRoutes: Array<{ route: AiDataUsageRoute; reason: string }>
+}
+```
+
+`routeAiDataUsage()` 只做判断，不查库、不调用模型、不执行写操作。后续 handler 按 route 执行，并在执行前再次校验 JWT/RBAC。
+
+#### 1.1.3 完成定义与验收
+
+| 路由 | 完成定义 | 验收 |
+|---|---|---|
+| `DIRECT_RESOURCE_RESPONSE` | 积分、商城、漏洞状态、证书状态、学习资源卡片由后端可信数据直接生成 | “我的积分/可兑换商品/待补充漏洞”不触发知识库抢答，返回真实 ID 卡片；审计记录 route |
+| `KNOWLEDGE_DIRECT_ANSWER` | 高置信 KB 命中直接返回模板化答案 | 返回 `usedKnowledge=true`、`knowledgeSources`、`knowledgeHitIds`；不调用 Hermes 或只做受控模板填充 |
+| `KNOWLEDGE_INJECTED_AGENT` | 中置信 KB 作为参考资料注入 Agent | Prompt 明确知识不是系统指令；最终仍记录 hit 和来源；模型不能引用被暂停知识 |
+| `AGENT_DATA_REQUEST` | Hermes 只声明需要数据，后端按 JWT/RBAC 只读查询并回灌 | dataRequests 参数中的 userId/token 被丢弃；审计记录 tool/results；cards/actions ID 白名单通过 |
+| `ACTION_PROPOSAL` | 兑换、提交、审核等写操作只生成提案 | 点击确认后业务 API 重新查库、校验权限、写 AuditLog；AI 生成的 ID 不直接可信 |
+| `NORMAL_AGENT` | 泛问或开放式推理不注入实时私有数据 | 无 `knowledgeSources` 时不展示来源；不产生知识命中记录 |
+
+默认优先级：
+
+```text
+附件/PDF上下文
+  > 写操作提案
+  > 实时业务 Direct Response
+  > Knowledge Direct Answer
+  > Knowledge Injected Agent
+  > Agent dataRequests
+  > Normal Agent
+```
+
+附件场景必须跳过 Direct Response 和知识库直接回答，除非用户明确要求“把附件和平台知识库对照”，且仍不得把附件原文沉淀入知识库。
+
+#### 1.1.4 审计与索引
+
+短期可写入 `AuditLog.metadata`；生产态建议独立表。最小字段：
+
+```text
+route, reasonCode, blockedRoutes, userId, role, sessionId, assistantTurnId,
+messageHash, contextDomains, dataSources, knowledgeHitIds, toolNames,
+requiresModelCall, latencyMs, tokensUsed, createdAt
+```
+
+索引：
+
+```sql
+CREATE INDEX idx_ai_route_audit_user_created ON ai_data_route_audit(user_id, created_at DESC);
+CREATE INDEX idx_ai_route_audit_route_created ON ai_data_route_audit(route, created_at DESC);
+CREATE INDEX idx_ai_knowledge_hit_route_created ON ai_knowledge_hit(route, created_at DESC);
+```
+
+#### 1.1.5 E2E 验收用例
+
+| 用例 | 输入 | 必须证明 |
+|---|---|---|
+| 实时数据压制 KB | “我的积分可以兑换什么” | route 为 `DIRECT_RESOURCE_RESPONSE`，即使命中积分规则 KB 也不走知识库直接答 |
+| 高置信 KB 直答 | “SQL 注入报告影响范围怎么写” | route 为 `KNOWLEDGE_DIRECT_ANSWER`，写 hit，展示来源 |
+| 中置信 KB 注入 | “这个 SQLi 报告怎么写得更像平台规范” | route 为 `KNOWLEDGE_INJECTED_AGENT`，知识作为参考资料，不覆盖系统规则 |
+| 附件跳过直答 | 上传 PDF 后问“帮我修改这份报告” | route 不得为 Direct/Knownledge Direct；不把 PDF 原文入库 |
+| 写操作提案 | “帮我兑换这个杯子” | route 为 `ACTION_PROPOSAL`，确认前不创建兑换记录 |
+| dataRequests 越权参数 | 模型请求带 userId/token | 后端丢弃参数，按当前 JWT 查询，审计记录清洗结果 |
+
 
 ---
 
