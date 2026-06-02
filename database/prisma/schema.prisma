@@ -206,6 +206,15 @@ enum AiKnowledgeFeedbackValue {
   REPORT_ABUSE
 }
 
+enum AiKnowledgeMaintenanceStatus {
+  HEALTHY
+  STALE_REVIEW
+  LOW_QUALITY_REVIEW
+  DUPLICATE_REVIEW
+  SECURITY_SUSPENDED
+  ARCHIVED
+}
+
 enum AiKnowledgeJobStatus {
   PENDING
   PROCESSING
@@ -1112,6 +1121,10 @@ model AiKnowledgeEntry {
   visibility             AiKnowledgeVisibility
   sensitivity            AiKnowledgeSensitivity
   status                 AiKnowledgeStatus       @default(CANDIDATE)
+  maintenanceStatus      AiKnowledgeMaintenanceStatus @default(HEALTHY)
+  retrievalEnabled       Boolean                 @default(true)
+  directAnswerEnabled    Boolean                 @default(true)
+  agentInjectEnabled     Boolean                 @default(true)
   source                 AiKnowledgeSource       @default(USER_CHAT)
   sourceCallId           String?
   sourceConversationId   String?
@@ -1157,6 +1170,7 @@ model AiKnowledgeEntry {
   @@index([status, updatedAt])
   @@index([roleScope, status])
   @@index([category, status])
+  @@index([maintenanceStatus, retrievalEnabled])
   @@index([sourceCallId])
   @@index([sourceConversationId])
   @@index([sourceUserId])

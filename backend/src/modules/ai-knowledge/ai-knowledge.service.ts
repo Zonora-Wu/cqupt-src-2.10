@@ -7,6 +7,7 @@ import {
   AiKnowledgeConversationStatus,
   AiKnowledgeFeedbackValue,
   AiKnowledgeJobStatus,
+  AiKnowledgeMaintenanceStatus,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
   AiKnowledgeSource,
@@ -120,16 +121,23 @@ export class AiKnowledgeService {
     const roleScopes = getRoleScopes(input.aiSpace)
     const where: Prisma.AiKnowledgeEntryWhereInput = {
       roleScope: { in: roleScopes },
+      maintenanceStatus: { in: [AiKnowledgeMaintenanceStatus.HEALTHY, AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW, AiKnowledgeMaintenanceStatus.DUPLICATE_REVIEW] },
+      retrievalEnabled: true,
       status: { in: [AiKnowledgeStatus.APPROVED, AiKnowledgeStatus.AUTO_APPROVED, AiKnowledgeStatus.PROMOTED_TO_SKILL] },
       sensitivity: { in: [AiKnowledgeSensitivity.PUBLIC, AiKnowledgeSensitivity.INTERNAL] },
       visibility: { in: [AiKnowledgeVisibility.PLATFORM_PUBLIC, AiKnowledgeVisibility.ROLE_ONLY] },
       abuseReportCount: 0,
-      OR: tokens.slice(0, 8).flatMap((token) => [
-        { title: { contains: token, mode: 'insensitive' as const } },
-        { canonicalQuestion: { contains: token, mode: 'insensitive' as const } },
-        { canonicalAnswer: { contains: token, mode: 'insensitive' as const } },
-        { tags: { has: token } },
-      ]),
+      AND: [
+        { OR: [{ directAnswerEnabled: true }, { agentInjectEnabled: true }] },
+        {
+          OR: tokens.slice(0, 8).flatMap((token) => [
+            { title: { contains: token, mode: 'insensitive' as const } },
+            { canonicalQuestion: { contains: token, mode: 'insensitive' as const } },
+            { canonicalAnswer: { contains: token, mode: 'insensitive' as const } },
+            { tags: { has: token } },
+          ]),
+        },
+      ],
     }
 
     const entries = await this.prisma.aiKnowledgeEntry.findMany({
@@ -140,9 +148,13 @@ export class AiKnowledgeService {
 
     const hits = entries
       .map((entry) => ({
+        agentInjectEnabled: entry.agentInjectEnabled,
         answer: entry.canonicalAnswer,
         category: entry.category,
+        directAnswerEnabled: entry.directAnswerEnabled && entry.maintenanceStatus !== AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW,
         id: entry.id,
+        maintenanceStatus: entry.maintenanceStatus,
+        retrievalEnabled: entry.retrievalEnabled,
         similarity: scoreKnowledgeHit(sanitized, tokens, entry),
         tags: entry.tags,
         title: entry.title,

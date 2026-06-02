@@ -2,6 +2,7 @@ import {
   AiKnowledgeCategory,
   AiKnowledgeConversationStatus,
   AiKnowledgeFeedbackValue,
+  AiKnowledgeMaintenanceStatus,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
   AiKnowledgeStatus,
@@ -46,11 +47,15 @@ export type AiKnowledgeRetrievalInput = {
 }
 
 export type AiKnowledgeHitSummary = {
+  agentInjectEnabled: boolean
   id: string
   title: string
   answer: string
   category: AiKnowledgeCategory
+  directAnswerEnabled: boolean
   hitId?: string
+  maintenanceStatus: AiKnowledgeMaintenanceStatus
+  retrievalEnabled: boolean
   tags: string[]
   similarity: number
 }

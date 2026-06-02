@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import {
   AiKnowledgeFeedbackValue,
   AiKnowledgeCategory,
+  AiKnowledgeMaintenanceStatus,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
   AiKnowledgeSource,
@@ -900,6 +901,8 @@ export class AiProblemSessionService {
       take: 12,
       where: {
         roleScope: { in: [roleScope, AiKnowledgeRoleScope.ALL] },
+        maintenanceStatus: { in: [AiKnowledgeMaintenanceStatus.HEALTHY, AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW, AiKnowledgeMaintenanceStatus.DUPLICATE_REVIEW] },
+        retrievalEnabled: true,
         sensitivity: { in: [AiKnowledgeSensitivity.PUBLIC, AiKnowledgeSensitivity.INTERNAL] },
         status: { in: [AiKnowledgeStatus.APPROVED, AiKnowledgeStatus.AUTO_APPROVED, AiKnowledgeStatus.PROMOTED_TO_SKILL, AiKnowledgeStatus.NEEDS_REVIEW] },
         OR: tokens.slice(0, 8).flatMap((token) => [

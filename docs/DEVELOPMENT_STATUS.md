@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -86,7 +86,7 @@ curl -s http://localhost:5000/health
 - 平台 Hermes 专属 skills 已迁移到宿主可写目录 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`，并通过 Docker bind mount 暴露为容器内 `/opt/data/skills/cqupt-src`；后端 `CQUPT_HERMES_SKILLS_ROOT` 已指向该目录，真实 Skill Candidate 安装链路和容器读取均已验证。
 - 证书模板坐标可视化仍可继续增强。
 - 大规模生产数据下，AI 知识沉淀评分阈值、去重阈值、自动入库阈值和审核工作量需要持续观察。
-- Knowledge Retrieval、来源标注写回、turn 级点赞/点踩持久化、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 和知识投毒暂停机制仍处于目标态或待验收。
+- Knowledge Retrieval、来源标注写回、turn 级点赞/点踩持久化、维护任务 Worker、不可变 revision 和知识投毒暂停机制仍处于目标态或待验收。
 
 ## 近期待办
 

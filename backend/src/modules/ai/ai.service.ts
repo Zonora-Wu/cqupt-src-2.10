@@ -947,7 +947,12 @@ function buildAssistantTurnKnowledgeMetadata(input: {
   }
 }
 
-function selectKnowledgeHitsForRoute<T extends { similarity: number }>(
+function selectKnowledgeHitsForRoute<T extends {
+  agentInjectEnabled?: boolean
+  directAnswerEnabled?: boolean
+  retrievalEnabled?: boolean
+  similarity: number
+}>(
   hits: T[],
   route: Extract<AiDataUsageRoute, 'KNOWLEDGE_DIRECT_ANSWER' | 'KNOWLEDGE_INJECTED_AGENT'>,
   policy: AiKnowledgeUsagePolicy,
@@ -955,10 +960,14 @@ function selectKnowledgeHitsForRoute<T extends { similarity: number }>(
   if (!policy.retrievalEnabled) return []
   if (route === 'KNOWLEDGE_DIRECT_ANSWER') {
     if (!policy.directAnswerEnabled || policy.directTopK <= 0) return []
-    return hits.filter((hit) => hit.similarity >= policy.directThreshold).slice(0, policy.directTopK)
+    return hits
+      .filter((hit) => hit.retrievalEnabled !== false && hit.directAnswerEnabled !== false && hit.similarity >= policy.directThreshold)
+      .slice(0, policy.directTopK)
   }
   if (!policy.agentInjectEnabled || policy.injectTopK <= 0) return []
-  return hits.filter((hit) => hit.similarity >= policy.injectThreshold).slice(0, policy.injectTopK)
+  return hits
+    .filter((hit) => hit.retrievalEnabled !== false && hit.agentInjectEnabled !== false && hit.similarity >= policy.injectThreshold)
+    .slice(0, policy.injectTopK)
 }
 
 function serializeKnowledgeUsagePolicy(policy: AiKnowledgeUsagePolicy) {

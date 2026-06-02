@@ -30,6 +30,7 @@ const state = {
   duplicateKnowledgeId: null,
   lifecycleSessionId: null,
   legacySensitiveConversationId: null,
+  maintenanceKnowledgeIds: [],
   originalKnowledgeUsagePolicy: null,
   otherStudentCode: String(Math.floor(1000000 + Math.random() * 8999999)),
   otherStudentId: null,
@@ -928,6 +929,108 @@ async function main() {
     })
   })
 
+  await step('KB-11 enforces maintenanceStatus and per-entry retrieval policy', async () => {
+    const oldKb11 = await prisma.aiKnowledgeEntry.findMany({ select: { id: true }, where: { title: { contains: 'KB11' } } })
+    const oldKb11Ids = oldKb11.map((entry) => entry.id)
+    if (oldKb11Ids.length) {
+      await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: oldKb11Ids } } })
+      await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: oldKb11Ids } } })
+      await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: oldKb11Ids } } })
+    }
+
+    const makeEntry = async ({
+      agentInjectEnabled = true,
+      directAnswerEnabled = true,
+      maintenanceStatus = 'HEALTHY',
+      question,
+      retrievalEnabled = true,
+      title,
+    }) => prisma.aiKnowledgeEntry.create({
+      data: {
+        agentInjectEnabled,
+        answerQualityScore: 0.92,
+        canonicalAnswer: [
+          `${title}：${question}`,
+          '先确认知识维护状态和条目级路由开关。只有 retrievalEnabled=true 且维护状态允许普通检索的知识才能进入候选。',
+          'LOW_QUALITY_REVIEW 只能注入 Agent 参考，不允许直接回答；SECURITY_SUSPENDED、STALE_REVIEW、ARCHIVED 和 retrieval disabled 必须被检索前过滤。',
+        ].join('\n'),
+        canonicalQuestion: question,
+        category: 'SRC_RULES',
+        confidenceScore: 0.95,
+        directAnswerEnabled,
+        educationalValueScore: 0.85,
+        generalityScore: 0.88,
+        maintenanceStatus,
+        platformRelevanceScore: 0.9,
+        privacyRiskScore: 0,
+        retrievalEnabled,
+        reuseValueScore: 0.88,
+        reviewedById: state.studentId,
+        roleScope: 'STUDENT',
+        safetyScore: 0.96,
+        sensitivity: 'INTERNAL',
+        source: 'ADMIN_CREATED',
+        sourceHash: `${runId}:kb11:${title}:${randomBytes(3).toString('hex')}`,
+        status: 'APPROVED',
+        tags: ['kb11', 'maintenance-policy'],
+        title,
+        visibility: 'ROLE_ONLY',
+      },
+    })
+
+    const blockedQuestion = `${marker} KB11BLOCKED blocked-maintenance-only 是否会命中？`
+    const lowQualityQuestion = `${marker} KB11LOWQUALITY lowquality-inject-only 低质量复核知识怎么路由？`
+    const directDisabledQuestion = `${marker} KB11DIRECTDISABLED direct-disabled-inject-only 禁止直答知识怎么路由？`
+    const agentDisabledQuestion = `${marker} KB11AGENTDISABLED agent-disabled-no-inject 禁止注入知识怎么路由？`
+
+    const entries = await Promise.all([
+      makeEntry({ maintenanceStatus: 'STALE_REVIEW', question: blockedQuestion, title: `${marker} KB11 stale blocked` }),
+      makeEntry({ maintenanceStatus: 'SECURITY_SUSPENDED', question: blockedQuestion, title: `${marker} KB11 security suspended blocked` }),
+      makeEntry({ maintenanceStatus: 'ARCHIVED', question: blockedQuestion, title: `${marker} KB11 archived blocked` }),
+      makeEntry({ question: blockedQuestion, retrievalEnabled: false, title: `${marker} KB11 retrieval disabled blocked` }),
+      makeEntry({ maintenanceStatus: 'LOW_QUALITY_REVIEW', question: lowQualityQuestion, title: `${marker} KB11 low quality inject only` }),
+      makeEntry({ directAnswerEnabled: false, question: directDisabledQuestion, title: `${marker} KB11 direct disabled inject only` }),
+      makeEntry({ agentInjectEnabled: false, question: agentDisabledQuestion, title: `${marker} KB11 agent disabled no inject` }),
+    ])
+    state.maintenanceKnowledgeIds = entries.map((entry) => entry.id)
+
+    const blocked = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: blockedQuestion, mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(!blocked.candidateKnowledgeIds?.some((id) => state.maintenanceKnowledgeIds.slice(0, 4).includes(id)), 'stale/security/archived/retrieval-disabled entries must not become candidates')
+    assert(blocked.route !== 'KNOWLEDGE_DIRECT_ANSWER' && blocked.route !== 'KNOWLEDGE_INJECTED_AGENT', 'blocked maintenance entries must not be used by ordinary retrieval')
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: entries.slice(0, 4).map((entry) => entry.id) } } })
+
+    const lowQuality = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: lowQualityQuestion, mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(lowQuality.candidateKnowledgeIds?.includes(entries[4].id), `LOW_QUALITY_REVIEW should remain visible as a retrieval candidate: ${JSON.stringify(lowQuality)}`)
+    assert(lowQuality.route === 'KNOWLEDGE_INJECTED_AGENT', 'LOW_QUALITY_REVIEW must not direct answer')
+    assert(lowQuality.selectedKnowledgeIds?.includes(entries[4].id), 'LOW_QUALITY_REVIEW should be selected only for agent injection')
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: entries[4].id } })
+
+    const directDisabled = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: directDisabledQuestion, mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(directDisabled.candidateKnowledgeIds?.includes(entries[5].id), `direct-disabled entry should still be retrievable: ${JSON.stringify(directDisabled)}`)
+    assert(directDisabled.route === 'KNOWLEDGE_INJECTED_AGENT', 'directAnswerEnabled=false should force injection instead of direct answer')
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: entries[5].id } })
+
+    const agentDisabled = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 2, message: agentDisabledQuestion, mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(agentDisabled.route !== 'KNOWLEDGE_INJECTED_AGENT', 'agentInjectEnabled=false must block injection when direct route is disabled by policy')
+    assert(!agentDisabled.selectedKnowledgeIds?.includes(entries[6].id), 'agentInjectEnabled=false entry must not be selected for injection')
+  })
+
   await step('KB-08 injects medium-confidence knowledge and keeps source record', async () => {
     assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 injected retrieval test')
     await request('/system-settings/ai-knowledge-usage', {
@@ -1178,6 +1281,11 @@ async function cleanupArtifacts() {
     await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: state.scopedKnowledgeIds } } })
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: state.scopedKnowledgeIds } } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: state.scopedKnowledgeIds } } })
+  }
+  if (state.maintenanceKnowledgeIds.length) {
+    await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: state.maintenanceKnowledgeIds } } })
   }
   if (state.legacySensitiveConversationId) {
     const knowledge = await prisma.aiKnowledgeEntry.findMany({ select: { id: true }, where: { sourceConversationId: state.legacySensitiveConversationId } })

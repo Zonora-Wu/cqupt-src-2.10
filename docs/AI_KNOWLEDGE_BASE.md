@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环，以及知识库成熟化治理项（评测体系、来源权威、冲突处理、回答快照、缓存失效、知识缺口发现、文档导入治理、功能开关与线上指标）。
+> 当前仍待实现/验收：问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环，以及知识库成熟化治理项（评测体系、来源权威、冲突处理、回答快照、缓存失效、知识缺口发现、文档导入治理、功能开关与线上指标）。`maintenanceStatus + retrievalPolicy` 已完成代码落地并纳入 E2E。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -471,7 +471,10 @@ model AiKnowledgeEntry {
   usedAsAnswerCount     Int      @default(0)
   lastUsedAt            DateTime?
 
-  maintenanceStatus     String   @default("HEALTHY") // HEALTHY | STALE_REVIEW | LOW_QUALITY_REVIEW | DUPLICATE_REVIEW | SUSPENDED | ARCHIVED
+  maintenanceStatus     AiKnowledgeMaintenanceStatus @default(HEALTHY) // HEALTHY | STALE_REVIEW | LOW_QUALITY_REVIEW | DUPLICATE_REVIEW | SECURITY_SUSPENDED | ARCHIVED
+  retrievalEnabled      Boolean  @default(true)
+  directAnswerEnabled   Boolean  @default(true)
+  agentInjectEnabled    Boolean  @default(true)
   qualityScore          Float    @default(0)
   freshnessScore        Float    @default(1)
   staleReason           String?  @db.Text
@@ -2288,7 +2291,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `23/23`，覆盖 KB-01 到 KB-10、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwkke8c_efc531.json`。本轮后端 `npm run build`、前端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `24/24`，覆盖 KB-01 到 KB-11、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈、KB-11 `maintenanceStatus + retrievalPolicy`，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwm179s_53f687.json`。本轮后端 `npm run build`、`npm run prisma:validate`、`npm run prisma:migrate:deploy`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2305,7 +2308,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-08B | 管理员知识库使用强度 | 已完成 | 管理员可设置 1-10 档 `knowledgeUsageStrength`，后端解析为直答/注入阈值、topK、来源展示和审计策略；档位不得绕过权限、实时数据、附件、写操作和维护状态硬边界 | E2E：route preview 展示 strength 2/7/10 下的 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds、blockedRoutes；实时数据和写操作在 10 档仍压制 KB；配置变更写 AuditLog |
 | KB-09 | 角色与权限过滤 | 已完成 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | E2E：student 只能命中 STUDENT/ALL 知识，不能命中 AUDITOR/ADMIN；auditor 不能命中 ADMIN/STUDENT；PRIVATE/SENSITIVE/REJECTED 均被过滤；管理员 route preview 写 `AI_KNOWLEDGE_ROUTE_PREVIEW` 审计记录 |
 | KB-10 | 来源标注与反馈 | 已完成 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | E2E：使用 KB 的回复返回 `knowledgeSources`、`knowledgeHitIds`、`assistantTurnId`；反馈写入 assistant turn metadata，追加 `AiKnowledgeFeedback` 历史，并更新 helpful/unhelpful/abuse 汇总；前端来源标注位于 assistant bubble 内部 |
-| KB-11 | maintenanceStatus + retrievalPolicy | 待代码确认 | 知识条目有维护状态和 direct/inject/retrieval 行为开关 | `STALE_REVIEW`、`SECURITY_SUSPENDED`、`ARCHIVED` 普通用户不可命中；`LOW_QUALITY_REVIEW` 不直接回答 |
+| KB-11 | maintenanceStatus + retrievalPolicy | 已完成 | `AiKnowledgeEntry` 增加 `maintenanceStatus`、`retrievalEnabled`、`directAnswerEnabled`、`agentInjectEnabled`；知识检索先按维护状态和条目级路由开关过滤，再进入 direct/inject 策略选择 | E2E：`STALE_REVIEW`、`SECURITY_SUSPENDED`、`ARCHIVED` 和 `retrievalEnabled=false` 不进入普通候选；`LOW_QUALITY_REVIEW` 只能注入 Agent、不直接回答；`directAnswerEnabled=false` 强制走注入；`agentInjectEnabled=false` 不会在 direct 被策略关闭时被注入 |
 | KB-12 | AiKnowledgeMaintenanceWorker | 待代码确认 | Worker 计算质量分、新鲜度、反馈趋势、重复风险，生成维护任务或暂停风险知识 | 重复运行不产生重复 OPEN task；安全举报后自动 `SECURITY_SUSPENDED` 且 retrieval disabled |
 | KB-13 | AiKnowledgeMaintenanceTask | 待代码确认 | 待维护任务有 priority、reason、dedupeKey、状态流转 | 管理端可按 P0-P4 查看任务；resolve/dismiss 写 AuditLog；同一 dedupeKey 不重复创建 |
 | KB-14 | AiKnowledgeRevision | 待代码确认 | 手工编辑、合并、过期修复、安全修复都创建不可变 revision snapshot | 修改答案后 version +1；oldSnapshot/newSnapshot 可读；可回滚；归档知识仍保留 revision 和 hit |
