@@ -379,6 +379,7 @@ export class AiService {
       })
 
       const sessionTurn = await this.problemSessions.recordChatTurnPair({
+        assistantMetadata: buildAssistantTurnKnowledgeMetadata({ knowledgeHitIds, knowledgeSources, usedKnowledge: true }),
         answer: knowledgeContent,
         hasAttachment: false,
         question: safeMessage,
@@ -600,6 +601,7 @@ export class AiService {
     })
 
     const sessionTurn = await this.problemSessions.recordChatTurnPair({
+      assistantMetadata: buildAssistantTurnKnowledgeMetadata({ knowledgeHitIds, knowledgeSources, usedKnowledge: knowledgeSources.length > 0 }),
       answer: displayContent,
       hasAttachment: hasAttachmentContext,
       question: safeMessage,
@@ -930,6 +932,19 @@ function buildKnowledgeSources(hits: Array<{ category: string; id: string; simil
     sourceType: 'PLATFORM_KB' as const,
     title: hit.title,
   }))
+}
+
+function buildAssistantTurnKnowledgeMetadata(input: {
+  knowledgeHitIds: string[]
+  knowledgeSources: ReturnType<typeof buildKnowledgeSources>
+  usedKnowledge: boolean
+}) {
+  if (!input.usedKnowledge && input.knowledgeHitIds.length === 0 && input.knowledgeSources.length === 0) return undefined
+  return {
+    knowledgeHitIds: input.knowledgeHitIds,
+    knowledgeSources: input.knowledgeSources,
+    usedKnowledge: input.usedKnowledge,
+  }
 }
 
 function selectKnowledgeHitsForRoute<T extends { similarity: number }>(

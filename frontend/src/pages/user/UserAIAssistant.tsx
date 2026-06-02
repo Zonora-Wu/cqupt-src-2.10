@@ -5,19 +5,25 @@ import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { createAiProblemSession, discardAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, resolveAiProblemSession, sendAiChat, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiPendingAction, type AiProblemSession, type AiQuota, type AiVulnerabilityDraft } from '../../services/ai'
+import { createAiProblemSession, discardAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, resolveAiProblemSession, sendAiChat, submitAiTurnFeedback, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
 
 type ChatMessage = {
+  assistantTurnId?: string
   attachment?: ChatAttachment
   content: string
+  feedback?: AiTurnFeedbackRating | null
+  knowledgeHitIds?: string[]
+  knowledgeSources?: AiChatResponse['knowledgeSources']
   role: 'assistant' | 'user'
   cards?: AiCard[]
   actions?: AiPendingAction[]
   reportDrafts?: AiVulnerabilityDraft[]
+  sessionId?: string
+  usedKnowledge?: boolean
 }
 
 type UserAIAssistantProps = {
@@ -399,9 +405,14 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         ...current,
         {
           actions: result.actions,
+          assistantTurnId: result.assistantTurnId,
           cards: result.cards,
           content: result.content || '',
+          knowledgeHitIds: result.knowledgeHitIds,
+          knowledgeSources: result.knowledgeSources,
           role: 'assistant',
+          sessionId: result.sessionId ?? activeSessionId,
+          usedKnowledge: result.usedKnowledge,
         },
       ])
     } catch (error) {
@@ -438,9 +449,14 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
           index === messageIndex
             ? {
                 actions: result.actions,
+                assistantTurnId: result.assistantTurnId,
                 cards: result.cards,
                 content: result.content || '',
+                knowledgeHitIds: result.knowledgeHitIds,
+                knowledgeSources: result.knowledgeSources,
                 role: 'assistant',
+                sessionId: result.sessionId ?? activeSessionId,
+                usedKnowledge: result.usedKnowledge,
               }
             : message,
         ),
@@ -643,12 +659,22 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                           cards={message.cards}
                           content={message.content}
                           getReportAttachmentFile={(draftId) => reportAttachmentFilesRef.current[draftId]}
+                          knowledgeSources={message.knowledgeSources}
                           reportDrafts={message.reportDrafts}
+                          usedKnowledge={message.usedKnowledge}
                         />
                         <AssistantMessageActions
+                          assistantTurnId={message.assistantTurnId}
                           content={message.content}
                           disabled={sending || uploadingAttachment}
+                          feedback={message.feedback}
                           onRegenerate={() => void regenerateAssistantMessage(index)}
+                          onFeedbackChange={(rating) => {
+                            setMessages((current) =>
+                              current.map((item, itemIndex) => itemIndex === index ? { ...item, feedback: rating === 'CLEARED' ? null : rating } : item),
+                            )
+                          }}
+                          sessionId={message.sessionId ?? problemSession?.id ?? undefined}
                         />
                       </>
                     )}
@@ -1020,17 +1046,30 @@ function MessageCopyButton({ align, content }: { align: 'left' | 'right'; conten
 }
 
 function AssistantMessageActions({
+  assistantTurnId,
   content,
   disabled,
+  feedback: initialFeedback,
+  onFeedbackChange,
   onRegenerate,
+  sessionId,
 }: {
+  assistantTurnId?: string
   content: string
   disabled?: boolean
+  feedback?: AiTurnFeedbackRating | null
+  onFeedbackChange?: (rating: AiTurnFeedbackRating) => void
   onRegenerate: () => void
+  sessionId?: string
 }) {
   const [copied, setCopied] = useState(false)
-  const [feedback, setFeedback] = useState<'down' | 'up' | null>(null)
+  const [feedback, setFeedback] = useState<AiTurnFeedbackRating | null>(initialFeedback ?? null)
+  const [feedbackBusy, setFeedbackBusy] = useState(false)
   const copyDisabled = !content.trim()
+
+  useEffect(() => {
+    setFeedback(initialFeedback ?? null)
+  }, [initialFeedback])
 
   const handleCopy = async () => {
     if (copyDisabled) return
@@ -1040,6 +1079,22 @@ function AssistantMessageActions({
       window.setTimeout(() => setCopied(false), 1600)
     } catch {
       setCopied(false)
+    }
+  }
+
+  const handleFeedback = async (next: AiTurnFeedbackRating) => {
+    const target = feedback === next ? 'CLEARED' : next
+    setFeedback(target === 'CLEARED' ? null : target)
+    onFeedbackChange?.(target)
+    if (!sessionId || !assistantTurnId) return
+    setFeedbackBusy(true)
+    try {
+      await submitAiTurnFeedback(sessionId, assistantTurnId, { rating: target })
+    } catch {
+      setFeedback(feedback)
+      if (feedback) onFeedbackChange?.(feedback)
+    } finally {
+      setFeedbackBusy(false)
     }
   }
 
@@ -1056,20 +1111,31 @@ function AssistantMessageActions({
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
         </IconActionButton>
         <IconActionButton
-          active={feedback === 'up'}
+          active={feedback === 'UP'}
           ariaLabel="点赞"
-          onClick={() => setFeedback((current) => (current === 'up' ? null : 'up'))}
+          disabled={feedbackBusy}
+          onClick={() => void handleFeedback('UP')}
           title="点赞"
         >
           <ThumbsUp className="h-3.5 w-3.5" />
         </IconActionButton>
         <IconActionButton
-          active={feedback === 'down'}
-          ariaLabel="点坏"
-          onClick={() => setFeedback((current) => (current === 'down' ? null : 'down'))}
-          title="点坏"
+          active={feedback === 'DOWN'}
+          ariaLabel="点踩"
+          disabled={feedbackBusy}
+          onClick={() => void handleFeedback('DOWN')}
+          title="点踩"
         >
           <ThumbsDown className="h-3.5 w-3.5" />
+        </IconActionButton>
+        <IconActionButton
+          active={feedback === 'REPORT'}
+          ariaLabel="举报"
+          disabled={feedbackBusy}
+          onClick={() => void handleFeedback('REPORT')}
+          title="举报"
+        >
+          <Shield className="h-3.5 w-3.5" />
         </IconActionButton>
         <IconActionButton
           ariaLabel="重新生成"
@@ -1193,16 +1259,21 @@ function AssistantMessageBubble({
   cards,
   content,
   getReportAttachmentFile,
+  knowledgeSources,
   reportDrafts,
+  usedKnowledge,
 }: {
   actions?: AiPendingAction[]
   cards?: AiCard[]
   content: string
   getReportAttachmentFile?: (draftId: string) => File | undefined
+  knowledgeSources?: AiChatResponse['knowledgeSources']
   reportDrafts?: AiVulnerabilityDraft[]
+  usedKnowledge?: boolean
 }) {
   const hasCards = Boolean(cards?.length)
   const hasReportDrafts = Boolean(reportDrafts?.length)
+  const visibleSources = (knowledgeSources ?? []).slice(0, 3)
   const [redeemedProducts, setRedeemedProducts] = useState<Record<string, { note?: string; pickupCode?: string; pointsCost: number }>>({})
   const spentInThisMessage = Object.values(redeemedProducts).reduce((sum, item) => sum + item.pointsCost, 0)
 
@@ -1239,6 +1310,23 @@ function AssistantMessageBubble({
                 />
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {(usedKnowledge || visibleSources.length > 0) && (
+        <div className="border-t border-black/5 px-4 py-2 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-slate-600 dark:text-slate-300">参考平台知识库</span>
+            {visibleSources.map((source) => (
+              <span
+                className="rounded-md border border-black/10 px-2 py-0.5 dark:border-white/10"
+                key={source.id}
+                title={`置信度 ${Math.round(source.confidence * 100)}%`}
+              >
+                {source.title}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -2231,7 +2319,13 @@ function messagesFromProblemSession(session: AiProblemSession): ChatMessage[] {
   return (session.turns ?? [])
     .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
     .map((turn) => ({
+      assistantTurnId: turn.role === 'assistant' ? turn.id : undefined,
       content: turn.content,
+      feedback: turn.metadata?.feedback?.rating === 'CLEARED' ? null : turn.metadata?.feedback?.rating,
+      knowledgeHitIds: turn.metadata?.knowledgeHitIds,
+      knowledgeSources: turn.metadata?.knowledgeSources,
       role: turn.role === 'user' ? 'user' : 'assistant',
+      sessionId: session.id,
+      usedKnowledge: turn.metadata?.usedKnowledge,
     }))
 }

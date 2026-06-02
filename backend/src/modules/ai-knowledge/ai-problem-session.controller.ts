@@ -82,6 +82,16 @@ export class AiProblemSessionController {
   discard(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.sessions.discard(id, user)
   }
+
+  @Post(':id/turns/:turnId/feedback')
+  feedback(
+    @Param('id') id: string,
+    @Param('turnId') turnId: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.sessions.submitTurnFeedback(id, turnId, normalizeTurnFeedbackBody(body), user)
+  }
 }
 
 function normalizeMode(value: unknown) {
@@ -98,4 +108,25 @@ function positiveInt(value: unknown, fallback: number) {
 function normalizeProblemSessionStatus(value: unknown) {
   if (typeof value !== 'string' || value === '' || value === 'ALL') return undefined
   return Object.values(AiProblemSessionStatus).includes(value as AiProblemSessionStatus) ? value as AiProblemSessionStatus : undefined
+}
+
+function normalizeTurnFeedbackBody(body: Record<string, unknown>) {
+  const rating = body.rating
+  if (rating !== 'UP' && rating !== 'DOWN' && rating !== 'REPORT' && rating !== 'CLEARED') {
+    throw new BadRequestException('反馈值必须是 UP、DOWN、REPORT 或 CLEARED')
+  }
+  const normalizedRating = rating as 'UP' | 'DOWN' | 'REPORT' | 'CLEARED'
+  return {
+    rating: normalizedRating,
+    reasonCode: optionalText(body.reasonCode, 80),
+    reasonText: optionalText(body.reasonText, 500),
+  }
+}
+
+function optionalText(value: unknown, maxLength: number) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') throw new BadRequestException('反馈原因格式不正确')
+  const text = value.trim()
+  if (!text) return undefined
+  return text.slice(0, maxLength)
 }

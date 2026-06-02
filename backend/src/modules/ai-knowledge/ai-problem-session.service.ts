@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { createHash } from 'crypto'
 import {
+  AiKnowledgeFeedbackValue,
   AiKnowledgeCategory,
   AiKnowledgeRoleScope,
   AiKnowledgeSensitivity,
@@ -9,6 +10,7 @@ import {
   AiKnowledgeVisibility,
   AiProblemSessionStatus,
   AiSpace,
+  AuditAction,
   Prisma,
 } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
@@ -28,6 +30,12 @@ type ResolveProblemSessionInput = {
 type ReviewProblemSessionInput = {
   note?: string
   status: 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'
+}
+
+type TurnFeedbackInput = {
+  rating: 'UP' | 'DOWN' | 'REPORT' | 'CLEARED'
+  reasonCode?: string
+  reasonText?: string
 }
 
 type ProblemSessionSummary = {
@@ -367,6 +375,7 @@ export class AiProblemSessionService {
   }
 
   async recordChatTurnPair(input: {
+    assistantMetadata?: Prisma.InputJsonValue
     answer: string
     hasAttachment: boolean
     question: string
@@ -403,6 +412,7 @@ export class AiProblemSessionService {
       const createdAssistantTurn = await tx.aiProblemSessionTurn.create({
         data: {
           contentHash: stableHash(`${session.id}:assistant:${answer}:${Date.now()}`),
+          metadata: input.assistantMetadata,
           role: 'assistant',
           sanitizedText: answer,
           sessionId: session.id,
@@ -428,6 +438,97 @@ export class AiProblemSessionService {
       assistantTurnId: assistantTurn.id,
       sessionId: session.id,
       userTurnId: userTurn.id,
+    }
+  }
+
+  async submitTurnFeedback(sessionId: string, turnId: string, input: TurnFeedbackInput, user: AuthenticatedRequestUser) {
+    const session = await this.getOwnedSession(sessionId, user.id)
+    const turn = await this.prisma.aiProblemSessionTurn.findFirst({
+      where: { id: turnId, role: 'assistant', sessionId: session.id },
+    })
+    if (!turn) throw new NotFoundException('AI 回复不存在')
+
+    const metadata = isRecord(turn.metadata) ? turn.metadata : {}
+    const existingFeedback = isRecord(metadata.feedback) ? metadata.feedback : null
+    const knowledgeHitIds = normalizeStringArray(metadata.knowledgeHitIds)
+    const previousValue = normalizeStoredKnowledgeFeedbackValue(existingFeedback?.knowledgeFeedbackValue)
+    const nextValue = mapTurnRatingToKnowledgeFeedbackValue(input.rating, input.reasonCode, input.reasonText)
+    const reason = [input.reasonCode, input.reasonText].filter((item): item is string => typeof item === 'string' && item.trim().length > 0).join('：').slice(0, 1000)
+    const now = new Date()
+
+    const usedHits = knowledgeHitIds.length
+      ? await this.prisma.aiKnowledgeHit.findMany({
+          select: { id: true, knowledgeId: true },
+          where: { id: { in: knowledgeHitIds }, usedInResponse: true, userId: user.id },
+        })
+      : []
+    const uniqueKnowledgeIds = [...new Set(usedHits.map((hit) => hit.knowledgeId))]
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.aiProblemSessionTurn.update({
+        data: {
+          metadata: {
+            ...metadata,
+            feedback: {
+              at: now.toISOString(),
+              knowledgeFeedbackValue: nextValue,
+              rating: input.rating,
+              reason,
+              reasonCode: input.reasonCode ?? null,
+              reasonText: input.reasonText ?? null,
+            },
+          } as Prisma.InputJsonValue,
+        },
+        where: { id: turn.id },
+      })
+
+      for (const knowledgeId of uniqueKnowledgeIds) {
+        if (previousValue) {
+          await tx.aiKnowledgeEntry.update({
+            data: buildKnowledgeFeedbackCounterUpdate(previousValue, -1),
+            where: { id: knowledgeId },
+          })
+        }
+        if (nextValue) {
+          await tx.aiKnowledgeFeedback.create({
+            data: {
+              knowledgeId,
+              note: reason || null,
+              userId: user.id,
+              value: nextValue,
+            },
+          })
+          await tx.aiKnowledgeEntry.update({
+            data: buildKnowledgeFeedbackCounterUpdate(nextValue, 1),
+            where: { id: knowledgeId },
+          })
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CALL_AI,
+          actorId: user.id,
+          metadata: {
+            feedback: input.rating,
+            knowledgeHitIds,
+            knowledgeIds: uniqueKnowledgeIds,
+            reasonCode: input.reasonCode ?? null,
+            turnId: turn.id,
+          },
+          result: 'success',
+          targetId: turn.id,
+          targetType: 'AI_PROBLEM_SESSION_TURN_FEEDBACK',
+        },
+      })
+    })
+
+    return {
+      knowledgeFeedbackUpdated: uniqueKnowledgeIds.length > 0 && input.rating !== 'CLEARED',
+      knowledgeHitIds: usedHits.map((hit) => hit.id),
+      rating: input.rating,
+      requiresReview: input.rating === 'REPORT' || input.reasonCode === 'SAFETY_RISK',
+      turnId: turn.id,
     }
   }
 
@@ -916,7 +1017,7 @@ function serializeProblemSession<T extends {
   turnCount: number
   updatedAt: Date
   userOutcomeNote: string | null
-  turns?: Array<{ createdAt: Date; id: string; role: string; sanitizedText: string }>
+  turns?: Array<{ createdAt: Date; id: string; metadata: Prisma.JsonValue | null; role: string; sanitizedText: string }>
 }>(session: T) {
   return {
     canonicalKey: session.canonicalKey ?? null,
@@ -945,11 +1046,40 @@ function serializeProblemSession<T extends {
       content: turn.sanitizedText,
       createdAt: turn.createdAt.toISOString(),
       id: turn.id,
+      metadata: turn.metadata,
       role: turn.role,
     })),
     updatedAt: session.updatedAt.toISOString(),
     userOutcomeNote: session.userOutcomeNote,
   }
+}
+
+function normalizeStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeStoredKnowledgeFeedbackValue(value: unknown): AiKnowledgeFeedbackValue | null {
+  if (value === AiKnowledgeFeedbackValue.HELPFUL || value === AiKnowledgeFeedbackValue.UNHELPFUL || value === AiKnowledgeFeedbackValue.REPORT_ABUSE) {
+    return value
+  }
+  return null
+}
+
+function mapTurnRatingToKnowledgeFeedbackValue(rating: TurnFeedbackInput['rating'], reasonCode?: string, reasonText?: string) {
+  if (rating === 'UP') return AiKnowledgeFeedbackValue.HELPFUL
+  if (rating === 'DOWN') return AiKnowledgeFeedbackValue.UNHELPFUL
+  if (rating === 'REPORT' || reasonCode === 'SAFETY_RISK' || /安全|风险|越权|投毒|攻击/.test(reasonText ?? '')) return AiKnowledgeFeedbackValue.REPORT_ABUSE
+  return null
+}
+
+function buildKnowledgeFeedbackCounterUpdate(value: AiKnowledgeFeedbackValue, delta: 1 | -1): Prisma.AiKnowledgeEntryUpdateInput {
+  if (value === AiKnowledgeFeedbackValue.HELPFUL) return { helpfulCount: { increment: delta } }
+  if (value === AiKnowledgeFeedbackValue.UNHELPFUL) return { unhelpfulCount: { increment: delta } }
+  return { abuseReportCount: { increment: delta } }
 }
 
 function normalizeMode(mode: AiProblemSessionMode | undefined): AiProblemSessionMode {

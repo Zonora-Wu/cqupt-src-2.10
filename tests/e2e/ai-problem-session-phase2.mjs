@@ -850,6 +850,84 @@ async function main() {
     assert(previewAuditAfter >= previewAuditBefore + 3, 'route preview should write audit records for admin previews')
   })
 
+  await step('KB-10 persists assistant turn feedback and knowledge feedback summary', async () => {
+    assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-10 feedback test')
+    const beforeEntry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: state.approvedKnowledgeId } })
+    const beforeHelpful = beforeEntry?.helpfulCount ?? 0
+    const beforeUnhelpful = beforeEntry?.unhelpfulCount ?? 0
+    const beforeAbuse = beforeEntry?.abuseReportCount ?? 0
+    const session = await request('/ai/problem-sessions', {
+      body: { initialQuestion: `${marker} KB-10 反馈测试`, mode: 'student' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    const result = await request('/ai/chat', {
+      body: {
+        message: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
+        mode: 'student',
+        sessionId: session.id,
+      },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(result.assistantTurnId, 'KB response should include assistantTurnId for feedback')
+    assert(result.knowledgeHitIds?.length > 0, 'KB response should include knowledgeHitIds for feedback')
+    assert(result.knowledgeSources?.some((source) => source.id === state.approvedKnowledgeId), 'KB response should include knowledge source for frontend badge')
+
+    const up = await request(`/ai/problem-sessions/${session.id}/turns/${result.assistantTurnId}/feedback`, {
+      body: { rating: 'UP' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(up.rating === 'UP' && up.knowledgeFeedbackUpdated === true, 'UP feedback should update knowledge feedback')
+    let entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: state.approvedKnowledgeId } })
+    assert(entry?.helpfulCount === beforeHelpful + 1, 'UP feedback should increment helpfulCount')
+
+    const down = await request(`/ai/problem-sessions/${session.id}/turns/${result.assistantTurnId}/feedback`, {
+      body: { rating: 'DOWN', reasonCode: 'NOT_ACTIONABLE', reasonText: '步骤不够具体' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(down.rating === 'DOWN', 'DOWN feedback should persist latest rating')
+    entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: state.approvedKnowledgeId } })
+    assert(entry?.helpfulCount === beforeHelpful, 'DOWN feedback should remove previous helpfulCount')
+    assert(entry?.unhelpfulCount === beforeUnhelpful + 1, 'DOWN feedback should increment unhelpfulCount')
+
+    const report = await request(`/ai/problem-sessions/${session.id}/turns/${result.assistantTurnId}/feedback`, {
+      body: { rating: 'REPORT', reasonCode: 'SAFETY_RISK', reasonText: '存在安全风险' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(report.rating === 'REPORT' && report.requiresReview === true, 'REPORT feedback should require review')
+    entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: state.approvedKnowledgeId } })
+    assert(entry?.unhelpfulCount === beforeUnhelpful, 'REPORT feedback should remove previous unhelpfulCount')
+    assert(entry?.abuseReportCount === beforeAbuse + 1, 'REPORT feedback should increment abuseReportCount')
+
+    const cleared = await request(`/ai/problem-sessions/${session.id}/turns/${result.assistantTurnId}/feedback`, {
+      body: { rating: 'CLEARED' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(cleared.rating === 'CLEARED', 'CLEARED feedback should clear latest rating')
+    entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: state.approvedKnowledgeId } })
+    assert(entry?.helpfulCount === beforeHelpful, 'CLEARED feedback should restore helpfulCount baseline')
+    assert(entry?.unhelpfulCount === beforeUnhelpful, 'CLEARED feedback should restore unhelpfulCount baseline')
+    assert(entry?.abuseReportCount === beforeAbuse, 'CLEARED feedback should restore abuseReportCount baseline')
+
+    const turn = await prisma.aiProblemSessionTurn.findUnique({ where: { id: result.assistantTurnId } })
+    assert(turn?.metadata?.feedback?.rating === 'CLEARED', 'assistant turn metadata should store latest feedback')
+    assert(turn?.metadata?.knowledgeHitIds?.length > 0, 'assistant turn metadata should store knowledgeHitIds')
+    const feedbackCount = await prisma.aiKnowledgeFeedback.count({
+      where: { knowledgeId: state.approvedKnowledgeId, userId: state.studentId },
+    })
+    assert(feedbackCount >= 3, 'knowledge feedback history should record each feedback event')
+
+    await request(`/ai/problem-sessions/${session.id}/discard`, {
+      method: 'POST',
+      token: state.studentToken,
+    })
+  })
+
   await step('KB-08 injects medium-confidence knowledge and keeps source record', async () => {
     assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 injected retrieval test')
     await request('/system-settings/ai-knowledge-usage', {

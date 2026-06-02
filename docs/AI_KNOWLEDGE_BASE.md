@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：前端来源标注展示、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环，以及知识库成熟化治理项（评测体系、来源权威、冲突处理、回答快照、缓存失效、知识缺口发现、文档导入治理、功能开关与线上指标）。
+> 当前仍待实现/验收：问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环，以及知识库成熟化治理项（评测体系、来源权威、冲突处理、回答快照、缓存失效、知识缺口发现、文档导入治理、功能开关与线上指标）。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -2108,7 +2108,7 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 | P1 | 结构化知识候选 | canonicalQuestion、successfulSteps、pitfalls、scores | 脱敏后总结；低质量/敏感/投毒拒绝或复审 | 管理端能看摘要、评分、来源 turns | 防把聊天原文当知识 | 已部分落地 |
 | P1 | 管理端审核 | READY_REVIEW 队列、review API | approve/discard/skill candidate 写状态和 AuditLog | 管理员能通过、丢弃、查看相似知识 | 防自动入库低质或敏感内容 | 已部分落地 |
 | P1 | Knowledge Retrieval | retrieval service、AiKnowledgeHit | 高置信直答写 hit；中置信注入 Agent；低置信不用 KB | 来源嵌在 assistant bubble 内，不用灰色分割块 | 防未审核/过期知识参与回答 | 待代码确认 |
-| P2 | 回复反馈持久化 | `assistantTurnId`、turn feedback、knowledge feedback | 点赞/点踩写后端，可撤销/改投 | 每条回复底部有“有帮助/没帮助” | 点踩安全风险触发复审 | 待实现 |
+| P2 | 回复反馈持久化 | `assistantTurnId`、turn feedback、knowledge feedback | 有用/无用/举报写后端，可撤销/改投 | 每条回复底部有反馈按钮和知识来源 | 举报或安全风险原因返回待复审信号 | 已完成 |
 | P2 | 知识维护状态 | maintenanceStatus、retrievalPolicy | 检索前过滤暂停/归档/低质/过期知识 | 管理端可按状态查看和处理 | 防过期或投毒知识继续污染回答 | 待实现 |
 | P2 | Revision 回滚 | AiKnowledgeRevision、diff、rollback API | 修订/合并/恢复生成不可变 revision | 管理端可看版本差异并回滚 | 防管理员误改后不可恢复 | 待实现 |
 | P3 | 语义聚类 | canonicalProblemJson、pgvector/pg_trgm、reranker | SAME_CLUSTER/VARIANT/MERGE_REVIEW/NEW_CLUSTER 决策可追踪 | 管理端展示候选 cluster、冲突字段、合并理由 | 防不同问题被错误合并 | 待实现 |
@@ -2288,7 +2288,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `22/22`，覆盖 KB-01 到 KB-09、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwk66wl_2097be.json`。本轮后端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `23/23`，覆盖 KB-01 到 KB-10、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwkke8c_efc531.json`。本轮后端 `npm run build`、前端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2304,7 +2304,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-08A | 数据使用路由 | 已完成 | 后端显式区分 `DIRECT_RESOURCE_RESPONSE`、`KNOWLEDGE_DIRECT_ANSWER`、`KNOWLEDGE_INJECTED_AGENT`、`AGENT_DATA_REQUEST`、`NORMAL_AGENT`、`ACTION_PROPOSAL`，响应和审计日志写入 `dataRoute` | E2E：积分实时查询走 `DIRECT_RESOURCE_RESPONSE` 且阻断知识库抢答；写操作走 `ACTION_PROPOSAL`、不调用模型、不返回可执行 action，并要求二次确认 |
 | KB-08B | 管理员知识库使用强度 | 已完成 | 管理员可设置 1-10 档 `knowledgeUsageStrength`，后端解析为直答/注入阈值、topK、来源展示和审计策略；档位不得绕过权限、实时数据、附件、写操作和维护状态硬边界 | E2E：route preview 展示 strength 2/7/10 下的 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds、blockedRoutes；实时数据和写操作在 10 档仍压制 KB；配置变更写 AuditLog |
 | KB-09 | 角色与权限过滤 | 已完成 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | E2E：student 只能命中 STUDENT/ALL 知识，不能命中 AUDITOR/ADMIN；auditor 不能命中 ADMIN/STUDENT；PRIVATE/SENSITIVE/REJECTED 均被过滤；管理员 route preview 写 `AI_KNOWLEDGE_ROUTE_PREVIEW` 审计记录 |
-| KB-10 | 来源标注与反馈 | 待代码确认 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | 使用 KB 的回复必须有 `knowledgeSources` 和 `knowledgeHitIds`；反馈写入 turn、hit 和知识反馈汇总 |
+| KB-10 | 来源标注与反馈 | 已完成 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | E2E：使用 KB 的回复返回 `knowledgeSources`、`knowledgeHitIds`、`assistantTurnId`；反馈写入 assistant turn metadata，追加 `AiKnowledgeFeedback` 历史，并更新 helpful/unhelpful/abuse 汇总；前端来源标注位于 assistant bubble 内部 |
 | KB-11 | maintenanceStatus + retrievalPolicy | 待代码确认 | 知识条目有维护状态和 direct/inject/retrieval 行为开关 | `STALE_REVIEW`、`SECURITY_SUSPENDED`、`ARCHIVED` 普通用户不可命中；`LOW_QUALITY_REVIEW` 不直接回答 |
 | KB-12 | AiKnowledgeMaintenanceWorker | 待代码确认 | Worker 计算质量分、新鲜度、反馈趋势、重复风险，生成维护任务或暂停风险知识 | 重复运行不产生重复 OPEN task；安全举报后自动 `SECURITY_SUSPENDED` 且 retrieval disabled |
 | KB-13 | AiKnowledgeMaintenanceTask | 待代码确认 | 待维护任务有 priority、reason、dedupeKey、状态流转 | 管理端可按 P0-P4 查看任务；resolve/dismiss 写 AuditLog；同一 dedupeKey 不重复创建 |
@@ -2373,8 +2373,8 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 检索前按 roleScope、visibility、sensitivity、status 过滤，学生/审核员/管理员知识隔离和 route preview 审计已由 E2E 覆盖。
 - [x] 命中写入 `AiKnowledgeHit`。
 - [x] 响应返回 `usedKnowledge` 和 `knowledgeSources`。
-- [ ] 前端在 AI 回复框底部显示平台知识库来源。
-- [ ] 用户可反馈有用、无用、举报；当前前端已有本地按钮状态，后端 turn 级持久化接口和知识命中汇总仍待实现。
+- [x] 前端在 AI 回复框底部显示平台知识库来源。
+- [x] 用户可反馈有用、无用、举报；反馈写入后端 turn metadata、知识反馈历史和知识命中汇总。
 
 ### 19.5 知识库持续维护
 

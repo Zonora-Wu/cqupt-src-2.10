@@ -114,6 +114,8 @@ export type AiChatResponse = {
   usedKnowledge?: boolean
 }
 
+export type AiTurnFeedbackRating = 'CLEARED' | 'DOWN' | 'REPORT' | 'UP'
+
 export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'
 
 export type AiProblemSessionTurn = {
@@ -121,6 +123,17 @@ export type AiProblemSessionTurn = {
   createdAt: string
   duplicateRiskScore?: number
   id: string
+  metadata?: {
+    feedback?: {
+      rating?: AiTurnFeedbackRating
+      reason?: string
+      reasonCode?: string | null
+      reasonText?: string | null
+    }
+    knowledgeHitIds?: string[]
+    knowledgeSources?: AiChatResponse['knowledgeSources']
+    usedKnowledge?: boolean
+  } | null
   role: 'assistant' | 'user' | string
 }
 
@@ -243,6 +256,24 @@ export function resolveAiProblemSession(id: string, note?: string) {
 export function discardAiProblemSession(id: string) {
   return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/discard`, {
     auth: true,
+    method: 'POST',
+  })
+}
+
+export function submitAiTurnFeedback(
+  sessionId: string,
+  turnId: string,
+  data: { rating: AiTurnFeedbackRating; reasonCode?: string; reasonText?: string },
+) {
+  return apiRequest<{
+    knowledgeFeedbackUpdated: boolean
+    knowledgeHitIds: string[]
+    rating: AiTurnFeedbackRating
+    requiresReview: boolean
+    turnId: string
+  }>(`/ai/problem-sessions/${sessionId}/turns/${turnId}/feedback`, {
+    auth: true,
+    body: data,
     method: 'POST',
   })
 }
