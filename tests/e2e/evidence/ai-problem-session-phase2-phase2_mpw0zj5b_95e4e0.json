@@ -1,0 +1,75 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T02:37:27.491Z",
+  "marker": "[phase2_mpw0zj5b_95e4e0]",
+  "runId": "phase2_mpw0zj5b_95e4e0",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 351,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 76,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 4307,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 15,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 40,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 42,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 20,
+      "label": "KB-05 rejects sensitive summary content",
+      "ok": true
+    },
+    {
+      "duration": 105,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 47,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects PII, real asset URL and raw request content",
+      "ok": true
+    },
+    {
+      "duration": 82,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 50630,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 47836,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "message": "/ai/chat expected 2xx, got 403: 本月邮宝 token 额度已用尽，请联系管理员调整额度",
+      "ok": false
+    }
+  ]
+}

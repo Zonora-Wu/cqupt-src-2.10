@@ -26,7 +26,7 @@
 
 - 多轮会话级知识沉淀：`AiKnowledgeConversation` + `AiKnowledgeConversationTurn`。
 - AI 总结与 AI+规则混合评分：`overallScore`、`kbScore`、`skillScore`、`safetyScore`、`privacyRiskScore`、`confidenceScore` 等字段。
-- 自动流转：低风险高分知识可自动进入 KB 或 Skill Candidate；未达阈值进入管理员审核。
+- 自动流转：低风险高分知识可自动进入 KB；Skill Candidate 只能由管理员在后端门槛校验通过后标记，不能由普通用户对话或规则评分直接自动生成。
 - 相似知识去重：`duplicateRiskScore`、`similarKnowledgeMatches`、`mergeSuggestion`；0.86 以上强重复、0.72 以上中等重复均阻断自动入库。
 - 管理端展示：会话队列、AI 评分、重复风险、相似知识和合并建议。
 - Skill Candidate：生成、审批、安装和安装日志链路可用。
@@ -129,8 +129,9 @@ content is stable methodology, not a one-off answer
 | 审核员初筛 checklist | 某审核员对某报告的意见 |
 | 学生 Web 安全学习路径 | 某用户的学习进度 |
 | 邮宝卡片协议 / 安全边界 | 当前商品库存、积分余额、漏洞状态 |
+| 自动化回归测试/部署验收 runbook | Kali 下载链接、版本号、官网镜像地址等静态答案 |
 
-Skill 必须通过 `AiSkillCandidate` 审核流生成，不允许用户聊天自动创建 skill。
+Skill 必须通过 `AiSkillCandidate` 审核流生成，不允许用户聊天自动创建 skill。问题会话被管理员标记为 `SKILL_CANDIDATE` 前，后端还必须确认该总结本身被判定为 `SKILL`、不是 `DISCARD`、无敏感/投毒/隐私风险、质量与复用评分达标、至少包含 3 个稳定有效步骤，并且不是下载链接、版本号、一次性查询或个人上下文对话。
 
 ### 0.4 何时拒绝沉淀
 
@@ -272,7 +273,7 @@ Direct Response > Knowledge Retrieval > Agent > Capture
 | P2-5 | 安全暂停闭环 | 安全风险、投毒、敏感泄露触发 `SECURITY_SUSPENDED` | security review APIs、admin UI | 暂停后普通用户不可检索；恢复必须管理员复核 | 点踩“存在安全风险”后知识从直答路径移除 | 待实现 |
 | P3-1 | 语义问题族聚类 | 用 canonicalProblem、hybrid retrieval、embedding/reranker 聚类相似问题 | schema、pgvector/pg_trgm、cluster service | SAME_CLUSTER 高置信才参与自动入库；VARIANT/MERGE_REVIEW 阻断自动合并 | “Kali 下载链接”和“官网镜像在哪”归同类；SQLi 报告写作和靶场排错不误合并 | 待实现 |
 | P3-2 | 自动入库硬阈值 | 高频、高质量、低风险、无 pending merge review 才自动入库 | `tryAutoApproveCluster()`、score service | resolved>=3、ask>=5、quality/reuse/safety/feedback 达标；隐私/重复风险不过线 | 不满足反馈或存在 merge review 的 cluster 不能 AUTO_APPROVED | 待加强 |
-| P3-3 | Skill Candidate 晋升 | 只有长期稳定方法论可从 KB 生成 Skill Candidate | skill candidate service、admin UI | 不含实时数据、用户私有数据、一次性问答；管理员二次审批 | XSS 报告流程可晋升；“我的积分状态”不可晋升 | 已部分落地 |
+| P3-3 | Skill Candidate 晋升 | 只有长期稳定方法论可从 KB/问题会话生成 Skill Candidate，普通问答、下载链接、版本号、一次性查询和个人上下文对话必须阻断 | skill candidate service、admin UI、`reviewResolvedSession()` 后端门槛 | 不含实时数据、用户私有数据、一次性问答；管理员二次审批；后端校验 recommendation=SKILL、质量/复用/安全/隐私达标、至少 3 个稳定步骤 | XSS 报告流程可晋升；“我的积分状态”和“Kali 下载链接是多少”不可晋升 | 已部分落地 |
 | P3-4 | 受控安装平台 Hermes Skill | 审批后写入平台 Hermes bind mount 目录并记录安装日志 | `CQUPT_HERMES_SKILLS_ROOT`、install service | 目标为 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src`；不写 CLI Hermes | 安装后宿主文件存在，容器内可读，AiSkillInstallLog 有 hash | 已部分落地 |
 
 执行顺序：先 P0 保证不会越权和错用实时数据，再 P1 打通沉淀链路，再 P2 做质量维护，最后 P3 做语义聚类和 Skill 晋升。

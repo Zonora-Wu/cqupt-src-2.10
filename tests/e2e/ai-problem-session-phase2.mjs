@@ -50,6 +50,8 @@ async function main() {
   await step('prepare accounts', async () => {
     state.studentId = await createTempStudent()
     state.otherStudentId = await createTempStudent(state.otherStudentCode, 'other')
+    await ensureHighAiQuota(state.studentId)
+    await ensureHighAiQuota(state.otherStudentId)
     state.studentToken = (await login({ password: 'E2e123456+-', unifiedCode: state.studentCode })).accessToken
     state.otherStudentToken = (await login({ password: 'E2e123456+-', unifiedCode: state.otherStudentCode })).accessToken
     state.adminToken = (await login(accounts.admin)).accessToken
@@ -162,6 +164,29 @@ async function main() {
     assert(Array.isArray(summarized.summaryJson?.pitfalls), 'summary should include pitfalls array')
     assert(typeof summarized.summaryJson?.scores?.quality === 'number', 'summary should include quality score')
     assert(!JSON.stringify(summarized.summaryJson).includes('Authorization:'), 'summary should not include Authorization header')
+  })
+
+  await step('KB-03 prevents direct-answer conversations from becoming skill candidates', async () => {
+    const session = await createResolvedProblemSession({
+      answer: [
+        `${marker} 可以按以下步骤处理：先进入 Kali 官方下载页，选择 Installer ISO 而不是来历不明的第三方镜像。`,
+        '执行 SHA256 校验，确认镜像完整性后再导入 VMware 或 VirtualBox。',
+        '安装时选择普通图形化安装，完成后重启虚拟机并验证网络连通。',
+        '注意不要使用来历不明的镜像，避免安全风险。',
+      ].join('\n'),
+      question: `${marker} Kali Linux 虚拟机安装的下载链接是多少？`,
+    })
+    const summarized = await request(`/ai/problem-sessions/${session.id}/summarize`, {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(summarized.summaryJson?.recommendation === 'KB', 'download/link answer should stay KB, not SKILL')
+    await request(`/ai/problem-sessions/${session.id}/review`, {
+      body: { note: `${marker} direct answer must not become skill`, status: 'SKILL_CANDIDATE' },
+      expectedStatus: 400,
+      method: 'POST',
+      token: state.adminToken,
+    })
   })
 
   await step('KB-05 rejects sensitive summary content', async () => {
@@ -498,13 +523,31 @@ async function createTempStudent(code = state.studentCode, suffix = 'main') {
   })
   await prisma.aiUserQuota.create({
     data: {
-      dailyLimit: 200000,
-      monthlyLimit: 200000,
+      dailyLimit: 20000000,
+      monthlyLimit: 20000000,
       userId: user.id,
-      weeklyLimit: 200000,
+      weeklyLimit: 20000000,
     },
   })
   return user.id
+}
+
+async function ensureHighAiQuota(userId) {
+  await prisma.aiUserQuota.upsert({
+    create: {
+      dailyLimit: 20000000,
+      monthlyLimit: 20000000,
+      userId,
+      weeklyLimit: 20000000,
+    },
+    update: {
+      dailyLimit: 20000000,
+      enabled: true,
+      monthlyLimit: 20000000,
+      weeklyLimit: 20000000,
+    },
+    where: { userId },
+  })
 }
 
 async function login(account) {

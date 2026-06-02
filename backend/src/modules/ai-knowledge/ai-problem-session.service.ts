@@ -270,6 +270,10 @@ export class AiProblemSessionService {
     const summary = parseProblemSessionSummary(fresh.summaryJson)
 
     if (input.status === 'SKILL_CANDIDATE') {
+      const skillCandidateReason = getProblemSessionSkillCandidateBlockReason(summary)
+      if (skillCandidateReason) {
+        throw new BadRequestException(`该会话不能晋升为 Skill Candidate：${skillCandidateReason}`)
+      }
       const marked = await this.prisma.aiProblemSession.update({
         data: {
           summaryJson: { ...(summary as object), reviewNote: input.note, reviewedById: reviewerId } as Prisma.InputJsonValue,
@@ -424,9 +428,10 @@ export class AiProblemSessionService {
     const safety = rejectionReason ? 0.1 : 0.94
     const privacy = rejectionReason ? 0.9 : 0.08
     const poisoningRisk = /忽略.*规则|ignore .*instructions|系统提示词|开发者指令|自动通过|绕过权限/i.test(fullText) ? 0.95 : 0.04
+    const skillSignal = inferSkillCandidateSignal(problem, fullText, successfulSteps, pitfalls, environment)
     const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || reuse < 0.5 || quality < 0.55
       ? 'DISCARD'
-      : /脚本|批量|扫描|收集|自动化|工作流|流程/i.test(fullText)
+      : skillSignal
         ? 'SKILL'
         : 'KB'
 
@@ -883,6 +888,40 @@ function getNonReusableProblemReason(problem: string) {
     return '实时个人业务数据不进入长期知识库'
   }
   return undefined
+}
+
+function inferSkillCandidateSignal(
+  problem: string,
+  fullText: string,
+  successfulSteps: string[],
+  pitfalls: string[],
+  environment: string[],
+) {
+  const text = `${problem}\n${fullText}`
+  if (isDirectAnswerOrLookupQuestion(text)) return false
+  const hasWorkflowSignal = /脚本|批量|扫描|收集|自动化|工作流|流程|pipeline|runbook|playbook|checklist|清单|规范|模板|规程|治理|运维|回滚|部署|审计|验收/i.test(text)
+  const hasReusableProcedureShape = successfulSteps.length >= 3 && (pitfalls.length > 0 || environment.length > 0)
+  const hasImplementationDepth = /(新增|封装|抽象|模块|服务|worker|队列|schema|migration|迁移|索引|权限|审计|测试|e2e|回归|脚本)/i.test(text)
+  return hasWorkflowSignal && hasReusableProcedureShape && hasImplementationDepth
+}
+
+function getProblemSessionSkillCandidateBlockReason(summary: ProblemSessionSummary) {
+  if (summary.rejectionReason) return summary.rejectionReason
+  if (summary.recommendation === 'DISCARD') return '该会话已被规则判定为不沉淀'
+  if (summary.recommendation !== 'SKILL') return '普通问答或单次排错只能进入知识库，不能晋升为 Hermes Skill'
+  if (summary.scores.quality < 0.8) return '质量分不足，Skill 需要稳定、完整、可复用的方法论'
+  if (summary.scores.reuse < 0.85) return '复用价值不足，不能作为跨用户方法论'
+  if (summary.scores.safety < 0.9 || summary.scores.privacy > 0.1 || summary.scores.poisoningRisk > 0.1) {
+    return '安全、隐私或投毒风险未达到 Skill 候选门槛'
+  }
+  if (summary.successfulSteps.length < 3) return '缺少足够的可执行步骤'
+  const combined = [summary.problem, summary.resolution, ...summary.successfulSteps, ...summary.pitfalls, ...summary.environment].join('\n')
+  if (isDirectAnswerOrLookupQuestion(combined)) return '下载链接、版本地址、一次性查询或静态答案应沉淀为 KB，不能晋升为 Skill'
+  return undefined
+}
+
+function isDirectAnswerOrLookupQuestion(text: string) {
+  return /(下载链接|下载地址|官网地址|镜像地址|链接是多少|地址是多少|版本号|当前版本|最新版本|今天|现在|实时|能兑换|多少积分|我的|这次|刚才|上次|这个对话|直接给|发我链接|给我地址|查一下|查询)/i.test(text)
 }
 
 function extractLines(text: string, pattern: RegExp, limit: number) {
