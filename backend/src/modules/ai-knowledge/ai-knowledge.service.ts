@@ -152,32 +152,34 @@ export class AiKnowledgeService {
       .slice(0, input.limit ?? 3)
 
     const recordedHitIds = new Map<string, string>()
-    try {
-      await Promise.all(
-        hits.map(async (hit) => {
-          const [, recordedHit] = await this.prisma.$transaction([
-            this.prisma.aiKnowledgeEntry.update({
-              data: { hitCount: { increment: 1 } },
-              where: { id: hit.id },
-            }),
-            this.prisma.aiKnowledgeHit.create({
-              data: {
-                aiSpace: input.aiSpace,
-                knowledgeId: hit.id,
-                questionHash: stableHash(sanitized),
-                questionSummary: sanitized.slice(0, 1000),
-                route: hit.similarity >= 0.55 ? 'RECALLED_DIRECT_CANDIDATE' : 'RECALLED_INJECT_CANDIDATE',
-                similarity: hit.similarity,
-                usedInResponse: false,
-                userId: input.userId,
-              },
-            }),
-          ])
-          recordedHitIds.set(hit.id, recordedHit.id)
-        }),
-      )
-    } catch (error) {
-      this.logger.warn(`AI 知识命中统计写入失败，不阻断检索结果：${error instanceof Error ? error.message : String(error)}`)
+    if (input.recordHits !== false) {
+      try {
+        await Promise.all(
+          hits.map(async (hit) => {
+            const [, recordedHit] = await this.prisma.$transaction([
+              this.prisma.aiKnowledgeEntry.update({
+                data: { hitCount: { increment: 1 } },
+                where: { id: hit.id },
+              }),
+              this.prisma.aiKnowledgeHit.create({
+                data: {
+                  aiSpace: input.aiSpace,
+                  knowledgeId: hit.id,
+                  questionHash: stableHash(sanitized),
+                  questionSummary: sanitized.slice(0, 1000),
+                  route: hit.similarity >= 0.55 ? 'RECALLED_DIRECT_CANDIDATE' : 'RECALLED_INJECT_CANDIDATE',
+                  similarity: hit.similarity,
+                  usedInResponse: false,
+                  userId: input.userId,
+                },
+              }),
+            ])
+            recordedHitIds.set(hit.id, recordedHit.id)
+          }),
+        )
+      } catch (error) {
+        this.logger.warn(`AI 知识命中统计写入失败，不阻断检索结果：${error instanceof Error ? error.message : String(error)}`)
+      }
     }
 
     return hits.map((hit) => ({ ...hit, hitId: recordedHitIds.get(hit.id) }))

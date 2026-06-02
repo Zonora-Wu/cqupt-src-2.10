@@ -12,7 +12,7 @@ import { S3StorageService } from '../../integrations/object-storage/s3-storage.s
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { generateCertificatePdf } from '../certificates/certificate-pdf.generator'
 import { PrismaService } from '../prisma/prisma.service'
-import { AiAssistantAppearance, AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem, PlatformSettings, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
+import { AiAssistantAppearance, AiKnowledgeUsagePolicySettings, AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem, PlatformSettings, RegistrationMode, UploadedSettingsFile } from './system-settings.types'
 
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
@@ -24,6 +24,7 @@ const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
 const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
+const AI_KNOWLEDGE_USAGE_POLICY_KEY = 'ai_knowledge_usage_policy'
 
 const DEFAULT_LAYOUT = {
   certificateNo: { x: 90, y: 74, fontSize: 28 },
@@ -641,6 +642,71 @@ export class SystemSettingsService {
     return { defaultDailyTokens, defaultMonthlyTokens, defaultWeeklyTokens, quotaPeriod, resetAt: getNextPeriodStart(quotaPeriod) }
   }
 
+  async getAiKnowledgeUsagePolicySettings(): Promise<AiKnowledgeUsagePolicySettings> {
+    const row = await this.prisma.systemSetting.findUnique({ where: { key: AI_KNOWLEDGE_USAGE_POLICY_KEY } })
+    return normalizeKnowledgeUsagePolicySettings(isRecord(row?.value) ? row.value : {})
+  }
+
+  async updateAiKnowledgeUsagePolicySettings(
+    body: Partial<AiKnowledgeUsagePolicySettings> & { changeReason?: string },
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<AiKnowledgeUsagePolicySettings> {
+    const changeReason = typeof body.changeReason === 'string' ? body.changeReason.trim() : ''
+    if (changeReason.length < 2 || changeReason.length > 300) {
+      throw new BadRequestException('修改原因不能为空且不超过 300 个字符')
+    }
+    const before = await this.getAiKnowledgeUsagePolicySettings()
+    const after = normalizeKnowledgeUsagePolicySettings({
+      agentInjectEnabled: body.agentInjectEnabled,
+      allowAttachmentKnowledgeInjection: body.allowAttachmentKnowledgeInjection,
+      auditCandidateHits: body.auditCandidateHits,
+      directAnswerEnabled: body.directAnswerEnabled,
+      directThresholdOverride: body.directThresholdOverride,
+      directTopKOverride: body.directTopKOverride,
+      injectThresholdOverride: body.injectThresholdOverride,
+      injectTopKOverride: body.injectTopKOverride,
+      knowledgeUsageStrength: body.knowledgeUsageStrength,
+      requireSourceBadge: body.requireSourceBadge,
+      retrievalEnabled: body.retrievalEnabled,
+    })
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        create: {
+          description: 'AI 知识库使用强度与受控路由策略',
+          key: AI_KNOWLEDGE_USAGE_POLICY_KEY,
+          updatedById: user.id,
+          value: after as unknown as import('@prisma/client').Prisma.InputJsonValue,
+        },
+        update: {
+          updatedById: user.id,
+          value: after as unknown as import('@prisma/client').Prisma.InputJsonValue,
+        },
+        where: { key: AI_KNOWLEDGE_USAGE_POLICY_KEY },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            after,
+            before,
+            changeReason,
+            key: AI_KNOWLEDGE_USAGE_POLICY_KEY,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return after
+  }
+
   async updatePlatformSettings(
     body: Partial<PlatformSettings>,
     user: AuthenticatedRequestUser,
@@ -833,6 +899,54 @@ function validateTokenLimit(value: unknown) {
   }
 
   return numberValue
+}
+
+function normalizeKnowledgeUsagePolicySettings(value: Record<string, unknown>): AiKnowledgeUsagePolicySettings {
+  return {
+    agentInjectEnabled: booleanOrDefault(value.agentInjectEnabled, true),
+    allowAttachmentKnowledgeInjection: booleanOrDefault(value.allowAttachmentKnowledgeInjection, false),
+    auditCandidateHits: booleanOrDefault(value.auditCandidateHits, true),
+    directAnswerEnabled: booleanOrDefault(value.directAnswerEnabled, true),
+    directThresholdOverride: optionalNumber(value.directThresholdOverride, 0.8, 0.98),
+    directTopKOverride: optionalInt(value.directTopKOverride, 0, 2),
+    injectThresholdOverride: optionalNumber(value.injectThresholdOverride, 0.65, 0.95),
+    injectTopKOverride: optionalInt(value.injectTopKOverride, 0, 5),
+    knowledgeUsageStrength: intOrDefault(value.knowledgeUsageStrength, 5, 1, 10),
+    requireSourceBadge: booleanOrDefault(value.requireSourceBadge, true),
+    retrievalEnabled: booleanOrDefault(value.retrievalEnabled, true),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function booleanOrDefault(value: unknown, fallback: boolean) {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function intOrDefault(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function optionalInt(value: unknown, min: number, max: number) {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new BadRequestException(`整数配置必须在 ${min} 到 ${max} 之间`)
+  }
+  return parsed
+}
+
+function optionalNumber(value: unknown, min: number, max: number) {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new BadRequestException(`阈值配置必须在 ${min} 到 ${max} 之间`)
+  }
+  return Number(parsed.toFixed(3))
 }
 
 function validateQuotaPeriod(value: unknown): AiQuotaSettings['quotaPeriod'] {

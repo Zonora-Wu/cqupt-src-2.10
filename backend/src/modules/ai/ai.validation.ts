@@ -15,6 +15,15 @@ export function normalizeAiChatBody(body: AiChatBody): NormalizedAiChatInput {
   }
 }
 
+export function normalizeAiRoutePreviewBody(body: Record<string, unknown>) {
+  return {
+    context: normalizeContext(body.context),
+    knowledgeUsageStrength: normalizeOptionalStrength(body.knowledgeUsageStrength),
+    message: requireText(body.message, '测试问题', 1, 6000),
+    mode: normalizeMode(body.mode),
+  }
+}
+
 function requireText(value: unknown, label: string, minLength: number, maxLength: number) {
   if (typeof value !== 'string') {
     throw new BadRequestException(`${label}格式不正确`)
@@ -74,4 +83,13 @@ function normalizeOptionalId(value: unknown, label: string) {
     throw new BadRequestException(`${label}格式不正确`)
   }
   return id
+}
+
+function normalizeOptionalStrength(value: unknown) {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+    throw new BadRequestException('知识库使用强度必须是 1 到 10 的整数')
+  }
+  return parsed
 }

@@ -2288,7 +2288,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `20/20`，覆盖 KB-01 到 KB-08、KB-06A 语义问题族聚类、KB-08A 数据使用路由，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwiy7tz_43fb1b.json`。本轮后端 `npm run build`、`npm run test:ai-problem-session` 和 `git diff --check` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `22/22`，覆盖 KB-01 到 KB-09、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpwk66wl_2097be.json`。本轮后端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2302,8 +2302,8 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-07 | 高频高质自动入库 | 已完成 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED`；旧单轮 capture/conversation 链路不再由 `/api/ai/chat` 触发 | E2E：构造 3 个已解决会话 + 5 次询问信号后自动入库；低质量或安全风险时不入库；单次聊天只写 `AiProblemSessionTurn`，不创建知识条目、capture job 或 legacy knowledge conversation |
 | KB-08 | Knowledge Retrieval | 已完成 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent；响应返回 `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds`，并把实际参与回复的 `AiKnowledgeHit.usedInResponse` 标记为 true | E2E：“我多少积分”不被 KB 抢答；高置信相似安全问答返回 `usedKnowledge=true` 和来源；中置信注入 Agent 后来源和 hit 仍被记录 |
 | KB-08A | 数据使用路由 | 已完成 | 后端显式区分 `DIRECT_RESOURCE_RESPONSE`、`KNOWLEDGE_DIRECT_ANSWER`、`KNOWLEDGE_INJECTED_AGENT`、`AGENT_DATA_REQUEST`、`NORMAL_AGENT`、`ACTION_PROPOSAL`，响应和审计日志写入 `dataRoute` | E2E：积分实时查询走 `DIRECT_RESOURCE_RESPONSE` 且阻断知识库抢答；写操作走 `ACTION_PROPOSAL`、不调用模型、不返回可执行 action，并要求二次确认 |
-| KB-08B | 管理员知识库使用强度 | 待代码确认 | 管理员可设置 1-10 档 `knowledgeUsageStrength`，后端解析为直答/注入阈值、topK、来源展示和审计策略；档位不得绕过权限、实时数据、附件、写操作和维护状态硬边界 | route preview 能展示不同档位的 route、threshold、selectedKnowledgeIds、blockedRoutes；E2E 覆盖档位 2/7/10 下直答、注入、实时数据压制、附件阻断、写操作阻断和配置变更审计 |
-| KB-09 | 角色与权限过滤 | 待代码确认 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | student 不能命中 auditor/admin 知识；auditor 不能看到 admin scoped 知识；管理员预览有审计记录 |
+| KB-08B | 管理员知识库使用强度 | 已完成 | 管理员可设置 1-10 档 `knowledgeUsageStrength`，后端解析为直答/注入阈值、topK、来源展示和审计策略；档位不得绕过权限、实时数据、附件、写操作和维护状态硬边界 | E2E：route preview 展示 strength 2/7/10 下的 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds、blockedRoutes；实时数据和写操作在 10 档仍压制 KB；配置变更写 AuditLog |
+| KB-09 | 角色与权限过滤 | 已完成 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | E2E：student 只能命中 STUDENT/ALL 知识，不能命中 AUDITOR/ADMIN；auditor 不能命中 ADMIN/STUDENT；PRIVATE/SENSITIVE/REJECTED 均被过滤；管理员 route preview 写 `AI_KNOWLEDGE_ROUTE_PREVIEW` 审计记录 |
 | KB-10 | 来源标注与反馈 | 待代码确认 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | 使用 KB 的回复必须有 `knowledgeSources` 和 `knowledgeHitIds`；反馈写入 turn、hit 和知识反馈汇总 |
 | KB-11 | maintenanceStatus + retrievalPolicy | 待代码确认 | 知识条目有维护状态和 direct/inject/retrieval 行为开关 | `STALE_REVIEW`、`SECURITY_SUSPENDED`、`ARCHIVED` 普通用户不可命中；`LOW_QUALITY_REVIEW` 不直接回答 |
 | KB-12 | AiKnowledgeMaintenanceWorker | 待代码确认 | Worker 计算质量分、新鲜度、反馈趋势、重复风险，生成维护任务或暂停风险知识 | 重复运行不产生重复 OPEN task；安全举报后自动 `SECURITY_SUSPENDED` 且 retrieval disabled |
@@ -2367,9 +2367,10 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 写操作只生成 proposal，要求用户二次确认，不直接返回可执行 action。
 - [x] 高置信知识命中直接回答。
 - [x] 中置信知识命中注入 Agent。
-- [ ] 管理员 1-10 档知识库使用强度会解析成受控阈值、topK、来源展示和审计策略，而不是直接传给模型。
-- [ ] 档位为 10 时仍不能绕过实时数据优先、附件阻断、写操作 proposal、权限过滤和维护状态过滤。
-- [ ] 管理端 route preview 能展示 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds 和 blockedRoutes。
+- [x] 管理员 1-10 档知识库使用强度会解析成受控阈值、topK、来源展示和审计策略，而不是直接传给模型。
+- [x] 档位为 10 时仍不能绕过实时数据优先、附件阻断、写操作 proposal、权限过滤和维护状态过滤。
+- [x] 管理端 route preview 能展示 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds 和 blockedRoutes。
+- [x] 检索前按 roleScope、visibility、sensitivity、status 过滤，学生/审核员/管理员知识隔离和 route preview 审计已由 E2E 覆盖。
 - [x] 命中写入 `AiKnowledgeHit`。
 - [x] 响应返回 `usedKnowledge` 和 `knowledgeSources`。
 - [ ] 前端在 AI 回复框底部显示平台知识库来源。

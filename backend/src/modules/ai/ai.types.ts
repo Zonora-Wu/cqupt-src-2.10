@@ -300,6 +300,33 @@ export type AiDataRouteDecision = {
   blockedRoutes: Array<{ route: AiDataUsageRoute; reason: string }>
   selectedKnowledgeIds?: string[]
   candidateKnowledgeIds?: string[]
+  knowledgeUsagePolicy?: {
+    strength: number
+    directThreshold: number | null
+    injectThreshold: number | null
+    directTopK: number
+    injectTopK: number
+    retrievalEnabled: boolean
+    directAnswerEnabled: boolean
+    agentInjectEnabled: boolean
+    requireSourceBadge: boolean
+    auditCandidateHits: boolean
+  }
+}
+
+export type AiKnowledgeUsagePolicy = {
+  strength: number
+  retrievalEnabled: boolean
+  directAnswerEnabled: boolean
+  agentInjectEnabled: boolean
+  directThreshold: number
+  injectThreshold: number
+  directTopK: number
+  injectTopK: number
+  allowAttachmentKnowledgeInjection: boolean
+  requireSourceBadge: boolean
+  auditCandidateHits: boolean
+  resolvedFrom: 'DEFAULT' | 'ADMIN_GLOBAL'
 }
 
 export type AiQuotaSummary = {

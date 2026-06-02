@@ -41,6 +41,7 @@ export type AiKnowledgeRetrievalInput = {
   aiSpace: AiSpace
   limit?: number
   question: string
+  recordHits?: boolean
   userId?: string
 }
 

@@ -30,12 +30,14 @@ const state = {
   duplicateKnowledgeId: null,
   lifecycleSessionId: null,
   legacySensitiveConversationId: null,
+  originalKnowledgeUsagePolicy: null,
   otherStudentCode: String(Math.floor(1000000 + Math.random() * 8999999)),
   otherStudentId: null,
   otherStudentToken: null,
   realtimeSessionId: null,
   sensitiveKnowledgeId: null,
   sensitiveSessionId: null,
+  scopedKnowledgeIds: [],
   studentCode: String(Math.floor(1000000 + Math.random() * 8999999)),
   studentId: null,
   studentToken: null,
@@ -58,6 +60,7 @@ async function main() {
     state.otherStudentToken = (await login({ password: 'E2e123456+-', unifiedCode: state.otherStudentCode })).accessToken
     state.adminToken = (await login(accounts.admin)).accessToken
     assert(state.studentToken && state.otherStudentToken && state.adminToken, 'student, other student and admin tokens should exist')
+    state.originalKnowledgeUsagePolicy = await request('/system-settings/ai-knowledge-usage', { token: state.adminToken })
   })
 
   await step('KB-01 validates problem session lifecycle and ownership', async () => {
@@ -658,6 +661,18 @@ async function main() {
 
   await step('KB-08 reuses approved knowledge with source and used hit record', async () => {
     assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 retrieval test')
+    await request('/system-settings/ai-knowledge-usage', {
+      body: {
+        agentInjectEnabled: true,
+        auditCandidateHits: true,
+        changeReason: `${marker} enable KB direct route for KB-08`,
+        directAnswerEnabled: true,
+        knowledgeUsageStrength: 7,
+        retrievalEnabled: true,
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
     const session = await request('/ai/problem-sessions', {
       body: { initialQuestion: `${marker} 知识库复用测试`, mode: 'student' },
       method: 'POST',
@@ -693,8 +708,162 @@ async function main() {
     })
   })
 
+  await step('KB-08B applies knowledge usage strength and route preview hard boundaries', async () => {
+    assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08B route preview test')
+    const lowStrength = await request('/ai/knowledge/route-preview', {
+      body: {
+        knowledgeUsageStrength: 2,
+        message: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
+        mode: 'student',
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(lowStrength.knowledgeUsageStrength === 2, 'route preview should use temporary strength 2')
+    assert(lowStrength.route !== 'KNOWLEDGE_DIRECT_ANSWER', 'strength 2 should not direct answer even with a strong candidate')
+    assert(lowStrength.thresholds.directThreshold === null, 'strength 2 should disable direct threshold')
+    assert(lowStrength.candidateKnowledgeIds?.includes(state.approvedKnowledgeId), 'route preview should show candidate KB id')
+
+    const highStrength = await request('/ai/knowledge/route-preview', {
+      body: {
+        knowledgeUsageStrength: 7,
+        message: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
+        mode: 'student',
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(highStrength.route === 'KNOWLEDGE_DIRECT_ANSWER', 'strength 7 should allow high-confidence direct answer')
+    assert(highStrength.thresholds.directThreshold === 0.86, 'strength 7 should resolve documented direct threshold')
+    assert(highStrength.selectedKnowledgeIds?.includes(state.approvedKnowledgeId), 'route preview should show selected KB id')
+
+    const realtime = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: '我的积分可以兑换什么？', mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(realtime.route === 'DIRECT_RESOURCE_RESPONSE', 'strength 10 must not override realtime data route')
+    assert(realtime.blockedRoutes?.some((item) => item.route === 'KNOWLEDGE_DIRECT_ANSWER' && item.reason.includes('实时')), 'realtime preview should explain KB direct answer is blocked')
+
+    const writeIntent = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: '帮我兑换积分商城第一个商品', mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(writeIntent.route === 'ACTION_PROPOSAL', 'strength 10 must not override write operation proposal route')
+    assert(writeIntent.blockedRoutes?.some((item) => item.route === 'NORMAL_AGENT'), 'write preview should block normal agent execution')
+
+    const settingAuditCountBefore = await prisma.auditLog.count({ where: { targetType: 'SystemSetting' } })
+    const updated = await request('/system-settings/ai-knowledge-usage', {
+      body: {
+        agentInjectEnabled: true,
+        auditCandidateHits: true,
+        changeReason: `${marker} set KB usage strength 7`,
+        directAnswerEnabled: true,
+        knowledgeUsageStrength: 7,
+        retrievalEnabled: true,
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(updated.knowledgeUsageStrength === 7, 'system setting should persist knowledge usage strength')
+    const settingAuditCountAfter = await prisma.auditLog.count({ where: { targetType: 'SystemSetting' } })
+    assert(settingAuditCountAfter > settingAuditCountBefore, 'system setting update should write audit log')
+  })
+
+  await step('KB-09 filters knowledge by role scope, visibility, sensitivity and status before preview', async () => {
+    const question = `${marker} KB09 角色隔离靶场口径怎么处理？`
+    const makeEntry = async ({ roleScope, title, visibility = 'ROLE_ONLY', sensitivity = 'INTERNAL', status = 'APPROVED' }) => prisma.aiKnowledgeEntry.create({
+      data: {
+        answerQualityScore: 0.9,
+        canonicalAnswer: [
+          `${title}：处理 KB09 角色隔离靶场口径时，先确认当前 aiSpace 和角色范围。`,
+          '然后只引用当前角色可见的知识，不能把审核员或管理员内部口径暴露给学生。',
+          '如果知识处于私有、待审核、拒绝、归档或敏感状态，应在检索前过滤掉。',
+        ].join('\n'),
+        canonicalQuestion: question,
+        category: 'SRC_RULES',
+        confidenceScore: 0.9,
+        educationalValueScore: 0.85,
+        generalityScore: 0.85,
+        platformRelevanceScore: 0.9,
+        privacyRiskScore: 0,
+        reuseValueScore: 0.85,
+        reviewedById: state.studentId,
+        roleScope,
+        safetyScore: 0.95,
+        sensitivity,
+        source: 'ADMIN_CREATED',
+        sourceHash: `${runId}:kb09:${roleScope}:${visibility}:${sensitivity}:${status}:${randomBytes(3).toString('hex')}`,
+        status,
+        tags: ['kb09', 'role-filter'],
+        title,
+        visibility,
+      },
+    })
+    const entries = await Promise.all([
+      makeEntry({ roleScope: 'STUDENT', title: `${marker} KB09 student scoped` }),
+      makeEntry({ roleScope: 'AUDITOR', title: `${marker} KB09 auditor scoped` }),
+      makeEntry({ roleScope: 'ADMIN', title: `${marker} KB09 admin scoped` }),
+      makeEntry({ roleScope: 'ALL', title: `${marker} KB09 all scoped`, visibility: 'PLATFORM_PUBLIC' }),
+      makeEntry({ roleScope: 'STUDENT', title: `${marker} KB09 private student`, visibility: 'PRIVATE' }),
+      makeEntry({ roleScope: 'STUDENT', title: `${marker} KB09 sensitive student`, sensitivity: 'SENSITIVE' }),
+      makeEntry({ roleScope: 'STUDENT', title: `${marker} KB09 rejected student`, status: 'REJECTED' }),
+    ])
+    state.scopedKnowledgeIds = entries.map((entry) => entry.id)
+    const byTitle = Object.fromEntries(entries.map((entry) => [entry.title, entry.id]))
+    const previewAuditBefore = await prisma.auditLog.count({ where: { targetType: 'AI_KNOWLEDGE_ROUTE_PREVIEW' } })
+
+    const studentPreview = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: question, mode: 'student' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 student scoped`]), 'student preview should include student scoped knowledge')
+    assert(studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 all scoped`]), 'student preview should include ALL scoped public knowledge')
+    assert(!studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 auditor scoped`]), 'student preview must not include auditor scoped knowledge')
+    assert(!studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 admin scoped`]), 'student preview must not include admin scoped knowledge')
+    assert(!studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 private student`]), 'student preview must filter private knowledge')
+    assert(!studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 sensitive student`]), 'student preview must filter sensitive knowledge')
+    assert(!studentPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 rejected student`]), 'student preview must filter rejected knowledge')
+
+    const auditorPreview = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: question, mode: 'auditor' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(auditorPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 auditor scoped`]), 'auditor preview should include auditor scoped knowledge')
+    assert(auditorPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 all scoped`]), 'auditor preview should include ALL scoped public knowledge')
+    assert(!auditorPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 admin scoped`]), 'auditor preview must not include admin scoped knowledge')
+    assert(!auditorPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 student scoped`]), 'auditor preview must not include student scoped knowledge')
+
+    const adminPreview = await request('/ai/knowledge/route-preview', {
+      body: { knowledgeUsageStrength: 10, message: question, mode: 'admin' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(adminPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 admin scoped`]), 'admin preview should include admin scoped knowledge')
+    assert(adminPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 all scoped`]), 'admin preview should include ALL scoped public knowledge')
+    assert(!adminPreview.candidateKnowledgeIds.includes(byTitle[`${marker} KB09 auditor scoped`]), 'admin preview should not include auditor scoped knowledge unless ALL')
+
+    const previewAuditAfter = await prisma.auditLog.count({ where: { targetType: 'AI_KNOWLEDGE_ROUTE_PREVIEW' } })
+    assert(previewAuditAfter >= previewAuditBefore + 3, 'route preview should write audit records for admin previews')
+  })
+
   await step('KB-08 injects medium-confidence knowledge and keeps source record', async () => {
     assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 injected retrieval test')
+    await request('/system-settings/ai-knowledge-usage', {
+      body: {
+        agentInjectEnabled: true,
+        auditCandidateHits: true,
+        changeReason: `${marker} disable direct route for KB injected test`,
+        directAnswerEnabled: false,
+        knowledgeUsageStrength: 10,
+        retrievalEnabled: true,
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
     const session = await request('/ai/problem-sessions', {
       body: { initialQuestion: `${marker} 知识库注入测试`, mode: 'student' },
       method: 'POST',
@@ -702,7 +871,7 @@ async function main() {
     })
     const result = await request('/ai/chat', {
       body: {
-        message: 'Redis 连不上',
+        message: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
         mode: 'student',
         sessionId: session.id,
       },
@@ -901,6 +1070,16 @@ function printSummary() {
 }
 
 async function cleanupArtifacts() {
+  if (state.originalKnowledgeUsagePolicy && state.adminToken) {
+    await request('/system-settings/ai-knowledge-usage', {
+      body: {
+        ...state.originalKnowledgeUsagePolicy,
+        changeReason: `${marker} restore original KB usage policy after E2E`,
+      },
+      method: 'POST',
+      token: state.adminToken,
+    }).catch(() => {})
+  }
   if (state.sensitiveKnowledgeId) {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.sensitiveKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.sensitiveKnowledgeId } })
@@ -916,6 +1095,11 @@ async function cleanupArtifacts() {
   if (state.duplicateKnowledgeId) {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.duplicateKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.duplicateKnowledgeId } })
+  }
+  if (state.scopedKnowledgeIds.length) {
+    await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: state.scopedKnowledgeIds } } })
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: state.scopedKnowledgeIds } } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: state.scopedKnowledgeIds } } })
   }
   if (state.legacySensitiveConversationId) {
     const knowledge = await prisma.aiKnowledgeEntry.findMany({ select: { id: true }, where: { sourceConversationId: state.legacySensitiveConversationId } })

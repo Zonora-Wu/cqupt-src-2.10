@@ -1,0 +1,15 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T11:14:11.175Z",
+  "marker": "[phase2_mpwji9mg_c21217]",
+  "runId": "phase2_mpwji9mg_c21217",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 44,
+      "label": "prepare accounts",
+      "message": "\nInvalid `prisma.role.findUnique()` invocation:\n\n\nCan't reach database server at `127.0.0.1:15432`\n\nPlease make sure your database server is running at `127.0.0.1:15432`.",
+      "ok": false
+    }
+  ]
+}

@@ -185,6 +185,52 @@ export class SystemSettingsController {
     )
   }
 
+  @Get('ai-knowledge-usage')
+  @RequirePermissions('system:manage')
+  getAiKnowledgeUsagePolicySettings() {
+    return this.settings.getAiKnowledgeUsagePolicySettings()
+  }
+
+  @Post('ai-knowledge-usage')
+  @RequirePermissions('system:manage')
+  updateAiKnowledgeUsagePolicySettings(
+    @Body() body: {
+      agentInjectEnabled?: unknown
+      allowAttachmentKnowledgeInjection?: unknown
+      auditCandidateHits?: unknown
+      changeReason?: unknown
+      directAnswerEnabled?: unknown
+      directThresholdOverride?: unknown
+      directTopKOverride?: unknown
+      injectThresholdOverride?: unknown
+      injectTopKOverride?: unknown
+      knowledgeUsageStrength?: unknown
+      requireSourceBadge?: unknown
+      retrievalEnabled?: unknown
+    },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.updateAiKnowledgeUsagePolicySettings(
+      {
+        agentInjectEnabled: body.agentInjectEnabled as boolean,
+        allowAttachmentKnowledgeInjection: body.allowAttachmentKnowledgeInjection as boolean,
+        auditCandidateHits: body.auditCandidateHits as boolean,
+        changeReason: body.changeReason as string,
+        directAnswerEnabled: body.directAnswerEnabled as boolean,
+        directThresholdOverride: body.directThresholdOverride as number,
+        directTopKOverride: body.directTopKOverride as number,
+        injectThresholdOverride: body.injectThresholdOverride as number,
+        injectTopKOverride: body.injectTopKOverride as number,
+        knowledgeUsageStrength: body.knowledgeUsageStrength as number,
+        requireSourceBadge: body.requireSourceBadge as boolean,
+        retrievalEnabled: body.retrievalEnabled as boolean,
+      },
+      user,
+      getRequestMeta(req),
+    )
+  }
+
   @Post('platform')
   @RequirePermissions('system:manage')
   updatePlatformSettings(

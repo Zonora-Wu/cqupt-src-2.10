@@ -14,6 +14,7 @@ import {
   AiChatResponse,
   AiDataRouteDecision,
   AiDataUsageRoute,
+  AiKnowledgeUsagePolicy,
   AiPendingAction,
   AiSkillLibraryItem,
   AiToolCall,
@@ -38,6 +39,7 @@ const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
 const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
+const AI_KNOWLEDGE_USAGE_POLICY_KEY = 'ai_knowledge_usage_policy'
 type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 const FALLBACK_SKILLS: AiSkillLibraryItem[] = [
@@ -140,6 +142,7 @@ export class AiService {
 
     const safeMessage = redactSensitiveText(input.message)
     const skillRoute = this.skillRouter.route({ ...input, message: safeMessage }, user)
+    const knowledgePolicy = await this.getKnowledgeUsagePolicy()
 
     const hasAttachmentContext = hasUserAttachmentContext(input.context)
     const contextDomains = selectContextDomains({
@@ -157,6 +160,7 @@ export class AiService {
       const dataRoute = routeAiDataUsage({
         allowedContextDomains: context.injectedDomains,
         hasAttachmentContext,
+        knowledgePolicy,
         message: safeMessage,
         route: 'ACTION_PROPOSAL',
       })
@@ -182,6 +186,7 @@ export class AiService {
             metadata: {
               contextDomains: context.injectedDomains,
               dataRoute,
+              knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(knowledgePolicy),
               mode: input.mode,
               promptLength: input.message.length,
               quotaRemainingBefore: quotaBefore.remaining,
@@ -223,6 +228,7 @@ export class AiService {
       const dataRoute = routeAiDataUsage({
         allowedContextDomains: context.injectedDomains,
         hasAttachmentContext,
+        knowledgePolicy,
         message: safeMessage,
         route: 'DIRECT_RESOURCE_RESPONSE',
       })
@@ -250,6 +256,7 @@ export class AiService {
               contextDomains: context.injectedDomains,
               dataRoute,
               directResponse: true,
+              knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(knowledgePolicy),
               mode: input.mode,
               promptLength: input.message.length,
               quotaRemainingBefore: quotaBefore.remaining,
@@ -294,27 +301,33 @@ export class AiService {
 
     // 3. 查询已审核知识库。强业务数据已经由 Direct Response 拦截，知识库只处理通用安全方法论。
     const aiSpace = getAiSpace(input.mode)
-    const knowledgeHits = hasAttachmentContext
+    const retrievalLimit = Math.max(knowledgePolicy.directTopK, knowledgePolicy.injectTopK, 3)
+    const knowledgeHits = !knowledgePolicy.retrievalEnabled || (hasAttachmentContext && !knowledgePolicy.allowAttachmentKnowledgeInjection)
       ? []
       : await this.knowledge.retrieve({
           aiSpace,
+          limit: retrievalLimit,
           question: safeMessage,
+          recordHits: knowledgePolicy.auditCandidateHits,
           userId: user.id,
         })
     const topKnowledgeHit = knowledgeHits[0]
-    if (topKnowledgeHit && topKnowledgeHit.similarity >= 0.65 && shouldUseKnowledgeDirectResponse()) {
-      const knowledgeHitIds = getKnowledgeHitRecordIds([topKnowledgeHit])
-      const knowledgeSources = buildKnowledgeSources([topKnowledgeHit])
+    const directKnowledgeHits = selectKnowledgeHitsForRoute(knowledgeHits, 'KNOWLEDGE_DIRECT_ANSWER', knowledgePolicy)
+    if (directKnowledgeHits.length > 0 && shouldUseKnowledgeDirectResponse()) {
+      const directTopKnowledgeHit = directKnowledgeHits[0]
+      const knowledgeHitIds = getKnowledgeHitRecordIds(directKnowledgeHits)
+      const knowledgeSources = buildKnowledgeSources(directKnowledgeHits)
       const dataRoute = routeAiDataUsage({
         allowedContextDomains: context.injectedDomains,
         candidateKnowledgeIds: knowledgeHits.map((hit) => hit.id),
         hasAttachmentContext,
+        knowledgePolicy,
         message: safeMessage,
         route: 'KNOWLEDGE_DIRECT_ANSWER',
-        selectedKnowledgeIds: [topKnowledgeHit.id],
-        topKnowledgeSimilarity: topKnowledgeHit.similarity,
+        selectedKnowledgeIds: directKnowledgeHits.map((hit) => hit.id),
+        topKnowledgeSimilarity: directTopKnowledgeHit.similarity,
       })
-      const knowledgeContent = `${topKnowledgeHit.answer}\n\n（已引用知识库：${topKnowledgeHit.title}）`
+      const knowledgeContent = `${directTopKnowledgeHit.answer}\n\n（已引用知识库：${directTopKnowledgeHit.title}）`
       await this.prisma.$transaction(async (tx) => {
         if (knowledgeHitIds.length > 0) {
           await tx.aiKnowledgeHit.updateMany({
@@ -345,8 +358,9 @@ export class AiService {
               dataRoute,
               knowledgeDirect: true,
               knowledgeHitIds,
-              knowledgeHit: { id: topKnowledgeHit.id, similarity: topKnowledgeHit.similarity, title: topKnowledgeHit.title },
+              knowledgeHit: { id: directTopKnowledgeHit.id, similarity: directTopKnowledgeHit.similarity, title: directTopKnowledgeHit.title },
               knowledgeSources,
+              knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(knowledgePolicy),
               mode: input.mode,
               promptLength: input.message.length,
               quotaRemainingBefore: quotaBefore.remaining,
@@ -389,15 +403,16 @@ export class AiService {
       }
     }
 
-    const selectedKnowledgeHits = topKnowledgeHit ? knowledgeHits : []
+    const selectedKnowledgeHits = selectKnowledgeHitsForRoute(knowledgeHits, 'KNOWLEDGE_INJECTED_AGENT', knowledgePolicy)
     const knowledgeHitIds = getKnowledgeHitRecordIds(selectedKnowledgeHits)
     const knowledgeSources = buildKnowledgeSources(selectedKnowledgeHits)
     const agentDataRoute = routeAiDataUsage({
       allowedContextDomains: context.injectedDomains,
       candidateKnowledgeIds: knowledgeHits.map((hit) => hit.id),
       hasAttachmentContext,
+      knowledgePolicy,
       message: safeMessage,
-      route: topKnowledgeHit ? 'KNOWLEDGE_INJECTED_AGENT' : shouldRouteAsAgentDataRequest(safeMessage, context.injectedDomains) ? 'AGENT_DATA_REQUEST' : 'NORMAL_AGENT',
+      route: selectedKnowledgeHits.length > 0 ? 'KNOWLEDGE_INJECTED_AGENT' : shouldRouteAsAgentDataRequest(safeMessage, context.injectedDomains) ? 'AGENT_DATA_REQUEST' : 'NORMAL_AGENT',
       selectedKnowledgeIds: selectedKnowledgeHits.map((hit) => hit.id),
       topKnowledgeSimilarity: topKnowledgeHit?.similarity,
     })
@@ -412,7 +427,7 @@ export class AiService {
     const promptContext = {
       platformRuntimeData: formatPlatformRuntimeDataForPrompt(context),
       ...(hasAttachmentContext ? compactAttachmentContextForAgent(input.context) : (input.context ?? {})),
-      ...(knowledgeHits.length > 0 ? { aiKnowledgeBase: formatKnowledgeHitsForPrompt(knowledgeHits) } : {}),
+      ...(selectedKnowledgeHits.length > 0 ? { aiKnowledgeBase: formatKnowledgeHitsForPrompt(selectedKnowledgeHits) } : {}),
     }
     const recentConversationTurns = await this.problemSessions.getRecentChatTurnsForPrompt(input.sessionId, user)
 
@@ -554,9 +569,10 @@ export class AiService {
           metadata: {
             contextDomains: context.injectedDomains,
             dataRoute: dataRequestsMade.length > 0 ? addPlatformToolResultSource(agentDataRoute) : agentDataRoute,
-            mode: input.mode,
             knowledgeHitIds,
             knowledgeSources,
+            knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(knowledgePolicy),
+            mode: input.mode,
             promptLength: input.message.length,
             quotaRemainingBefore: quotaBefore.remaining,
             redacted: safeMessage !== input.message,
@@ -612,6 +628,118 @@ export class AiService {
       ],
       usedKnowledge: knowledgeSources.length > 0,
     }
+  }
+
+  async routePreview(
+    input: {
+      context?: Record<string, unknown>
+      knowledgeUsageStrength?: number
+      message: string
+      mode: NormalizedAiChatInput['mode']
+    },
+    user: AuthenticatedRequestUser,
+    meta?: ClientRequestMeta,
+  ) {
+    const startedAt = Date.now()
+    if (!user.permissions.includes('ai:manage_skills')) {
+      this.assertCanUseMode(input.mode, user)
+    }
+    const safeMessage = redactSensitiveText(input.message)
+    const storedPolicy = await this.getKnowledgeUsagePolicy()
+    const knowledgePolicy = input.knowledgeUsageStrength
+      ? resolveKnowledgeUsagePolicy({ ...storedPolicy, strength: input.knowledgeUsageStrength })
+      : storedPolicy
+    const hasAttachmentContext = hasUserAttachmentContext(input.context)
+    const contextDomains = selectContextDomains({
+      forceFullContext: shouldUseDirectResourceResponse(),
+      hasAttachmentContext,
+      input: { context: input.context, message: safeMessage, mode: input.mode },
+      role: user.role,
+    })
+    const context = await this.toolsService.buildUserContext(user, { domains: contextDomains })
+    const directResponse = isWriteIntent(safeMessage)
+      ? null
+      : buildDirectResourceResponse({ context: input.context, message: safeMessage, mode: input.mode }, context)
+    const aiSpace = getAiSpace(input.mode)
+    const knowledgeHits = !knowledgePolicy.retrievalEnabled || (hasAttachmentContext && !knowledgePolicy.allowAttachmentKnowledgeInjection)
+      ? []
+      : await this.knowledge.retrieve({
+          aiSpace,
+          limit: Math.max(knowledgePolicy.directTopK, knowledgePolicy.injectTopK, 3),
+          question: safeMessage,
+          recordHits: false,
+          userId: user.id,
+        })
+    const topKnowledgeHit = knowledgeHits[0]
+
+    let route: AiDataUsageRoute
+    let selectedKnowledgeHits: typeof knowledgeHits = []
+    if (isWriteIntent(safeMessage)) {
+      route = 'ACTION_PROPOSAL'
+    } else if (directResponse) {
+      route = 'DIRECT_RESOURCE_RESPONSE'
+    } else {
+      selectedKnowledgeHits = selectKnowledgeHitsForRoute(knowledgeHits, 'KNOWLEDGE_DIRECT_ANSWER', knowledgePolicy)
+      if (selectedKnowledgeHits.length > 0 && shouldUseKnowledgeDirectResponse()) {
+        route = 'KNOWLEDGE_DIRECT_ANSWER'
+      } else {
+        selectedKnowledgeHits = selectKnowledgeHitsForRoute(knowledgeHits, 'KNOWLEDGE_INJECTED_AGENT', knowledgePolicy)
+        route = selectedKnowledgeHits.length > 0 ? 'KNOWLEDGE_INJECTED_AGENT' : shouldRouteAsAgentDataRequest(safeMessage, context.injectedDomains) ? 'AGENT_DATA_REQUEST' : 'NORMAL_AGENT'
+      }
+    }
+
+    const dataRoute = routeAiDataUsage({
+      allowedContextDomains: context.injectedDomains,
+      candidateKnowledgeIds: knowledgeHits.map((hit) => hit.id),
+      hasAttachmentContext,
+      knowledgePolicy,
+      message: safeMessage,
+      route,
+      selectedKnowledgeIds: selectedKnowledgeHits.map((hit) => hit.id),
+      topKnowledgeSimilarity: topKnowledgeHit?.similarity,
+    })
+
+    const preview = {
+      blockedRoutes: dataRoute.blockedRoutes,
+      candidateKnowledgeIds: dataRoute.candidateKnowledgeIds ?? [],
+      knowledgeUsageStrength: knowledgePolicy.strength,
+      latencyMs: Date.now() - startedAt,
+      reasonCode: dataRoute.reasonCode,
+      route: dataRoute.route,
+      selectedKnowledgeIds: dataRoute.selectedKnowledgeIds ?? [],
+      sourcesPreview: buildKnowledgeSources(selectedKnowledgeHits),
+      thresholds: {
+        directThreshold: knowledgePolicy.directAnswerEnabled ? knowledgePolicy.directThreshold : null,
+        injectThreshold: knowledgePolicy.agentInjectEnabled ? knowledgePolicy.injectThreshold : null,
+      },
+      topKnowledgeSimilarity: topKnowledgeHit ? Number(topKnowledgeHit.similarity.toFixed(3)) : null,
+    }
+
+    if (meta) {
+      await this.prisma.auditLog.create({
+        data: {
+          action: AuditAction.CALL_AI,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            dataRoute,
+            knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(knowledgePolicy),
+            mode: input.mode,
+            preview: true,
+            promptLength: input.message.length,
+            redacted: safeMessage !== input.message,
+            routePreview: preview,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: user.id,
+          targetType: 'AI_KNOWLEDGE_ROUTE_PREVIEW',
+          userAgent: meta.userAgent,
+        },
+      })
+    }
+
+    return preview
   }
 
   // ════════════════════════════════════════════════════════════
@@ -676,6 +804,11 @@ export class AiService {
       defaultWeeklyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
       quotaPeriod: normalizeQuotaPeriod(map[AI_QUOTA_PERIOD_KEY]),
     }
+  }
+
+  private async getKnowledgeUsagePolicy(): Promise<AiKnowledgeUsagePolicy> {
+    const row = await this.prisma.systemSetting.findUnique({ where: { key: AI_KNOWLEDGE_USAGE_POLICY_KEY } })
+    return resolveKnowledgeUsagePolicy(isRecord(row?.value) ? row.value : undefined)
   }
 
   private assertCanUseMode(mode: NormalizedAiChatInput['mode'], user: AuthenticatedRequestUser) {
@@ -797,6 +930,35 @@ function buildKnowledgeSources(hits: Array<{ category: string; id: string; simil
     sourceType: 'PLATFORM_KB' as const,
     title: hit.title,
   }))
+}
+
+function selectKnowledgeHitsForRoute<T extends { similarity: number }>(
+  hits: T[],
+  route: Extract<AiDataUsageRoute, 'KNOWLEDGE_DIRECT_ANSWER' | 'KNOWLEDGE_INJECTED_AGENT'>,
+  policy: AiKnowledgeUsagePolicy,
+) {
+  if (!policy.retrievalEnabled) return []
+  if (route === 'KNOWLEDGE_DIRECT_ANSWER') {
+    if (!policy.directAnswerEnabled || policy.directTopK <= 0) return []
+    return hits.filter((hit) => hit.similarity >= policy.directThreshold).slice(0, policy.directTopK)
+  }
+  if (!policy.agentInjectEnabled || policy.injectTopK <= 0) return []
+  return hits.filter((hit) => hit.similarity >= policy.injectThreshold).slice(0, policy.injectTopK)
+}
+
+function serializeKnowledgeUsagePolicy(policy: AiKnowledgeUsagePolicy) {
+  return {
+    agentInjectEnabled: policy.agentInjectEnabled,
+    auditCandidateHits: policy.auditCandidateHits,
+    directAnswerEnabled: policy.directAnswerEnabled,
+    directThreshold: policy.directAnswerEnabled ? policy.directThreshold : null,
+    directTopK: policy.directTopK,
+    injectThreshold: policy.agentInjectEnabled ? policy.injectThreshold : null,
+    injectTopK: policy.injectTopK,
+    requireSourceBadge: policy.requireSourceBadge,
+    retrievalEnabled: policy.retrievalEnabled,
+    strength: policy.strength,
+  }
 }
 
 function getKnowledgeHitRecordIds(hits: Array<{ hitId?: string }>) {
@@ -1067,6 +1229,67 @@ function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
   return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }
 
+const KNOWLEDGE_USAGE_PRESETS: Record<number, {
+  directThreshold: number | null
+  injectThreshold: number | null
+  directTopK: number
+  injectTopK: number
+}> = {
+  1: { directThreshold: null, injectThreshold: null, directTopK: 0, injectTopK: 0 },
+  2: { directThreshold: null, injectThreshold: 0.9, directTopK: 0, injectTopK: 1 },
+  3: { directThreshold: null, injectThreshold: 0.86, directTopK: 0, injectTopK: 1 },
+  4: { directThreshold: null, injectThreshold: 0.82, directTopK: 0, injectTopK: 2 },
+  5: { directThreshold: 0.92, injectThreshold: 0.78, directTopK: 1, injectTopK: 2 },
+  6: { directThreshold: 0.89, injectThreshold: 0.75, directTopK: 1, injectTopK: 3 },
+  7: { directThreshold: 0.86, injectThreshold: 0.72, directTopK: 1, injectTopK: 3 },
+  8: { directThreshold: 0.84, injectThreshold: 0.7, directTopK: 1, injectTopK: 4 },
+  9: { directThreshold: 0.82, injectThreshold: 0.68, directTopK: 2, injectTopK: 4 },
+  10: { directThreshold: 0.8, injectThreshold: 0.65, directTopK: 2, injectTopK: 5 },
+}
+
+function resolveKnowledgeUsagePolicy(config?: Record<string, unknown>): AiKnowledgeUsagePolicy {
+  const strength = clampInt(config?.strength ?? config?.knowledgeUsageStrength, 5, 1, 10)
+  const preset = KNOWLEDGE_USAGE_PRESETS[strength] ?? KNOWLEDGE_USAGE_PRESETS[5]
+  const retrievalEnabled = typeof config?.retrievalEnabled === 'boolean' ? config.retrievalEnabled : true
+  const directAnswerEnabled = retrievalEnabled && (typeof config?.directAnswerEnabled === 'boolean' ? config.directAnswerEnabled : preset.directThreshold !== null)
+  const agentInjectEnabled = retrievalEnabled && (typeof config?.agentInjectEnabled === 'boolean' ? config.agentInjectEnabled : preset.injectThreshold !== null)
+  const directThreshold = clampNumber(config?.directThresholdOverride, preset.directThreshold ?? 0.98, 0.8, 0.98)
+  const injectThreshold = clampNumber(config?.injectThresholdOverride, preset.injectThreshold ?? 0.95, 0.65, 0.95)
+  const directTopK = directAnswerEnabled ? clampInt(config?.directTopKOverride, preset.directTopK, 0, 2) : 0
+  const injectTopK = agentInjectEnabled ? clampInt(config?.injectTopKOverride, preset.injectTopK, 0, 5) : 0
+
+  return {
+    agentInjectEnabled: agentInjectEnabled && injectTopK > 0,
+    allowAttachmentKnowledgeInjection: typeof config?.allowAttachmentKnowledgeInjection === 'boolean' ? config.allowAttachmentKnowledgeInjection : false,
+    auditCandidateHits: typeof config?.auditCandidateHits === 'boolean' ? config.auditCandidateHits : true,
+    directAnswerEnabled: directAnswerEnabled && directTopK > 0,
+    directThreshold,
+    directTopK,
+    injectThreshold,
+    injectTopK,
+    requireSourceBadge: typeof config?.requireSourceBadge === 'boolean' ? config.requireSourceBadge : true,
+    resolvedFrom: config ? 'ADMIN_GLOBAL' : 'DEFAULT',
+    retrievalEnabled,
+    strength,
+  }
+}
+
+function clampInt(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function formatScore(value: number | undefined) {
+  return Number.isFinite(value) ? (value as number).toFixed(2) : '无'
+}
+
 // ══════════════════════════════════════════════════════════════
 // 确定性资源响应 — 不依赖模型，避免超时/编造业务 ID
 // ══════════════════════════════════════════════════════════════
@@ -1103,6 +1326,7 @@ function routeAiDataUsage(input: {
   allowedContextDomains: UserContextDomain[]
   candidateKnowledgeIds?: string[]
   hasAttachmentContext: boolean
+  knowledgePolicy: AiKnowledgeUsagePolicy
   message: string
   route: AiDataUsageRoute
   selectedKnowledgeIds?: string[]
@@ -1135,7 +1359,20 @@ function routeAiDataUsage(input: {
   }
 
   if (input.route !== 'KNOWLEDGE_DIRECT_ANSWER' && candidateKnowledgeIds.length > 0) {
-    blockedRoutes.push({ route: 'KNOWLEDGE_DIRECT_ANSWER', reason: '知识命中置信度或策略未达到直答条件' })
+    blockedRoutes.push({
+      route: 'KNOWLEDGE_DIRECT_ANSWER',
+      reason: input.knowledgePolicy.directAnswerEnabled
+        ? `最高知识命中 ${formatScore(input.topKnowledgeSimilarity)} 低于直答阈值 ${input.knowledgePolicy.directThreshold.toFixed(2)} 或被硬规则压制`
+        : '当前知识库使用强度禁用知识库直答',
+    })
+  }
+  if (input.route !== 'KNOWLEDGE_INJECTED_AGENT' && input.route !== 'KNOWLEDGE_DIRECT_ANSWER' && candidateKnowledgeIds.length > 0) {
+    blockedRoutes.push({
+      route: 'KNOWLEDGE_INJECTED_AGENT',
+      reason: input.knowledgePolicy.agentInjectEnabled
+        ? `最高知识命中 ${formatScore(input.topKnowledgeSimilarity)} 低于注入阈值 ${input.knowledgePolicy.injectThreshold.toFixed(2)} 或被硬规则压制`
+        : '当前知识库使用强度禁用知识库注入',
+    })
   }
 
   const dataSources = buildRouteDataSources(input.route, input.hasAttachmentContext)
@@ -1145,6 +1382,7 @@ function routeAiDataUsage(input: {
     candidateKnowledgeIds,
     confidence: buildRouteConfidence(input.route, input.topKnowledgeSimilarity),
     dataSources,
+    knowledgeUsagePolicy: serializeKnowledgeUsagePolicy(input.knowledgePolicy),
     reasonCode: buildRouteReasonCode(input.route, input.hasAttachmentContext, realtime),
     requiresKnowledgeHit: input.route === 'KNOWLEDGE_DIRECT_ANSWER' || input.route === 'KNOWLEDGE_INJECTED_AGENT',
     requiresModelCall: input.route === 'KNOWLEDGE_INJECTED_AGENT' || input.route === 'AGENT_DATA_REQUEST' || input.route === 'NORMAL_AGENT',

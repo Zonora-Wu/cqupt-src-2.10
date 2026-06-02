@@ -11,7 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { CurrentUser } from '../auth/auth.decorators'
+import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { UploadedPdfFile } from '../attachments/attachment.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -19,7 +19,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { AiChatBody } from './ai.types'
 import { AiReportDraftService } from './ai.report-draft.service'
 import { AiService } from './ai.service'
-import { normalizeAiChatBody } from './ai.validation'
+import { normalizeAiChatBody, normalizeAiRoutePreviewBody } from './ai.validation'
 
 type RequestLike = {
   ip?: string
@@ -77,6 +77,16 @@ export class AiController {
   ) {
     const input = normalizeAiChatBody(body)
     return this.ai.chat(input, user, getRequestMeta(req))
+  }
+
+  @Post('knowledge/route-preview')
+  @RequirePermissions('ai:manage_skills')
+  routePreview(
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.ai.routePreview(normalizeAiRoutePreviewBody(body), user, getRequestMeta(req))
   }
 
   @Post('report-drafts')

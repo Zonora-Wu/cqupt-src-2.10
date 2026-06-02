@@ -29,7 +29,7 @@ API 文档目录。当前已完成健康检查、认证注册、账号中心、�
 | AI 问题会话 | 已实现：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`；目标态：title/archive/fork/turn feedback |
 | AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`GET /api/ai/knowledge/clusters`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback`、`POST /api/ai/knowledge/:id/merge` |
 | Skill Candidate | `GET /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates/:id/review`、`POST /api/ai/knowledge/skill-candidates/:id/install` |
-| 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
+| 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/ai-knowledge-usage`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
 
 > 说明：旧版 `POST /api/access/security-exam/submit` 仅记录分数；当前真实安全答题准入使用 `GET /api/security-exam/paper` 随机组卷和 `POST /api/security-exam/submit` 后端判分。
 
@@ -605,7 +605,33 @@ admin: ai:use_admin
 - 新版知识沉淀不依赖浏览器本地聊天历史。前端可以继续本地缓存最近消息用于显示恢复，但平台知识沉淀以后端 `AiProblemSession` 和脱敏 turns 为准。
 - 如果 `usedKnowledge=true`，前端必须在 AI 回复框底部展示“本回答参考了平台知识库”的来源标注。
 - 当前已实现的 `/api/ai/chat` 会返回 `sessionId`、`userTurnId`、`assistantTurnId` 和脱敏后的 turn 记录，用于问题会话沉淀。
-- `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds` 与 turn 级点赞/点踩持久化属于 Knowledge Retrieval / Feedback 目标态；前端不应把 knowledgeId 当作可信评分对象。
+- `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds` 已由 Knowledge Retrieval 返回；turn 级点赞/点踩持久化仍属 Feedback 目标态。前端不应把 knowledgeId 当作可信评分对象。
+
+管理员 route preview：
+
+```text
+POST /api/ai/knowledge/route-preview
+```
+
+权限要求：
+
+```text
+ai:manage_skills
+```
+
+请求示例：
+
+```json
+{
+  "mode": "student",
+  "message": "SQL 注入报告影响范围怎么写？",
+  "knowledgeUsageStrength": 7
+}
+```
+
+返回包含 `route`、`reasonCode`、`thresholds`、`candidateKnowledgeIds`、`selectedKnowledgeIds`、`blockedRoutes`、`topKnowledgeSimilarity` 和 `latencyMs`。该接口只读预览路由，不调用模型，也不写 `AiKnowledgeHit`，但会写 `AuditLog`，`targetType` 为 `AI_KNOWLEDGE_ROUTE_PREVIEW`。
+
+预览和正式检索都会在相似度排序前过滤 `roleScope`、`visibility`、`sensitivity` 和 `status`。例如 student mode 只能召回 `STUDENT` / `ALL` 范围且已审核、非敏感、可见的知识；auditor mode 不会召回 admin scoped 知识。
 
 ### AI 问题会话
 
@@ -1027,6 +1053,47 @@ Content-Disposition: inline
 ```
 
 ### AI 助手外观配置
+
+### AI 知识库使用强度配置
+
+管理员读取当前知识库路由策略：
+
+```text
+GET /api/system-settings/ai-knowledge-usage
+```
+
+管理员更新策略：
+
+```text
+POST /api/system-settings/ai-knowledge-usage
+```
+
+权限要求：
+
+```text
+system:manage
+```
+
+请求字段：
+
+```json
+{
+  "knowledgeUsageStrength": 7,
+  "retrievalEnabled": true,
+  "directAnswerEnabled": true,
+  "agentInjectEnabled": true,
+  "directThresholdOverride": 0.86,
+  "injectThresholdOverride": 0.72,
+  "directTopKOverride": 1,
+  "injectTopKOverride": 3,
+  "allowAttachmentKnowledgeInjection": false,
+  "requireSourceBadge": true,
+  "auditCandidateHits": true,
+  "changeReason": "知识库验收后调高复用强度"
+}
+```
+
+`changeReason` 必填并写入 `AuditLog`。强度和覆盖项只影响 KB 直答/注入阈值、topK、来源展示和候选命中审计，不会绕过实时数据优先、附件阻断、写操作提案、RBAC 和知识状态过滤。
 
 管理员读取当前 AI 助手外观：
 
