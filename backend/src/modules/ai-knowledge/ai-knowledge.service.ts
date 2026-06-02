@@ -50,7 +50,7 @@ const PROMPT_INJECTION_PATTERNS = [
   /忽略.*(规则|指令|系统)/,
   /ignore\s+(previous|all)\s+instructions/i,
   /system\s*prompt/i,
-  /开发者指令|系统提示词|越权|绕过.*(权限|规则)/i,
+  /开发者指令|系统提示词|绕过\s*(平台|系统|审核|权限|规则)|越权\s*(读取|查询|查看|操作|修改|删除)\s*(平台|系统|用户|管理员|数据库|数据)/i,
 ]
 const AI_KNOWLEDGE_AUTO_APPROVE_THRESHOLD = 0.88
 const AI_KNOWLEDGE_REVIEW_THRESHOLD = 0.62
@@ -1217,6 +1217,7 @@ function scoreKnowledgeHit(question: string, tokens: string[], entry: { title: s
 
 function redactSensitiveText(text: string) {
   return text
+    .replace(/https?:\/\/localhost\s*:\s*\[TARGET_HOST\]/gi, 'http://localhost')
     .replace(/(?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01][\s\S]*?(?=\n\n|$)/gi, '[PRIVATE_REQUEST]')
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi, '[PRIVATE_ATTACHMENT]')
     .replace(/authorization\s*:\s*[^\n\r]+/gi, 'Authorization: [REDACTED]')
@@ -1225,7 +1226,7 @@ function redactSensitiveText(text: string) {
     .replace(/(password|api[_-]?key|secret|client_secret|secret_key|private_key|token|access_token|refresh_token|session[_-]?id)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
     .replace(/postgres(?:ql)?:\/\/[^\s"'<>，。]+/gi, '[DATABASE_URL]')
     .replace(/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/gi, '[TARGET_URL]')
-    .replace(/host\s*:\s*[^\n\r]+/gi, 'Host: [TARGET_HOST]')
+    .replace(/(^|[\r\n])host\s*:\s*(?!localhost\b|127\.0\.0\.1\b|\[TARGET_HOST\])[^\n\r，。]+/gi, '$1Host: [TARGET_HOST]')
     .replace(/(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}/g, '[REDACTED_IP]')
     .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, (email) => maskEmail(email))
     .replace(/(?:\+?86[-\s]?)?1[3-9]\d{9}\b/g, (phone) => `${phone.slice(0, 3)}****${phone.slice(-4)}`)
@@ -1248,6 +1249,7 @@ function getRejectionReason(question: string, answer: string) {
 
 function normalizeTextForSafetyCheck(text: string) {
   return text
+    .replace(/https?:\/\/localhost\s*:\s*\[TARGET_HOST\]/gi, '')
     .replace(/authorization\s*:\s*\[REDACTED\]/gi, '')
     .replace(/(?:set-cookie|cookie)\s*:\s*\[REDACTED\]/gi, '')
     .replace(/bearer\s+\[REDACTED\]/gi, '')
