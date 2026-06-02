@@ -1017,6 +1017,11 @@ model AiProblemSession {
   mode               String
   title              String?
   topicKey           String?
+  canonicalKey       String?
+  canonicalProblemJson Json?
+  clusterDecision    String?
+  clusterDecisionScore Float?
+  clusterDecisionReason String?               @db.Text
   initialQuestion    String                 @db.Text
   status             AiProblemSessionStatus @default(ACTIVE)
   startedAt          DateTime               @default(now())
@@ -1040,6 +1045,7 @@ model AiProblemSession {
 
   @@index([userId, status, updatedAt])
   @@index([clusterId])
+  @@index([canonicalKey, status])
   @@index([topicKey, status])
   @@index([status, lastActiveAt])
 }
@@ -1048,10 +1054,14 @@ model AiKnowledgeCluster {
   id                       String             @id @default(cuid())
   aiSpace                  AiSpace
   topicKey                 String
+  canonicalKey             String?
+  canonicalProblemJson     Json?
   representativeProblem    String             @db.Text
   representativeResolution String?            @db.Text
   resolvedSessionCount     Int                @default(0)
   totalAskCount            Int                @default(0)
+  variantCount             Int                @default(0)
+  mergeReviewCount         Int                @default(0)
   avgQualityScore          Float              @default(0)
   avgReuseScore            Float              @default(0)
   avgSafetyScore           Float              @default(0)
@@ -1068,6 +1078,7 @@ model AiKnowledgeCluster {
   sessions                 AiProblemSession[]
 
   @@unique([aiSpace, topicKey])
+  @@index([aiSpace, canonicalKey])
   @@index([aiSpace, updatedAt])
   @@index([duplicateRiskScore])
 }

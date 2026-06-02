@@ -347,6 +347,63 @@ async function main() {
     assert(cluster?.duplicateRiskScore >= 0.72, 'cluster should retain duplicate risk')
   })
 
+  await step('KB-06A semantically clusters same problem and separates variants', async () => {
+    const answer = [
+      `${marker} 先确认浏览器代理指向 localhost 代理端口，并检查 Burp Proxy listener 已启动。`,
+      '再检查浏览器代理例外配置，访问本地测试页面确认请求进入 Burp history。',
+      '最后检查拦截开关和目标 scope，避免请求被过滤。',
+      '注意浏览器代理、Burp listener 和 scope 过滤这三个常见坑。',
+    ].join('\n')
+
+    const first = await createResolvedProblemSession({
+      answer,
+      question: `${marker} Burp Suite 启动后抓不到浏览器请求怎么排查？`,
+    })
+    const firstSummary = await request(`/ai/problem-sessions/${first.id}/summarize`, {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(firstSummary.clusterDecision === 'NEW_CLUSTER', 'first semantic problem should create a new cluster')
+    assert(firstSummary.canonicalKey?.includes('burp_suite'), 'summary should expose canonicalKey')
+    assert(firstSummary.canonicalProblemJson?.symptom === 'proxy_no_traffic', 'canonical problem should normalize symptom')
+
+    const second = await createResolvedProblemSession({
+      answer,
+      question: `${marker} Burp 配好代理但浏览器请求进不来怎么办？`,
+    })
+    const secondSummary = await request(`/ai/problem-sessions/${second.id}/summarize`, {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(secondSummary.clusterDecision === 'SAME_CLUSTER', 'different wording should be SAME_CLUSTER')
+    assert(secondSummary.clusterId === firstSummary.clusterId, 'semantic same problem should share cluster')
+
+    const sameCluster = await prisma.aiKnowledgeCluster.findUnique({ where: { id: firstSummary.clusterId } })
+    assert(sameCluster?.resolvedSessionCount === 2, 'SAME_CLUSTER should increment resolvedSessionCount')
+    assert(sameCluster?.canonicalKey?.includes('burp_suite'), 'cluster should persist canonicalKey')
+    assert(sameCluster?.canonicalProblemJson?.symptom === 'proxy_no_traffic', 'cluster should persist canonicalProblemJson')
+
+    const variant = await createResolvedProblemSession({
+      answer: [
+        `${marker} 先确认 Intercept is on，再检查请求是否进入 Proxy history。`,
+        '如果请求已经进入 history 但没有停住，检查目标 scope 和自动放行规则。',
+        '关闭临时放行规则后重新访问测试页面，确认请求可以停在 Intercept 标签页。',
+        '注意请求能进入 history 说明代理链路可用，问题通常在拦截开关或过滤规则。',
+      ].join('\n'),
+      question: `${marker} Burp history 有请求但没有停在 Intercept 怎么处理？`,
+    })
+    const variantSummary = await request(`/ai/problem-sessions/${variant.id}/summarize`, {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(variantSummary.clusterId === firstSummary.clusterId, 'same topic variant should attach to candidate cluster')
+    assert(variantSummary.clusterDecision === 'VARIANT_OF_CLUSTER' || variantSummary.clusterDecision === 'MERGE_REVIEW', 'variant should not be SAME_CLUSTER')
+
+    const afterVariant = await prisma.aiKnowledgeCluster.findUnique({ where: { id: firstSummary.clusterId } })
+    assert(afterVariant?.resolvedSessionCount === 2, 'variant should not increment resolvedSessionCount for auto approval')
+    assert((afterVariant?.variantCount ?? 0) + (afterVariant?.mergeReviewCount ?? 0) >= 1, 'variant or merge review count should be recorded')
+  })
+
   await step('KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve', async () => {
     const question = `${marker} Pikachu XSS 靶场提交 payload 后没有弹窗怎么排查？`
     const answer = [

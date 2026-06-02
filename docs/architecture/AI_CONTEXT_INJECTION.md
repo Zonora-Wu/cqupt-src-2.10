@@ -99,6 +99,7 @@ type AiDataRouteDecision = {
 - 卡片/action 的真实 ID 只能来自已注入上下文或 `platformToolResults`，不能相信模型生成的 ID。
 - 附件/PDF 场景默认走 `KNOWLEDGE_INJECTED_AGENT` 或 `NORMAL_AGENT` 的附件上下文变体，跳过 Direct Response 和知识库直接回答。
 - 知识库高置信直接回答必须返回 `usedKnowledge=true`、`knowledgeSources`，并写 `AiKnowledgeHit` 或同等审计记录。
+- 管理员可配置 `knowledgeUsageStrength = 1..10` 调整知识库参与度；该值只解析为直答/注入阈值、topK、来源展示和审计策略，不得绕过权限、实时数据优先、附件阻断、写操作确认和维护状态过滤。详细方案见 `docs/AI_KNOWLEDGE_BASE.md` 的“管理员知识库使用强度（1-10 档）”。
 - 每次路由决策都写审计：route、reasonCode、blockedRoutes、contextDomains、knowledgeHitIds、toolNames、latencyMs、tokensUsed。
 
 

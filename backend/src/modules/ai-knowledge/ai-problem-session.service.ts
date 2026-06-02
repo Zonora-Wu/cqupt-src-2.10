@@ -32,6 +32,9 @@ type ReviewProblemSessionInput = {
 
 type ProblemSessionSummary = {
   problem: string
+  canonicalKey?: string
+  canonicalProblemJson?: CanonicalProblem
+  clusterDecision?: ClusterDecisionEvidence
   environment: string[]
   successfulSteps: string[]
   failedAttempts: string[]
@@ -63,12 +66,46 @@ type ProblemSessionSummary = {
   mergeSuggestion?: string
 }
 
+type CanonicalProblem = {
+  domain: string
+  intent: string
+  entities: string[]
+  scenario: string
+  symptom: string
+  environment: string[]
+  expectedOutcome: string
+  roleScope: string
+  safetyClass: string
+  reusableType: string
+}
+
+type ClusterDecision = 'SAME_CLUSTER' | 'VARIANT_OF_CLUSTER' | 'MERGE_REVIEW' | 'NEW_CLUSTER' | 'REJECT'
+
+type ClusterDecisionEvidence = {
+  candidateClusterId?: string
+  conflicts: string[]
+  decision: ClusterDecision
+  reason: string
+  score: number
+}
+
+type ClusterCandidate = {
+  canonicalProblemJson: Prisma.JsonValue | null
+  id: string
+  representativeProblem: string
+  representativeResolution: string | null
+  topicKey: string
+}
+
 const CONTINUABLE_STATUSES = new Set<AiProblemSessionStatus>([
   AiProblemSessionStatus.ACTIVE,
   AiProblemSessionStatus.AWAITING_RESOLUTION,
 ])
 
 const DUPLICATE_REVIEW_THRESHOLD = 0.72
+const SAME_CLUSTER_THRESHOLD = 0.9
+const VARIANT_CLUSTER_THRESHOLD = 0.72
+const MERGE_REVIEW_THRESHOLD = 0.58
 const AUTO_APPROVAL_THRESHOLDS = {
   maxDuplicateRisk: 0.72,
   maxPrivacyRisk: 0.1,
@@ -102,7 +139,7 @@ export class AiProblemSessionService {
         initialQuestion,
         mode,
         title: buildProblemSessionTitle(initialQuestion),
-        topicKey: buildTopicKey(initialQuestion),
+        topicKey: buildSemanticTopicKey(buildCanonicalProblemFromText(initialQuestion, getAiSpace(mode))),
         userId: user.id,
       },
     })
@@ -229,13 +266,26 @@ export class AiProblemSessionService {
 
     const summary = await this.buildResolvedSessionSummary(session)
     validateProblemSessionSummary(summary)
-    const topicKey = buildTopicKey(summary.problem)
-    const cluster = await this.updateKnowledgeCluster(session, summary, topicKey)
+    const canonicalProblem = buildCanonicalProblem(summary.problem, renderProblemSessionKnowledgeAnswer(summary), session.aiSpace)
+    const clusterDecision = await this.decideKnowledgeCluster(session.aiSpace, summary, canonicalProblem)
+    const cluster = await this.applyKnowledgeClusterDecision(session, summary, canonicalProblem, clusterDecision)
+    const topicKey = cluster?.topicKey ?? buildSemanticTopicKey(canonicalProblem)
+    const summaryWithDecision: ProblemSessionSummary = {
+      ...summary,
+      canonicalKey: buildCanonicalKey(canonicalProblem),
+      canonicalProblemJson: canonicalProblem,
+      clusterDecision,
+    }
     const updated = await this.prisma.aiProblemSession.update({
       data: {
+        canonicalKey: buildCanonicalKey(canonicalProblem),
+        canonicalProblemJson: canonicalProblem as unknown as Prisma.InputJsonValue,
         clusterId: cluster?.id,
+        clusterDecision: clusterDecision.decision,
+        clusterDecisionReason: clusterDecision.reason,
+        clusterDecisionScore: clusterDecision.score,
         duplicateRiskScore: summary.similarKnowledgeMatches[0]?.similarity ?? 0,
-        summaryJson: summary as unknown as Prisma.InputJsonValue,
+        summaryJson: summaryWithDecision as unknown as Prisma.InputJsonValue,
         title: buildProblemSessionTitle(summary.problem),
         topicKey,
         status: AiProblemSessionStatus.READY_REVIEW,
@@ -322,7 +372,7 @@ export class AiProblemSessionService {
       ? {
           initialQuestion: question,
           title: buildProblemSessionTitle(question),
-          topicKey: buildTopicKey(question),
+          topicKey: buildSemanticTopicKey(buildCanonicalProblemFromText(question, session.aiSpace)),
         }
       : {}
 
@@ -466,16 +516,18 @@ export class AiProblemSessionService {
     }
   }
 
-  private async updateKnowledgeCluster(session: {
+  private async applyKnowledgeClusterDecision(session: {
     aiSpace: AiSpace
     clusterId?: string | null
     id: string
-  }, summary: ProblemSessionSummary, topicKey: string) {
+  }, summary: ProblemSessionSummary, canonicalProblem: CanonicalProblem, decision: ClusterDecisionEvidence) {
     if (summary.rejectionReason) return null
+    if (decision.decision === 'REJECT') return null
     const duplicateRiskScore = summary.similarKnowledgeMatches[0]?.similarity ?? 0
-    const existing = await this.prisma.aiKnowledgeCluster.findUnique({
-      where: { aiSpace_topicKey: { aiSpace: session.aiSpace, topicKey } },
-    })
+    const topicKey = buildSemanticTopicKey(canonicalProblem)
+    const existing = decision.candidateClusterId
+      ? await this.prisma.aiKnowledgeCluster.findUnique({ where: { id: decision.candidateClusterId } })
+      : await this.prisma.aiKnowledgeCluster.findUnique({ where: { aiSpace_topicKey: { aiSpace: session.aiSpace, topicKey } } })
     const shouldIncrement = !session.clusterId || session.clusterId !== existing?.id
     if (!existing) {
       return this.prisma.aiKnowledgeCluster.create({
@@ -484,6 +536,8 @@ export class AiProblemSessionService {
           avgQualityScore: summary.scores.quality,
           avgReuseScore: summary.scores.reuse,
           avgSafetyScore: summary.scores.safety,
+          canonicalKey: buildCanonicalKey(canonicalProblem),
+          canonicalProblemJson: canonicalProblem as unknown as Prisma.InputJsonValue,
           duplicateRiskScore,
           lastResolvedAt: new Date(),
           mergeSuggestion: summary.mergeSuggestion,
@@ -496,6 +550,17 @@ export class AiProblemSessionService {
         },
       })
     }
+    if (decision.decision === 'VARIANT_OF_CLUSTER' || decision.decision === 'MERGE_REVIEW') {
+      return this.prisma.aiKnowledgeCluster.update({
+        data: {
+          mergeReviewCount: decision.decision === 'MERGE_REVIEW' ? { increment: 1 } : undefined,
+          mergeSuggestion: buildClusterDecisionSuggestion(decision, summary.mergeSuggestion),
+          similarKnowledgeMatches: summary.similarKnowledgeMatches as unknown as Prisma.InputJsonValue,
+          variantCount: decision.decision === 'VARIANT_OF_CLUSTER' ? { increment: 1 } : undefined,
+        },
+        where: { id: existing.id },
+      })
+    }
     const nextResolvedCount = shouldIncrement ? existing.resolvedSessionCount + 1 : existing.resolvedSessionCount
     const nextTotalAskCount = Math.max(existing.totalAskCount, nextResolvedCount)
     const average = (current: number, incoming: number) => shouldIncrement
@@ -506,6 +571,8 @@ export class AiProblemSessionService {
         avgQualityScore: average(existing.avgQualityScore, summary.scores.quality),
         avgReuseScore: average(existing.avgReuseScore, summary.scores.reuse),
         avgSafetyScore: average(existing.avgSafetyScore, summary.scores.safety),
+        canonicalKey: existing.canonicalKey ?? buildCanonicalKey(canonicalProblem),
+        canonicalProblemJson: existing.canonicalProblemJson ?? canonicalProblem as unknown as Prisma.InputJsonValue,
         duplicateRiskScore,
         lastResolvedAt: new Date(),
         mergeSuggestion: summary.mergeSuggestion,
@@ -520,14 +587,18 @@ export class AiProblemSessionService {
   }
 
   private async recordClusterAskSignal(aiSpace: AiSpace, question: string) {
-    const topicKey = buildTopicKey(question)
-    const existing = await this.prisma.aiKnowledgeCluster.findUnique({
-      where: { aiSpace_topicKey: { aiSpace, topicKey } },
-    })
+    const canonicalProblem = buildCanonicalProblemFromText(question, aiSpace)
+    const decision = await this.decideAskCluster(aiSpace, question, canonicalProblem)
+    const topicKey = buildSemanticTopicKey(canonicalProblem)
+    const existing = decision.candidateClusterId
+      ? await this.prisma.aiKnowledgeCluster.findUnique({ where: { id: decision.candidateClusterId } })
+      : await this.prisma.aiKnowledgeCluster.findUnique({ where: { aiSpace_topicKey: { aiSpace, topicKey } } })
     if (!existing) {
       await this.prisma.aiKnowledgeCluster.create({
         data: {
           aiSpace,
+          canonicalKey: buildCanonicalKey(canonicalProblem),
+          canonicalProblemJson: canonicalProblem as unknown as Prisma.InputJsonValue,
           representativeProblem: question,
           topicKey,
           totalAskCount: 1,
@@ -535,6 +606,7 @@ export class AiProblemSessionService {
       })
       return
     }
+    if (decision.decision !== 'SAME_CLUSTER') return
     await this.prisma.aiKnowledgeCluster.update({
       data: {
         representativeProblem: existing.representativeProblem || question,
@@ -542,6 +614,79 @@ export class AiProblemSessionService {
       },
       where: { id: existing.id },
     })
+  }
+
+  private async decideAskCluster(aiSpace: AiSpace, question: string, canonicalProblem: CanonicalProblem): Promise<ClusterDecisionEvidence> {
+    const candidates = await this.findClusterCandidates(aiSpace, canonicalProblem)
+    return decideClusterMatch({
+      answerText: '',
+      canonicalProblem,
+      candidates,
+      problemText: question,
+    })
+  }
+
+  private async decideKnowledgeCluster(aiSpace: AiSpace, summary: ProblemSessionSummary, canonicalProblem: CanonicalProblem): Promise<ClusterDecisionEvidence> {
+    if (summary.rejectionReason || summary.recommendation === 'DISCARD') {
+      return {
+        conflicts: [summary.rejectionReason ?? '无复用价值'],
+        decision: 'REJECT',
+        reason: summary.rejectionReason ?? '总结被判定为不适合沉淀',
+        score: 0,
+      }
+    }
+    const candidates = await this.findClusterCandidates(aiSpace, canonicalProblem)
+    return decideClusterMatch({
+      answerText: renderProblemSessionKnowledgeAnswer(summary),
+      canonicalProblem,
+      candidates,
+      problemText: summary.problem,
+    })
+  }
+
+  private async findClusterCandidates(aiSpace: AiSpace, canonicalProblem: CanonicalProblem): Promise<ClusterCandidate[]> {
+    const canonicalKey = buildCanonicalKey(canonicalProblem)
+    const entityKeywords = canonicalProblem.entities.slice(0, 4)
+    const exact = await this.prisma.aiKnowledgeCluster.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 12,
+      where: {
+        aiSpace,
+        canonicalKey,
+      },
+    })
+    const lexical = entityKeywords.length
+      ? await this.prisma.aiKnowledgeCluster.findMany({
+          orderBy: { updatedAt: 'desc' },
+          take: 24,
+          where: {
+            aiSpace,
+            OR: entityKeywords.flatMap((entity) => [
+              { representativeProblem: { contains: entity, mode: 'insensitive' as const } },
+              { representativeResolution: { contains: entity, mode: 'insensitive' as const } },
+            ]),
+          },
+        })
+      : []
+    const recent = await this.prisma.aiKnowledgeCluster.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 12,
+      where: { aiSpace },
+    })
+    const seen = new Set<string>()
+    return [...exact, ...lexical, ...recent]
+      .filter((candidate) => {
+        if (seen.has(candidate.id)) return false
+        seen.add(candidate.id)
+        return true
+      })
+      .map((candidate) => ({
+        canonicalProblemJson: candidate.canonicalProblemJson,
+        id: candidate.id,
+        representativeProblem: candidate.representativeProblem,
+        representativeResolution: candidate.representativeResolution,
+        topicKey: candidate.topicKey,
+      }))
   }
 
   private async tryAutoApproveCluster(latestSessionId: string) {
@@ -703,7 +848,7 @@ export class AiProblemSessionService {
           safetyScore: summary.scores.safety,
           sanitizedInputHash: stableHash(question),
           sensitivity: AiKnowledgeSensitivity.INTERNAL,
-          similarityKey: buildTopicKey(question),
+          similarityKey: summary.canonicalKey ?? buildSemanticTopicKey(summary.canonicalProblemJson ?? buildCanonicalProblem(question, answer, session.aiSpace)),
           source: AiKnowledgeSource.USER_CHAT,
           sourceClusterId: session.clusterId ?? undefined,
           sourceHash,
@@ -731,7 +876,12 @@ export class AiProblemSessionService {
 }
 
 function serializeProblemSession<T extends {
+  canonicalKey?: string | null
+  canonicalProblemJson?: Prisma.JsonValue | null
   clusterId: string | null
+  clusterDecision?: string | null
+  clusterDecisionReason?: string | null
+  clusterDecisionScore?: number | null
   closedAt: Date | null
   createdAt: Date
   duplicateRiskScore: number
@@ -752,8 +902,13 @@ function serializeProblemSession<T extends {
   turns?: Array<{ createdAt: Date; id: string; role: string; sanitizedText: string }>
 }>(session: T) {
   return {
+    canonicalKey: session.canonicalKey ?? null,
+    canonicalProblemJson: session.canonicalProblemJson ?? null,
     closedAt: session.closedAt?.toISOString() ?? null,
     clusterId: session.clusterId,
+    clusterDecision: session.clusterDecision ?? null,
+    clusterDecisionReason: session.clusterDecisionReason ?? null,
+    clusterDecisionScore: session.clusterDecisionScore ?? null,
     createdAt: session.createdAt.toISOString(),
     duplicateRiskScore: session.duplicateRiskScore,
     id: session.id,
@@ -796,8 +951,312 @@ function buildProblemSessionTitle(question: string) {
   return compact || '新问题会话'
 }
 
-function buildTopicKey(question: string) {
-  return stableHash(question.toLowerCase().replace(/\s+/g, ' ').slice(0, 120))
+function buildSemanticTopicKey(canonicalProblem: CanonicalProblem) {
+  return stableHash(buildCanonicalKey(canonicalProblem))
+}
+
+function buildCanonicalKey(problem: CanonicalProblem) {
+  const primaryEntity = problem.entities[0] ?? 'general'
+  return [
+    problem.roleScope,
+    problem.domain,
+    problem.intent,
+    normalizeKeyPart(primaryEntity),
+    problem.scenario,
+    problem.symptom,
+    problem.expectedOutcome,
+  ].join(':')
+}
+
+function normalizeKeyPart(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'general'
+}
+
+function buildCanonicalProblemFromText(text: string, aiSpace: AiSpace) {
+  return buildCanonicalProblem(text, '', aiSpace)
+}
+
+function buildCanonicalProblem(problem: string, answer: string, aiSpace: AiSpace): CanonicalProblem {
+  const problemText = normalizeSemanticText(problem)
+  const text = normalizeSemanticText(`${problem}\n${answer}`)
+  const entities = inferCanonicalEntities(text)
+  const environment = inferCanonicalEnvironment(text)
+  const symptom = inferCanonicalSymptom(problemText)
+  const scenario = inferCanonicalScenario(text, entities, symptom)
+  const domain = inferCanonicalDomain(text, entities)
+  const intent = inferCanonicalIntent(text, symptom)
+  const expectedOutcome = inferExpectedOutcome(text, scenario, symptom)
+  return {
+    domain,
+    entities,
+    environment,
+    expectedOutcome,
+    intent,
+    reusableType: isDirectAnswerOrLookupQuestion(text) ? 'direct_answer' : 'how_to',
+    roleScope: mapAiSpaceToRoleScope(aiSpace).toLowerCase(),
+    safetyClass: getProblemSessionRejectionReason(text) ? 'risk_review' : 'benign_learning',
+    scenario,
+    symptom,
+  }
+}
+
+function normalizeSemanticText(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/\[[^\]]*phase2[^\]]*\]/gi, ' ')
+    .replace(/皮卡丘/g, 'pikachu')
+    .replace(/弹框|弹窗|alert/g, 'alert')
+    .replace(/端口被占|端口占用|address already in use/g, 'port_conflict')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function inferCanonicalEntities(text: string) {
+  const entities: string[] = []
+  const add = (entity: string, pattern: RegExp) => {
+    if (pattern.test(text) && !entities.includes(entity)) entities.push(entity)
+  }
+  add('Pikachu', /pikachu/)
+  add('DVWA', /\bdvwa\b/)
+  add('Kali Linux', /\bkali\b/)
+  add('VMware', /\bvmware\b/)
+  add('VirtualBox', /virtualbox/)
+  add('Docker', /\bdocker\b|compose/)
+  add('XSS', /\bxss\b|跨站|alert/)
+  add('SQL Injection', /sql\s*注入|sql\s*injection|sqli/)
+  add('Burp Suite', /\bburp\b/)
+  add('Chrome', /chrome|浏览器/)
+  if (!entities.length) entities.push('General')
+  return entities
+}
+
+function inferCanonicalEnvironment(text: string) {
+  const environment: string[] = []
+  const add = (value: string, pattern: RegExp) => {
+    if (pattern.test(text) && !environment.includes(value)) environment.push(value)
+  }
+  add('Windows', /windows|win10|win11/)
+  add('WSL', /\bwsl\b/)
+  add('Linux', /linux|ubuntu|centos/)
+  add('Docker', /docker|compose/)
+  add('Chrome', /chrome|浏览器/)
+  add('VMware', /vmware/)
+  add('VirtualBox', /virtualbox/)
+  return environment
+}
+
+function inferCanonicalSymptom(text: string) {
+  if (/alert|没有弹|不弹|弹不出来|触发不了/.test(text)) return 'no_alert'
+  if (/\bburp\b/.test(text) && /(history|拦截|intercept|停住|不停|放行)/.test(text)) return 'intercept_not_paused'
+  if (/\bburp\b/.test(text) && /(抓不到|进不来|没有请求|代理|proxy|拦截不到|抓包失败)/.test(text)) return 'proxy_no_traffic'
+  if (/\bburp\b/.test(text) && /(证书|certificate|https|tls|ssl)/.test(text)) return 'certificate_error'
+  if (/port_conflict|端口|8080|3000|5173/.test(text)) return 'port_conflict'
+  if (/下载|镜像|iso|链接|地址/.test(text)) return 'download_link_request'
+  if (/驳回|退回|不通过|审核失败/.test(text)) return 'report_rejected'
+  if (/登录|login|密码/.test(text)) return 'login_failed'
+  if (/启动失败|起不来|无法启动|运行失败/.test(text)) return 'startup_failed'
+  if (/空白页|白屏/.test(text)) return 'page_blank'
+  if (/permission denied|403|权限/.test(text)) return 'permission_denied'
+  return 'general_issue'
+}
+
+function inferCanonicalScenario(text: string, entities: string[], symptom: string) {
+  if (entities.includes('Pikachu') && entities.includes('XSS')) return 'xss_lab_reproduction'
+  if (entities.includes('DVWA') && (entities.includes('Docker') || symptom === 'port_conflict' || symptom === 'startup_failed')) return 'dvwa_startup'
+  if (entities.includes('Kali Linux') && /vmware|virtualbox|虚拟机|iso|镜像|安装/.test(text)) return 'vm_installation'
+  if (entities.includes('Burp Suite') && (symptom === 'proxy_no_traffic' || symptom === 'intercept_not_paused' || symptom === 'certificate_error')) return 'burp_proxy_setup'
+  if (/漏洞报告|src|提交|复现材料|修复建议|驳回/.test(text)) return 'vulnerability_report'
+  if (/商城|兑换|积分/.test(text)) return 'mall_realtime'
+  if (/证书/.test(text)) return 'certificate_realtime'
+  return 'general_troubleshooting'
+}
+
+function inferCanonicalDomain(text: string, entities: string[]) {
+  if (/商城|兑换|积分/.test(text)) return 'mall'
+  if (/证书/.test(text)) return 'certificate'
+  if (/漏洞报告|src|提交|复现材料|修复建议|驳回/.test(text)) return 'vulnerability_reporting'
+  if (entities.some((entity) => ['Pikachu', 'DVWA', 'Kali Linux', 'Burp Suite', 'XSS', 'SQL Injection'].includes(entity))) return 'security_learning'
+  return 'platform_usage'
+}
+
+function inferCanonicalIntent(text: string, symptom: string) {
+  if (symptom !== 'general_issue' && symptom !== 'download_link_request') return 'troubleshooting'
+  if (/区别|对比|哪个好|差异/.test(text)) return 'compare'
+  if (/解释|是什么|为什么/.test(text)) return 'explain'
+  if (/推荐|建议/.test(text)) return 'recommend'
+  if (/模板|怎么写|格式/.test(text)) return 'template'
+  if (/怎么|步骤|安装|配置|处理|排查|解决/.test(text)) return 'how_to'
+  return 'how_to'
+}
+
+function inferExpectedOutcome(text: string, scenario: string, symptom: string) {
+  if (scenario === 'xss_lab_reproduction' && symptom === 'no_alert') return 'trigger_alert'
+  if (scenario === 'dvwa_startup') return 'start_lab_success'
+  if (scenario === 'vm_installation' && symptom === 'download_link_request') return 'download_official_iso'
+  if (scenario === 'vm_installation') return 'install_success'
+  if (scenario === 'burp_proxy_setup' && symptom === 'proxy_no_traffic') return 'capture_http_traffic'
+  if (scenario === 'burp_proxy_setup' && symptom === 'intercept_not_paused') return 'pause_intercepted_request'
+  if (scenario === 'burp_proxy_setup' && symptom === 'certificate_error') return 'fix_https_intercept'
+  if (scenario === 'vulnerability_report' && symptom === 'report_rejected') return 'revise_report_pass_review'
+  if (symptom === 'port_conflict') return 'fix_port_conflict'
+  if (symptom === 'download_link_request') return 'get_official_download'
+  return 'fix_error'
+}
+
+function parseCanonicalProblem(value: Prisma.JsonValue | null): CanonicalProblem | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const item = value as unknown as Partial<CanonicalProblem>
+  if (!item.domain || !item.intent || !item.scenario || !item.symptom || !item.expectedOutcome) return null
+  return {
+    domain: item.domain,
+    entities: Array.isArray(item.entities) ? item.entities.filter((entity): entity is string => typeof entity === 'string') : [],
+    environment: Array.isArray(item.environment) ? item.environment.filter((env): env is string => typeof env === 'string') : [],
+    expectedOutcome: item.expectedOutcome,
+    intent: item.intent,
+    reusableType: item.reusableType ?? 'how_to',
+    roleScope: item.roleScope ?? 'student',
+    safetyClass: item.safetyClass ?? 'benign_learning',
+    scenario: item.scenario,
+    symptom: item.symptom,
+  }
+}
+
+function decideClusterMatch(input: {
+  answerText: string
+  canonicalProblem: CanonicalProblem
+  candidates: ClusterCandidate[]
+  problemText: string
+}): ClusterDecisionEvidence {
+  if (input.canonicalProblem.safetyClass !== 'benign_learning') {
+    return { conflicts: ['安全分类不允许自动聚类'], decision: 'REJECT', reason: '安全或隐私风险问题不进入问题族统计', score: 0 }
+  }
+  const scored = input.candidates
+    .map((candidate) => scoreClusterCandidate(input.canonicalProblem, input.problemText, input.answerText, candidate))
+    .sort((a, b) => b.score - a.score)
+  const best = scored[0]
+  if (!best) {
+    return { conflicts: [], decision: 'NEW_CLUSTER', reason: '未召回可兼容的问题族，创建新 cluster', score: 0 }
+  }
+  if (best.score >= SAME_CLUSTER_THRESHOLD && best.conflicts.length === 0) {
+    return {
+      candidateClusterId: best.candidate.id,
+      conflicts: [],
+      decision: 'SAME_CLUSTER',
+      reason: `canonical 问题族高置信匹配：${best.reason}`,
+      score: best.score,
+    }
+  }
+  if (best.score >= VARIANT_CLUSTER_THRESHOLD && hasVariantEvidence(input.canonicalProblem, best.canonical)) {
+    return {
+      candidateClusterId: best.candidate.id,
+      conflicts: best.conflicts,
+      decision: 'VARIANT_OF_CLUSTER',
+      reason: `同主题变体，不计入自动入库统计：${best.reason}`,
+      score: best.score,
+    }
+  }
+  if (best.score >= 0.42 && hasStrongVariantEvidence(input.canonicalProblem, best.canonical)) {
+    return {
+      candidateClusterId: best.candidate.id,
+      conflicts: best.conflicts,
+      decision: 'VARIANT_OF_CLUSTER',
+      reason: `同一主实体和场景下的不同症状/结果，作为变体记录：${best.reason}`,
+      score: best.score,
+    }
+  }
+  if (best.score >= MERGE_REVIEW_THRESHOLD) {
+    return {
+      candidateClusterId: best.candidate.id,
+      conflicts: best.conflicts,
+      decision: 'MERGE_REVIEW',
+      reason: `可能同类但证据不足，需要管理员合并复核：${best.reason}`,
+      score: best.score,
+    }
+  }
+  return { conflicts: [], decision: 'NEW_CLUSTER', reason: '候选问题族相似度不足，创建新 cluster', score: best.score }
+}
+
+function scoreClusterCandidate(canonicalProblem: CanonicalProblem, problemText: string, answerText: string, candidate: ClusterCandidate) {
+  const candidateCanonical = parseCanonicalProblem(candidate.canonicalProblemJson) ?? buildCanonicalProblem(candidate.representativeProblem, candidate.representativeResolution ?? '', AiSpace.STUDENT)
+  const conflicts = getClusterConflicts(canonicalProblem, candidateCanonical)
+  const entityOverlap = overlapScore(canonicalProblem.entities, candidateCanonical.entities)
+  const environmentOverlap = canonicalProblem.environment.length && candidateCanonical.environment.length
+    ? overlapScore(canonicalProblem.environment, candidateCanonical.environment)
+    : 0.5
+  const lexical = scoreTextSimilarity(
+    `${problemText}\n${answerText}`,
+    tokenizeForSearch(`${problemText}\n${answerText}`),
+    `${candidate.representativeProblem}\n${candidate.representativeResolution ?? ''}`,
+  )
+  const exactCanonical = buildCanonicalKey(canonicalProblem) === buildCanonicalKey(candidateCanonical)
+  const base = [
+    canonicalProblem.domain === candidateCanonical.domain ? 0.18 : 0,
+    canonicalProblem.intent === candidateCanonical.intent ? 0.12 : 0,
+    canonicalProblem.scenario === candidateCanonical.scenario ? 0.18 : 0,
+    canonicalProblem.symptom === candidateCanonical.symptom ? 0.16 : 0,
+    canonicalProblem.expectedOutcome === candidateCanonical.expectedOutcome ? 0.14 : 0,
+    entityOverlap * 0.16,
+    environmentOverlap * 0.04,
+    lexical * 0.12,
+    exactCanonical ? 0.12 : 0,
+  ].reduce((sum, item) => sum + item, 0)
+  const score = clampScore(base - (conflicts.length * 0.18))
+  return {
+    candidate,
+    canonical: candidateCanonical,
+    conflicts,
+    reason: [
+      `domain=${canonicalProblem.domain === candidateCanonical.domain}`,
+      `intent=${canonicalProblem.intent === candidateCanonical.intent}`,
+      `scenario=${canonicalProblem.scenario === candidateCanonical.scenario}`,
+      `symptom=${canonicalProblem.symptom === candidateCanonical.symptom}`,
+      `expectedOutcome=${canonicalProblem.expectedOutcome === candidateCanonical.expectedOutcome}`,
+      `entityOverlap=${entityOverlap.toFixed(2)}`,
+      `lexical=${lexical.toFixed(2)}`,
+      conflicts.length ? `conflicts=${conflicts.join(',')}` : 'noConflicts',
+    ].join('；'),
+    score,
+  }
+}
+
+function getClusterConflicts(current: CanonicalProblem, candidate: CanonicalProblem) {
+  const conflicts: string[] = []
+  const currentPrimary = current.entities[0] ?? 'General'
+  const candidatePrimary = candidate.entities[0] ?? 'General'
+  if (current.domain !== candidate.domain) conflicts.push('domain')
+  if (currentPrimary !== 'General' && candidatePrimary !== 'General' && currentPrimary !== candidatePrimary) conflicts.push('primaryEntity')
+  if (current.scenario !== candidate.scenario && current.symptom !== candidate.symptom) conflicts.push('scenarioAndSymptom')
+  if (current.scenario !== candidate.scenario && current.expectedOutcome !== candidate.expectedOutcome && current.symptom !== candidate.symptom) conflicts.push('answerOutcome')
+  return conflicts
+}
+
+function hasVariantEvidence(current: CanonicalProblem, candidate: CanonicalProblem) {
+  const entityOverlap = overlapScore(current.entities, candidate.entities)
+  return current.domain === candidate.domain
+    && entityOverlap >= 0.5
+    && (current.scenario === candidate.scenario || current.intent === candidate.intent)
+}
+
+function hasStrongVariantEvidence(current: CanonicalProblem, candidate: CanonicalProblem) {
+  const entityOverlap = overlapScore(current.entities, candidate.entities)
+  return current.domain === candidate.domain
+    && current.scenario === candidate.scenario
+    && entityOverlap >= 0.5
+}
+
+function overlapScore(left: string[], right: string[]) {
+  const a = new Set(left.map(normalizeKeyPart))
+  const b = new Set(right.map(normalizeKeyPart))
+  if (!a.size || !b.size) return 0
+  let overlap = 0
+  for (const item of a) {
+    if (b.has(item)) overlap += 1
+  }
+  return overlap / Math.max(a.size, b.size)
+}
+
+function buildClusterDecisionSuggestion(decision: ClusterDecisionEvidence, mergeSuggestion?: string) {
+  return [mergeSuggestion, `${decision.decision} ${Math.round(decision.score * 100)}%：${decision.reason}`].filter(Boolean).join('；')
 }
 
 function estimateTokens(text: string) {
