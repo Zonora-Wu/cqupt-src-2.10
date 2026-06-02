@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类（canonicalProblem + hybrid retrieval + embedding/reranker + merge review）、数据使用路由（直接返回 vs AI 处理）、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：前端来源标注展示、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环，以及知识库成熟化治理项（评测体系、来源权威、冲突处理、回答快照、缓存失效、知识缺口发现、文档导入治理、功能开关与线上指标）。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -1189,7 +1189,7 @@ CREATE INDEX idx_ai_knowledge_hit_route_created
 | 9 | 0.82 | 0.68 | 2 | 4 | 高成熟度场景 |
 | 10 | 0.80 | 0.65 | 2 | 5 | 最大复用，但仍受硬规则限制 |
 
-如果后续接入 embedding + reranker，直答不应只看向量相似度，而应使用重排后的 `sameProblemConfidence` 或“答案路径一致性”分数。例如“SQL 注入报告怎么写”和“SQL 注入靶场启动失败”关键词相近，但答案路径不同，不能因为高档位而直接复用错误知识。
+如果未来启用 embedding + reranker，直答不应只看向量相似度，而应使用重排后的 `sameProblemConfidence` 或“答案路径一致性”分数。例如“SQL 注入报告怎么写”和“SQL 注入靶场启动失败”关键词相近，但答案路径不同，不能因为高档位而直接复用错误知识。
 
 #### 路由策略伪代码
 
@@ -2101,8 +2101,45 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 | P3 | 语义聚类 | canonicalProblemJson、pgvector/pg_trgm、reranker | SAME_CLUSTER/VARIANT/MERGE_REVIEW/NEW_CLUSTER 决策可追踪 | 管理端展示候选 cluster、冲突字段、合并理由 | 防不同问题被错误合并 | 待实现 |
 | P3 | 自动入库 | cluster 阈值、反馈阈值、隐私/重复阻断 | 高频高质低风险才 AUTO_APPROVED | 管理端可查看自动入库原因和撤回 | 防未验证经验自动污染 KB | 待加强 |
 | P3 | Skill 晋升 | AiSkillCandidate、Skill.md、install log | 审批后写平台 Hermes skills 根目录；记录 hash | 管理端可预览、审批、安装、回滚 | 防一次性答案或私有数据进入 Skill | 已部分落地 |
+| P1 | 知识来源权威等级 | `sourceAuthority`、source metadata、引用展示规则 | 检索排序、冲突裁决和来源展示都读取权威等级；低权威不得覆盖平台规则 | 管理端可看到来源等级、原始出处、有效期和最后复核人 | 防用户会话或低质导入文档伪装成平台规则 | 待实现 |
+| P1 | 知识冲突处理 | conflict detector、人工裁决队列、冲突状态 | 新旧规则、角色口径、答案路径、有效期冲突会阻断自动合并/直答 | 管理端显示冲突字段、建议动作和裁决记录 | 防互斥答案被拼接成错误权威答案 | 待实现 |
+| P1 | 回答快照追溯 | `knowledgeRevisionId`、snippetHash、routeDecision、promptTemplateVersion | 每次使用 KB 回答都能还原知识版本、片段、路由、模型和模板版本 | 管理员可从回复追溯到来源知识 revision 与 hit/audit | 防“当时为什么这么答”无法复盘 | 待实现 |
+| P1 | 缓存失效策略 | cache key、version stamp、强制失效事件 | 知识状态变更、权限变更、`SECURITY_SUSPENDED`、规则更新会清理或绕过缓存 | route preview 和线上审计能证明缓存命中/失效原因 | 防被暂停或过期知识继续通过缓存回答 | 待实现 |
+| P2 | 知识库评测体系 | eval dataset、golden cases、离线评测脚本、线上抽样 | 命中率、正确引用率、误召回率、越权拦截率、直答安全率可量化 | 管理端或报告展示最近评测结果和失败样例 | 防只凭主观感觉调阈值和提示词 | 待实现 |
+| P2 | 知识缺口发现 | `AiKnowledgeGap`、miss/fallback 聚合、需求队列 | 反复 miss、反复转 Agent、用户连续追问未解决会生成 gap 候选 | 管理端可按频次/角色/影响查看缺口并转建知识 | 防只维护已有知识而看不到未覆盖问题 | 待实现 |
+| P2 | 文档导入治理 | import job、chunk 规范、来源继承、OCR/表格质量标记 | 导入文档必须记录出处、版本、chunk 边界、解析质量和审核状态 | 管理端可预览 chunk、拒绝低质量 OCR、追溯来源链接 | 防批量导入低质碎片污染 KB | 待实现 |
+| P2 | 功能开关与线上质量指标 | feature flags、metrics、dashboard、rollback runbook | capture/retrieval/direct/inject/maintenance/skill promotion 可独立开关；关键指标可观测 | 管理端能看到命中率、直答率、注入率、反馈率、举报率和错误率 | 防上线后无法降级、无法定位质量退化 | 待实现 |
 
 执行口径：P0 是上线安全门槛；P1 是知识沉淀最小闭环；P2 是长期治理；P3 是规模化复用。每一项完成时，必须补充证据路径：API 响应、数据库记录、前端截图或 E2E evidence JSON。
+
+### 15.1 成熟化治理补充项：范围、规则与验收标准
+
+以下补充项来自四个专家视角：产品经理关注“如何度量价值和缺口”，后端架构师关注“版本、缓存、可追溯和可扩展”，安全工程师关注“权威、冲突、越权和投毒”，提示词工程师关注“评测、提示词版本和幻觉抑制”。这些不是推翻现有主链路，而是把“能跑通”提升为“能长期运营”。
+
+| 编号 | 补充项 | 需要完成什么 | 核心规则 | 验收标准 | 建议优先级 |
+|---|---|---|---|---|---|
+| GOV-01 | 知识库评测体系 | 建立离线 golden set、线上抽样评测、按角色/mode 覆盖的评测脚本；输出命中率、正确引用率、误召回率、越权拦截率、直接回答安全率、幻觉率、用户继续追问率 | 评测集必须包含正例、近似问题、冲突问题、实时数据问题、越权问题、附件问题和 prompt injection；调阈值、改 prompt、换模型、改检索逻辑前后必须跑回归 | 1) 至少覆盖 student/auditor/admin 三类角色；2) P0 安全用例 100% 通过；3) 实时业务数据误用 KB 的比例为 0；4) 每次评测产出 evidence JSON/Markdown；5) 失败项能定位到 knowledgeId、route 和原因 | P2，建议在大规模开放前完成 |
+| GOV-02 | 知识来源权威等级 | 为知识条目、chunk、source session 增加 `sourceAuthority`、sourceType、sourceUrl/sourceSessionId、effectiveFrom/effectiveTo、reviewerId、lastVerifiedAt | 权威等级建议：`OFFICIAL_POLICY` > `ADMIN_MANUAL` > `AUDITOR_GUIDELINE` > `APPROVED_KB` > `AUTO_APPROVED_CONVERSATION` > `USER_SESSION` > `IMPORTED_DOC_DRAFT`；低权威不得覆盖高权威；用户会话永远不能直接成为平台制度 | 1) 检索结果返回 authority；2) 冲突时高权威优先，低权威进入复审；3) 来源标注能区分“平台规则/管理员手册/用户经验沉淀”；4) 未审核导入文档不能普通召回；5) 权威字段变更写 AuditLog | P1，建议优先补到 schema/文档 |
+| GOV-03 | 知识冲突处理 | 建立冲突检测与人工裁决队列，覆盖新旧规则冲突、角色口径冲突、环境/工具冲突、步骤互斥、有效期冲突、实时数据冲突 | 冲突不允许自动合并；高风险冲突不允许直答；同一问题族下允许 variant，但必须有清晰适用范围；裁决必须记录“保留/合并/挂变体/暂停/归档”的理由 | 1) 构造两条互斥答案时不会自动直答；2) 管理端展示冲突字段和建议动作；3) 裁决后创建 revision 或 maintenance task；4) 学生不会看到审核员口径冲突内容；5) route audit 记录被压制的候选知识 | P1，和语义聚类/维护状态一起实现 |
+| GOV-04 | 回答快照追溯 | 每次 AI 回复记录使用的 knowledgeId、knowledgeRevisionId、snippetHash、retrievalPolicyVersion、routeDecision、promptTemplateVersion、model、threshold、selectedSnippet | 回答追溯记录必须不可由前端伪造；归档或修订知识后，历史回答仍能还原“当时使用的版本”；不要在快照中保存敏感原文 | 1) 从任意使用 KB 的 assistantTurn 可查到 hit/audit；2) 修改知识后历史 hit 仍指向旧 revision；3) 管理端能显示“本回答依据”；4) snippetHash 与 revision 内容可校验；5) 删除/归档知识不破坏审计链 | P1，和 `AiKnowledgeHit` / revision 同步设计 |
+| GOV-05 | 缓存失效策略 | 定义检索缓存、策略缓存、route preview 缓存、模型回答缓存的 key 和 TTL；建立强制失效事件 | cache key 必须包含 role/mode/aiSpace、knowledgeVersion、policyVersion、maintenanceStatus、authority、retrievalPolicy；`SECURITY_SUSPENDED`、权限变更、知识修订、规则变更必须立即失效；禁止缓存写操作 proposal 的最终执行结果 | 1) 知识被暂停后下一次请求不再命中旧缓存；2) 权限降级后不能通过缓存看到原有知识；3) route preview 展示 cache hit/miss 和 version；4) E2E 覆盖状态变更后的缓存失效；5) 缓存异常时默认降级为不使用 KB | P1，上线 retrieval 缓存前必须完成 |
+| GOV-06 | 知识缺口发现 | 新增 `AiKnowledgeGap` 或等价队列，聚合低置信 miss、Agent 回答失败、用户重复追问、同类问题反复未解决、管理员搜索无结果 | gap 只能作为“待补知识需求”，不能自动生成权威知识；必须按频次、角色影响、安全风险排序；可从 gap 转为文档补充任务或管理员知识草稿 | 1) 连续 N 次同类 miss 生成一个去重 gap；2) gap 显示代表问题、影响角色、频次、最近样例；3) 管理员可关闭、合并、转知识草稿；4) gap 不参与普通检索；5) 关闭/转化写 AuditLog | P2，适合在基础检索稳定后做 |
+| GOV-07 | 文档导入治理 | 设计导入任务、chunk 规则、标题继承、表格/OCR 质量标记、来源链接、版本号、审核流；低质量 chunk 进入待修复 | 批量导入默认 `PENDING_REVIEW`；chunk 必须保留文档层级标题和出处；OCR 置信度低、表格丢列、内容过短/过长、无标题 chunk 不得自动入库；导入文档不得绕过权限和权威等级 | 1) 导入后每个 chunk 有 source、headingPath、chunkIndex、parseQuality；2) 低质量 chunk 被阻断；3) 管理员可预览/编辑/合并 chunk；4) 删除导入源会影响对应知识状态；5) 文档版本更新触发相关知识复审 | P2，等人工知识库稳定后再批量导入 |
+| GOV-08 | 功能开关与线上质量指标 | 增加独立开关、降级路径、指标仪表盘和回滚 Runbook；开关至少覆盖 capture、summarize、retrieval、direct answer、agent inject、maintenance worker、auto approval、skill promotion | 开关必须独立，不能“一关全关”；P0 安全异常时可只关闭直答保留普通 Agent；所有开关变更写 AuditLog；指标异常触发告警或人工复审 | 1) 管理端可查看开关状态和最近变更；2) 禁用 direct answer 后仍可走 Agent/Direct Resource；3) 统计命中率、直答率、注入率、反馈率、继续追问率、低相关引用率、过期反馈、安全举报率、错误率；4) 有回滚步骤；5) worker 失败不影响普通 AI 聊天 | P2，但直答上线前至少要有开关和审计 |
+
+### 15.2 成熟化验收证据模板
+
+每个 GOV 项完成时，在进度表旁补充一条证据记录，格式建议如下：
+
+```text
+证据编号: GOV-xx-yyyyMMdd
+代码范围: backend/...、frontend/...、database/prisma/schema.prisma
+接口证据: curl/HTTP response 或 E2E evidence JSON
+数据库证据: 关键表记录、状态变更、AuditLog
+前端证据: 管理端页面截图路径或可复现步骤
+安全证据: 越权/实时数据/prompt injection/缓存失效测试结果
+结论: 通过 / 未通过 / 部分通过；剩余风险与下一步
+```
 
 ---
 
@@ -2195,7 +2232,7 @@ POST /api/ai/knowledge/maintenance/run
 
 ---
 
-## 16. 安全与隐私边界
+## 17. 安全与隐私边界
 
 不得沉淀或展示：
 
@@ -2232,13 +2269,13 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 ---
 
-## 17. 实施进度表与验收规则
+## 18. 实施进度表与验收规则
 
 本表用于跟踪 AI Knowledge Base 从“问题会话沉淀”到“持续维护 + Skill 晋升”的落地进度。每一项都必须同时满足“完成定义”和“验收规则”，不能只因为代码写完或页面出现就标记完成。
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `16/16`，覆盖 KB-01 到 KB-07 以及 KB-06A 语义问题族聚类；最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpw28kox_278a85.json`。本轮后端 `npm run prisma:validate`、`npm run prisma:generate`、`npm run typecheck` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `19/19`，覆盖 KB-01 到 KB-08、KB-06A 语义问题族聚类以及 KB-08A 数据使用路由；最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpw4h86m_aa15cf.json`。本轮后端 `npm run prisma:validate`、`npm run prisma:generate`、`npm run typecheck` 已通过，前端 `npm run build` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2250,8 +2287,8 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-06 | 文本级相似聚类与去重 | 已完成 | 相同或非常接近的问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | E2E：相同问题两次已解决后累计 cluster 计数；duplicateRiskScore >= 0.72；返回相似知识和 mergeSuggestion，自动入库前被阻断 |
 | KB-06A | 语义问题族聚类 | 已完成 | 使用 `canonicalProblemJson`、`canonicalKey`、hybrid retrieval、语义字段评分和答案兼容性判断 `SAME_CLUSTER` / `VARIANT_OF_CLUSTER` / `MERGE_REVIEW` / `NEW_CLUSTER` / `REJECT` | E2E：Burp 代理抓不到请求的不同问法归入同一 cluster；Burp 同场景 Intercept 变体挂到候选 cluster 但不增加 `resolvedSessionCount`；自动入库只统计高置信 `SAME_CLUSTER` |
 | KB-07 | 高频高质自动入库 | 已完成 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED`；旧单轮 capture/conversation 链路不再由 `/api/ai/chat` 触发 | E2E：构造 3 个已解决会话 + 5 次询问信号后自动入库；低质量或安全风险时不入库；单次聊天只写 `AiProblemSessionTurn`，不创建知识条目、capture job 或 legacy knowledge conversation |
-| KB-08 | Knowledge Retrieval | 待代码确认 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent | “我多少积分”不被 KB 抢答；相似安全问答返回 `usedKnowledge=true`；中置信注入后来源仍被记录 |
-| KB-08A | 数据使用路由 | 待代码确认 | 后端显式区分 `DIRECT_RESOURCE_RESPONSE`、`KNOWLEDGE_DIRECT_ANSWER`、`KNOWLEDGE_INJECTED_AGENT`、`AGENT_DATA_REQUEST`、`NORMAL_AGENT`、`ACTION_PROPOSAL` | 积分/库存/漏洞状态等实时业务数据不被知识库抢答；附件场景不走 Direct Response；高置信 KB 直接答并写 hit；中置信 KB 注入 Agent；写操作只生成提案并二次确认 |
+| KB-08 | Knowledge Retrieval | 已完成 | `/api/ai/chat` 在 Direct Response 之后执行知识检索，高置信直接回答，中置信注入 Agent；响应返回 `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds`，并把实际参与回复的 `AiKnowledgeHit.usedInResponse` 标记为 true | E2E：“我多少积分”不被 KB 抢答；高置信相似安全问答返回 `usedKnowledge=true` 和来源；中置信注入 Agent 后来源和 hit 仍被记录 |
+| KB-08A | 数据使用路由 | 已完成 | 后端显式区分 `DIRECT_RESOURCE_RESPONSE`、`KNOWLEDGE_DIRECT_ANSWER`、`KNOWLEDGE_INJECTED_AGENT`、`AGENT_DATA_REQUEST`、`NORMAL_AGENT`、`ACTION_PROPOSAL`，响应和审计日志写入 `dataRoute` | E2E：积分实时查询走 `DIRECT_RESOURCE_RESPONSE` 且阻断知识库抢答；写操作走 `ACTION_PROPOSAL`、不调用模型、不返回可执行 action，并要求二次确认 |
 | KB-08B | 管理员知识库使用强度 | 待代码确认 | 管理员可设置 1-10 档 `knowledgeUsageStrength`，后端解析为直答/注入阈值、topK、来源展示和审计策略；档位不得绕过权限、实时数据、附件、写操作和维护状态硬边界 | route preview 能展示不同档位的 route、threshold、selectedKnowledgeIds、blockedRoutes；E2E 覆盖档位 2/7/10 下直答、注入、实时数据压制、附件阻断、写操作阻断和配置变更审计 |
 | KB-09 | 角色与权限过滤 | 待代码确认 | 检索前按 roleScope、visibility、sensitivity、status 过滤 | student 不能命中 auditor/admin 知识；auditor 不能看到 admin scoped 知识；管理员预览有审计记录 |
 | KB-10 | 来源标注与反馈 | 待代码确认 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | 使用 KB 的回复必须有 `knowledgeSources` 和 `knowledgeHitIds`；反馈写入 turn、hit 和知识反馈汇总 |
@@ -2265,12 +2302,20 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-18 | Skill Candidate 晋升 | 待代码确认 | 高质量稳定方法论生成 Skill Candidate，管理员二次审批后安装 | 只有满足命中、反馈、质量、安全阈值的知识可晋升；安装写入 `AiSkillInstallLog` 和 AuditLog |
 | KB-19 | 安全与滥用测试 | 待代码确认 | 覆盖 prompt injection、越权、敏感泄露、安全举报、维护状态过滤 | P0 安全测试全部通过；失败时阻断上线；安全暂停恢复必须有管理员复核和 revision |
 | KB-20 | 观测与回滚 | 待代码确认 | 有指标、审计、维护运行记录、禁用开关和回滚路径 | 可关闭 capture/retrieval/maintenance；可按知识 ID 归档、暂停、恢复；Worker run 有统计和错误记录 |
+| KB-21 | 知识库评测体系 | 待实现 | 建立离线 golden set、线上抽样和回归评测，覆盖命中质量、引用正确性、越权阻断、实时数据压制、prompt injection、不同角色/mode | 评测脚本产出 evidence；P0 安全用例 100% 通过；实时数据误用 KB 为 0；每个失败项可定位到 knowledgeId、route、promptTemplateVersion 和原因 |
+| KB-22 | 知识来源权威等级 | 待实现 | 为 KB entry/chunk/source 增加 authority、sourceType、出处、有效期、复核人和最后复核时间；检索排序与冲突裁决读取该等级 | 低权威不能覆盖高权威；未审核导入文档不能普通召回；来源标注能区分平台规则、管理员手册、用户经验；authority 变更写 AuditLog |
+| KB-23 | 知识冲突处理 | 待实现 | 检测并管理新旧规则、角色口径、环境工具、步骤互斥、有效期和实时数据冲突；进入人工裁决队列 | 互斥知识不自动合并/直答；管理端展示冲突字段、建议动作和裁决理由；裁决后创建 revision 或 maintenance task；route audit 记录被压制候选 |
+| KB-24 | 回答快照追溯 | 待实现 | 每次使用 KB 回答记录 knowledgeRevisionId、snippetHash、routeDecision、retrievalPolicyVersion、promptTemplateVersion、model、threshold 和 selectedSnippet | 任意 assistantTurn 可追溯到当时使用的知识版本与片段；知识修订/归档后历史回答仍可复盘；snapshot 不保存敏感原文 |
+| KB-25 | 缓存失效策略 | 待实现 | 定义检索/策略/route preview 缓存 key、TTL 和强制失效事件；cache key 包含 role/mode/aiSpace、policyVersion、knowledgeVersion、maintenanceStatus | SECURITY_SUSPENDED、权限变更、知识修订、规则更新后下一次请求不命中旧缓存；缓存异常默认降级为不使用 KB；route preview 展示 cache hit/miss |
+| KB-26 | 知识缺口发现 | 待实现 | 聚合低置信 miss、Agent fallback、重复未解决追问和管理员搜索无结果，生成 `AiKnowledgeGap` 或等价队列 | 连续同类 miss 去重成一个 gap；显示代表问题、影响角色、频次和最近样例；管理员可关闭、合并、转知识草稿；gap 不参与普通检索 |
+| KB-27 | 文档导入治理 | 待实现 | 建立 import job、chunk 规范、来源继承、OCR/表格质量标记、审核流和版本更新复审 | 每个 chunk 有 source、headingPath、chunkIndex、parseQuality；低质量 chunk 阻断；导入默认 PENDING_REVIEW；文档版本更新触发相关知识复审 |
+| KB-28 | 功能开关与线上质量指标 | 待实现 | 独立开关 capture/summarize/retrieval/direct/inject/maintenance/auto approval/skill promotion；建立指标看板与回滚 Runbook | 禁用 direct answer 后仍可走普通 Agent/Direct Resource；开关变更写 AuditLog；可观测命中率、直答率、注入率、反馈率、继续追问率、低相关引用率、过期反馈、安全举报率、错误率 |
 
 ---
 
-## 18. 验收清单
+## 19. 验收清单
 
-### 18.1 用户会话生命周期
+### 19.1 用户会话生命周期
 
 - [x] 用户进入 AI 助手默认创建新 `AiProblemSession`。
 - [x] `/api/ai/chat` 请求携带 `sessionId`。
@@ -2281,7 +2326,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 用户点击“还没解决”后继续当前会话。
 - [x] 用户点击“不沉淀”后不进入知识库。
 
-### 18.2 总结、评分、去重
+### 19.2 总结、评分、去重
 
 - [x] 已解决会话生成结构化 JSON 总结。
 - [x] 总结包含 problem、resolution、steps、pitfalls、failedAttempts。
@@ -2293,7 +2338,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 不同问法的同一问题通过 `canonicalProblemJson` / `canonicalKey` 归入同一 cluster。
 - [x] 同主题变体记录 `VARIANT_OF_CLUSTER` / `MERGE_REVIEW`，不增加自动入库用的 `resolvedSessionCount`。
 
-### 18.3 高频自动入库
+### 19.3 高频自动入库
 
 - [x] 同类问题进入 `AiKnowledgeCluster`。
 - [x] resolvedSessionCount / totalAskCount 正确累计。
@@ -2301,20 +2346,23 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 自动入库原因写入 `autoApprovalReason`。
 - [ ] 管理员可撤回或归档自动入库条目。
 
-### 18.4 知识库回答复用
+### 19.4 知识库回答复用
 
-- [ ] Direct Response 优先于 Knowledge Retrieval。
-- [ ] 高置信知识命中直接回答。
-- [ ] 中置信知识命中注入 Agent。
+- [x] Direct Response 优先于 Knowledge Retrieval。
+- [x] 数据使用路由返回并审计 `DIRECT_RESOURCE_RESPONSE` / `KNOWLEDGE_DIRECT_ANSWER` / `KNOWLEDGE_INJECTED_AGENT` / `AGENT_DATA_REQUEST` / `NORMAL_AGENT` / `ACTION_PROPOSAL`。
+- [x] 实时积分/库存/漏洞状态等个人业务数据阻断知识库抢答。
+- [x] 写操作只生成 proposal，要求用户二次确认，不直接返回可执行 action。
+- [x] 高置信知识命中直接回答。
+- [x] 中置信知识命中注入 Agent。
 - [ ] 管理员 1-10 档知识库使用强度会解析成受控阈值、topK、来源展示和审计策略，而不是直接传给模型。
 - [ ] 档位为 10 时仍不能绕过实时数据优先、附件阻断、写操作 proposal、权限过滤和维护状态过滤。
 - [ ] 管理端 route preview 能展示 route、threshold、candidateKnowledgeIds、selectedKnowledgeIds 和 blockedRoutes。
-- [ ] 命中写入 `AiKnowledgeHit`。
-- [ ] 响应返回 `usedKnowledge` 和 `knowledgeSources`。
+- [x] 命中写入 `AiKnowledgeHit`。
+- [x] 响应返回 `usedKnowledge` 和 `knowledgeSources`。
 - [ ] 前端在 AI 回复框底部显示平台知识库来源。
 - [ ] 用户可反馈有用、无用、举报；当前前端已有本地按钮状态，后端 turn 级持久化接口和知识命中汇总仍待实现。
 
-### 18.5 知识库持续维护
+### 19.5 知识库持续维护
 
 - [ ] 已入库知识有 `maintenanceStatus`、质量分、最近命中、最近反馈和复审时间。
 - [ ] 点踩率高、举报、过期反馈会触发降级、暂停或待复审。
@@ -2325,7 +2373,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [ ] 知识投毒样例会被拒绝入库或进入 `SECURITY_SUSPENDED`。
 - [ ] 管理端有待维护队列，可修订、合并、暂停、恢复、归档。
 
-### 18.6 Skill 晋升
+### 19.6 Skill 晋升
 
 - [ ] 只有 APPROVED / AUTO_APPROVED 且质量足够的知识可生成 Skill Candidate。
 - [ ] Skill Candidate 必须管理员二次审批。
@@ -2333,9 +2381,21 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [ ] 安装成功写 `AiSkillInstallLog`。
 - [ ] 源知识状态更新为 `PROMOTED_TO_SKILL`。
 
+### 19.7 成熟化治理补充项
+
+- [ ] 知识库评测体系覆盖 student/auditor/admin、正例/近似/冲突/实时数据/越权/附件/prompt injection，并产出可追溯 evidence。
+- [ ] 知识来源权威等级已进入 schema、检索排序、来源展示和冲突裁决；低权威不得覆盖高权威。
+- [ ] 冲突检测能阻断自动合并和高风险直答，管理员可裁决并创建 revision/maintenance task。
+- [ ] 每次 KB 参与回答都能追溯 knowledgeRevisionId、snippetHash、routeDecision、promptTemplateVersion、model 和阈值。
+- [ ] `SECURITY_SUSPENDED`、权限变更、知识修订、规则更新会让相关检索/策略缓存立即失效；缓存异常默认降级为不用 KB。
+- [ ] 反复 miss、fallback、未解决追问和管理员搜索无结果会生成去重的知识缺口队列，且 gap 不参与普通检索。
+- [ ] 文档导入默认待审核，每个 chunk 保留 source、headingPath、chunkIndex、parseQuality；低质量 OCR/表格 chunk 被阻断。
+- [ ] capture、retrieval、direct answer、agent inject、maintenance worker、auto approval、skill promotion 均有独立开关、审计和回滚路径。
+- [ ] 线上指标至少包含命中率、直答率、注入率、反馈率、继续追问率、低相关引用率、过期反馈、安全举报率和错误率。
+
 ---
 
-## 19. 分阶段实施路线
+## 20. 分阶段实施路线
 
 ### Phase 1：问题会话生命周期
 
@@ -2420,7 +2480,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 ---
 
-## 20. 最终结论
+## 21. 最终结论
 
 CQUPT-SRC 采用“问题会话式知识沉淀”后，知识库不再由零散单轮对话驱动，而由“用户确认已解决的问题会话”驱动。
 

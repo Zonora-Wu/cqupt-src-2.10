@@ -102,6 +102,10 @@ async function main() {
     })
     assert(result.sessionId === state.lifecycleSessionId, 'chat response should carry sessionId')
     assert(result.assistantTurnId, 'chat response should carry assistantTurnId')
+    assert(result.dataRoute?.route === 'DIRECT_RESOURCE_RESPONSE', 'realtime points query should use Direct Response route')
+    assert(result.dataRoute?.requiresModelCall === false, 'Direct Response route should not require model call')
+    assert(result.dataRoute?.dataSources?.includes('REALTIME_DB'), 'Direct Response should declare realtime DB source')
+    assert(result.dataRoute?.blockedRoutes?.some((item) => item.route === 'KNOWLEDGE_DIRECT_ANSWER'), 'realtime route should block KB direct answer')
     const turns = await prisma.aiProblemSessionTurn.findMany({
       orderBy: { createdAt: 'asc' },
       where: { sessionId: state.lifecycleSessionId },
@@ -128,6 +132,36 @@ async function main() {
     assert(resolved.status === 'READY_REVIEW', 'resolve should trigger summarization and enter review queue')
   })
 
+  await step('KB-08A routes write intent to action proposal with audit record', async () => {
+    const session = await request('/ai/problem-sessions', {
+      body: { initialQuestion: `${marker} 写操作路由测试`, mode: 'student' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    const result = await request('/ai/chat', {
+      body: { message: '请现在帮我兑换积分商城第一个商品', mode: 'student', sessionId: session.id },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(result.dataRoute?.route === 'ACTION_PROPOSAL', 'write intent should route to ACTION_PROPOSAL')
+    assert(result.dataRoute?.requiresUserConfirmation === true, 'action proposal should require user confirmation')
+    assert(result.dataRoute?.requiresModelCall === false, 'action proposal should not call model')
+    assert(result.dataRoute?.blockedRoutes?.some((item) => item.route === 'NORMAL_AGENT'), 'write intent should block normal agent execution')
+    assert((result.actions ?? []).length === 0, 'action proposal should not return executable actions')
+    assert(result.content.includes('不能直接'), 'action proposal should explain no direct execution')
+
+    const audit = await prisma.auditLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      where: { actorId: state.studentId, targetType: 'AI' },
+    })
+    assert(audit?.metadata?.dataRoute?.route === 'ACTION_PROPOSAL', 'audit log should persist data route decision')
+
+    await request(`/ai/problem-sessions/${session.id}/discard`, {
+      method: 'POST',
+      token: state.studentToken,
+    })
+  })
+
   await step('KB-02 rejects unresolved session summarization', async () => {
     const session = await prisma.aiProblemSession.create({
       data: {
@@ -149,8 +183,8 @@ async function main() {
 
   await step('KB-03 summarizes resolved session with required schema', async () => {
     const session = await createResolvedProblemSession({
-      answer: `可以按以下步骤解决：先检查 docker compose 版本，再修改端口映射，最后重启服务并访问靶场确认页面正常。注意端口占用和 PHP 版本不兼容这两个坑。`,
-      question: `${marker} DVWA 靶场 docker compose 启动失败，端口占用后怎么排查？`,
+      answer: `可以按以下步骤解决：先运行 docker compose ps 确认 vulhub redis 容器已经启动，再检查 6379 端口映射是否绑定到本机可访问地址。然后查看 docker logs redis，确认服务没有因为配置文件错误退出。最后用 redis-cli 或 nc 连接本机 redis 端口验证连通性。注意端口映射、容器健康状态和防火墙规则这三个坑。`,
+      question: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
     })
     state.validSessionId = session.id
     const summarized = await request(`/ai/problem-sessions/${session.id}/summarize`, {
@@ -530,6 +564,80 @@ async function main() {
     const entry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: reviewed.knowledgeEntryId } })
     assert(entry?.status === 'APPROVED', 'created knowledge should be APPROVED after admin approval')
     assert(!entry.canonicalAnswer.includes('Bearer'), 'knowledge answer should not contain bearer token')
+  })
+
+  await step('KB-08 reuses approved knowledge with source and used hit record', async () => {
+    assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 retrieval test')
+    const session = await request('/ai/problem-sessions', {
+      body: { initialQuestion: `${marker} 知识库复用测试`, mode: 'student' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    const result = await request('/ai/chat', {
+      body: {
+        message: `${marker} Vulhub Redis 未授权靶场 docker compose 启动后 6379 端口不通怎么排查？`,
+        mode: 'student',
+        sessionId: session.id,
+      },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(result.dataRoute?.route === 'KNOWLEDGE_DIRECT_ANSWER', 'high-confidence approved KB should direct answer')
+    assert(result.usedKnowledge === true, 'KB direct answer should set usedKnowledge')
+    assert(result.knowledgeSources?.some((source) => source.id === state.approvedKnowledgeId), 'KB response should include approved knowledge source')
+    assert(result.knowledgeHitIds?.length > 0, 'KB response should include knowledgeHitIds')
+
+    const usedHit = await prisma.aiKnowledgeHit.findFirst({
+      where: {
+        id: { in: result.knowledgeHitIds },
+        knowledgeId: state.approvedKnowledgeId,
+        route: 'KNOWLEDGE_DIRECT_ANSWER',
+        usedInResponse: true,
+      },
+    })
+    assert(usedHit, 'KB direct answer should mark AiKnowledgeHit as used in response')
+
+    await request(`/ai/problem-sessions/${session.id}/discard`, {
+      method: 'POST',
+      token: state.studentToken,
+    })
+  })
+
+  await step('KB-08 injects medium-confidence knowledge and keeps source record', async () => {
+    assert(state.approvedKnowledgeId, 'approved knowledge should exist before KB-08 injected retrieval test')
+    const session = await request('/ai/problem-sessions', {
+      body: { initialQuestion: `${marker} 知识库注入测试`, mode: 'student' },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    const result = await request('/ai/chat', {
+      body: {
+        message: 'Redis 连不上',
+        mode: 'student',
+        sessionId: session.id,
+      },
+      method: 'POST',
+      token: state.studentToken,
+    })
+    assert(result.dataRoute?.route === 'KNOWLEDGE_INJECTED_AGENT', 'medium-confidence KB should inject into agent')
+    assert(result.usedKnowledge === true, 'KB injected answer should set usedKnowledge')
+    assert(result.knowledgeSources?.some((source) => source.id === state.approvedKnowledgeId), 'KB injected response should include approved knowledge source')
+    assert(result.knowledgeHitIds?.length > 0, 'KB injected response should include knowledgeHitIds')
+
+    const usedHit = await prisma.aiKnowledgeHit.findFirst({
+      where: {
+        id: { in: result.knowledgeHitIds },
+        knowledgeId: state.approvedKnowledgeId,
+        route: 'KNOWLEDGE_INJECTED_AGENT',
+        usedInResponse: true,
+      },
+    })
+    assert(usedHit, 'KB injected answer should mark AiKnowledgeHit as used in response')
+
+    await request(`/ai/problem-sessions/${session.id}/discard`, {
+      method: 'POST',
+      token: state.studentToken,
+    })
   })
 
   await writeEvidence('passed')

@@ -86,9 +86,32 @@ export type AiChatResponse = {
   cards?: AiCard[]
   actions?: AiPendingAction[]
   assistantTurnId?: string
+  dataRoute?: {
+    route: 'DIRECT_RESOURCE_RESPONSE' | 'KNOWLEDGE_DIRECT_ANSWER' | 'KNOWLEDGE_INJECTED_AGENT' | 'AGENT_DATA_REQUEST' | 'NORMAL_AGENT' | 'ACTION_PROPOSAL'
+    reasonCode: string
+    confidence: number
+    dataSources: string[]
+    requiresModelCall: boolean
+    requiresKnowledgeHit: boolean
+    requiresSourceBadge: boolean
+    requiresUserConfirmation: boolean
+    allowedContextDomains: string[]
+    blockedRoutes: Array<{ route: string; reason: string }>
+    selectedKnowledgeIds?: string[]
+    candidateKnowledgeIds?: string[]
+  }
+  knowledgeHitIds?: string[]
+  knowledgeSources?: Array<{
+    id: string
+    title: string
+    sourceType: 'PLATFORM_KB'
+    category: string
+    confidence: number
+  }>
   quota?: AiQuota
   sessionId?: string
   toolCalls?: Array<{ name: string }>
+  usedKnowledge?: boolean
 }
 
 export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'

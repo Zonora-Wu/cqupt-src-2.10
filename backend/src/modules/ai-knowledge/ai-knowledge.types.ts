@@ -49,6 +49,7 @@ export type AiKnowledgeHitSummary = {
   title: string
   answer: string
   category: AiKnowledgeCategory
+  hitId?: string
   tags: string[]
   similarity: number
 }

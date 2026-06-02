@@ -1,0 +1,40 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T04:11:02.949Z",
+  "marker": "[phase2_mpw4e3k4_7e3e3b]",
+  "runId": "phase2_mpw4e3k4_7e3e3b",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 294,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 62,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 79,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 75,
+      "label": "KB-08A routes write intent to action proposal with audit record",
+      "ok": true
+    },
+    {
+      "duration": 14,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 19,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "message": "/ai/problem-sessions/cmpw4e3yr000fukryyuv95x25/summarize expected 2xx, got 400: 问题会话总结含敏感内容：包含内网或真实资产地址",
+      "ok": false
+    }
+  ]
+}

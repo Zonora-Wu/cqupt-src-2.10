@@ -12,6 +12,8 @@ import { getAvailableTools } from './ai.tools.registry'
 import {
   AiCard,
   AiChatResponse,
+  AiDataRouteDecision,
+  AiDataUsageRoute,
   AiPendingAction,
   AiSkillLibraryItem,
   AiToolCall,
@@ -150,11 +152,80 @@ export class AiService {
     // 1. 构建按需用户上下文。附件场景默认不注入平台业务数据，避免报告/PDF 问题被商城或漏洞列表污染。
     const context = await this.toolsService.buildUserContext(user, { domains: contextDomains })
 
-    // 2. 平台数据只作为模型上下文注入，不再用关键词规则直接生成回复。
-    const directResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = shouldUseDirectResourceResponse()
-      ? buildDirectResourceResponse(input, context)
-      : null
+    if (isWriteIntent(safeMessage)) {
+      const actionProposal = buildActionProposalResponse(safeMessage)
+      const dataRoute = routeAiDataUsage({
+        allowedContextDomains: context.injectedDomains,
+        hasAttachmentContext,
+        message: safeMessage,
+        route: 'ACTION_PROPOSAL',
+      })
+      await this.prisma.$transaction(async (tx) => {
+        await tx.aiCallLog.create({
+          data: {
+            aiSpace: getAiSpace(input.mode),
+            ipAddress: meta.ipAddress,
+            modelName: `${getOpenAiModel()}:action-proposal`,
+            outputSummary: actionProposal.content.slice(0, 1000),
+            purpose: AiCallPurpose.CHAT,
+            sanitizedInputSummary: safeMessage.slice(0, 1000),
+            tokensUsed: 0,
+            userAgent: meta.userAgent,
+            userId: user.id,
+          },
+        })
+        await tx.auditLog.create({
+          data: {
+            action: AuditAction.CALL_AI,
+            actorId: user.id,
+            ipAddress: meta.ipAddress,
+            metadata: {
+              contextDomains: context.injectedDomains,
+              dataRoute,
+              mode: input.mode,
+              promptLength: input.message.length,
+              quotaRemainingBefore: quotaBefore.remaining,
+              redacted: safeMessage !== input.message,
+              status: 200,
+              tokensUsed: 0,
+              upstreamModel: getOpenAiModel(),
+            },
+            requestPath: meta.requestPath,
+            result: 'success',
+            targetId: user.id,
+            targetType: 'AI',
+            userAgent: meta.userAgent,
+          },
+        })
+      })
+      const sessionTurn = await this.problemSessions.recordChatTurnPair({
+        answer: actionProposal.content,
+        hasAttachment: hasAttachmentContext,
+        question: safeMessage,
+        sessionId: input.sessionId,
+        user,
+      })
+      return {
+        ...actionProposal,
+        assistantTurnId: sessionTurn?.assistantTurnId,
+        dataRoute,
+        mode: input.mode,
+        quota: await this.buildQuotaSummary(user.id),
+        sessionId: sessionTurn?.sessionId ?? input.sessionId,
+        skillRoute: serializeSkillRoute(skillRoute),
+        toolCalls: [],
+      }
+    }
+
+    // 2. 实时业务数据和确定性平台说明优先于知识库与 Agent。
+    const directResponse: Pick<AiChatResponse, 'actions' | 'cards' | 'content'> | null = buildDirectResourceResponse(input, context)
     if (directResponse) {
+      const dataRoute = routeAiDataUsage({
+        allowedContextDomains: context.injectedDomains,
+        hasAttachmentContext,
+        message: safeMessage,
+        route: 'DIRECT_RESOURCE_RESPONSE',
+      })
       await this.prisma.$transaction(async (tx) => {
         await tx.aiCallLog.create({
           data: {
@@ -177,6 +248,7 @@ export class AiService {
             ipAddress: meta.ipAddress,
             metadata: {
               contextDomains: context.injectedDomains,
+              dataRoute,
               directResponse: true,
               mode: input.mode,
               promptLength: input.message.length,
@@ -211,6 +283,7 @@ export class AiService {
       return {
         ...directResponse,
         assistantTurnId: sessionTurn?.assistantTurnId,
+        dataRoute,
         mode: input.mode,
         quota: await this.buildQuotaSummary(user.id),
         sessionId: sessionTurn?.sessionId ?? input.sessionId,
@@ -230,8 +303,25 @@ export class AiService {
         })
     const topKnowledgeHit = knowledgeHits[0]
     if (topKnowledgeHit && topKnowledgeHit.similarity >= 0.65 && shouldUseKnowledgeDirectResponse()) {
+      const knowledgeHitIds = getKnowledgeHitRecordIds([topKnowledgeHit])
+      const knowledgeSources = buildKnowledgeSources([topKnowledgeHit])
+      const dataRoute = routeAiDataUsage({
+        allowedContextDomains: context.injectedDomains,
+        candidateKnowledgeIds: knowledgeHits.map((hit) => hit.id),
+        hasAttachmentContext,
+        message: safeMessage,
+        route: 'KNOWLEDGE_DIRECT_ANSWER',
+        selectedKnowledgeIds: [topKnowledgeHit.id],
+        topKnowledgeSimilarity: topKnowledgeHit.similarity,
+      })
       const knowledgeContent = `${topKnowledgeHit.answer}\n\n（已引用知识库：${topKnowledgeHit.title}）`
       await this.prisma.$transaction(async (tx) => {
+        if (knowledgeHitIds.length > 0) {
+          await tx.aiKnowledgeHit.updateMany({
+            data: { route: 'KNOWLEDGE_DIRECT_ANSWER', usedInResponse: true },
+            where: { id: { in: knowledgeHitIds } },
+          })
+        }
         await tx.aiCallLog.create({
           data: {
             aiSpace,
@@ -252,8 +342,11 @@ export class AiService {
             ipAddress: meta.ipAddress,
             metadata: {
               contextDomains: context.injectedDomains,
+              dataRoute,
               knowledgeDirect: true,
+              knowledgeHitIds,
               knowledgeHit: { id: topKnowledgeHit.id, similarity: topKnowledgeHit.similarity, title: topKnowledgeHit.title },
+              knowledgeSources,
               mode: input.mode,
               promptLength: input.message.length,
               quotaRemainingBefore: quotaBefore.remaining,
@@ -284,13 +377,30 @@ export class AiService {
         assistantTurnId: sessionTurn?.assistantTurnId,
         cards: [],
         content: knowledgeContent,
+        dataRoute,
+        knowledgeHitIds,
+        knowledgeSources,
         mode: input.mode,
         quota: await this.buildQuotaSummary(user.id),
         sessionId: sessionTurn?.sessionId ?? input.sessionId,
         skillRoute: serializeSkillRoute(skillRoute),
         toolCalls: [],
+        usedKnowledge: true,
       }
     }
+
+    const selectedKnowledgeHits = topKnowledgeHit ? knowledgeHits : []
+    const knowledgeHitIds = getKnowledgeHitRecordIds(selectedKnowledgeHits)
+    const knowledgeSources = buildKnowledgeSources(selectedKnowledgeHits)
+    const agentDataRoute = routeAiDataUsage({
+      allowedContextDomains: context.injectedDomains,
+      candidateKnowledgeIds: knowledgeHits.map((hit) => hit.id),
+      hasAttachmentContext,
+      message: safeMessage,
+      route: topKnowledgeHit ? 'KNOWLEDGE_INJECTED_AGENT' : shouldRouteAsAgentDataRequest(safeMessage, context.injectedDomains) ? 'AGENT_DATA_REQUEST' : 'NORMAL_AGENT',
+      selectedKnowledgeIds: selectedKnowledgeHits.map((hit) => hit.id),
+      topKnowledgeSimilarity: topKnowledgeHit?.similarity,
+    })
 
     // 4. 构建提示词。Hermes Agent 当前不执行后端业务 tool；实时平台数据通过 dataRequests JSON 由后端代执行。
     const routeAndDataRequestPrompt = [
@@ -415,6 +525,12 @@ export class AiService {
 
     // 7. 写审计日志
     await this.prisma.$transaction(async (tx) => {
+      if (knowledgeHitIds.length > 0) {
+        await tx.aiKnowledgeHit.updateMany({
+          data: { route: 'KNOWLEDGE_INJECTED_AGENT', usedInResponse: true },
+          where: { id: { in: knowledgeHitIds } },
+        })
+      }
       await tx.aiCallLog.create({
         data: {
           aiSpace: getAiSpace(input.mode),
@@ -437,7 +553,10 @@ export class AiService {
           ipAddress: meta.ipAddress,
           metadata: {
             contextDomains: context.injectedDomains,
+            dataRoute: dataRequestsMade.length > 0 ? addPlatformToolResultSource(agentDataRoute) : agentDataRoute,
             mode: input.mode,
+            knowledgeHitIds,
+            knowledgeSources,
             promptLength: input.message.length,
             quotaRemainingBefore: quotaBefore.remaining,
             redacted: safeMessage !== input.message,
@@ -480,6 +599,9 @@ export class AiService {
       assistantTurnId: sessionTurn?.assistantTurnId,
       cards: enrichedCards,
       content: displayContent,
+      dataRoute: dataRequestsMade.length > 0 ? addPlatformToolResultSource(agentDataRoute) : agentDataRoute,
+      knowledgeHitIds,
+      knowledgeSources,
       mode: input.mode,
       quota: await this.buildQuotaSummary(user.id),
       sessionId: sessionTurn?.sessionId ?? input.sessionId,
@@ -488,6 +610,7 @@ export class AiService {
         ...toolCallsMade.map((tc) => ({ name: tc.name })),
         ...dataRequestsMade.map((request) => ({ name: request.tool })),
       ],
+      usedKnowledge: knowledgeSources.length > 0,
     }
   }
 
@@ -633,7 +756,7 @@ function shouldUseDirectResourceResponse() {
 }
 
 function shouldUseKnowledgeDirectResponse() {
-  return process.env.AI_KNOWLEDGE_DIRECT_RESPONSE === 'true'
+  return process.env.AI_KNOWLEDGE_DIRECT_RESPONSE !== 'false'
 }
 
 function getRequestTimeoutMs() {
@@ -664,6 +787,20 @@ function formatKnowledgeHitsForPrompt(hits: Array<{ answer: string; category: st
     confidence: Number(hit.similarity.toFixed(2)),
     title: hit.title,
   }))
+}
+
+function buildKnowledgeSources(hits: Array<{ category: string; id: string; similarity: number; title: string }>) {
+  return hits.map((hit) => ({
+    category: hit.category,
+    confidence: Number(hit.similarity.toFixed(3)),
+    id: hit.id,
+    sourceType: 'PLATFORM_KB' as const,
+    title: hit.title,
+  }))
+}
+
+function getKnowledgeHitRecordIds(hits: Array<{ hitId?: string }>) {
+  return hits.map((hit) => hit.hitId).filter((id): id is string => Boolean(id))
 }
 
 function formatPlatformRuntimeDataForPrompt(context: UserContextSnapshot) {
@@ -948,6 +1085,120 @@ function buildAgentFailureResponse(reason: string): Pick<AiChatResponse, 'action
   }
 }
 
+function buildActionProposalResponse(message: string): Pick<AiChatResponse, 'actions' | 'cards' | 'content'> {
+  return {
+    actions: [],
+    cards: [],
+    content: [
+      '我不能直接替你执行这个操作。',
+      '',
+      '可以先把要执行的动作整理成提案，并在你确认后由对应业务接口重新校验权限、库存、状态和数据有效性。',
+      '',
+      `本次识别到的操作意图：${message.slice(0, 120)}`,
+    ].join('\n'),
+  }
+}
+
+function routeAiDataUsage(input: {
+  allowedContextDomains: UserContextDomain[]
+  candidateKnowledgeIds?: string[]
+  hasAttachmentContext: boolean
+  message: string
+  route: AiDataUsageRoute
+  selectedKnowledgeIds?: string[]
+  topKnowledgeSimilarity?: number
+}): AiDataRouteDecision {
+  const blockedRoutes: AiDataRouteDecision['blockedRoutes'] = []
+  const candidateKnowledgeIds = input.candidateKnowledgeIds ?? []
+  const selectedKnowledgeIds = input.selectedKnowledgeIds ?? []
+  const realtime = isRealtimeBusinessQuery(input.message)
+
+  if (input.hasAttachmentContext) {
+    blockedRoutes.push(
+      { route: 'DIRECT_RESOURCE_RESPONSE', reason: '附件/PDF 场景必须交给 Agent 结合附件上下文处理' },
+      { route: 'KNOWLEDGE_DIRECT_ANSWER', reason: '附件/PDF 场景不能由知识库直接回答' },
+    )
+  }
+  if (isWriteIntent(input.message)) {
+    blockedRoutes.push(
+      { route: 'DIRECT_RESOURCE_RESPONSE', reason: '写操作不能直接执行' },
+      { route: 'KNOWLEDGE_DIRECT_ANSWER', reason: '知识库不能执行兑换、提交、审核或修改' },
+      { route: 'KNOWLEDGE_INJECTED_AGENT', reason: '写操作必须二次确认并由业务接口重新校验' },
+      { route: 'NORMAL_AGENT', reason: '模型不能直接执行写操作' },
+    )
+  }
+  if (realtime) {
+    blockedRoutes.push(
+      { route: 'KNOWLEDGE_DIRECT_ANSWER', reason: '实时个人业务数据优先查库，不能使用历史知识抢答' },
+      { route: 'KNOWLEDGE_INJECTED_AGENT', reason: '实时个人业务数据不能由知识库作为主要依据' },
+    )
+  }
+
+  if (input.route !== 'KNOWLEDGE_DIRECT_ANSWER' && candidateKnowledgeIds.length > 0) {
+    blockedRoutes.push({ route: 'KNOWLEDGE_DIRECT_ANSWER', reason: '知识命中置信度或策略未达到直答条件' })
+  }
+
+  const dataSources = buildRouteDataSources(input.route, input.hasAttachmentContext)
+  return {
+    allowedContextDomains: input.allowedContextDomains,
+    blockedRoutes: dedupeBlockedRoutes(blockedRoutes),
+    candidateKnowledgeIds,
+    confidence: buildRouteConfidence(input.route, input.topKnowledgeSimilarity),
+    dataSources,
+    reasonCode: buildRouteReasonCode(input.route, input.hasAttachmentContext, realtime),
+    requiresKnowledgeHit: input.route === 'KNOWLEDGE_DIRECT_ANSWER' || input.route === 'KNOWLEDGE_INJECTED_AGENT',
+    requiresModelCall: input.route === 'KNOWLEDGE_INJECTED_AGENT' || input.route === 'AGENT_DATA_REQUEST' || input.route === 'NORMAL_AGENT',
+    requiresSourceBadge: input.route === 'KNOWLEDGE_DIRECT_ANSWER' || input.route === 'KNOWLEDGE_INJECTED_AGENT',
+    requiresUserConfirmation: input.route === 'ACTION_PROPOSAL',
+    route: input.route,
+    selectedKnowledgeIds,
+  }
+}
+
+function buildRouteDataSources(route: AiDataUsageRoute, hasAttachmentContext: boolean): AiDataRouteDecision['dataSources'] {
+  if (route === 'DIRECT_RESOURCE_RESPONSE') return ['REALTIME_DB', 'USER_CONTEXT']
+  if (route === 'KNOWLEDGE_DIRECT_ANSWER' || route === 'KNOWLEDGE_INJECTED_AGENT') return ['AI_KNOWLEDGE']
+  if (route === 'AGENT_DATA_REQUEST') return ['USER_CONTEXT']
+  if (hasAttachmentContext) return ['ATTACHMENT_TEXT']
+  return ['NONE']
+}
+
+function buildRouteReasonCode(route: AiDataUsageRoute, hasAttachmentContext: boolean, realtime: boolean): AiDataRouteDecision['reasonCode'] {
+  if (hasAttachmentContext) return 'HAS_ATTACHMENT_CONTEXT'
+  if (route === 'ACTION_PROPOSAL') return 'WRITE_INTENT_REQUIRES_CONFIRMATION'
+  if (route === 'DIRECT_RESOURCE_RESPONSE' || realtime) return 'REALTIME_BUSINESS_DATA'
+  if (route === 'KNOWLEDGE_DIRECT_ANSWER') return 'HIGH_CONFIDENCE_KB'
+  if (route === 'KNOWLEDGE_INJECTED_AGENT') return 'MEDIUM_CONFIDENCE_KB'
+  if (route === 'AGENT_DATA_REQUEST') return 'MODEL_REQUESTED_PLATFORM_DATA'
+  return 'OPEN_ENDED_AGENT_TASK'
+}
+
+function buildRouteConfidence(route: AiDataUsageRoute, topKnowledgeSimilarity: number | undefined) {
+  if (route === 'DIRECT_RESOURCE_RESPONSE' || route === 'ACTION_PROPOSAL') return 1
+  if (route === 'KNOWLEDGE_DIRECT_ANSWER' || route === 'KNOWLEDGE_INJECTED_AGENT') return Number((topKnowledgeSimilarity ?? 0).toFixed(3))
+  if (route === 'AGENT_DATA_REQUEST') return 0.72
+  return 0.5
+}
+
+function dedupeBlockedRoutes(blockedRoutes: AiDataRouteDecision['blockedRoutes']) {
+  const seen = new Set<string>()
+  return blockedRoutes.filter((item) => {
+    const key = `${item.route}:${item.reason}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function addPlatformToolResultSource(route: AiDataRouteDecision): AiDataRouteDecision {
+  return {
+    ...route,
+    dataSources: Array.from(new Set([...route.dataSources, 'PLATFORM_TOOL_RESULTS'])) as AiDataRouteDecision['dataSources'],
+    reasonCode: 'MODEL_REQUESTED_PLATFORM_DATA',
+    route: 'AGENT_DATA_REQUEST',
+  }
+}
+
 function buildDirectResourceResponse(
   input: NormalizedAiChatInput,
   context: UserContextSnapshot,
@@ -1080,6 +1331,29 @@ function buildDirectResourceResponse(
 function hasPlatformBasicsIntent(message: string): boolean {
   const normalized = message.toLowerCase().replace(/\s+/g, '')
   return /(?:cqupt-src|cq?uptsrc|src平台|这个平台|平台).{0,12}(?:是什么|干什么|介绍|说明|作用|怎么用|角色|流程)/i.test(normalized)
+}
+
+function isRealtimeBusinessQuery(message: string): boolean {
+  const normalized = normalizeIntentText(message)
+  return hasPersonalPointIntent(message)
+    || hasUserVulnerabilityListIntent(message)
+    || hasMallBrowseIntent(normalized)
+    || hasPriceFilterIntent(normalized)
+    || hasLearningResourceIntent(message)
+    || /(?:我的|我提交|当前|账户|账号|个人).{0,12}(?:证书|公告|排名|状态)|今天|现在|实时/.test(normalized)
+}
+
+function shouldRouteAsAgentDataRequest(message: string, injectedDomains: UserContextDomain[]) {
+  if (injectedDomains.length > 0) return false
+  return isRealtimeBusinessQuery(message)
+}
+
+function isWriteIntent(message: string): boolean {
+  const normalized = normalizeIntentText(message)
+  if (/(?:怎么|如何|流程|步骤|规则|说明|介绍|能不能|可以吗|为什么|模板|格式|有哪些|有什么|哪些|推荐|查询|查看|看看)/.test(normalized)) {
+    return false
+  }
+  return /(?:(?:帮我|替我|给我|直接|立即|马上|现在|确认|执行).{0,8}(?:兑换|换购|购买|提交|补充|撤回|删除|修改|更新|审核通过|驳回|复测通过|发放证书|禁用|启用|归档|恢复|安装skill|安装技能)|(?:我要|我想|我现在要)(?:兑换|换购|购买|提交|补充|撤回)|(?:把|将).{1,24}(?:改成|更新为|删除|归档|恢复|审核通过|驳回))/.test(normalized)
 }
 
 function hasGreetingIntent(message: string): boolean {

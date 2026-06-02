@@ -248,6 +248,9 @@ export type AiChatResponse = {
   cards?: AiCard[]
   actions?: AiPendingAction[]
   assistantTurnId?: string
+  dataRoute?: AiDataRouteDecision
+  knowledgeHitIds?: string[]
+  knowledgeSources?: AiKnowledgeResponseSource[]
   quota?: AiQuotaSummary
   sessionId?: string
   skillRoute?: {
@@ -257,6 +260,46 @@ export type AiChatResponse = {
     strategy: 'explicit_backend_role_routing'
   }
   toolCalls?: Array<{ name: string }>
+  usedKnowledge?: boolean
+}
+
+export type AiKnowledgeResponseSource = {
+  id: string
+  title: string
+  sourceType: 'PLATFORM_KB'
+  category: string
+  confidence: number
+}
+
+export type AiDataUsageRoute =
+  | 'DIRECT_RESOURCE_RESPONSE'
+  | 'KNOWLEDGE_DIRECT_ANSWER'
+  | 'KNOWLEDGE_INJECTED_AGENT'
+  | 'AGENT_DATA_REQUEST'
+  | 'NORMAL_AGENT'
+  | 'ACTION_PROPOSAL'
+
+export type AiDataRouteDecision = {
+  route: AiDataUsageRoute
+  reasonCode:
+    | 'HAS_ATTACHMENT_CONTEXT'
+    | 'WRITE_INTENT_REQUIRES_CONFIRMATION'
+    | 'REALTIME_BUSINESS_DATA'
+    | 'HIGH_CONFIDENCE_KB'
+    | 'MEDIUM_CONFIDENCE_KB'
+    | 'MODEL_REQUESTED_PLATFORM_DATA'
+    | 'OPEN_ENDED_AGENT_TASK'
+    | 'SAFETY_FALLBACK'
+  confidence: number
+  dataSources: Array<'USER_CONTEXT' | 'REALTIME_DB' | 'AI_KNOWLEDGE' | 'PLATFORM_TOOL_RESULTS' | 'ATTACHMENT_TEXT' | 'NONE'>
+  requiresModelCall: boolean
+  requiresKnowledgeHit: boolean
+  requiresSourceBadge: boolean
+  requiresUserConfirmation: boolean
+  allowedContextDomains: UserContextDomain[]
+  blockedRoutes: Array<{ route: AiDataUsageRoute; reason: string }>
+  selectedKnowledgeIds?: string[]
+  candidateKnowledgeIds?: string[]
 }
 
 export type AiQuotaSummary = {
