@@ -29,6 +29,7 @@ const state = {
   discardedSessionId: null,
   duplicateKnowledgeId: null,
   lifecycleSessionId: null,
+  legacySensitiveConversationId: null,
   otherStudentCode: String(Math.floor(1000000 + Math.random() * 8999999)),
   otherStudentId: null,
   otherStudentToken: null,
@@ -370,6 +371,47 @@ async function main() {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.sensitiveKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.sensitiveKnowledgeId } })
     state.sensitiveKnowledgeId = null
+  })
+
+  await step('KB-05A legacy user conversation resummarizes after deterministic redaction', async () => {
+    const rawSecrets = ['Bearer legacy-secret-token-abcdef123456', 'csrftoken=legacy-cookie-value', '127.0.0.1']
+    const conversation = await prisma.aiKnowledgeConversation.create({
+      data: {
+        aiSpace: 'STUDENT',
+        problemStatement: `${marker} Pikachu 安装排错：Authorization: ${rawSecrets[0]}，回连 ${rawSecrets[2]}:8080`,
+        status: 'READY_REVIEW',
+        title: `${marker} legacy pikachu sensitive conversation`,
+        topicKey: `${runId}:legacy-pikachu`,
+        turnCount: 4,
+        userId: state.studentId,
+        turns: {
+          create: [
+            { content: `${marker} 我安装 Pikachu 时访问失败，Authorization: ${rawSecrets[0]}，Cookie: ${rawSecrets[1]}，Host: real-target.example.edu`, contentHash: `${runId}:legacy-user-1`, role: 'user' },
+            { content: `${marker} 先确认 Docker/PHP/MySQL 版本，再检查端口映射和数据库配置。不要沉淀 Authorization、Cookie 或真实 Host。`, contentHash: `${runId}:legacy-assistant-1`, role: 'assistant' },
+            { content: `${marker} 日志里显示连接 ${rawSecrets[2]}:3306 失败，还是打不开页面。`, contentHash: `${runId}:legacy-user-2`, role: 'user' },
+            { content: `${marker} 最终有效步骤：1. 检查 docker compose 服务状态；2. 修改 Pikachu 数据库连接配置；3. 重启 Web 和 MySQL 容器；4. 访问本地靶场确认安装成功。安装好了后只沉淀通用排错流程。`, contentHash: `${runId}:legacy-assistant-2`, role: 'assistant' },
+          ],
+        },
+      },
+    })
+    state.legacySensitiveConversationId = conversation.id
+
+    const summarized = await request(`/ai/knowledge/conversations/${conversation.id}/summarize`, {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(['READY_REVIEW', 'SKILL_CANDIDATE', 'APPROVED_TO_KB'].includes(summarized.status), 'legacy conversation should summarize instead of being blocked by redacted sensitive markers')
+
+    const refreshed = await prisma.aiKnowledgeConversation.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' } } },
+      where: { id: conversation.id },
+    })
+    assert(refreshed, 'legacy conversation should still exist')
+    const serialized = JSON.stringify(refreshed)
+    for (const secret of rawSecrets) {
+      assert(!serialized.includes(secret), `legacy conversation should not retain raw sensitive value: ${secret}`)
+    }
+    assert(serialized.includes('[REDACTED]') || serialized.includes('[REDACTED_IP]') || serialized.includes('[TARGET_HOST]'), 'legacy conversation should retain safe redaction markers')
   })
 
   await step('KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest', async () => {
@@ -874,6 +916,16 @@ async function cleanupArtifacts() {
   if (state.duplicateKnowledgeId) {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.duplicateKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.duplicateKnowledgeId } })
+  }
+  if (state.legacySensitiveConversationId) {
+    const knowledge = await prisma.aiKnowledgeEntry.findMany({ select: { id: true }, where: { sourceConversationId: state.legacySensitiveConversationId } })
+    const knowledgeIds = knowledge.map((item) => item.id)
+    if (knowledgeIds.length) {
+      await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: knowledgeIds } } })
+      await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: knowledgeIds } } })
+    }
+    await prisma.aiKnowledgeConversationTurn.deleteMany({ where: { conversationId: state.legacySensitiveConversationId } })
+    await prisma.aiKnowledgeConversation.deleteMany({ where: { id: state.legacySensitiveConversationId } })
   }
   await prisma.aiProblemSessionTurn.deleteMany({ where: { session: { userId: { in: [state.studentId, state.otherStudentId].filter(Boolean) } } } })
   await prisma.aiProblemSession.deleteMany({ where: { userId: { in: [state.studentId, state.otherStudentId].filter(Boolean) } } })

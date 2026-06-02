@@ -39,4 +39,4 @@ docker compose -f deploy/docker/docker-compose.local.yml down
 
 - 不提交 `.env`、MinIO 密钥、模型 API Key 或真实附件。
 - MinIO bucket 由后端启动时按需创建。
-- 生产部署前需确认平台 Hermes `data/skills` 目录权限，避免 Skill Candidate 安装失败。
+- 生产部署前需确认平台 Hermes 宿主目录 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src` 权限，避免 Skill Candidate 安装失败；不要让后端写容器私有 `data/skills`。

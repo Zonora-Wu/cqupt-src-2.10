@@ -12,22 +12,17 @@
 
 部署配置目录。
 
-目标环境：
+权威部署说明见：`docs/deployment/README.md`。
 
-- 本地 Docker Compose
-- Ubuntu 云服务器 Docker Compose
-- 学校服务器部署
-
-后续会补齐：
-
-- 生产环境 `docker-compose.yml`
-- 前端 Dockerfile
-- 后端 Dockerfile
-- Nginx 配置
-- 环境变量示例
-
-当前已经提供本地依赖编排：
+当前仓库已提供：
 
 ```text
-deploy/docker/docker-compose.local.yml
+deploy/docker/docker-compose.local.yml   # 本地 PostgreSQL / Redis / MinIO 依赖编排
+deploy/scripts/start-local.sh            # Linux / WSL / macOS 本地一键启动
+deploy/scripts/start-local.ps1           # Windows PowerShell 本地一键启动
+deploy/scripts/stop-local.sh             # Linux / WSL / macOS 停止脚本
+deploy/scripts/stop-local.ps1            # Windows PowerShell 停止脚本
+deploy/nginx/README.md                   # Nginx 职责说明，完整示例见部署文档
 ```
+
+生产交付现状：仓库目前没有生产 Dockerfile，也没有生产 `docker-compose.yml`。推荐生产形态是数据服务容器化、后端 Node.js 进程托管、前端由 Nginx 托管、Hermes Agent 独立容器运行。

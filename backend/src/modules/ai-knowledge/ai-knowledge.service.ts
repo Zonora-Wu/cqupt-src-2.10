@@ -184,9 +184,9 @@ export class AiKnowledgeService {
   }
 
   async enqueueCapture(input: AiKnowledgeCaptureInput) {
-    const rejectionReason = getRejectionReason(input.question, input.answer)
     const question = redactSensitiveText(input.question)
     const answer = redactSensitiveText(input.answer)
+    const rejectionReason = getRejectionReason(question, answer)
     const questionHash = stableHash(`${input.aiSpace}:${question}`)
     const answerHash = stableHash(answer)
 
@@ -285,8 +285,21 @@ export class AiKnowledgeService {
       where: { id },
     })
     if (!conversation) throw new NotFoundException('知识沉淀会话不存在')
-    const summary = buildConversationLearningSummary(conversation.turns)
-    const aiEvaluation = await this.evaluateConversationLearning(conversation.turns, summary)
+    const sanitizedTurns = conversation.turns.map((turn) => ({ ...turn, content: redactSensitiveText(turn.content) }))
+    const turnRedactionWrites = sanitizedTurns
+      .filter((turn, index) => turn.content !== conversation.turns[index]?.content)
+      .map((turn) => this.prisma.aiKnowledgeConversationTurn.update({ data: { content: turn.content }, where: { id: turn.id } }))
+    const sanitizedProblemStatement = redactSensitiveText(conversation.problemStatement)
+    if (turnRedactionWrites.length || sanitizedProblemStatement !== conversation.problemStatement) {
+      await this.prisma.$transaction([
+        ...turnRedactionWrites,
+        ...(sanitizedProblemStatement !== conversation.problemStatement
+          ? [this.prisma.aiKnowledgeConversation.update({ data: { problemStatement: sanitizedProblemStatement, title: buildConversationTitle(sanitizedProblemStatement) }, where: { id } })]
+          : []),
+      ])
+    }
+    const summary = buildConversationLearningSummary(sanitizedTurns)
+    const aiEvaluation = await this.evaluateConversationLearning(sanitizedTurns, summary)
     return this.applyConversationLearningDecision(id, summary, aiEvaluation)
   }
 
@@ -485,11 +498,12 @@ export class AiKnowledgeService {
     title: string
     userId?: string | null
   }, reviewerId: string | null, reviewNote?: string) {
-    const sourceText = renderConversationKnowledgeAnswer(summarized)
-    const rejectionReason = getRejectionReason(summarized.problemStatement, sourceText)
+    const question = redactSensitiveText(summarized.problemStatement)
+    const sourceText = redactSensitiveText(renderConversationKnowledgeAnswer(summarized))
+    const rejectionReason = getRejectionReason(question, sourceText)
     if (rejectionReason) throw new BadRequestException(`会话总结未通过安全沉淀检查：${rejectionReason}`)
     const sourceHash = stableHash(`conversation:${summarized.id}:${stableHash(sourceText)}`)
-    const category = inferCategory(`${summarized.problemStatement}\n${sourceText}`)
+    const category = inferCategory(`${question}\n${sourceText}`)
     const roleScope = mapAiSpaceToRoleScope(summarized.aiSpace)
     const status = reviewerId ? AiKnowledgeStatus.APPROVED : AiKnowledgeStatus.AUTO_APPROVED
 
@@ -497,7 +511,7 @@ export class AiKnowledgeService {
       create: {
         answerQualityScore: clampScore((summarized.aiKbScore ?? 0.82) + 0.04),
         canonicalAnswer: sourceText,
-        canonicalQuestion: summarized.problemStatement,
+        canonicalQuestion: question,
         category,
         confidenceScore: clampScore(summarized.aiOverallScore ?? 0.78),
         educationalValueScore: 0.9,
@@ -510,9 +524,9 @@ export class AiKnowledgeService {
         reviewNote,
         roleScope,
         safetyScore: clampScore(summarized.aiSafetyScore ?? 0.88),
-        sanitizedInputHash: stableHash(summarized.problemStatement),
+        sanitizedInputHash: stableHash(question),
         sensitivity: AiKnowledgeSensitivity.INTERNAL,
-        similarityKey: buildSimilarityKey(summarized.problemStatement),
+        similarityKey: buildSimilarityKey(question),
         source: AiKnowledgeSource.USER_CHAT,
         sourceConversationId: summarized.id,
         sourceHash,
@@ -699,10 +713,10 @@ ${job.answerSummary}`),
   }
 
   async createKnowledge(input: AiKnowledgeCreateInput, actorId: string) {
-    const rejectionReason = getRejectionReason(input.question, input.answer)
-    if (rejectionReason) throw new BadRequestException(`知识内容未通过安全沉淀检查：${rejectionReason}`)
     const question = redactSensitiveText(input.question)
     const answer = redactSensitiveText(input.answer)
+    const rejectionReason = getRejectionReason(question, answer)
+    if (rejectionReason) throw new BadRequestException(`知识内容未通过安全沉淀检查：${rejectionReason}`)
     const sourceHash = stableHash(`admin:${question}:${answer}`)
 
     try {
@@ -1203,23 +1217,49 @@ function scoreKnowledgeHit(question: string, tokens: string[], entry: { title: s
 
 function redactSensitiveText(text: string) {
   return text
+    .replace(/(?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01][\s\S]*?(?=\n\n|$)/gi, '[PRIVATE_REQUEST]')
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi, '[PRIVATE_ATTACHMENT]')
     .replace(/authorization\s*:\s*[^\n\r]+/gi, 'Authorization: [REDACTED]')
-    .replace(/cookie\s*:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
+    .replace(/(?:set-cookie|cookie)\s*:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
     .replace(/bearer\s+[a-z0-9._~+/=-]{12,}/gi, 'Bearer [REDACTED]')
-    .replace(/(password|api[_-]?key|token)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
+    .replace(/(password|api[_-]?key|secret|client_secret|secret_key|private_key|token|access_token|refresh_token|session[_-]?id)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
+    .replace(/postgres(?:ql)?:\/\/[^\s"'<>，。]+/gi, '[DATABASE_URL]')
+    .replace(/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/gi, '[TARGET_URL]')
+    .replace(/host\s*:\s*[^\n\r]+/gi, 'Host: [TARGET_HOST]')
+    .replace(/(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}/g, '[REDACTED_IP]')
+    .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, (email) => maskEmail(email))
+    .replace(/(?:\+?86[-\s]?)?1[3-9]\d{9}\b/g, (phone) => `${phone.slice(0, 3)}****${phone.slice(-4)}`)
+    .replace(/(?:[A-Za-z]:\\|\/home\/|\/Users\/|\/var\/www\/|\/opt\/)[^\s"'<>，。]+/g, '[LOCAL_PATH]')
     .trim()
 }
 
 function shouldRejectForSafety(text: string) {
-  return SENSITIVE_PATTERNS.some((pattern) => pattern.test(text)) || PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text))
+  const inspect = normalizeTextForSafetyCheck(text)
+  return SENSITIVE_PATTERNS.some((pattern) => pattern.test(inspect)) || PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(inspect))
 }
 
 function getRejectionReason(question: string, answer: string) {
-  const text = `${question}\n${answer}`
+  const text = normalizeTextForSafetyCheck(`${redactSensitiveText(question)}\n${redactSensitiveText(answer)}`)
   if (SENSITIVE_PATTERNS.some((pattern) => pattern.test(text))) return '包含敏感凭证或未脱敏资产'
   if (PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text))) return '疑似 prompt injection'
   if (answer.length < 80) return '回答过短，复用价值不足'
   return null
+}
+
+function normalizeTextForSafetyCheck(text: string) {
+  return text
+    .replace(/authorization\s*:\s*\[REDACTED\]/gi, '')
+    .replace(/(?:set-cookie|cookie)\s*:\s*\[REDACTED\]/gi, '')
+    .replace(/bearer\s+\[REDACTED\]/gi, '')
+    .replace(/(password|api[_-]?key|secret|client_secret|secret_key|private_key|token|access_token|refresh_token|session[_-]?id)\s*[=:：]\s*\[REDACTED\]/gi, '')
+    .replace(/host\s*:\s*\[TARGET_HOST\]/gi, '')
+    .replace(/\[(REDACTED|TARGET_URL|TARGET_HOST|DATABASE_URL|LOCAL_PATH|PRIVATE_REQUEST|PRIVATE_ATTACHMENT|REDACTED_IP)\]/gi, '')
+}
+
+function maskEmail(email: string) {
+  const [name, domain] = email.split('@')
+  if (!name || !domain) return '***@***'
+  return `${name.slice(0, 1)}***@${domain}`
 }
 
 function getOpenAiBaseUrl() {
