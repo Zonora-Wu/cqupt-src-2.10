@@ -78,7 +78,7 @@ curl -s http://localhost:5000/health
 - AI Knowledge Base → Skill Candidate → 安装链路已使用真实平台 skills 挂载目录完成核心 E2E 验证。
 - AI dataRequests 后端托管工具网关已通过后端 TypeScript 构建验证，平台 skill 文件已写入宿主 skills 目录。
 - `backend npm run test:core-e2e` 已覆盖安全答题准入、责任书、漏洞提交、PDF 附件、AI 报告草稿、知识沉淀、Skill 安装与 RBAC 拒绝。
-- `backend npm run test:ai-problem-session` 已覆盖 AI 问题会话生命周期、脱敏 turn 写入、已解决会话总结、敏感内容拒绝、discard 不入库、管理员审核和高频高质自动入库。
+- `backend npm run test:ai-problem-session` 已覆盖 AI 问题会话生命周期、脱敏 turn 写入、已解决会话总结、敏感信息前置脱敏与审核分流、discard 不入库、管理员审核和高频高质自动入库。
 
 ## 已知限制
 

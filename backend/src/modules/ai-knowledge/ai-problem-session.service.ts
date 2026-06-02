@@ -264,7 +264,21 @@ export class AiProblemSessionService {
       throw new BadRequestException('问题会话轮次不足，不能总结')
     }
 
-    const summary = await this.buildResolvedSessionSummary(session)
+    const sanitizedTurns = session.turns.map((turn) => ({ ...turn, sanitizedText: redactSensitiveText(turn.sanitizedText) }))
+    const turnRedactionWrites = sanitizedTurns
+      .filter((turn, index) => turn.sanitizedText !== session.turns[index]?.sanitizedText)
+      .map((turn) => this.prisma.aiProblemSessionTurn.update({ data: { sanitizedText: turn.sanitizedText }, where: { id: turn.id } }))
+    const sanitizedInitialQuestion = redactSensitiveText(session.initialQuestion)
+    if (turnRedactionWrites.length || sanitizedInitialQuestion !== session.initialQuestion) {
+      await this.prisma.$transaction([
+        ...turnRedactionWrites,
+        ...(sanitizedInitialQuestion !== session.initialQuestion
+          ? [this.prisma.aiProblemSession.update({ data: { initialQuestion: sanitizedInitialQuestion, title: buildProblemSessionTitle(sanitizedInitialQuestion) }, where: { id } })]
+          : []),
+      ])
+    }
+
+    const summary = await this.buildResolvedSessionSummary({ ...session, initialQuestion: sanitizedInitialQuestion, turns: sanitizedTurns })
     validateProblemSessionSummary(summary)
     const canonicalProblem = buildCanonicalProblem(summary.problem, renderProblemSessionKnowledgeAnswer(summary), session.aiSpace)
     const clusterDecision = await this.decideKnowledgeCluster(session.aiSpace, summary, canonicalProblem)
@@ -464,8 +478,11 @@ export class AiProblemSessionService {
     const assistantMessages = turns.filter((turn) => turn.role === 'assistant').map((turn) => turn.content)
     const problem = userMessages[0] || session.initialQuestion
     const lastAnswer = assistantMessages.at(-1) ?? ''
-    const ruleFlags = getProblemSessionRuleFlags(fullText, problem)
-    const rejectionReason = ruleFlags[0]
+    const rejectionFlags = getProblemSessionRuleFlags(fullText, problem)
+    const redactionFlags = getRedactionRuleFlags(fullText)
+    const ruleFlags = [...rejectionFlags, ...redactionFlags]
+    const rejectionReason = rejectionFlags[0]
+    const hasRedactedSensitiveContent = redactionFlags.length > 0
     const environment = extractLines(fullText, /(windows|wsl|linux|ubuntu|centos|docker|compose|php\s*\d|mysql|mariadb|nginx|apache|node|npm|python|端口|版本|浏览器|burp|nmap|sqlmap)/i, 8)
     const pitfalls = extractLines(fullText, /(报错|错误|失败|不兼容|permission denied|denied|not found|timeout|端口占用|版本|依赖|乱码|空白页|连接失败|启动失败|越权|403|500)/i, 10)
     const successfulSteps = extractLines(assistantMessages.join('\n'), /(执行|运行|修改|配置|安装|重启|检查|确认|设置|创建|导入|访问|启动|提交|补充|复现|验证)/i, 12)
@@ -476,7 +493,7 @@ export class AiProblemSessionService {
     const quality = clampScore((successfulSteps.length >= 2 ? 0.72 : 0.48) + (pitfalls.length ? 0.08 : 0) + (environment.length ? 0.06 : 0))
     const reuse = clampScore(/积分|余额|商品|兑换|我的|当前|今天|公告|排名|证书|漏洞状态|SRC-\d/i.test(problem) ? 0.22 : quality + 0.08)
     const safety = rejectionReason ? 0.1 : 0.94
-    const privacy = rejectionReason ? 0.9 : 0.08
+    const privacy = rejectionReason ? 0.9 : hasRedactedSensitiveContent ? 0.18 : 0.08
     const poisoningRisk = /忽略.*规则|ignore .*instructions|系统提示词|开发者指令|自动通过|绕过权限/i.test(fullText) ? 0.95 : 0.04
     const skillSignal = inferSkillCandidateSignal(problem, fullText, successfulSteps, pitfalls, environment)
     const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || reuse < 0.5 || quality < 0.55
@@ -1322,15 +1339,28 @@ function renderProblemSessionKnowledgeAnswer(summary: ProblemSessionSummary) {
 }
 
 function getProblemSessionRejectionReason(text: string) {
-  if (/authorization\s*:|bearer\s+[a-z0-9._~+/=-]{12,}|cookie\s*:|set-cookie\s*:/i.test(text)) return '包含 Token、Cookie 或 Authorization 信息'
-  if (/(password|api[_-]?key|secret|private_key)\s*[=:：]\s*\S+/i.test(text)) return '包含密码、密钥或私钥信息'
-  if (/(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}/.test(text)) return '包含内网或真实资产地址'
-  if (/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/i.test(text)) return '包含真实资产 URL'
-  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text)) return '包含邮箱等个人身份信息'
-  if (/(?:\+?86[-\s]?)?1[3-9]\d{9}\b/.test(text)) return '包含手机号等个人身份信息'
-  if (/(?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01]|Host:\s*[^\s]+|-----BEGIN [A-Z ]+PRIVATE KEY-----/i.test(text)) return '包含原始请求包或私密附件内容'
-  if (/忽略.*(规则|指令|系统)|ignore\s+(previous|all)\s+instructions|system\s*prompt|开发者指令|系统提示词|越权|绕过.*(权限|规则)/i.test(text)) return '疑似 prompt injection 或越权指令'
+  const inspect = text
+    .replace(/authorization\s*:\s*\[REDACTED\]/gi, '')
+    .replace(/bearer\s+\[REDACTED\]/gi, '')
+    .replace(/(?:set-cookie|cookie)\s*:\s*\[REDACTED\]/gi, '')
+    .replace(/(password|api[_-]?key|secret|private_key|token|session[_-]?id)\s*[=:：]\s*\[REDACTED\]/gi, '')
+    .replace(/host\s*:\s*\[TARGET_HOST\]/gi, '')
+  if (/authorization\s*:|bearer\s+[a-z0-9._~+/=-]{12,}|cookie\s*:|set-cookie\s*:/i.test(inspect)) return '包含 Token、Cookie 或 Authorization 信息'
+  if (/(password|api[_-]?key|secret|private_key|token)\s*[=:：]\s*\S+/i.test(inspect)) return '包含密码、密钥或私钥信息'
+  if (/(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}/.test(inspect)) return '包含内网或真实资产地址'
+  if (/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/i.test(inspect)) return '包含真实资产 URL'
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(inspect)) return '包含邮箱等个人身份信息'
+  if (/(?:\+?86[-\s]?)?1[3-9]\d{9}\b/.test(inspect)) return '包含手机号等个人身份信息'
+  if (/(?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01]|Host:\s*[^\s]+|-----BEGIN [A-Z ]+PRIVATE KEY-----/i.test(inspect)) return '包含原始请求包或私密附件内容'
+  if (/忽略.*(规则|指令|系统)|ignore\s+(previous|all)\s+instructions|system\s*prompt|开发者指令|系统提示词|越权|绕过.*(权限|规则)/i.test(inspect)) return '疑似 prompt injection 或越权指令'
   return undefined
+}
+
+function getRedactionRuleFlags(text: string) {
+  if (/\[REDACTED\]|\[TARGET_URL\]|\[TARGET_HOST\]|\[DATABASE_URL\]|\[LOCAL_PATH\]|\[PRIVATE_REQUEST\]|\[PRIVATE_ATTACHMENT\]|\[REDACTED_IP\]|\*\*\*/.test(text)) {
+    return ['原始会话含敏感字段，已在总结前确定性脱敏，需人工复核后入库']
+  }
+  return []
 }
 
 function getProblemSessionRuleFlags(fullText: string, problem: string) {
@@ -1460,15 +1490,19 @@ function isUniqueConstraintError(error: unknown) {
 
 function redactSensitiveText(text: string) {
   return text
-    .replace(/authorization\s*:\s*[^\n\r]+/gi, 'Authorization: [REDACTED]')
-    .replace(/cookie\s*:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
-    .replace(/bearer\s+[a-z0-9._~+/=-]{12,}/gi, 'Bearer [REDACTED]')
-    .replace(/(password|api[_-]?key|token)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
-    .replace(/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/gi, '[TARGET_URL]')
-    .replace(/([a-z0-9._%+-])[a-z0-9._%+-]*(@[a-z0-9.-]+\.[a-z]{2,})/gi, '$1***$2')
-    .replace(/\b((?:\+?86[-\s]?)?1[3-9]\d{2})\d{4}(\d{4})\b/g, '$1****$2')
     .replace(/((?:GET|POST|PUT|DELETE|PATCH)\s+\/[^\s]*\s+HTTP\/1\.[01][\s\S]{0,1200}?)(?=\n\n|$)/gi, '[PRIVATE_REQUEST]')
     .replace(/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+PRIVATE KEY-----/g, '[PRIVATE_ATTACHMENT]')
+    .replace(/authorization\s*:\s*[^\n\r]+/gi, 'Authorization: [REDACTED]')
+    .replace(/set-cookie\s*:\s*[^\n\r]+/gi, 'Set-Cookie: [REDACTED]')
+    .replace(/cookie\s*:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
+    .replace(/bearer\s+[a-z0-9._~+/=-]{12,}/gi, 'Bearer [REDACTED]')
+    .replace(/(password|api[_-]?key|secret|private[_-]?key|token|session[_-]?id)\s*([=:：])\s*\S+/gi, '$1$2 [REDACTED]')
+    .replace(/(?:postgres|postgresql|mysql|mongodb|redis):\/\/[^\s"'<>，。]+/gi, '[DATABASE_URL]')
+    .replace(/https?:\/\/(?!localhost\b|127\.0\.0\.1\b|example\.(?:com|org|net)\b)[^\s"'<>，。]+/gi, '[TARGET_URL]')
+    .replace(/host\s*:\s*(?!localhost\b|127\.0\.0\.1\b|\[TARGET_HOST\])[^\s，。]+/gi, 'Host: [TARGET_HOST]')
+    .replace(/([a-z0-9._%+-])[a-z0-9._%+-]*(@[a-z0-9.-]+\.[a-z]{2,})/gi, '$1***$2')
+    .replace(/\b((?:\+?86[-\s]?)?1[3-9]\d{2})\d{4}(\d{4})\b/g, '$1****$2')
     .replace(/\b(?:10|127|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b/g, '[REDACTED_IP]')
+    .replace(/(?:[A-Za-z]:\\|\/home\/|\/mnt\/[a-z]\/|\/Users\/)[^\s"'<>，。]+/g, '[LOCAL_PATH]')
     .trim()
 }

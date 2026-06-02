@@ -544,6 +544,19 @@ AI 总结必须输出严格 JSON，后端做 schema 校验。
 - 不能包含 system prompt、模型配置、真实 token、cookie、完整请求包。
 - 不能将用户的一次性业务数据泛化为平台规则。
 
+### 6.4 敏感信息前置脱敏口径
+
+当前落地策略不是“命中敏感信息就整段拒绝”，而是先在后端执行确定性替换，再用替换后的 `sanitizedText` 进入总结、评分、聚类和人工审核：
+
+- `Authorization` / `Bearer` / `Cookie` / `Set-Cookie` / `password` / `apiKey` / `secret` / `token` / `sessionId` 替换为 `[REDACTED]`。
+- 原始 HTTP 请求包替换为 `[PRIVATE_REQUEST]`；私钥块替换为 `[PRIVATE_ATTACHMENT]`。
+- 真实 URL 替换为 `[TARGET_URL]`，Host 替换为 `[TARGET_HOST]`，数据库连接串替换为 `[DATABASE_URL]`。
+- 邮箱、手机号、内网 IP、本地路径分别替换为掩码邮箱、掩码手机号、`[REDACTED_IP]`、`[LOCAL_PATH]`。
+- 如果总结中出现 `[REDACTED]`、`[TARGET_URL]`、`[PRIVATE_REQUEST]` 等脱敏标记，`scoreDetails.ruleFlags` 记录“已确定性脱敏，需人工复核”，`privacy` 分提高到高于自动入库阈值；该类会话可以成为 `READY_REVIEW` 候选，但不得 `AUTO_APPROVED`。
+- 只有无法可靠脱敏、涉及其他用户数据、平台内部 prompt/配置、越权指令或 prompt injection 的内容才拒绝沉淀。
+
+验收重点：敏感原文不得出现在 `summaryJson`、`AiKnowledgeEntry`、Hermes prompt 或 Skill 文件中；脱敏后仍有通用步骤和复用价值的经验应进入人工审核队列。
+
 ---
 
 ## 7. AI + 规则混合评分
@@ -583,8 +596,8 @@ AI 输出评分建议：
 | 没有成功步骤 | 不允许自动入库 |
 | 隐私风险高 | 进入审核或拒绝 |
 | 安全分低 | 进入审核或拒绝 |
-| 检测到 Token / Cookie / API Key | 拒绝沉淀，只保留最小审计 |
-| 真实资产 URL / 内网 IP 无法脱敏 | 拒绝沉淀 |
+| 检测到 Token / Cookie / API Key | 先确定性脱敏；脱敏后仍有通用价值则进入人工审核，禁止自动入库 |
+| 真实资产 URL / 内网 IP 无法脱敏 | 拒绝沉淀；可脱敏则保留 `[TARGET_URL]` / `[REDACTED_IP]` 等占位符进入审核 |
 | 涉及其他用户数据 | 拒绝沉淀 |
 | 涉及实时积分、库存、漏洞状态 | 不进入知识库 |
 | prompt injection | 拒绝沉淀并写安全审计 |
@@ -2275,7 +2288,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `19/19`，覆盖 KB-01 到 KB-08、KB-06A 语义问题族聚类以及 KB-08A 数据使用路由；最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpw4h86m_aa15cf.json`。本轮后端 `npm run prisma:validate`、`npm run prisma:generate`、`npm run typecheck` 已通过，前端 `npm run build` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `19/19`，覆盖 KB-01 到 KB-08、KB-06A 语义问题族聚类、KB-08A 数据使用路由，以及 KB-05 敏感信息前置脱敏与审核分流；最近证据文件为 `tests/e2e/evidence/ai-problem-session-phase2-phase2_mpw9ljyv_be9713.json`。本轮后端 `npm run build`、`npm run prisma:validate` 和 docs Markdown fence 检查已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2283,7 +2296,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-02 | 解决确认与沉淀触发 | 已完成 | 只有用户确认已解决或管理员标记有价值时才触发总结 | 单测/E2E：未确认解决的 session 不生成 KB 候选；寒暄、积分、商品、漏洞实时查询不触发沉淀 |
 | KB-03 | 结构化总结 | 已完成 | `summarizeResolvedSession()` 输出问题、环境、成功步骤、失败尝试、坑点、适用范围、不适用范围 | JSON schema 校验通过；缺字段或含敏感原文时拒绝；总结不包含 Token、Cookie、真实资产和附件原文 |
 | KB-04 | AI + 规则评分 | 已完成 | 生成 quality、reuse、safety、privacy、confidence、poisoningRisk 等评分，后端规则兜底 | E2E：高安全风险 prompt injection 被拒绝；低质量回答进入 `DISCARD`；评分字段和 `scoreDetails.scoringVersion` 完整 |
-| KB-05 | 脱敏与拒绝策略 | 已完成 | Token、Cookie、Authorization、真实资产、内网 IP、其他用户数据不可入库 | E2E：Authorization、Cookie、手机号、邮箱、真实资产 URL、原始请求包样例均拒绝总结/入库；拒绝会话不生成知识条目 |
+| KB-05 | 敏感信息前置脱敏与审核分流 | 已完成 | Token、Cookie、Authorization、真实资产、内网 IP、手机号、邮箱、原始请求包等先由后端确定性替换；脱敏后有复用价值的会话可进 `READY_REVIEW`，但隐私分高于自动入库阈值，需人工审核 | E2E：Authorization、内网 IP、Cookie、手机号、邮箱、真实资产 URL、原始请求包样例在总结前被替换；summary、turn、KB entry 不含敏感原文；脱敏候选可人工审核入库但不可自动入库 |
 | KB-06 | 文本级相似聚类与去重 | 已完成 | 相同或非常接近的问题进入 `AiKnowledgeCluster`，重复风险阻断自动入库并生成合并建议 | E2E：相同问题两次已解决后累计 cluster 计数；duplicateRiskScore >= 0.72；返回相似知识和 mergeSuggestion，自动入库前被阻断 |
 | KB-06A | 语义问题族聚类 | 已完成 | 使用 `canonicalProblemJson`、`canonicalKey`、hybrid retrieval、语义字段评分和答案兼容性判断 `SAME_CLUSTER` / `VARIANT_OF_CLUSTER` / `MERGE_REVIEW` / `NEW_CLUSTER` / `REJECT` | E2E：Burp 代理抓不到请求的不同问法归入同一 cluster；Burp 同场景 Intercept 变体挂到候选 cluster 但不增加 `resolvedSessionCount`；自动入库只统计高置信 `SAME_CLUSTER` |
 | KB-07 | 高频高质自动入库 | 已完成 | 满足 resolvedSessionCount、totalAskCount、评分、反馈、安全阈值后创建 `AUTO_APPROVED`；旧单轮 capture/conversation 链路不再由 `/api/ai/chat` 触发 | E2E：构造 3 个已解决会话 + 5 次询问信号后自动入库；低质量或安全风险时不入库；单次聊天只写 `AiProblemSessionTurn`，不创建知识条目、capture job 或 legacy knowledge conversation |
@@ -2332,7 +2345,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - [x] 总结包含 problem、resolution、steps、pitfalls、failedAttempts。
 - [x] AI 评分字段完整。
 - [x] 规则评分兜底生效。
-- [x] 敏感内容被拒绝或脱敏。
+- [x] 敏感内容在总结前确定性脱敏；脱敏后有复用价值的候选进入人工审核，不自动入库。
 - [x] duplicateRiskScore >= 0.72 阻断自动入库。
 - [x] 管理端可查看相似知识和合并建议。
 - [x] 不同问法的同一问题通过 `canonicalProblemJson` / `canonicalKey` 归入同一 cluster。

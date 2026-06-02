@@ -33,6 +33,7 @@ const state = {
   otherStudentId: null,
   otherStudentToken: null,
   realtimeSessionId: null,
+  sensitiveKnowledgeId: null,
   sensitiveSessionId: null,
   studentCode: String(Math.floor(1000000 + Math.random() * 8999999)),
   studentId: null,
@@ -223,17 +224,37 @@ async function main() {
     })
   })
 
-  await step('KB-05 rejects sensitive summary content', async () => {
+  await step('KB-05 redacts sensitive content before summary and keeps it review-only', async () => {
+    const rawSecrets = ['verysecretbearertoken123456', '192.168.1.22']
     const session = await createResolvedProblemSession({
-      answer: '排查时不要保存 Authorization: Bearer verysecrettoken123456789，也不要记录 192.168.1.22 这样的内网地址。',
-      question: `${marker} 带敏感凭证的问题`,
+      answer: [
+        '可以按以下步骤排查：先执行 curl -H "Authorization: Bearer verysecretbearertoken123456" 复现接口返回，确认认证头是否导致失败。',
+        '再在本地靶场服务器 192.168.1.22 上检查 nginx 日志，确认请求是否到达应用。',
+        '最后重新配置测试环境的代理和回调地址，重启服务后验证漏洞复现链路。',
+        '注意不要把 Authorization、内网 IP 或真实回调地址写入长期知识。',
+      ].join('\n'),
+      question: `${marker} Vulhub 回调靶场带敏感凭证的排查流程怎么沉淀？`,
     })
     state.sensitiveSessionId = session.id
-    await request(`/ai/problem-sessions/${session.id}/summarize`, {
-      expectedStatus: 400,
+    const summarized = await request(`/ai/problem-sessions/${session.id}/summarize`, {
       method: 'POST',
       token: state.adminToken,
     })
+    const serializedSummary = JSON.stringify(summarized.summaryJson)
+    assert(summarized.status === 'READY_REVIEW', 'redacted sensitive session should become READY_REVIEW')
+    assert(summarized.summaryJson?.recommendation !== 'DISCARD', 'redacted reusable session should remain a reusable candidate')
+    assert(summarized.summaryJson?.scores?.privacy > 0.1, 'redacted session should require manual review and block auto-ingest')
+    assert(summarized.summaryJson?.scoreDetails?.ruleFlags?.some((flag) => flag.includes('确定性脱敏')), 'summary should record redaction review flag')
+    for (const secret of rawSecrets) {
+      assert(!serializedSummary.includes(secret), `summary should not include raw secret: ${secret}`)
+    }
+    assert(serializedSummary.includes('[REDACTED]') || serializedSummary.includes('[REDACTED_IP]'), 'summary should retain safe redaction markers')
+
+    const storedTurns = await prisma.aiProblemSessionTurn.findMany({ where: { sessionId: session.id } })
+    const serializedTurns = JSON.stringify(storedTurns)
+    for (const secret of rawSecrets) {
+      assert(!serializedTurns.includes(secret), `stored turns should not include raw secret: ${secret}`)
+    }
   })
 
   await step('KB-02 marks greeting and realtime data sessions as non-reusable', async () => {
@@ -312,16 +333,43 @@ async function main() {
     assert(summarized.summaryJson?.scoreDetails?.scoringVersion, 'scoreDetails should include scoringVersion')
   })
 
-  await step('KB-05 rejects PII, real asset URL and raw request content', async () => {
+  await step('KB-05 redacts PII, real asset URL and raw request before KB approval', async () => {
+    const rawSecrets = ['prod.example.edu.cn', '13812345678', 'user@example.edu.cn', 'sid=secret']
     const sensitive = await createResolvedProblemSession({
-      answer: '附件里有 POST /admin HTTP/1.1\\nHost: prod.example.edu.cn\\nCookie: sid=secret，联系方式 13812345678，邮箱 user@example.edu.cn，资产 https://prod.example.edu.cn/admin。',
+      answer: [
+        '可以按以下流程沉淀为通用排查方法：先用代理工具复现请求并确认服务端返回码。',
+        '再检查目标路由的认证中间件和访问控制规则，确认未登录访问是否被正确拦截。',
+        '最后补充复现步骤、影响说明和修复建议，提交前删除 Cookie、联系方式、真实域名和原始请求包。',
+        '附件原文：POST /admin HTTP/1.1\nHost: prod.example.edu.cn\nCookie: sid=secret，联系方式 13812345678，邮箱 user@example.edu.cn，资产 https://prod.example.edu.cn/admin。',
+      ].join('\n'),
       question: `${marker} 带真实资产和隐私信息的问题`,
     })
-    await request(`/ai/problem-sessions/${sensitive.id}/summarize`, {
-      expectedStatus: 400,
+    const summarized = await request(`/ai/problem-sessions/${sensitive.id}/summarize`, {
       method: 'POST',
       token: state.adminToken,
     })
+    assert(summarized.status === 'READY_REVIEW', 'sanitized PII session should enter review queue')
+    assert(summarized.summaryJson?.scores?.privacy > 0.1, 'sanitized PII session should require manual review')
+    const serializedSummary = JSON.stringify(summarized.summaryJson)
+    for (const secret of rawSecrets) {
+      assert(!serializedSummary.includes(secret), `summary should not include raw sensitive value: ${secret}`)
+    }
+
+    const reviewed = await request(`/ai/problem-sessions/${sensitive.id}/review`, {
+      body: { note: `${marker} sanitized sensitive case can be manually approved`, status: 'APPROVED_TO_KB' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    state.sensitiveKnowledgeId = reviewed.knowledgeEntryId
+    const knowledge = await prisma.aiKnowledgeEntry.findUnique({ where: { id: reviewed.knowledgeEntryId } })
+    assert(knowledge, 'manual review should create knowledge entry')
+    const serializedKnowledge = JSON.stringify(knowledge)
+    for (const secret of rawSecrets) {
+      assert(!serializedKnowledge.includes(secret), `knowledge entry should not include raw sensitive value: ${secret}`)
+    }
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.sensitiveKnowledgeId } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.sensitiveKnowledgeId } })
+    state.sensitiveKnowledgeId = null
   })
 
   await step('KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest', async () => {
@@ -548,7 +596,7 @@ async function main() {
 
   await step('KB-02/KB-03 admin review creates knowledge only after approval', async () => {
     const before = await prisma.aiKnowledgeEntry.count({
-      where: { canonicalQuestion: { contains: marker }, id: { notIn: [state.duplicateKnowledgeId, state.autoApprovedKnowledgeId].filter(Boolean) } },
+      where: { canonicalQuestion: { contains: marker }, id: { notIn: [state.duplicateKnowledgeId, state.autoApprovedKnowledgeId, state.sensitiveKnowledgeId].filter(Boolean) } },
     })
     assert(before === 0, 'no knowledge should be created before admin approval')
 
@@ -811,6 +859,10 @@ function printSummary() {
 }
 
 async function cleanupArtifacts() {
+  if (state.sensitiveKnowledgeId) {
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.sensitiveKnowledgeId } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.sensitiveKnowledgeId } })
+  }
   if (state.approvedKnowledgeId) {
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.approvedKnowledgeId } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.approvedKnowledgeId } })
