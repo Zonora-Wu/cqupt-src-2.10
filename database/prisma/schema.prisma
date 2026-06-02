@@ -1166,6 +1166,7 @@ model AiKnowledgeEntry {
   hits                   AiKnowledgeHit[]
   feedbacks              AiKnowledgeFeedback[]
   revisions              AiKnowledgeRevision[]
+  maintenanceTasks       AiKnowledgeMaintenanceTask[]
 
   @@index([status, updatedAt])
   @@index([roleScope, status])
@@ -1295,6 +1296,24 @@ model AiSkillInstallLog {
 
   @@index([candidateId, createdAt])
   @@index([operatorId, createdAt])
+}
+
+model AiKnowledgeMaintenanceTask {
+  id          String    @id @default(cuid())
+  knowledgeId String
+  taskType    String    // STALE_REVIEW | LOW_QUALITY | DUPLICATE | SECURITY | ARCHIVE | EXPIRY
+  reason      String    @db.Text
+  priority    String    @default("P3") // P0 | P1 | P2 | P3 | P4
+  status      String    @default("OPEN") // OPEN | RESOLVED | DISMISSED
+  dedupeKey   String    @unique
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  knowledge   AiKnowledgeEntry @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeId, createdAt])
+  @@index([status, priority])
+  @@index([taskType, status])
 }
 
 model AuditLog {

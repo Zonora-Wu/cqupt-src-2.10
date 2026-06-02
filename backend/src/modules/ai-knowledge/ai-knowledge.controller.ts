@@ -4,6 +4,7 @@ import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { AiKnowledgeMaintenanceWorker } from './ai-knowledge-maintenance.worker'
 import { AiKnowledgeService } from './ai-knowledge.service'
 import {
   normalizeCreateKnowledgeBody,
@@ -12,6 +13,7 @@ import {
   normalizeKnowledgeFeedbackBody,
   normalizeKnowledgeListQuery,
   normalizeKnowledgeReviewBody,
+  normalizeMaintenanceResolveBody,
   normalizeSkillCandidateBody,
   normalizeSkillCandidateReviewBody,
 } from './ai-knowledge.validation'
@@ -19,7 +21,10 @@ import {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('ai/knowledge')
 export class AiKnowledgeController {
-  constructor(@Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService) {}
+  constructor(
+    @Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService,
+    @Inject(AiKnowledgeMaintenanceWorker) private readonly maintenanceWorker: AiKnowledgeMaintenanceWorker,
+  ) {}
 
   @Get()
   @RequirePermissions('ai:manage_skills')
@@ -119,6 +124,41 @@ export class AiKnowledgeController {
     @CurrentUser() user: AuthenticatedRequestUser,
   ) {
     return this.knowledge.reviewSkillCandidate(id, normalizeSkillCandidateReviewBody(body), user.id)
+  }
+
+  // ─── Maintenance task endpoints ─────────────────────────────────
+
+  @Get('maintenance/tasks')
+  @RequirePermissions('ai:manage_skills')
+  listMaintenanceTasks(@Query() query: Record<string, unknown>) {
+    const page = positiveInt(query.page, 1)
+    const pageSize = Math.min(positiveInt(query.pageSize, 20), 100)
+    return this.knowledge.listMaintenanceTasks({
+      knowledgeId: typeof query.knowledgeId === 'string' ? query.knowledgeId : undefined,
+      page,
+      pageSize,
+      priority: typeof query.priority === 'string' ? query.priority : undefined,
+      status: typeof query.status === 'string' ? query.status : undefined,
+      taskType: typeof query.taskType === 'string' ? query.taskType : undefined,
+    })
+  }
+
+  @Post('maintenance/tasks/:id/resolve')
+  @RequirePermissions('ai:manage_skills')
+  resolveMaintenanceTask(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.knowledge.resolveMaintenanceTask(id, normalizeMaintenanceResolveBody(body))
+  }
+
+  @Post('maintenance/tasks/:id/dismiss')
+  @RequirePermissions('ai:manage_skills')
+  dismissMaintenanceTask(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.knowledge.dismissMaintenanceTask(id, normalizeMaintenanceResolveBody(body))
+  }
+
+  @Post('maintenance/run')
+  @RequirePermissions('ai:manage_skills')
+  runMaintenance() {
+    return this.maintenanceWorker.runMaintenanceScan()
   }
 }
 

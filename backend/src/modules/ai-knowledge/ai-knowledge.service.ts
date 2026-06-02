@@ -1,5 +1,4 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
-import { createHash } from 'crypto'
 import { constants, existsSync, lstatSync, mkdirSync, openSync, closeSync, realpathSync, renameSync, writeFileSync } from 'fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'path'
 import {
@@ -19,6 +18,7 @@ import {
   Prisma,
 } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { stableHash } from './ai-knowledge.utils'
 import {
   AiKnowledgeCaptureInput,
   AiKnowledgeConversationListQuery,
@@ -28,6 +28,8 @@ import {
   AiKnowledgeFeedbackInput,
   AiKnowledgeHitSummary,
   AiKnowledgeListQuery,
+  AiKnowledgeMaintenanceListQuery,
+  AiKnowledgeMaintenanceResolveInput,
   AiKnowledgeRetrievalInput,
   AiKnowledgeReviewInput,
   AiSkillCandidateCreateInput,
@@ -949,6 +951,50 @@ ${candidate.content}`)
       throw new ConflictException(message)
     }
   }
+
+  // ─── Maintenance task management ─────────────────────────────────
+
+  async listMaintenanceTasks(query: AiKnowledgeMaintenanceListQuery) {
+    const where: Prisma.AiKnowledgeMaintenanceTaskWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.taskType ? { taskType: query.taskType } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.knowledgeId ? { knowledgeId: query.knowledgeId } : {}),
+    }
+    const [total, items] = await Promise.all([
+      this.prisma.aiKnowledgeMaintenanceTask.count({ where }),
+      this.prisma.aiKnowledgeMaintenanceTask.findMany({
+        orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        where,
+      }),
+    ])
+    return {
+      items,
+      pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) },
+    }
+  }
+
+  async resolveMaintenanceTask(id: string, input: AiKnowledgeMaintenanceResolveInput) {
+    const task = await this.prisma.aiKnowledgeMaintenanceTask.findUnique({ where: { id } })
+    if (!task) throw new NotFoundException('维护任务不存在')
+    if (task.status !== 'OPEN') throw new ConflictException('只有 OPEN 状态的任务可以解决')
+    return this.prisma.aiKnowledgeMaintenanceTask.update({
+      data: { reason: input.reason ? `${task.reason}\n决议：${input.reason}` : task.reason, resolvedAt: new Date(), status: 'RESOLVED' },
+      where: { id },
+    })
+  }
+
+  async dismissMaintenanceTask(id: string, input: AiKnowledgeMaintenanceResolveInput) {
+    const task = await this.prisma.aiKnowledgeMaintenanceTask.findUnique({ where: { id } })
+    if (!task) throw new NotFoundException('维护任务不存在')
+    if (task.status !== 'OPEN') throw new ConflictException('只有 OPEN 状态的任务可以忽略')
+    return this.prisma.aiKnowledgeMaintenanceTask.update({
+      data: { reason: input.reason ? `${task.reason}\n忽略原因：${input.reason}` : task.reason, resolvedAt: new Date(), status: 'DISMISSED' },
+      where: { id },
+    })
+  }
 }
 
 function buildTopicKey(question: string) {
@@ -1310,10 +1356,6 @@ function extractJsonObject(content: string) {
   const end = candidate.lastIndexOf('}')
   if (start < 0 || end <= start) throw new Error('AI评分未返回JSON对象')
   return candidate.slice(start, end + 1)
-}
-
-function stableHash(value: string) {
-  return createHash('sha256').update(value).digest('hex')
 }
 
 function buildSimilarityKey(question: string) {

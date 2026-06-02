@@ -1,0 +1,125 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T14:42:39.787Z",
+  "marker": "[phase2_mpwqw58t_09b129]",
+  "runId": "phase2_mpwqw58t_09b129",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 340,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 79,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 121,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 112,
+      "label": "KB-08A routes write intent to action proposal with audit record",
+      "ok": true
+    },
+    {
+      "duration": 14,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 48,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 47,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 43,
+      "label": "KB-05 redacts sensitive content before summary and keeps it review-only",
+      "ok": true
+    },
+    {
+      "duration": 105,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 43,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 80,
+      "label": "KB-05 redacts PII, real asset URL and raw request before KB approval",
+      "ok": true
+    },
+    {
+      "duration": 12030,
+      "label": "KB-05A legacy user conversation resummarizes after deterministic redaction",
+      "ok": true
+    },
+    {
+      "duration": 82,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 107,
+      "label": "KB-06A semantically clusters same problem and separates variants",
+      "ok": true
+    },
+    {
+      "duration": 62789,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 27174,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 27,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 26,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    },
+    {
+      "duration": 117,
+      "label": "KB-08 reuses approved knowledge with source and used hit record",
+      "ok": true
+    },
+    {
+      "duration": 159,
+      "label": "KB-08B applies knowledge usage strength and route preview hard boundaries",
+      "ok": true
+    },
+    {
+      "duration": 75,
+      "label": "KB-09 filters knowledge by role scope, visibility, sensitivity and status before preview",
+      "ok": true
+    },
+    {
+      "duration": 160,
+      "label": "KB-10 persists assistant turn feedback and knowledge feedback summary",
+      "ok": true
+    },
+    {
+      "duration": 55,
+      "label": "KB-11 enforces maintenanceStatus and per-entry retrieval policy",
+      "message": "LOW_QUALITY_REVIEW should remain visible as a retrieval candidate: {\"blockedRoutes\":[{\"route\":\"KNOWLEDGE_DIRECT_ANSWER\",\"reason\":\"最高知识命中 0.53 低于直答阈值 0.80 或被硬规则压制\"},{\"route\":\"KNOWLEDGE_INJECTED_AGENT\",\"reason\":\"最高知识命中 0.53 低于注入阈值 0.65 或被硬规则压制\"}],\"candidateKnowledgeIds\":[\"cmpwqydbr003kukcgipxka08g\",\"cmpwqydbr003gukcg4g0isyt8\",\"cmpwqxrwp002rukibdaiudqdn\",\"cmpwqycx4004tukib5xz6uukr\",\"cmpwqwfbt001oukcghoxhkx9n\"],\"knowledgeUsageStrength\":10,\"latencyMs\":5,\"reasonCode\":\"OPEN_ENDED_AGENT_TASK\",\"route\":\"NORMAL_AGENT\",\"selectedKnowledgeIds\":[],\"sourcesPreview\":[],\"thresholds\":{\"directThreshold\":0.8,\"injectThreshold\":0.65},\"topKnowledgeSimilarity\":0.535}",
+      "ok": false
+    }
+  ]
+}

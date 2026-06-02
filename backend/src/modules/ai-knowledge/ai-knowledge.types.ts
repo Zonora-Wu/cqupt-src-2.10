@@ -100,3 +100,16 @@ export type AiSkillCandidateReviewInput = {
   note?: string
   status: Extract<AiSkillCandidateStatus, 'APPROVED' | 'REJECTED'>
 }
+
+export type AiKnowledgeMaintenanceListQuery = {
+  knowledgeId?: string
+  page: number
+  pageSize: number
+  priority?: string
+  status?: string
+  taskType?: string
+}
+
+export type AiKnowledgeMaintenanceResolveInput = {
+  reason?: string
+}

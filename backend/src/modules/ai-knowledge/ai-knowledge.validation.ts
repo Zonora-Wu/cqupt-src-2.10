@@ -15,6 +15,7 @@ import {
   AiKnowledgeConversationReviewInput,
   AiKnowledgeFeedbackInput,
   AiKnowledgeListQuery,
+  AiKnowledgeMaintenanceResolveInput,
   AiKnowledgeReviewInput,
   AiSkillCandidateCreateInput,
   AiSkillCandidateReviewInput,
@@ -130,6 +131,10 @@ function normalizeTags(value: unknown) {
 function normalizeIdList(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) throw new BadRequestException('来源知识不能为空')
   return value.map((item) => requiredText(item, '知识 ID', 3, 128)).slice(0, 20)
+}
+
+export function normalizeMaintenanceResolveBody(body: Record<string, unknown>): AiKnowledgeMaintenanceResolveInput {
+  return { reason: optionalText(body.reason, '处理原因', 2000) }
 }
 
 function normalizeSkillName(value: string) {
