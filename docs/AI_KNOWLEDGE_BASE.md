@@ -2291,7 +2291,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `25/25`，覆盖 KB-01 到 KB-13、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈、KB-11 `maintenanceStatus + retrievalPolicy`、KB-12 `AiKnowledgeMaintenanceWorker`、KB-13 `AiKnowledgeMaintenanceTask` 管理端 P0/P1 优先级过滤、invalid priority 拒绝、任务 knowledge summary、resolve/dismiss 审计与 dedupeKey 去重，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。KB-12/KB-13 覆盖安全举报自动 `SECURITY_SUSPENDED`、重复运行不产生重复 OPEN 任务、低质量反馈触发 `LOW_QUALITY_REVIEW`、管理端任务列表/解决/忽略、resolve/dismiss 写 `AuditLog`、以及非管理员拒绝。本轮后端 `npm run build`、`npm run typecheck`、`npm run prisma:validate`、前端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `25/25`，覆盖 KB-01 到 KB-13、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈、KB-11 `maintenanceStatus + retrievalPolicy`、KB-12 `AiKnowledgeMaintenanceWorker`、KB-13 `AiKnowledgeMaintenanceTask` 管理端 P0-P4 过滤能力（E2E 覆盖 P0/P1）、invalid priority 拒绝、任务 knowledge summary、resolve/dismiss 审计与 dedupeKey 去重，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。KB-12/KB-13 覆盖安全举报自动 `SECURITY_SUSPENDED`、重复运行不产生重复 OPEN 任务、低质量反馈触发 `LOW_QUALITY_REVIEW`、管理端任务列表/解决/忽略、resolve/dismiss 写 `AuditLog`、以及非管理员拒绝。本轮后端 `npm run build`、`npm run typecheck`、`npm run prisma:validate`、前端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 和 `git diff --check` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|

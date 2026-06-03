@@ -15,6 +15,8 @@ import {
   normalizeKnowledgeReviewBody,
   normalizeMaintenanceListQuery,
   normalizeMaintenanceResolveBody,
+  normalizeRevisionCreateBody,
+  normalizeRevisionRestoreBody,
   normalizeSkillCandidateBody,
   normalizeSkillCandidateReviewBody,
 } from './ai-knowledge.validation'
@@ -117,6 +119,34 @@ export class AiKnowledgeController {
   @Post(':id/feedback')
   feedback(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.knowledge.addFeedback(id, normalizeKnowledgeFeedbackBody(body), user.id, user.role)
+  }
+
+  @Get(':id/revisions')
+  @RequirePermissions('ai:manage_skills')
+  listRevisions(@Param('id') id: string) {
+    return this.knowledge.listRevisions(id)
+  }
+
+  @Post(':id/revisions')
+  @RequirePermissions('ai:manage_skills')
+  createRevision(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.knowledge.createRevision(id, normalizeRevisionCreateBody(body), user.id, getRequestMeta(req))
+  }
+
+  @Post(':id/restore')
+  @RequirePermissions('ai:manage_skills')
+  restoreRevision(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.knowledge.restoreRevision(id, normalizeRevisionRestoreBody(body), user.id, getRequestMeta(req))
   }
 
   @Get('skill-candidates')

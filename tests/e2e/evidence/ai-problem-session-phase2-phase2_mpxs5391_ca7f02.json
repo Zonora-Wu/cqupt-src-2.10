@@ -1,0 +1,125 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-03T08:29:23.760Z",
+  "marker": "[phase2_mpxs5391_ca7f02]",
+  "runId": "phase2_mpxs5391_ca7f02",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 346,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 82,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 116,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 104,
+      "label": "KB-08A routes write intent to action proposal with audit record",
+      "ok": true
+    },
+    {
+      "duration": 16,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 49,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 48,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 43,
+      "label": "KB-05 redacts sensitive content before summary and keeps it review-only",
+      "ok": true
+    },
+    {
+      "duration": 111,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 42,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 77,
+      "label": "KB-05 redacts PII, real asset URL and raw request before KB approval",
+      "ok": true
+    },
+    {
+      "duration": 45144,
+      "label": "KB-05A legacy user conversation resummarizes after deterministic redaction",
+      "ok": true
+    },
+    {
+      "duration": 86,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 113,
+      "label": "KB-06A semantically clusters same problem and separates variants",
+      "ok": true
+    },
+    {
+      "duration": 748962,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 748560,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 33,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 29,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    },
+    {
+      "duration": 126,
+      "label": "KB-08 reuses approved knowledge with source and used hit record",
+      "ok": true
+    },
+    {
+      "duration": 139,
+      "label": "KB-08B applies knowledge usage strength and route preview hard boundaries",
+      "ok": true
+    },
+    {
+      "duration": 80,
+      "label": "KB-09 filters knowledge by role scope, visibility, sensitivity and status before preview",
+      "ok": true
+    },
+    {
+      "duration": 196,
+      "label": "KB-10 persists assistant turn feedback and knowledge feedback summary",
+      "ok": true
+    },
+    {
+      "duration": 59,
+      "label": "KB-11 enforces maintenanceStatus and per-entry retrieval policy",
+      "message": "LOW_QUALITY_REVIEW should remain visible as a retrieval candidate: {\"blockedRoutes\":[{\"route\":\"KNOWLEDGE_DIRECT_ANSWER\",\"reason\":\"最高知识命中 0.53 低于直答阈值 0.80 或被硬规则压制\"},{\"route\":\"KNOWLEDGE_INJECTED_AGENT\",\"reason\":\"最高知识命中 0.53 低于注入阈值 0.65 或被硬规则压制\"}],\"candidateKnowledgeIds\":[\"cmpxt273x003mukgc6m9ifxb1\",\"cmpxsm4xe002sukk3y02xtbam\",\"cmpxt26o70056ukk33w1t2vlh\",\"cmpxs62vw001oukgc1sno0ngq\"],\"knowledgeUsageStrength\":10,\"latencyMs\":5,\"reasonCode\":\"OPEN_ENDED_AGENT_TASK\",\"route\":\"NORMAL_AGENT\",\"selectedKnowledgeIds\":[],\"sourcesPreview\":[],\"thresholds\":{\"directThreshold\":0.8,\"injectThreshold\":0.65},\"topKnowledgeSimilarity\":0.535}",
+      "ok": false
+    }
+  ]
+}

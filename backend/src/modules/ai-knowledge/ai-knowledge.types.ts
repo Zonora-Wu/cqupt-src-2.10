@@ -117,3 +117,27 @@ export type AiKnowledgeMaintenanceListQuery = {
 export type AiKnowledgeMaintenanceResolveInput = {
   reason?: string
 }
+
+export type AiKnowledgeRevisionChangeType = 'MANUAL_EDIT' | 'OUTDATED_FIX' | 'SAFETY_FIX' | 'MERGE' | 'ROLLBACK' | 'REVIEW'
+
+export type AiKnowledgeRevisionCreateInput = {
+  agentInjectEnabled?: boolean
+  answer?: string
+  category?: AiKnowledgeCategory
+  changeReason: string
+  changeType: AiKnowledgeRevisionChangeType
+  directAnswerEnabled?: boolean
+  question?: string
+  retrievalEnabled?: boolean
+  roleScope?: AiKnowledgeRoleScope
+  sensitivity?: AiKnowledgeSensitivity
+  tags?: string[]
+  title?: string
+  visibility?: AiKnowledgeVisibility
+}
+
+export type AiKnowledgeRevisionRestoreInput = {
+  reason: string
+  revisionId?: string
+  version?: number
+}

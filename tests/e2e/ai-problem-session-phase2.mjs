@@ -31,6 +31,7 @@ const state = {
   kb12LowQualityKnowledgeId: null,
   kb12SecurityKnowledgeId: null,
   kb13MaintenanceTaskIds: [],
+  kb14KnowledgeId: null,
   lifecycleSessionId: null,
   legacySensitiveConversationId: null,
   maintenanceKnowledgeIds: [],
@@ -1342,6 +1343,104 @@ async function main() {
     state.kb12LowQualityKnowledgeId = lowQualityEntry.id
   })
 
+  await step('KB-14 creates immutable revisions and restores snapshots', async () => {
+    const originalAnswer = `${marker} KB14 原始答案：先检查 Docker 服务，再查看端口映射。`
+    const revisedAnswer = `${marker} KB14 修订答案：先检查 Docker 服务，再查看端口映射，最后重启靶场容器。`
+    const entry = await prisma.aiKnowledgeEntry.create({
+      data: {
+        agentInjectEnabled: true,
+        answerQualityScore: 0.86,
+        canonicalAnswer: originalAnswer,
+        canonicalQuestion: `${marker} KB14 revision test question`,
+        category: 'PLATFORM_USAGE',
+        confidenceScore: 0.86,
+        directAnswerEnabled: true,
+        educationalValueScore: 0.82,
+        generalityScore: 0.8,
+        maintenanceStatus: 'HEALTHY',
+        platformRelevanceScore: 0.82,
+        privacyRiskScore: 0.05,
+        retrievalEnabled: true,
+        reuseValueScore: 0.83,
+        reviewedById: state.studentId,
+        roleScope: 'STUDENT',
+        safetyScore: 0.9,
+        sensitivity: 'INTERNAL',
+        source: 'ADMIN_CREATED',
+        sourceHash: `${runId}:kb14:${randomBytes(3).toString('hex')}`,
+        status: 'APPROVED',
+        tags: ['kb14', 'revision-test'],
+        title: `${marker} KB14 修订测试`,
+        visibility: 'ROLE_ONLY',
+      },
+    })
+    state.kb14KnowledgeId = entry.id
+    await prisma.aiKnowledgeHit.create({
+      data: {
+        aiSpace: 'STUDENT',
+        knowledgeId: entry.id,
+        questionHash: `${runId}:kb14-hit`,
+        questionSummary: `${marker} KB14 hit retention`,
+        route: 'KNOWLEDGE_DIRECT_ANSWER',
+        similarity: 0.91,
+        usedInResponse: true,
+        userId: state.studentId,
+      },
+    })
+
+    const edited = await request(`/ai/knowledge/${entry.id}/revisions`, {
+      body: {
+        answer: revisedAnswer,
+        changeReason: `${marker} KB14 手工修订答案`,
+        changeType: 'MANUAL_EDIT',
+        title: `${marker} KB14 修订测试 v2`,
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(edited.revision?.version === 1, `first revision should be version 1, got ${edited.revision?.version}`)
+    assert(edited.revision?.oldSnapshot?.canonicalAnswer === originalAnswer, 'revision oldSnapshot should keep original answer')
+    assert(edited.revision?.newSnapshot?.canonicalAnswer === revisedAnswer, 'revision newSnapshot should keep revised answer')
+    assert(edited.entry?.canonicalAnswer === revisedAnswer, 'entry should use revised answer')
+
+    const listed = await request(`/ai/knowledge/${entry.id}/revisions`, { token: state.adminToken })
+    assert(listed.length === 1, `revision list should contain 1 item, got ${listed.length}`)
+    assert(listed[0].version === 1, 'revision list should expose version 1')
+
+    const secondAnswer = `${marker} KB14 第二次修订答案：加入日志路径检查。`
+    const secondEdit = await request(`/ai/knowledge/${entry.id}/revisions`, {
+      body: {
+        answer: secondAnswer,
+        changeReason: `${marker} KB14 第二次手工修订`,
+        changeType: 'OUTDATED_FIX',
+      },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(secondEdit.revision?.version === 2, `second revision should be version 2, got ${secondEdit.revision?.version}`)
+    assert(secondEdit.entry?.canonicalAnswer === secondAnswer, 'entry should use second revised answer')
+
+    const restored = await request(`/ai/knowledge/${entry.id}/restore`, {
+      body: { reason: `${marker} KB14 回滚到第一版修订`, version: 1 },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(restored.revision?.version === 3, `restore should create version 3, got ${restored.revision?.version}`)
+    assert(restored.revision?.changeType === 'ROLLBACK', 'restore revision should record ROLLBACK changeType')
+    assert(restored.entry?.canonicalAnswer === revisedAnswer, 'restore to version 1 should use version 1 snapshot answer')
+
+    const archived = await request(`/ai/knowledge/${entry.id}/review`, {
+      body: { note: `${marker} KB14 归档保留历史`, status: 'ARCHIVED' },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(archived.status === 'ARCHIVED', 'archive should mark entry ARCHIVED')
+    const revisionCount = await prisma.aiKnowledgeRevision.count({ where: { knowledgeId: entry.id } })
+    const hitCount = await prisma.aiKnowledgeHit.count({ where: { knowledgeId: entry.id } })
+    assert(revisionCount >= 3, `archive should preserve and add revisions, got ${revisionCount}`)
+    assert(hitCount === 1, `archive should preserve hits, got ${hitCount}`)
+  })
+
   await writeEvidence('passed')
   printSummary()
 }
@@ -1555,6 +1654,12 @@ async function cleanupArtifacts() {
     await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: state.maintenanceKnowledgeIds } } })
+  }
+  if (state.kb14KnowledgeId) {
+    await prisma.auditLog.deleteMany({ where: { targetId: state.kb14KnowledgeId, targetType: 'AiKnowledgeEntry' } })
+    await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: state.kb14KnowledgeId } })
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: state.kb14KnowledgeId } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: state.kb14KnowledgeId } })
   }
   const kb12Ids = [state.kb12SecurityKnowledgeId, state.kb12LowQualityKnowledgeId].filter(Boolean)
   if (state.kb13MaintenanceTaskIds.length) {

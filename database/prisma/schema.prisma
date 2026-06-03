@@ -1186,12 +1186,19 @@ model AiKnowledgeRevision {
   title             String
   canonicalQuestion String            @db.Text
   canonicalAnswer   String            @db.Text
-  changeReason      String?           @db.Text
+  version           Int
+  changeType        String
+  changeReason      String            @db.Text
+  oldSnapshot       Json
+  newSnapshot       Json
+  diffSummary       String?           @db.Text
+  editorType        String            @default("ADMIN")
   createdAt         DateTime          @default(now())
 
   knowledge         AiKnowledgeEntry  @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
   editor            User?             @relation("AiKnowledgeRevisionEditor", fields: [editorId], references: [id])
 
+  @@unique([knowledgeId, version])
   @@index([knowledgeId, createdAt])
   @@index([editorId])
 }

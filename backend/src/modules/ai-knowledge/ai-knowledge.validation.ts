@@ -17,6 +17,8 @@ import {
   AiKnowledgeListQuery,
   AiKnowledgeMaintenanceListQuery,
   AiKnowledgeMaintenanceResolveInput,
+  AiKnowledgeRevisionCreateInput,
+  AiKnowledgeRevisionRestoreInput,
   AiKnowledgeReviewInput,
   AiSkillCandidateCreateInput,
   AiSkillCandidateReviewInput,
@@ -27,6 +29,7 @@ const DEFAULT_PAGE_SIZE = 20
 const MAINTENANCE_PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4'] as const
 const MAINTENANCE_TASK_STATUSES = ['OPEN', 'RESOLVED', 'DISMISSED'] as const
 const MAINTENANCE_TASK_TYPES = ['STALE_REVIEW', 'LOW_QUALITY', 'DUPLICATE', 'SECURITY', 'ARCHIVE', 'EXPIRY'] as const
+const REVISION_CHANGE_TYPES = ['MANUAL_EDIT', 'OUTDATED_FIX', 'SAFETY_FIX', 'MERGE', 'ROLLBACK', 'REVIEW'] as const
 
 export function normalizeKnowledgeListQuery(query: Record<string, unknown>): AiKnowledgeListQuery {
   return {
@@ -87,6 +90,36 @@ export function normalizeKnowledgeReviewBody(body: Record<string, unknown>): AiK
   return { note: optionalText(body.note, '审核备注', 1000), status }
 }
 
+export function normalizeRevisionCreateBody(body: Record<string, unknown>): AiKnowledgeRevisionCreateInput {
+  const changeType = normalizeStringUnion(body.changeType, REVISION_CHANGE_TYPES, '修订类型') ?? 'MANUAL_EDIT'
+  const patch = {
+    agentInjectEnabled: optionalBoolean(body.agentInjectEnabled, 'Agent 注入开关'),
+    answer: optionalText(body.answer, '标准答案', 12000),
+    category: normalizeEnum(body.category, AiKnowledgeCategory, '知识分类'),
+    changeReason: requiredText(body.changeReason, '修订原因', 3, 1000),
+    changeType,
+    directAnswerEnabled: optionalBoolean(body.directAnswerEnabled, '直接回答开关'),
+    question: optionalText(body.question, '标准问题', 3000),
+    retrievalEnabled: optionalBoolean(body.retrievalEnabled, '检索开关'),
+    roleScope: normalizeEnum(body.roleScope, AiKnowledgeRoleScope, '角色范围'),
+    sensitivity: normalizeEnum(body.sensitivity, AiKnowledgeSensitivity, '敏感级别'),
+    tags: body.tags === undefined ? undefined : normalizeTags(body.tags),
+    title: optionalText(body.title, '标题', 120),
+    visibility: normalizeEnum(body.visibility, AiKnowledgeVisibility, '可见性'),
+  }
+  if (!Object.entries(patch).some(([key, value]) => key !== 'changeReason' && key !== 'changeType' && value !== undefined)) {
+    throw new BadRequestException('修订内容不能为空')
+  }
+  return patch
+}
+
+export function normalizeRevisionRestoreBody(body: Record<string, unknown>): AiKnowledgeRevisionRestoreInput {
+  const revisionId = optionalText(body.revisionId, '修订 ID', 128)
+  const version = body.version === undefined || body.version === null || body.version === '' ? undefined : positiveInt(body.version, 1)
+  if (!revisionId && !version) throw new BadRequestException('必须指定 revisionId 或 version')
+  return { reason: requiredText(body.reason, '回滚原因', 3, 1000), revisionId, version }
+}
+
 export function normalizeKnowledgeFeedbackBody(body: Record<string, unknown>): AiKnowledgeFeedbackInput {
   const value = normalizeEnum(body.value, AiKnowledgeFeedbackValue, '反馈值')
   if (!value) throw new BadRequestException('反馈值不能为空')
@@ -120,6 +153,12 @@ function requiredText(value: unknown, label: string, min: number, max: number) {
 function optionalText(value: unknown, label: string, max: number) {
   if (value === undefined || value === null || value === '') return undefined
   return requiredText(value, label, 1, max)
+}
+
+function optionalBoolean(value: unknown, label: string) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'boolean') throw new BadRequestException(`${label}格式不正确`)
+  return value
 }
 
 function positiveInt(value: unknown, fallback: number) {

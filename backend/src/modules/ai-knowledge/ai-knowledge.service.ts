@@ -32,6 +32,8 @@ import {
   AiKnowledgeMaintenanceListQuery,
   AiKnowledgeMaintenanceResolveInput,
   AiKnowledgeRetrievalInput,
+  AiKnowledgeRevisionCreateInput,
+  AiKnowledgeRevisionRestoreInput,
   AiKnowledgeReviewInput,
   AiSkillCandidateCreateInput,
   AiSkillCandidateReviewInput,
@@ -782,17 +784,8 @@ ${job.answerSummary}`),
     }
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.aiKnowledgeRevision.create({
-        data: {
-          canonicalAnswer: entry.canonicalAnswer,
-          canonicalQuestion: entry.canonicalQuestion,
-          changeReason: input.note,
-          editorId: reviewerId,
-          knowledgeId: id,
-          title: entry.title,
-        },
-      })
-      return tx.aiKnowledgeEntry.update({
+      const oldSnapshot = this.buildKnowledgeSnapshot(entry)
+      const updated = await tx.aiKnowledgeEntry.update({
         data: {
           reviewNote: input.note,
           reviewedAt: new Date(),
@@ -804,7 +797,207 @@ ${job.answerSummary}`),
         },
         where: { id },
       })
+      await this.createRevisionRecord(tx, {
+        changeReason: input.note ?? `审核状态变更为 ${input.status}`,
+        changeType: 'REVIEW',
+        editorId: reviewerId,
+        knowledgeId: id,
+        newEntry: updated,
+        oldSnapshot,
+      })
+      return updated
     })
+  }
+
+  async listRevisions(knowledgeId: string) {
+    await this.ensureKnowledgeExists(knowledgeId)
+    return this.prisma.aiKnowledgeRevision.findMany({
+      orderBy: { version: 'desc' },
+      where: { knowledgeId },
+    })
+  }
+
+  async createRevision(id: string, input: AiKnowledgeRevisionCreateInput, editorId: string, meta: ClientRequestMeta = {}) {
+    const entry = await this.prisma.aiKnowledgeEntry.findUnique({ where: { id } })
+    if (!entry) throw new NotFoundException('知识条目不存在')
+
+    const nextAnswer = input.answer ?? entry.canonicalAnswer
+    const nextQuestion = input.question ?? entry.canonicalQuestion
+    const rejectionReason = getRejectionReason(nextQuestion, nextAnswer)
+    if (rejectionReason) throw new BadRequestException(`知识修订内容未通过安全沉淀检查：${rejectionReason}`)
+
+    return this.prisma.$transaction(async (tx) => {
+      const oldSnapshot = this.buildKnowledgeSnapshot(entry)
+      const updated = await tx.aiKnowledgeEntry.update({
+        data: {
+          ...(input.agentInjectEnabled === undefined ? {} : { agentInjectEnabled: input.agentInjectEnabled }),
+          ...(input.answer === undefined ? {} : { canonicalAnswer: input.answer }),
+          ...(input.category === undefined ? {} : { category: input.category }),
+          ...(input.directAnswerEnabled === undefined ? {} : { directAnswerEnabled: input.directAnswerEnabled }),
+          ...(input.question === undefined ? {} : { canonicalQuestion: input.question }),
+          ...(input.retrievalEnabled === undefined ? {} : { retrievalEnabled: input.retrievalEnabled }),
+          ...(input.roleScope === undefined ? {} : { roleScope: input.roleScope }),
+          ...(input.sensitivity === undefined ? {} : { sensitivity: input.sensitivity }),
+          ...(input.tags === undefined ? {} : { tags: input.tags }),
+          ...(input.title === undefined ? {} : { title: input.title }),
+          ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
+          reviewNote: input.changeReason,
+          reviewedAt: new Date(),
+          reviewedById: editorId,
+        },
+        where: { id },
+      })
+      const revision = await this.createRevisionRecord(tx, {
+        changeReason: input.changeReason,
+        changeType: input.changeType,
+        editorId,
+        knowledgeId: id,
+        newEntry: updated,
+        oldSnapshot,
+      })
+      await tx.auditLog.create({
+        data: {
+          action: 'CHANGE_SYSTEM_SETTING',
+          actorId: editorId,
+          ipAddress: meta.ipAddress,
+          metadata: { changeType: input.changeType, revisionId: revision.id, version: revision.version } as Prisma.InputJsonValue,
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'AiKnowledgeEntry',
+          userAgent: meta.userAgent,
+        },
+      })
+      return { entry: updated, revision }
+    })
+  }
+
+  async restoreRevision(id: string, input: AiKnowledgeRevisionRestoreInput, editorId: string, meta: ClientRequestMeta = {}) {
+    const entry = await this.prisma.aiKnowledgeEntry.findUnique({ where: { id } })
+    if (!entry) throw new NotFoundException('知识条目不存在')
+    const target = await this.prisma.aiKnowledgeRevision.findFirst({
+      where: { knowledgeId: id, ...(input.revisionId ? { id: input.revisionId } : { version: input.version }) },
+    })
+    if (!target) throw new NotFoundException('修订版本不存在')
+
+    return this.prisma.$transaction(async (tx) => {
+      const oldSnapshot = this.buildKnowledgeSnapshot(entry)
+      const restoredData = this.buildKnowledgeUpdateFromSnapshot(target.newSnapshot)
+      const updated = await tx.aiKnowledgeEntry.update({
+        data: {
+          ...restoredData,
+          reviewNote: input.reason,
+          reviewedAt: new Date(),
+          reviewedById: editorId,
+        },
+        where: { id },
+      })
+      const revision = await this.createRevisionRecord(tx, {
+        changeReason: input.reason,
+        changeType: 'ROLLBACK',
+        editorId,
+        knowledgeId: id,
+        newEntry: updated,
+        oldSnapshot,
+      })
+      await tx.auditLog.create({
+        data: {
+          action: 'CHANGE_SYSTEM_SETTING',
+          actorId: editorId,
+          ipAddress: meta.ipAddress,
+          metadata: { restoredRevisionId: target.id, restoredVersion: target.version, revisionId: revision.id, version: revision.version } as Prisma.InputJsonValue,
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'AiKnowledgeEntry',
+          userAgent: meta.userAgent,
+        },
+      })
+      return { entry: updated, revision, restoredFrom: target }
+    })
+  }
+
+  private async ensureKnowledgeExists(id: string) {
+    const exists = await this.prisma.aiKnowledgeEntry.findUnique({ select: { id: true }, where: { id } })
+    if (!exists) throw new NotFoundException('知识条目不存在')
+  }
+
+  private async createRevisionRecord(
+    tx: Prisma.TransactionClient,
+    input: {
+      changeReason: string
+      changeType: string
+      editorId?: string | null
+      knowledgeId: string
+      newEntry: Prisma.AiKnowledgeEntryGetPayload<Record<string, never>>
+      oldSnapshot: Prisma.InputJsonValue
+    },
+  ) {
+    const version = ((await tx.aiKnowledgeRevision.aggregate({ _max: { version: true }, where: { knowledgeId: input.knowledgeId } }))._max.version ?? 0) + 1
+    const newSnapshot = this.buildKnowledgeSnapshot(input.newEntry)
+    return tx.aiKnowledgeRevision.create({
+      data: {
+        canonicalAnswer: input.newEntry.canonicalAnswer,
+        canonicalQuestion: input.newEntry.canonicalQuestion,
+        changeReason: input.changeReason,
+        changeType: input.changeType,
+        diffSummary: this.buildRevisionDiffSummary(input.oldSnapshot, newSnapshot),
+        editorId: input.editorId,
+        editorType: input.editorId ? 'ADMIN' : 'SYSTEM',
+        knowledgeId: input.knowledgeId,
+        newSnapshot,
+        oldSnapshot: input.oldSnapshot,
+        title: input.newEntry.title,
+        version,
+      },
+    })
+  }
+
+  private buildKnowledgeSnapshot(entry: Prisma.AiKnowledgeEntryGetPayload<Record<string, never>>): Prisma.InputJsonValue {
+    return {
+      agentInjectEnabled: entry.agentInjectEnabled,
+      canonicalAnswer: entry.canonicalAnswer,
+      canonicalQuestion: entry.canonicalQuestion,
+      category: entry.category,
+      directAnswerEnabled: entry.directAnswerEnabled,
+      maintenanceStatus: entry.maintenanceStatus,
+      retrievalEnabled: entry.retrievalEnabled,
+      roleScope: entry.roleScope,
+      sensitivity: entry.sensitivity,
+      status: entry.status,
+      tags: entry.tags,
+      title: entry.title,
+      visibility: entry.visibility,
+    }
+  }
+
+  private buildKnowledgeUpdateFromSnapshot(snapshot: Prisma.JsonValue): Prisma.AiKnowledgeEntryUncheckedUpdateInput {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new ConflictException('修订快照格式不正确')
+    const value = snapshot as Record<string, unknown>
+    return {
+      agentInjectEnabled: Boolean(value.agentInjectEnabled),
+      canonicalAnswer: String(value.canonicalAnswer ?? ''),
+      canonicalQuestion: String(value.canonicalQuestion ?? ''),
+      category: String(value.category ?? AiKnowledgeCategory.VULNERABILITY_REPORTING) as AiKnowledgeCategory,
+      directAnswerEnabled: Boolean(value.directAnswerEnabled),
+      maintenanceStatus: String(value.maintenanceStatus ?? AiKnowledgeMaintenanceStatus.HEALTHY) as AiKnowledgeMaintenanceStatus,
+      retrievalEnabled: Boolean(value.retrievalEnabled),
+      roleScope: String(value.roleScope ?? AiKnowledgeRoleScope.ALL) as AiKnowledgeRoleScope,
+      sensitivity: String(value.sensitivity ?? AiKnowledgeSensitivity.INTERNAL) as AiKnowledgeSensitivity,
+      status: String(value.status ?? AiKnowledgeStatus.APPROVED) as AiKnowledgeStatus,
+      tags: Array.isArray(value.tags) ? value.tags.map(String).slice(0, 12) : [],
+      title: String(value.title ?? '未命名知识'),
+      visibility: String(value.visibility ?? AiKnowledgeVisibility.ROLE_ONLY) as AiKnowledgeVisibility,
+    }
+  }
+
+  private buildRevisionDiffSummary(oldSnapshot: Prisma.InputJsonValue, newSnapshot: Prisma.InputJsonValue) {
+    if (!oldSnapshot || !newSnapshot || typeof oldSnapshot !== 'object' || typeof newSnapshot !== 'object' || Array.isArray(oldSnapshot) || Array.isArray(newSnapshot)) return '知识快照已更新'
+    const oldValue = oldSnapshot as Record<string, unknown>
+    const newValue = newSnapshot as Record<string, unknown>
+    const changed = ['title', 'canonicalQuestion', 'canonicalAnswer', 'status', 'maintenanceStatus', 'retrievalEnabled', 'directAnswerEnabled', 'agentInjectEnabled']
+      .filter((key) => JSON.stringify(oldValue[key]) !== JSON.stringify(newValue[key]))
+    return changed.length ? `更新字段：${changed.join('、')}` : '知识快照无可见字段变化'
   }
 
   async addFeedback(id: string, input: AiKnowledgeFeedbackInput, userId: string, userRole: RoleCode) {
