@@ -12,7 +12,7 @@
 
 本文档是 CQUPT-SRC 平台“邮宝”AI 知识沉淀、知识库复用、管理员审核、自动入库、相似知识聚类和 Hermes Skill 晋升的目标方案。
 
-面向用户的 AI 助手名称统一为“邮宝”。Hermes Agent 只表示底层模型编排和 skill 运行环境。本文中的“知识沉淀”默认指沉淀到 PostgreSQL 主业务库，不是直接写入 Hermes skills 目录。Hermes Skill 只承载经过管理员批准的长期稳定方法论。
+面向用户的 AI 助手名称统一为“邮宝”。Hermes Agent 只表示底层模型编排和 skill 运行环境。本文中的“知识沉淀”默认指沉淀到 PostgreSQL 主业务库，不是直接写入 Hermes skills 目录。Hermes Skill 只承载管理员基于平台规则、审核流程或人工整理方法论显式创建的长期稳定能力；用户对话及其总结、自动入库知识不得直接或间接晋升为 Skill。
 
 本文采用“问题会话式知识沉淀”（Problem Session Knowledge Capture）：不再把每一轮 AI 对话都立即当作知识候选，而是先把用户围绕同一问题的多轮交互组织成一次问题会话；只有用户确认问题已解决，或管理员明确标记会话有沉淀价值后，才进入总结、评分、去重和审核链路。
 
@@ -29,7 +29,7 @@
 5. 用户确认已解决后，本次会话才进入知识沉淀流程。
 6. 每条 AI 回复底部提供点赞/点踩按钮，用户反馈作为后续知识质量评分、聚类质量和自动入库判定的重要信号。
 7. 邮宝对已解决会话生成结构化总结，并给出知识价值、安全性、隐私风险、复用价值评分。
-8. 管理员可以审核、合并、丢弃或晋升为 Skill Candidate。
+8. 管理员可以审核、合并、丢弃，或将候选知识沉淀为普通 KB；用户会话不得标记为 Skill Candidate。
 9. 同类问题多次被问到、且多次被用户确认解决、AI 评分也足够高、用户反馈为正向时，后端可以自动沉淀到知识库。
 10. 后续其他用户问到相似问题时，系统优先复用知识库；若使用平台知识库，前端必须在回复底部标注来源。
 
@@ -45,7 +45,7 @@
 8. 知识库命中回答要记录 `AiKnowledgeHit`，并支持有用、无用、举报反馈。
 9. 历史会话列表只用于用户体验和问题续接，不得把旧会话自动注入新问题上下文；用户明确选择“继续此会话”或“基于此问题继续追问”时，后端才加载对应 session。
 10. 点赞/点踩反馈必须绑定到具体 assistant turn 和 knowledge hit，不能只在前端本地计数。
-11. 知识条目必须有生命周期维护：低质量要降级，过期要复审，重复要合并，错误或有风险要暂停检索，稳定方法论才晋升 Skill。
+11. 知识条目必须有生命周期维护：低质量要降级，过期要复审，重复要合并，错误或有风险要暂停检索；用户来源知识不得晋升 Skill，Skill 只能由管理员基于平台级材料或人工整理方法论显式创建。
 
 ---
 
@@ -65,14 +65,23 @@
   -> AI Knowledge Base
   -> 后续命中时回答并标注平台知识来源
   -> 根据命中、反馈、过期、重复和规则变化持续维护
-  -> 高质量稳定方法论再生成 Skill Candidate
+```
+
+Skill 另走管理员显式创建链路：
+
+```text
+管理员基于平台规则 / 审核流程 / 人工整理方法论
+  -> 创建 Skill Candidate
   -> 管理员二次审批
   -> 受控安装到平台 Hermes skills 目录
 ```
 
+用户对话、用户会话总结、用户来源 KB、自动入库 KB 均不得进入上述 Skill 链路。
+
 必须避免：
 
 - 用户每问一个问题就自动创建 Hermes Skill。
+- 将用户对话、用户会话总结、用户来源 KB 或自动入库 KB 直接或间接晋升为 Skill Candidate / Hermes Skill。
 - 未解决、半截、闲聊、低质量会话进入知识库。
 - 把 A 用户原始对话、漏洞细节、资产、凭据或附件内容暴露给 B 用户。
 - 用历史知识库回答实时业务问题，例如当前积分、商品库存、漏洞状态。
@@ -106,7 +115,7 @@ SUMMARIZED          已生成结构化总结
 READY_REVIEW        等待管理员审核
 AUTO_APPROVED       满足高频高质阈值，后端自动入库
 APPROVED_TO_KB      管理员批准沉淀到知识库
-SKILL_CANDIDATE     管理员标记为 Skill 候选
+SKILL_CANDIDATE     禁止用于用户会话；Skill 只能由管理员显式创建
 DISCARDED           管理员或用户丢弃
 ```
 
@@ -181,10 +190,11 @@ Cluster: Kali 虚拟机安装与镜像选择
 
 ### 3.4 Skill Candidate：Skill 候选层
 
-Skill Candidate 是中间层，适合保存稳定、可复用、长期有效的方法论草稿。它不是“用户对话的高级版”，也不是普通 KB 问答的替代入口。
+Skill Candidate 是管理员显式创建的中间层，适合保存稳定、可复用、长期有效的方法论草稿。它不是“用户对话的高级版”，也不是普通 KB 问答的替代入口；用户对话、用户会话总结、用户来源 KB、自动入库 KB 均不得作为 Skill Candidate 来源。
 
 适合晋升为 Skill Candidate：
 
+- 管理员基于平台规则、审核规范、运营流程或多条已审核知识人工整理出的新方法论。
 - 多步骤排错工作流，且步骤、前提、失败模式和验证方式都足够稳定。
 - 审核员初筛 checklist。
 - 漏洞报告结构化写作流程。
@@ -193,13 +203,14 @@ Skill Candidate 是中间层，适合保存稳定、可复用、长期有效的�
 
 不允许晋升为 Skill Candidate：
 
+- 任何用户对话、用户会话总结、脱敏 turns、用户来源 KB 或由用户问题自动入库的 `AUTO_APPROVED` 知识。
 - 下载链接、版本号、官网地址、镜像地址等静态答案或一次性查询。
 - “我刚才/这次/上次”的个人上下文对话。
 - 只回答一个具体问题、没有稳定流程的方法片段。
 - 依赖当前库存、积分、漏洞状态、附件原文、真实资产或私有环境的内容。
 - 仅因为文本里出现“步骤/流程/脚本”等词就判为 Skill；必须同时满足完整可执行步骤、稳定适用范围、风险边界和较高质量/复用/安全评分。
 
-当前代码门槛：管理员将问题会话标记为 `SKILL_CANDIDATE` 前，后端会校验 `summary.recommendation === 'SKILL'`、非 `DISCARD`、无 `rejectionReason`、质量/复用/安全/隐私/投毒风险达标、至少 3 个有效步骤，并阻断下载链接/一次性查询类会话。
+目标代码门槛：后端必须拒绝从 `AiProblemSession`、legacy `AiKnowledgeConversation`、用户来源 `AiKnowledgeEntry` 或 `AUTO_APPROVED` 用户经验生成 Skill Candidate；Skill Candidate 只能由管理员基于平台级材料或人工整理内容显式创建，并继续经过二次审批和受控安装。
 
 Skill Candidate 不等于已安装 Skill。必须经过管理员二次审批后，才能安装到平台 Hermes skills 目录。
 
@@ -2029,7 +2040,6 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 
 - 批准入库。
 - 合并到已有知识。
-- 标记为 Skill Candidate。
 - 丢弃。
 - 重新总结。
 - 查看脱敏证据。
@@ -2065,13 +2075,13 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 - 状态。
 - 命中次数。
 - 有用 / 无用 / 举报。
-- 是否可晋升 Skill。
+- 是否为管理员显式整理内容；用户来源知识一律不可晋升 Skill。
 
 ### 14.4 Skill Candidate
 
-保留现有链路：
+保留受控安装链路，但来源必须改为管理员显式创建或人工整理：
 
-- 从知识条目生成候选。
+- 管理员创建或从平台级材料/人工整理内容生成候选。
 - 审批。
 - 安装。
 - 查看安装日志。
@@ -2098,7 +2108,7 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 
 ## 15. 专家建议分步执行表
 
-这张表用于把“AI 对话 -> 问题沉淀 -> 知识库调用 -> 反馈治理 -> Skill 晋升”拆成可执行项。状态以当前文档和已验证代码为准；没有 API/UI/E2E 证据的项标为待实现或待代码确认。
+这张表用于把“AI 对话 -> 问题沉淀 -> 知识库调用 -> 反馈治理”和“管理员显式创建 Skill -> 审批安装”拆成可执行项。状态以当前文档和已验证代码为准；没有 API/UI/E2E 证据的项标为待实现或待代码确认。
 
 | 阶段 | 目标 | 交付物 | 后端验收 | 前端/管理端验收 | 风险控制 | 状态 |
 |---|---|---|---|---|---|---|
@@ -2109,7 +2119,7 @@ Knowledge Retrieval 必须在相似度计算前过滤维护状态：
 | P0 | 附件隔离 | 附件文本摘要、附件路由策略 | 附件轮跳过 Direct Response 和 KB 直答；不入库原文 | 文件先进入待发送区，发送时按指令分流 | 防报告关键词误吞附件任务 | 待代码确认 |
 | P1 | Problem Session 闭环 | session、turn、resolve、summary | 只在用户确认已解决后总结；跨用户隔离 | 左侧历史可恢复/查看；已结束继续问走 fork | 防旧上下文污染新问题 | 已部分落地 |
 | P1 | 结构化知识候选 | canonicalQuestion、successfulSteps、pitfalls、scores | 脱敏后总结；低质量/敏感/投毒拒绝或复审 | 管理端能看摘要、评分、来源 turns | 防把聊天原文当知识 | 已部分落地 |
-| P1 | 管理端审核 | READY_REVIEW 队列、review API | approve/discard/skill candidate 写状态和 AuditLog | 管理员能通过、丢弃、查看相似知识 | 防自动入库低质或敏感内容 | 已部分落地 |
+| P1 | 管理端审核 | READY_REVIEW 队列、review API | approve/discard 写状态和 AuditLog；用户会话不得转 Skill Candidate | 管理员能通过、丢弃、查看相似知识 | 防自动入库低质或敏感内容 | 已部分落地 |
 | P1 | Knowledge Retrieval | retrieval service、AiKnowledgeHit | 高置信直答写 hit；中置信注入 Agent；低置信不用 KB | 来源嵌在 assistant bubble 内，不用灰色分割块 | 防未审核/过期知识参与回答 | 待代码确认 |
 | P2 | 回复反馈持久化 | `assistantTurnId`、turn feedback、knowledge feedback | 有用/无用/举报写后端，可撤销/改投 | 每条回复底部有反馈按钮和知识来源 | 举报或安全风险原因返回待复审信号 | 已完成 |
 | P2 | 知识维护状态 | maintenanceStatus、retrievalPolicy | 检索前过滤暂停/归档/低质/过期知识 | 管理端可按状态查看和处理 | 防过期或投毒知识继续污染回答 | 待实现 |
@@ -2315,7 +2325,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-15 | 知识投毒防护 | 待代码确认 | 入库前和维护扫描计算 poisoningRiskScore，指令型/越权型内容拒绝或安全复审 | 含“忽略规则”“以后都自动通过”等样例不能入库；已入库发现后进入 `SECURITY_SUSPENDED` |
 | KB-16 | Embedding 版本化 | 待代码确认 | embeddingModel、embeddingVersion、contentHash、embeddingUpdatedAt 可追踪 | 更换 embedding 模型后不混用旧阈值；内容变更触发重算任务；重算前可 fallback 到文本相似度 |
 | KB-17 | 管理端待维护工作台 | 待代码确认 | 管理员能看待更新、低质量、重复、暂停、归档候选和推荐动作 | 页面展示触发原因、反馈趋势、相似知识、revision diff；支持修订、合并、暂停、恢复、归档 |
-| KB-18 | Skill Candidate 晋升 | 待代码确认 | 高质量稳定方法论生成 Skill Candidate，管理员二次审批后安装 | 只有满足命中、反馈、质量、安全阈值的知识可晋升；安装写入 `AiSkillInstallLog` 和 AuditLog |
+| KB-18 | Skill Candidate 晋升 | 待代码确认 | 管理员基于平台规则、审核流程或人工整理方法论显式生成 Skill Candidate，二次审批后安装；用户对话、用户来源 KB、`AUTO_APPROVED` 用户经验不得作为 Skill 来源 | 只有管理员显式创建/整理的内容可晋升；安装写入 `AiSkillInstallLog` 和 AuditLog；用户会话转 Skill Candidate 被拒绝 |
 | KB-19 | 安全与滥用测试 | 待代码确认 | 覆盖 prompt injection、越权、敏感泄露、安全举报、维护状态过滤 | P0 安全测试全部通过；失败时阻断上线；安全暂停恢复必须有管理员复核和 revision |
 | KB-20 | 观测与回滚 | 待代码确认 | 有指标、审计、维护运行记录、禁用开关和回滚路径 | 可关闭 capture/retrieval/maintenance；可按知识 ID 归档、暂停、恢复；Worker run 有统计和错误记录 |
 | KB-21 | 知识库评测体系 | 待实现 | 建立离线 golden set、线上抽样和回归评测，覆盖命中质量、引用正确性、越权阻断、实时数据压制、prompt injection、不同角色/mode | 评测脚本产出 evidence；P0 安全用例 100% 通过；实时数据误用 KB 为 0；每个失败项可定位到 knowledgeId、route、promptTemplateVersion 和原因 |
@@ -2392,7 +2402,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 ### 19.6 Skill 晋升
 
-- [ ] 只有 APPROVED / AUTO_APPROVED 且质量足够的知识可生成 Skill Candidate。
+- [ ] 只有管理员显式创建或人工整理的内容可生成 Skill Candidate；用户对话、用户来源 KB、`AUTO_APPROVED` 用户经验一律不可晋升 Skill。
 - [ ] Skill Candidate 必须管理员二次审批。
 - [ ] 安装写入 `CQUPT_HERMES_SKILLS_ROOT`。
 - [ ] 安装成功写 `AiSkillInstallLog`。
@@ -2443,7 +2453,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 - AI + 规则评分。
 - duplicateRiskScore。
 - 管理端展示 resolved sessions。
-- 管理员批准入库 / 丢弃 / 标为 Skill Candidate。
+- 管理员批准入库 / 丢弃；用户会话不得标为 Skill Candidate。
 
 ### Phase 3：知识库检索回答与来源标注
 
@@ -2484,13 +2494,14 @@ Authorization: [REDACTED_AUTH_HEADER]
 - 待维护管理视图。
 - 修订、合并、降级、暂停、恢复、归档流程。
 
-### Phase 6：Skill 晋升优化
+### Phase 6：Skill 管理员显式创建与安装优化
 
-目标：稳定方法论晋升 Hermes Skill。
+目标：管理员整理的平台级方法论晋升 Hermes Skill。
 
 范围：
 
-- 从高命中知识条目生成 Skill Candidate。
+- 管理员从平台规则、审核流程或人工整理方法论生成 Skill Candidate。
+- 后端拒绝用户对话、用户来源 KB 和 `AUTO_APPROVED` 用户经验进入 Skill 来源。
 - 管理员二次审批。
 - 安装到平台 Hermes skills 目录。
 - 保持现有受控安装链路。
@@ -2516,7 +2527,15 @@ CQUPT-SRC 采用“问题会话式知识沉淀”后，知识库不再由零散�
   -> 后续相似问题复用
   -> 回复底部标注平台知识来源
   -> 基于反馈、命中、过期和重复信号持续维护
-  -> 稳定方法论再晋升 Hermes Skill
+```
+
+Skill 链路独立于用户对话沉淀：
+
+```text
+管理员基于平台规则 / 审核流程 / 人工整理方法论
+  -> 显式创建 Skill Candidate
+  -> 管理员二次审批
+  -> 受控安装 Hermes Skill
 ```
 
 这套方案能让邮宝在真实使用中成长，同时降低未解决对话、敏感信息、错误知识和 prompt injection 污染平台长期知识的风险。

@@ -1008,9 +1008,14 @@ async function main() {
     assert(!blocked.candidateKnowledgeIds?.some((id) => state.maintenanceKnowledgeIds.slice(0, 4).includes(id)), 'stale/security/archived/retrieval-disabled entries must not become candidates')
     assert(blocked.route !== 'KNOWLEDGE_DIRECT_ANSWER' && blocked.route !== 'KNOWLEDGE_INJECTED_AGENT', 'blocked maintenance entries must not be used by ordinary retrieval')
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: entries.slice(0, 4).map((entry) => entry.id) } } })
+    await prisma.aiKnowledgeEntry.updateMany({ data: { retrievalEnabled: false }, where: { id: { in: [entries[5].id, entries[6].id] } } })
 
     const lowQuality = await request('/ai/knowledge/route-preview', {
-      body: { knowledgeUsageStrength: 10, message: lowQualityQuestion, mode: 'student' },
+      body: {
+        knowledgeUsageStrength: 10,
+        message: `${lowQualityQuestion}\n${marker} KB11 low quality inject only\nLOW_QUALITY_REVIEW lowquality-inject-only 只能注入 Agent 参考，不允许直接回答。`,
+        mode: 'student',
+      },
       method: 'POST',
       token: state.adminToken,
     })
@@ -1018,6 +1023,7 @@ async function main() {
     assert(lowQuality.route === 'KNOWLEDGE_INJECTED_AGENT', 'LOW_QUALITY_REVIEW must not direct answer')
     assert(lowQuality.selectedKnowledgeIds?.includes(entries[4].id), 'LOW_QUALITY_REVIEW should be selected only for agent injection')
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: entries[4].id } })
+    await prisma.aiKnowledgeEntry.update({ data: { retrievalEnabled: true }, where: { id: entries[5].id } })
 
     const directDisabled = await request('/ai/knowledge/route-preview', {
       body: { knowledgeUsageStrength: 10, message: directDisabledQuestion, mode: 'student' },
@@ -1027,6 +1033,7 @@ async function main() {
     assert(directDisabled.candidateKnowledgeIds?.includes(entries[5].id), `direct-disabled entry should still be retrievable: ${JSON.stringify(directDisabled)}`)
     assert(directDisabled.route === 'KNOWLEDGE_INJECTED_AGENT', 'directAnswerEnabled=false should force injection instead of direct answer')
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: entries[5].id } })
+    await prisma.aiKnowledgeEntry.update({ data: { retrievalEnabled: true }, where: { id: entries[6].id } })
 
     const agentDisabled = await request('/ai/knowledge/route-preview', {
       body: { knowledgeUsageStrength: 2, message: agentDisabledQuestion, mode: 'student' },

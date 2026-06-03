@@ -197,6 +197,7 @@ CQUPT-SRC 专属 skills 目录：
 - `cqupt-src-platform-data-request` 是 dataRequests 协议 skill：Hermes 只输出数据请求，NestJS 后端基于 JWT/RBAC 执行只读查询并回灌结果。
 - `mall-product-search` 是早期旧版商城搜索 skill，当前保留是为了避免历史引用断掉。
 - 后续推荐平台接入使用 `cqupt-src-mall-search`。
+- AI 漏洞自动复测已额外安装 `mukul975/Anthropic-Cybersecurity-Skills` 的 curated subset。该子集不是 CQUPT-SRC 基础 skill，而是供 Hermes 在复测计划/报告中读取的第三方安全剧本；安装记录和 26 个 skill 的详细用途、允许动作、禁止边界见宿主文件：`/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src/THIRD_PARTY_CYBERSECURITY_SKILLS_INSTALL.md`。方案文档中的详细策略见：`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md#611-平台-hermes-已安装的第三方复测-skill-子集`。
 
 ---
 
@@ -295,11 +296,7 @@ docker exec hermes-agent sh -lc 'find /opt/data/skills/cqupt-src -maxdepth 2 -na
 docker exec hermes-agent sh -lc 'find /opt/data/skills/cqupt-src -maxdepth 2 -name SKILL.md | wc -l'
 ```
 
-当前应为：
-
-```text
-9
-```
+当前会随平台专属 skill、临时测试 skill 和第三方复测 curated subset 增减；不要硬编码数量。验证时以实际命令输出为准，并重点确认基础 CQUPT-SRC skill 和第三方复测 subset 均可读。
 
 ### 6.2 重启平台 Hermes
 
