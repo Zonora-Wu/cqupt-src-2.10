@@ -101,13 +101,17 @@ export type AiSkillCandidateReviewInput = {
   status: Extract<AiSkillCandidateStatus, 'APPROVED' | 'REJECTED'>
 }
 
+export type AiKnowledgeMaintenancePriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4'
+export type AiKnowledgeMaintenanceTaskStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED'
+export type AiKnowledgeMaintenanceTaskType = 'STALE_REVIEW' | 'LOW_QUALITY' | 'DUPLICATE' | 'SECURITY' | 'ARCHIVE' | 'EXPIRY'
+
 export type AiKnowledgeMaintenanceListQuery = {
   knowledgeId?: string
   page: number
   pageSize: number
-  priority?: string
-  status?: string
-  taskType?: string
+  priority?: AiKnowledgeMaintenancePriority
+  status?: AiKnowledgeMaintenanceTaskStatus
+  taskType?: AiKnowledgeMaintenanceTaskType
 }
 
 export type AiKnowledgeMaintenanceResolveInput = {

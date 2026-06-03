@@ -28,6 +28,9 @@ const state = {
   autoApprovedKnowledgeId: null,
   discardedSessionId: null,
   duplicateKnowledgeId: null,
+  kb12LowQualityKnowledgeId: null,
+  kb12SecurityKnowledgeId: null,
+  kb13MaintenanceTaskIds: [],
   lifecycleSessionId: null,
   legacySensitiveConversationId: null,
   maintenanceKnowledgeIds: [],
@@ -1080,6 +1083,263 @@ async function main() {
     })
   })
 
+  await step('KB-12/KB-13 maintenance worker creates deduped tasks and admin workflow audits actions', async () => {
+    // Create an approved entry with abuse reports for security suspension test
+    const securityEntry = await prisma.aiKnowledgeEntry.create({
+      data: {
+        abuseReportCount: 3,
+        agentInjectEnabled: true,
+        answerQualityScore: 0.85,
+        canonicalAnswer: `${marker} KB12 安全测试知识 - 含举报记录`,
+        canonicalQuestion: `${marker} KB12 security test question`,
+        category: 'SRC_RULES',
+        confidenceScore: 0.88,
+        directAnswerEnabled: true,
+        educationalValueScore: 0.82,
+        generalityScore: 0.8,
+        helpfulCount: 0,
+        hitCount: 5,
+        maintenanceStatus: 'HEALTHY',
+        platformRelevanceScore: 0.85,
+        privacyRiskScore: 0.05,
+        retrievalEnabled: true,
+        reuseValueScore: 0.85,
+        reviewedById: state.studentId,
+        roleScope: 'STUDENT',
+        safetyScore: 0.9,
+        sensitivity: 'INTERNAL',
+        source: 'ADMIN_CREATED',
+        sourceHash: `${runId}:kb12:security:${randomBytes(3).toString('hex')}`,
+        status: 'APPROVED',
+        tags: ['kb12', 'security-test'],
+        title: `${marker} KB12 安全暂停测试`,
+        unhelpfulCount: 0,
+        visibility: 'ROLE_ONLY',
+      },
+    })
+
+    // Create an approved entry with poor feedback for low-quality test
+    const lowQualityEntry = await prisma.aiKnowledgeEntry.create({
+      data: {
+        agentInjectEnabled: true,
+        answerQualityScore: 0.72,
+        canonicalAnswer: `${marker} KB12 低质量知识 - 高差评率`,
+        canonicalQuestion: `${marker} KB12 low quality test question`,
+        category: 'VULNERABILITY_REPORTING',
+        confidenceScore: 0.7,
+        directAnswerEnabled: true,
+        educationalValueScore: 0.7,
+        generalityScore: 0.7,
+        helpfulCount: 2,
+        hitCount: 10,
+        maintenanceStatus: 'HEALTHY',
+        platformRelevanceScore: 0.7,
+        privacyRiskScore: 0.1,
+        retrievalEnabled: true,
+        reuseValueScore: 0.65,
+        reviewedById: state.studentId,
+        roleScope: 'STUDENT',
+        safetyScore: 0.85,
+        sensitivity: 'INTERNAL',
+        source: 'ADMIN_CREATED',
+        sourceHash: `${runId}:kb12:lowquality:${randomBytes(3).toString('hex')}`,
+        status: 'APPROVED',
+        tags: ['kb12', 'low-quality-test'],
+        title: `${marker} KB12 低质量测试`,
+        unhelpfulCount: 4,
+        visibility: 'ROLE_ONLY',
+      },
+    })
+
+    // Create feedback records for the low-quality entry (2 HELPFUL + 4 UNHELPFUL = 6 total, 33% positive rate)
+    await prisma.aiKnowledgeFeedback.createMany({
+      data: [
+        ...Array.from({ length: 2 }, () => ({
+          knowledgeId: lowQualityEntry.id,
+          userId: state.studentId,
+          value: 'HELPFUL',
+        })),
+        ...Array.from({ length: 4 }, () => ({
+          knowledgeId: lowQualityEntry.id,
+          userId: state.studentId,
+          value: 'UNHELPFUL',
+        })),
+      ],
+    })
+
+    // First run: triggers security suspension + low quality review
+    const result1 = await request('/ai/knowledge/maintenance/run', {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(typeof result1.scanned === 'number', 'maintenance run should return scanned count')
+    assert(typeof result1.processed === 'number', 'maintenance run should return processed count')
+    assert(typeof result1.tasksCreated === 'number', 'maintenance run should return tasksCreated count')
+    assert(typeof result1.securitySuspended === 'number', 'maintenance run should return securitySuspended count')
+    assert(typeof result1.errors === 'object', 'maintenance run should return errors array')
+    assert(result1.securitySuspended >= 1, `security entry should be suspended, got securitySuspended=${result1.securitySuspended}`)
+    assert(result1.tasksCreated >= 2, `should create at least 2 tasks (security + low quality), got ${result1.tasksCreated}`)
+
+    // Verify security-suspended entry: all retrieval gates disabled
+    const suspendedEntry = await prisma.aiKnowledgeEntry.findUnique({ where: { id: securityEntry.id } })
+    assert(suspendedEntry.maintenanceStatus === 'SECURITY_SUSPENDED', `security entry should be SECURITY_SUSPENDED, got ${suspendedEntry.maintenanceStatus}`)
+    assert(suspendedEntry.retrievalEnabled === false, 'security-suspended entry must have retrievalEnabled=false')
+    assert(suspendedEntry.directAnswerEnabled === false, 'security-suspended entry must have directAnswerEnabled=false')
+    assert(suspendedEntry.agentInjectEnabled === false, 'security-suspended entry must have agentInjectEnabled=false')
+
+    // Verify low-quality entry: direct answer disabled
+    const lowQualityAfter = await prisma.aiKnowledgeEntry.findUnique({ where: { id: lowQualityEntry.id } })
+    assert(lowQualityAfter.maintenanceStatus === 'LOW_QUALITY_REVIEW', `low-quality entry should be LOW_QUALITY_REVIEW, got ${lowQualityAfter.maintenanceStatus}`)
+    assert(lowQualityAfter.directAnswerEnabled === false, 'low-quality entry must have directAnswerEnabled=false')
+
+    // Verify maintenance tasks were created with correct priority and type
+    const securityTask = await prisma.aiKnowledgeMaintenanceTask.findFirst({
+      where: { knowledgeId: securityEntry.id, taskType: 'SECURITY', status: 'OPEN' },
+    })
+    assert(securityTask, 'should create an OPEN SECURITY maintenance task')
+    assert(securityTask.priority === 'P0', `security task should be P0, got ${securityTask.priority}`)
+
+    const lowQualityTask = await prisma.aiKnowledgeMaintenanceTask.findFirst({
+      where: { knowledgeId: lowQualityEntry.id, taskType: 'LOW_QUALITY', status: 'OPEN' },
+    })
+    assert(lowQualityTask, 'should create an OPEN LOW_QUALITY maintenance task')
+    assert(lowQualityTask.priority === 'P1', `low quality task should be P1, got ${lowQualityTask.priority}`)
+    assert(securityTask.dedupeKey, 'security task should expose dedupeKey')
+    assert(lowQualityTask.dedupeKey, 'low quality task should expose dedupeKey')
+    assert(securityTask.dedupeKey !== lowQualityTask.dedupeKey, 'different task causes should have different dedupe keys')
+    state.kb13MaintenanceTaskIds.push(securityTask.id, lowQualityTask.id)
+
+    // Second run: verify no duplicate OPEN tasks
+    const result2 = await request('/ai/knowledge/maintenance/run', {
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(result2.tasksCreated === 0, `second run should create 0 new tasks (dedup), got ${result2.tasksCreated}`)
+    // security entry should not be recounted since already SECURITY_SUSPENDED
+    assert(result2.securitySuspended === 0, `second run should not re-suspend already suspended entry, got ${result2.securitySuspended}`)
+
+    // Verify task counts are still 1 per knowledge entry
+    const securityTaskCount = await prisma.aiKnowledgeMaintenanceTask.count({
+      where: { knowledgeId: securityEntry.id, taskType: 'SECURITY' },
+    })
+    assert(securityTaskCount === 1, `should have exactly 1 SECURITY task, got ${securityTaskCount}`)
+
+    const lowQualityTaskCount = await prisma.aiKnowledgeMaintenanceTask.count({
+      where: { knowledgeId: lowQualityEntry.id, taskType: 'LOW_QUALITY' },
+    })
+    assert(lowQualityTaskCount === 1, `should have exactly 1 LOW_QUALITY task, got ${lowQualityTaskCount}`)
+
+    // Verify admin can list maintenance tasks
+    const taskList = await request('/ai/knowledge/maintenance/tasks', { token: state.adminToken })
+    assert(taskList.items?.length >= 2, `task list should include at least 2 tasks, got ${taskList.items?.length}`)
+    assert(typeof taskList.pagination?.total === 'number', 'task list should have pagination')
+    const listedSecurityTask = taskList.items?.find((task) => task.id === securityTask.id)
+    assert(listedSecurityTask, 'task list should include security task')
+    assert(listedSecurityTask.knowledge?.id === securityEntry.id, 'task list should include related knowledge summary')
+    assert(listedSecurityTask.knowledge?.title?.includes('KB12 安全暂停测试'), 'knowledge summary should include title')
+
+    // Verify admin can filter tasks by status
+    const openTasks = await request('/ai/knowledge/maintenance/tasks?status=OPEN', { token: state.adminToken })
+    assert(openTasks.items?.every((task) => task.status === 'OPEN'), 'filtered tasks should all be OPEN')
+
+    const p0Tasks = await request('/ai/knowledge/maintenance/tasks?priority=P0&status=OPEN', { token: state.adminToken })
+    assert(p0Tasks.items?.length >= 1, 'P0 filter should return at least one security task')
+    assert(p0Tasks.items?.every((task) => task.priority === 'P0'), 'P0 filtered tasks should all be P0')
+    assert(p0Tasks.items?.some((task) => task.id === securityTask.id), 'P0 filter should include security task')
+
+    const p1Tasks = await request('/ai/knowledge/maintenance/tasks?priority=P1&status=OPEN', { token: state.adminToken })
+    assert(p1Tasks.items?.length >= 1, 'P1 filter should return at least one low-quality task')
+    assert(p1Tasks.items?.every((task) => task.priority === 'P1'), 'P1 filtered tasks should all be P1')
+    assert(p1Tasks.items?.some((task) => task.id === lowQualityTask.id), 'P1 filter should include low-quality task')
+
+    await request('/ai/knowledge/maintenance/tasks?priority=P9', {
+      expectedStatus: 400,
+      token: state.adminToken,
+    })
+
+    // Verify admin can resolve a task and writes audit log
+    const resolveAuditBefore = await prisma.auditLog.count({
+      where: { targetId: lowQualityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    const resolved = await request(`/ai/knowledge/maintenance/tasks/${lowQualityTask.id}/resolve`, {
+      body: { reason: `${marker} 已人工复核，低质量已修正` },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(resolved.status === 'RESOLVED', `task should be RESOLVED after resolution, got ${resolved.status}`)
+    assert(resolved.resolvedAt, 'resolved task should have resolvedAt timestamp')
+    const resolveAuditAfter = await prisma.auditLog.count({
+      where: { targetId: lowQualityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    assert(resolveAuditAfter === resolveAuditBefore + 1, 'resolve should write one maintenance task audit log')
+    const resolveAudit = await prisma.auditLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      where: { targetId: lowQualityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    assert(resolveAudit?.actorId, 'resolve audit should have admin actorId')
+    assert(resolveAudit?.action === 'CHANGE_SYSTEM_SETTING', 'resolve audit should reuse CHANGE_SYSTEM_SETTING action')
+    assert(resolveAudit?.result === 'success', 'resolve audit result should be success')
+    assert(resolveAudit?.metadata?.operation === 'RESOLVE', 'resolve audit metadata should record operation')
+    assert(resolveAudit?.metadata?.knowledgeId === lowQualityEntry.id, 'resolve audit metadata should record knowledgeId')
+    assert(resolveAudit?.metadata?.priority === 'P1', 'resolve audit metadata should record priority')
+    assert(resolveAudit?.metadata?.dedupeKey === lowQualityTask.dedupeKey, 'resolve audit metadata should record dedupeKey')
+
+    // Verify admin can dismiss a different OPEN task and writes audit log
+    const dismissAuditBefore = await prisma.auditLog.count({
+      where: { targetId: securityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    const dismissed = await request(`/ai/knowledge/maintenance/tasks/${securityTask.id}/dismiss`, {
+      body: { reason: `${marker} 安全任务已记录，暂不重复处理` },
+      method: 'POST',
+      token: state.adminToken,
+    })
+    assert(dismissed.status === 'DISMISSED', `task should be DISMISSED, got ${dismissed.status}`)
+    assert(dismissed.resolvedAt, 'dismissed task should have resolvedAt timestamp')
+    const dismissAuditAfter = await prisma.auditLog.count({
+      where: { targetId: securityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    assert(dismissAuditAfter === dismissAuditBefore + 1, 'dismiss should write one maintenance task audit log')
+    const dismissAudit = await prisma.auditLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      where: { targetId: securityTask.id, targetType: 'AiKnowledgeMaintenanceTask' },
+    })
+    assert(dismissAudit?.actorId, 'dismiss audit should have admin actorId')
+    assert(dismissAudit?.metadata?.operation === 'DISMISS', 'dismiss audit metadata should record operation')
+    assert(dismissAudit?.metadata?.knowledgeId === securityEntry.id, 'dismiss audit metadata should record knowledgeId')
+    assert(dismissAudit?.metadata?.priority === 'P0', 'dismiss audit metadata should record priority')
+    assert(dismissAudit?.metadata?.dedupeKey === securityTask.dedupeKey, 'dismiss audit metadata should record dedupeKey')
+
+    // Verify dismiss endpoint is only for OPEN tasks
+    await request(`/ai/knowledge/maintenance/tasks/${securityTask.id}/dismiss`, {
+      body: { reason: 'double dismiss should fail' },
+      expectedStatus: 409,
+      method: 'POST',
+      token: state.adminToken,
+    })
+
+    await request('/ai/knowledge/maintenance/tasks', {
+      expectedStatus: 403,
+      token: state.studentToken,
+    })
+    await request(`/ai/knowledge/maintenance/tasks/${lowQualityTask.id}/resolve`, {
+      body: { reason: 'student should not resolve' },
+      expectedStatus: 403,
+      method: 'POST',
+      token: state.studentToken,
+    })
+
+    // Verify non-admin cannot trigger maintenance
+    await request('/ai/knowledge/maintenance/run', {
+      expectedStatus: 403,
+      method: 'POST',
+      token: state.studentToken,
+    })
+
+    // Track for cleanup
+    state.kb12SecurityKnowledgeId = securityEntry.id
+    state.kb12LowQualityKnowledgeId = lowQualityEntry.id
+  })
+
   await writeEvidence('passed')
   printSummary()
 }
@@ -1286,6 +1546,23 @@ async function cleanupArtifacts() {
     await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
     await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: state.maintenanceKnowledgeIds } } })
     await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: state.maintenanceKnowledgeIds } } })
+  }
+  const kb12Ids = [state.kb12SecurityKnowledgeId, state.kb12LowQualityKnowledgeId].filter(Boolean)
+  if (state.kb13MaintenanceTaskIds.length) {
+    await prisma.auditLog.deleteMany({
+      where: {
+        targetId: { in: state.kb13MaintenanceTaskIds },
+        targetType: 'AiKnowledgeMaintenanceTask',
+      },
+    })
+  }
+  if (kb12Ids.length) {
+    await prisma.auditLog.deleteMany({ where: { targetId: { in: kb12Ids }, targetType: 'AiKnowledgeEntry' } })
+    await prisma.aiKnowledgeMaintenanceTask.deleteMany({ where: { knowledgeId: { in: kb12Ids } } })
+    await prisma.aiKnowledgeFeedback.deleteMany({ where: { knowledgeId: { in: kb12Ids } } })
+    await prisma.aiKnowledgeHit.deleteMany({ where: { knowledgeId: { in: kb12Ids } } })
+    await prisma.aiKnowledgeRevision.deleteMany({ where: { knowledgeId: { in: kb12Ids } } })
+    await prisma.aiKnowledgeEntry.deleteMany({ where: { id: { in: kb12Ids } } })
   }
   if (state.legacySensitiveConversationId) {
     const knowledge = await prisma.aiKnowledgeEntry.findMany({ select: { id: true }, where: { sourceConversationId: state.legacySensitiveConversationId } })

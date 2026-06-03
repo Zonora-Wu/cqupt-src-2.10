@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { AiKnowledgeJobStatus } from '@prisma/client'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
-import { AuthenticatedRequestUser } from '../auth/auth.types'
+import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AiKnowledgeMaintenanceWorker } from './ai-knowledge-maintenance.worker'
@@ -13,10 +13,31 @@ import {
   normalizeKnowledgeFeedbackBody,
   normalizeKnowledgeListQuery,
   normalizeKnowledgeReviewBody,
+  normalizeMaintenanceListQuery,
   normalizeMaintenanceResolveBody,
   normalizeSkillCandidateBody,
   normalizeSkillCandidateReviewBody,
 } from './ai-knowledge.validation'
+
+type RequestLike = {
+  ip?: string
+  path?: string
+  headers?: {
+    ['user-agent']?: string
+    ['x-forwarded-for']?: string | string[]
+  }
+}
+
+function getRequestMeta(req: RequestLike): ClientRequestMeta {
+  const forwardedFor = req.headers?.['x-forwarded-for']
+  const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor
+
+  return {
+    ipAddress: forwardedIp?.split(',')[0]?.trim() || req.ip,
+    requestPath: req.path,
+    userAgent: req.headers?.['user-agent'],
+  }
+}
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('ai/knowledge')
@@ -131,28 +152,29 @@ export class AiKnowledgeController {
   @Get('maintenance/tasks')
   @RequirePermissions('ai:manage_skills')
   listMaintenanceTasks(@Query() query: Record<string, unknown>) {
-    const page = positiveInt(query.page, 1)
-    const pageSize = Math.min(positiveInt(query.pageSize, 20), 100)
-    return this.knowledge.listMaintenanceTasks({
-      knowledgeId: typeof query.knowledgeId === 'string' ? query.knowledgeId : undefined,
-      page,
-      pageSize,
-      priority: typeof query.priority === 'string' ? query.priority : undefined,
-      status: typeof query.status === 'string' ? query.status : undefined,
-      taskType: typeof query.taskType === 'string' ? query.taskType : undefined,
-    })
+    return this.knowledge.listMaintenanceTasks(normalizeMaintenanceListQuery(query))
   }
 
   @Post('maintenance/tasks/:id/resolve')
   @RequirePermissions('ai:manage_skills')
-  resolveMaintenanceTask(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.knowledge.resolveMaintenanceTask(id, normalizeMaintenanceResolveBody(body))
+  resolveMaintenanceTask(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.knowledge.resolveMaintenanceTask(id, normalizeMaintenanceResolveBody(body), user.id, getRequestMeta(req))
   }
 
   @Post('maintenance/tasks/:id/dismiss')
   @RequirePermissions('ai:manage_skills')
-  dismissMaintenanceTask(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.knowledge.dismissMaintenanceTask(id, normalizeMaintenanceResolveBody(body))
+  dismissMaintenanceTask(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.knowledge.dismissMaintenanceTask(id, normalizeMaintenanceResolveBody(body), user.id, getRequestMeta(req))
   }
 
   @Post('maintenance/run')

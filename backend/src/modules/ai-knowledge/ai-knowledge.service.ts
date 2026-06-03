@@ -18,6 +18,7 @@ import {
   Prisma,
 } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { ClientRequestMeta } from '../auth/auth.types'
 import { stableHash } from './ai-knowledge.utils'
 import {
   AiKnowledgeCaptureInput,
@@ -964,6 +965,20 @@ ${candidate.content}`)
     const [total, items] = await Promise.all([
       this.prisma.aiKnowledgeMaintenanceTask.count({ where }),
       this.prisma.aiKnowledgeMaintenanceTask.findMany({
+        include: {
+          knowledge: {
+            select: {
+              agentInjectEnabled: true,
+              category: true,
+              directAnswerEnabled: true,
+              id: true,
+              maintenanceStatus: true,
+              retrievalEnabled: true,
+              status: true,
+              title: true,
+            },
+          },
+        },
         orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
@@ -976,23 +991,73 @@ ${candidate.content}`)
     }
   }
 
-  async resolveMaintenanceTask(id: string, input: AiKnowledgeMaintenanceResolveInput) {
-    const task = await this.prisma.aiKnowledgeMaintenanceTask.findUnique({ where: { id } })
-    if (!task) throw new NotFoundException('维护任务不存在')
-    if (task.status !== 'OPEN') throw new ConflictException('只有 OPEN 状态的任务可以解决')
-    return this.prisma.aiKnowledgeMaintenanceTask.update({
-      data: { reason: input.reason ? `${task.reason}\n决议：${input.reason}` : task.reason, resolvedAt: new Date(), status: 'RESOLVED' },
-      where: { id },
-    })
+  async resolveMaintenanceTask(
+    id: string,
+    input: AiKnowledgeMaintenanceResolveInput,
+    actorId: string,
+    meta: ClientRequestMeta = {},
+  ) {
+    return this.closeMaintenanceTask(id, input, actorId, meta, 'RESOLVE')
   }
 
-  async dismissMaintenanceTask(id: string, input: AiKnowledgeMaintenanceResolveInput) {
-    const task = await this.prisma.aiKnowledgeMaintenanceTask.findUnique({ where: { id } })
-    if (!task) throw new NotFoundException('维护任务不存在')
-    if (task.status !== 'OPEN') throw new ConflictException('只有 OPEN 状态的任务可以忽略')
-    return this.prisma.aiKnowledgeMaintenanceTask.update({
-      data: { reason: input.reason ? `${task.reason}\n忽略原因：${input.reason}` : task.reason, resolvedAt: new Date(), status: 'DISMISSED' },
-      where: { id },
+  async dismissMaintenanceTask(
+    id: string,
+    input: AiKnowledgeMaintenanceResolveInput,
+    actorId: string,
+    meta: ClientRequestMeta = {},
+  ) {
+    return this.closeMaintenanceTask(id, input, actorId, meta, 'DISMISS')
+  }
+
+  private async closeMaintenanceTask(
+    id: string,
+    input: AiKnowledgeMaintenanceResolveInput,
+    actorId: string,
+    meta: ClientRequestMeta,
+    operation: 'RESOLVE' | 'DISMISS',
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.aiKnowledgeMaintenanceTask.findUnique({ where: { id } })
+      if (!task) throw new NotFoundException('维护任务不存在')
+      if (task.status !== 'OPEN') {
+        throw new ConflictException(operation === 'RESOLVE' ? '只有 OPEN 状态的任务可以解决' : '只有 OPEN 状态的任务可以忽略')
+      }
+
+      const operatorReason = input.reason
+      const updated = await tx.aiKnowledgeMaintenanceTask.update({
+        data: {
+          reason: operatorReason
+            ? `${task.reason}\n${operation === 'RESOLVE' ? '决议' : '忽略原因'}：${operatorReason}`
+            : task.reason,
+          resolvedAt: new Date(),
+          status: operation === 'RESOLVE' ? 'RESOLVED' : 'DISMISSED',
+        },
+        where: { id },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: 'CHANGE_SYSTEM_SETTING',
+          actorId,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            dedupeKey: task.dedupeKey,
+            knowledgeId: task.knowledgeId,
+            operation,
+            operatorReason: operatorReason ?? null,
+            previousStatus: task.status,
+            priority: task.priority,
+            taskType: task.taskType,
+          } as Prisma.InputJsonValue,
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: task.id,
+          targetType: 'AiKnowledgeMaintenanceTask',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return updated
     })
   }
 }

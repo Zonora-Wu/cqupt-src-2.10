@@ -5,22 +5,29 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   createAiSkillCandidate,
+  dismissAiKnowledgeMaintenanceTask,
   getAiKnowledgeStats,
   installAiSkillCandidate,
   listAiKnowledge,
   listAiKnowledgeCaptureJobs,
   listAiKnowledgeConversations,
+  listAiKnowledgeMaintenanceTasks,
   listAiProblemSessionsForReview,
   listAiSkillCandidates,
   processAiKnowledgeCaptures,
+  resolveAiKnowledgeMaintenanceTask,
   reviewAiKnowledge,
   reviewAiKnowledgeConversation,
   reviewAiProblemSession,
   reviewAiSkillCandidate,
+  runAiKnowledgeMaintenance,
   summarizeAiKnowledgeConversation,
   summarizeAiProblemSession,
   type AiKnowledgeConversation,
   type AiKnowledgeEntry,
+  type AiKnowledgeMaintenanceTask,
+  type AiKnowledgeMaintenanceTaskPriority,
+  type AiKnowledgeMaintenanceTaskStatus,
   type AiKnowledgeStats,
   type AiKnowledgeStatus,
   type AiProblemSession,
@@ -35,9 +42,11 @@ const statusLabels: Record<string, string> = {
   CANDIDATE: '候选',
   COMPLETED: '已完成',
   DISCARDED: '已丢弃',
+  DISMISSED: '已忽略',
   FAILED: '失败',
   INSTALLED: '已安装',
   NEEDS_REVIEW: '待审核',
+  OPEN: '待处理',
   PENDING: '待处理',
   PROCESSING: '处理中',
   PROMOTED_TO_SKILL: '已晋升 Skill',
@@ -74,8 +83,29 @@ const categoryLabels: Record<string, string> = {
   XSS: 'XSS',
 }
 
+const maintenanceTaskTypeLabels: Record<string, string> = {
+  ARCHIVE: '待归档复审',
+  DUPLICATE: '疑似重复',
+  EXPIRY: '过期复审',
+  LOW_QUALITY: '低质量复审',
+  SECURITY: '安全复核',
+  STALE_REVIEW: '过期内容复审',
+}
+
+const maintenanceStatusLabels: Record<string, string> = {
+  ARCHIVED: '已归档',
+  DUPLICATE_REVIEW: '重复复审',
+  HEALTHY: '健康',
+  LOW_QUALITY_REVIEW: '低质量复审',
+  SECURITY_SUSPENDED: '安全暂停',
+  STALE_REVIEW: '过期复审',
+}
+
 export function AdminAiKnowledgeManagement() {
   const [entries, setEntries] = useState<AiKnowledgeEntry[]>([])
+  const [maintenanceTasks, setMaintenanceTasks] = useState<AiKnowledgeMaintenanceTask[]>([])
+  const [maintenancePriority, setMaintenancePriority] = useState<AiKnowledgeMaintenanceTaskPriority | 'ALL'>('ALL')
+  const [maintenanceStatus, setMaintenanceStatus] = useState<AiKnowledgeMaintenanceTaskStatus | 'ALL'>('OPEN')
   const [conversations, setConversations] = useState<AiKnowledgeConversation[]>([])
   const [problemSessions, setProblemSessions] = useState<AiProblemSession[]>([])
   const [candidates, setCandidates] = useState<AiSkillCandidate[]>([])
@@ -99,13 +129,14 @@ export function AdminAiKnowledgeManagement() {
     setLoading(true)
     setError('')
     try {
-      const [statsData, entriesData, candidatesData, jobsData, conversationData, problemSessionData] = await Promise.all([
+      const [statsData, entriesData, candidatesData, jobsData, conversationData, problemSessionData, maintenanceTaskData] = await Promise.all([
         getAiKnowledgeStats(),
         listAiKnowledge({ page: 1, pageSize: 20, status: activeTab === 'AUTO_APPROVED' ? 'AUTO_APPROVED' : activeTab === 'SKILLS' ? undefined : status === 'ALL' ? undefined : status, keyword }),
         listAiSkillCandidates(),
         listAiKnowledgeCaptureJobs({ page: 1, pageSize: 8 }),
         listAiKnowledgeConversations({ page: 1, pageSize: 8 }),
         listAiProblemSessionsForReview({ page: 1, pageSize: 8 }),
+        listAiKnowledgeMaintenanceTasks({ page: 1, pageSize: 30, priority: maintenancePriority, status: maintenanceStatus }),
       ])
       setStats(statsData)
       setEntries(entriesData.items)
@@ -113,13 +144,14 @@ export function AdminAiKnowledgeManagement() {
       setCaptureJobs(jobsData.items)
       setConversations(conversationData.items)
       setProblemSessions(problemSessionData.items)
+      setMaintenanceTasks(maintenanceTaskData.items)
       setSelectedIds((current) => current.filter((id) => entriesData.items.some((entry) => entry.id === id && promotableStatuses.has(entry.status))))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'AI 知识库数据加载失败')
     } finally {
       setLoading(false)
     }
-  }, [activeTab, keyword, status])
+  }, [activeTab, keyword, maintenancePriority, maintenanceStatus, status])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadAll(), 0)
@@ -151,6 +183,22 @@ export function AdminAiKnowledgeManagement() {
     setSelectedIds([])
     setSkillName('')
     setSkillDescription('')
+  }
+
+  function promptMaintenanceReason(defaultReason: string) {
+    return window.prompt('请输入处理原因，将写入审计记录：', defaultReason)?.trim()
+  }
+
+  async function resolveMaintenance(task: AiKnowledgeMaintenanceTask) {
+    const reason = promptMaintenanceReason('管理员确认维护事项已处理')
+    if (reason === undefined) return
+    await runAction(task.id, () => resolveAiKnowledgeMaintenanceTask(task.id, reason), '维护任务已解决')
+  }
+
+  async function dismissMaintenance(task: AiKnowledgeMaintenanceTask) {
+    const reason = promptMaintenanceReason('管理员确认暂不处理该维护事项')
+    if (reason === undefined) return
+    await runAction(task.id, () => dismissAiKnowledgeMaintenanceTask(task.id, reason), '维护任务已忽略')
   }
 
   return (
@@ -457,17 +505,83 @@ export function AdminAiKnowledgeManagement() {
           ) : null}
 
           {activeTab === 'MAINTENANCE' ? (
-            <SurfacePanel className="p-8">
-              <div className="flex max-w-3xl items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
-                  <Wrench className="h-5 w-5" />
+            <>
+              <SurfacePanel className="p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">待维护任务</h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">按 P0-P4 优先级查看维护任务；解决或忽略会写入审计日志。修订、合并和回滚不在 KB-13 范围内。</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <SelectInput
+                      className="min-w-32"
+                      onChange={(value) => setMaintenanceStatus(value as AiKnowledgeMaintenanceTaskStatus | 'ALL')}
+                      options={[
+                        { label: '待处理', value: 'OPEN' },
+                        { label: '已解决', value: 'RESOLVED' },
+                        { label: '已忽略', value: 'DISMISSED' },
+                        { label: '全部状态', value: 'ALL' },
+                      ]}
+                      value={maintenanceStatus}
+                    />
+                    <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">查询</button>
+                    <button
+                      className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60 dark:bg-green-500 dark:text-[#07100a]"
+                      disabled={busy === 'maintenance-run'}
+                      onClick={() => void runAction('maintenance-run', runAiKnowledgeMaintenance, '维护扫描已完成')}
+                      type="button"
+                    >
+                      <Wrench className="mr-1.5 inline h-4 w-4" />运行扫描
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold">待维护工作台将在 Phase 5 接入</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">该视图将承载待更新、低质量、疑似重复、安全暂停和待归档知识。后端仍需补充 maintenanceStatus、维护任务优先级、revision diff，以及修订、合并、暂停、恢复接口。</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(['ALL', 'P0', 'P1', 'P2', 'P3', 'P4'] as const).map((priority) => (
+                    <button
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${maintenancePriority === priority ? 'border-brand-600/40 bg-brand-600/10 text-brand-800 dark:text-green-200' : 'border-black/10 text-slate-500 hover:bg-black/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10'}`}
+                      key={priority}
+                      onClick={() => setMaintenancePriority(priority)}
+                      type="button"
+                    >
+                      {priority === 'ALL' ? '全部优先级' : priority}
+                    </button>
+                  ))}
                 </div>
-              </div>
-            </SurfacePanel>
+              </SurfacePanel>
+
+              {loading ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载维护任务...</SurfacePanel> : null}
+              {!loading && maintenanceTasks.length === 0 ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">当前筛选条件下暂无维护任务。</SurfacePanel> : null}
+
+              {maintenanceTasks.map((task) => (
+                <SurfacePanel className="p-5" key={task.id}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <PriorityBadge priority={task.priority} />
+                        <StatusBadge status={task.status} />
+                        <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{maintenanceTaskTypeLabels[task.taskType] ?? task.taskType}</span>
+                        {task.knowledge ? <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{categoryLabels[task.knowledge.category] ?? task.knowledge.category}</span> : null}
+                      </div>
+                      <h3 className="mt-3 text-lg font-semibold">{task.knowledge?.title ?? task.knowledgeId}</h3>
+                      {task.knowledge ? (
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          知识状态：{statusLabels[task.knowledge.status] ?? task.knowledge.status} · 维护状态：{maintenanceStatusLabels[task.knowledge.maintenanceStatus] ?? task.knowledge.maintenanceStatus} · 检索 {task.knowledge.retrievalEnabled ? '开启' : '关闭'} · 直接回答 {task.knowledge.directAnswerEnabled ? '开启' : '关闭'} · Agent 注入 {task.knowledge.agentInjectEnabled ? '开启' : '关闭'}
+                        </p>
+                      ) : null}
+                      <p className="mt-3 whitespace-pre-wrap rounded-lg border border-black/5 bg-black/[0.025] p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">{task.reason}</p>
+                      <p className="mt-3 break-all text-xs text-slate-500 dark:text-slate-400">
+                        dedupeKey: {task.dedupeKey} · 创建：{formatDateTime(task.createdAt)}
+                        {task.resolvedAt ? ` · 处理：${formatDateTime(task.resolvedAt)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2 lg:w-36 lg:flex-col">
+                      <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === task.id || task.status !== 'OPEN'} onClick={() => void resolveMaintenance(task)} type="button">解决</button>
+                      <button className="rounded-lg border border-amber-500/30 px-3 py-2 text-sm font-medium text-amber-700 disabled:opacity-60 dark:text-amber-200" disabled={busy === task.id || task.status !== 'OPEN'} onClick={() => void dismissMaintenance(task)} type="button">忽略</button>
+                    </div>
+                  </div>
+                </SurfacePanel>
+              ))}
+            </>
           ) : null}
 
           {activeTab === 'SKILLS' ? (
@@ -608,6 +722,18 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium dark:border-white/10">{statusLabels[status] ?? status}</span>
 }
 
+function PriorityBadge({ priority }: { priority: string }) {
+  const tone =
+    priority === 'P0'
+      ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
+      : priority === 'P1'
+        ? 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-200'
+        : priority === 'P2'
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+          : 'border-black/10 bg-black/[0.025] text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300'
+  return <span className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${tone}`}>{priority}</span>
+}
+
 function ScorePill({ inverse, label, value }: { inverse?: boolean; label: string; value: number }) {
   const effective = inverse ? 1 - (value ?? 0) : (value ?? 0)
   const tone = effective >= 0.82 ? 'text-emerald-700 dark:text-emerald-200' : effective >= 0.62 ? 'text-amber-700 dark:text-amber-200' : 'text-red-700 dark:text-red-200'
@@ -626,6 +752,10 @@ function ScorePill({ inverse, label, value }: { inverse?: boolean; label: string
 
 function formatPercent(value: number) {
   return `${Math.round((value ?? 0) * 100)}%`
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
 function formatProblemSessionMode(mode: string) {

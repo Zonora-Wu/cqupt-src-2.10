@@ -15,6 +15,7 @@ import {
   AiKnowledgeConversationReviewInput,
   AiKnowledgeFeedbackInput,
   AiKnowledgeListQuery,
+  AiKnowledgeMaintenanceListQuery,
   AiKnowledgeMaintenanceResolveInput,
   AiKnowledgeReviewInput,
   AiSkillCandidateCreateInput,
@@ -23,6 +24,9 @@ import {
 
 const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 20
+const MAINTENANCE_PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'P4'] as const
+const MAINTENANCE_TASK_STATUSES = ['OPEN', 'RESOLVED', 'DISMISSED'] as const
+const MAINTENANCE_TASK_TYPES = ['STALE_REVIEW', 'LOW_QUALITY', 'DUPLICATE', 'SECURITY', 'ARCHIVE', 'EXPIRY'] as const
 
 export function normalizeKnowledgeListQuery(query: Record<string, unknown>): AiKnowledgeListQuery {
   return {
@@ -32,6 +36,17 @@ export function normalizeKnowledgeListQuery(query: Record<string, unknown>): AiK
     pageSize: Math.min(positiveInt(query.pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
     roleScope: normalizeEnum(query.roleScope, AiKnowledgeRoleScope, '角色范围'),
     status: normalizeEnum(query.status, AiKnowledgeStatus, '知识状态'),
+  }
+}
+
+export function normalizeMaintenanceListQuery(query: Record<string, unknown>): AiKnowledgeMaintenanceListQuery {
+  return {
+    knowledgeId: optionalText(query.knowledgeId, '知识 ID', 128),
+    page: positiveInt(query.page, 1),
+    pageSize: Math.min(positiveInt(query.pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
+    priority: normalizeStringUnion(query.priority, MAINTENANCE_PRIORITIES, '维护任务优先级'),
+    status: normalizeStringUnion(query.status, MAINTENANCE_TASK_STATUSES, '维护任务状态'),
+    taskType: normalizeStringUnion(query.taskType, MAINTENANCE_TASK_TYPES, '维护任务类型'),
   }
 }
 
@@ -120,6 +135,18 @@ function normalizeEnum<T extends Record<string, string>>(value: unknown, source:
     throw new BadRequestException(`${label}不正确`)
   }
   return value as T[keyof T]
+}
+
+function normalizeStringUnion<const T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  label: string,
+): T[number] | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new BadRequestException(`${label}不正确`)
+  }
+  return value as T[number]
 }
 
 function normalizeTags(value: unknown) {

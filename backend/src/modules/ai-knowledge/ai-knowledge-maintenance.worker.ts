@@ -203,30 +203,34 @@ export class AiKnowledgeMaintenanceWorker implements OnModuleInit, OnModuleDestr
     }
 
     // 2. Gather feedback stats for quality analysis
-    const [feedbackStats, recentHits] = await Promise.all([
-      this.prisma.aiKnowledgeFeedback.aggregate({
-        _count: { _all: true },
+    const [recentFeedbacks, latestHit] = await Promise.all([
+      this.prisma.aiKnowledgeFeedback.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: { value: true },
+        take: RECENT_DOWNVOTE_WINDOW,
         where: { knowledgeId: entry.id },
       }),
-      this.prisma.aiKnowledgeHit.findMany({
+      this.prisma.aiKnowledgeHit.findFirst({
         orderBy: { createdAt: 'desc' },
-        select: { createdAt: true, route: true, usedInResponse: true },
-        take: RECENT_DOWNVOTE_WINDOW,
+        select: { createdAt: true },
         where: { knowledgeId: entry.id },
       }),
     ])
 
-    const totalFeedback = feedbackStats._count._all
     const totalVotes = entry.helpfulCount + entry.unhelpfulCount
     const positiveRate = totalVotes > 0 ? entry.helpfulCount / totalVotes : 1
-    const recentDownvoteRate = entry.unhelpfulCount > 0 && totalVotes >= RECENT_DOWNVOTE_WINDOW
-      ? entry.unhelpfulCount / Math.max(totalVotes, 1)
-      : 0
+    const recentUnhelpfulCount = recentFeedbacks.filter(
+      (feedback) => feedback.value === 'UNHELPFUL',
+    ).length
+    const recentDownvoteRate =
+      recentFeedbacks.length >= RECENT_DOWNVOTE_WINDOW
+        ? recentUnhelpfulCount / recentFeedbacks.length
+        : 0
 
     // Compute freshness score: decay over time since last meaningful update
     const daysSinceUpdate = Math.max(0, (now.getTime() - entry.updatedAt.getTime()) / (1000 * 60 * 60 * 24))
     const freshnessScore = Math.max(0, 1 - daysSinceUpdate / 180) // linear decay over 180 days
-    const lastHitAt = recentHits.length > 0 ? recentHits[0].createdAt : entry.createdAt
+    const lastHitAt = latestHit?.createdAt ?? entry.createdAt
     const daysSinceLastHit = Math.max(0, (now.getTime() - lastHitAt.getTime()) / (1000 * 60 * 60 * 24))
 
     // 3. No hits for extended period → archive candidate
@@ -239,16 +243,16 @@ export class AiKnowledgeMaintenanceWorker implements OnModuleInit, OnModuleDestr
       })
     }
 
-    // 4. Low quality — poor feedback
+    // 4. Low quality — poor feedback (uses cumulative vote totals for overall quality)
     if (
-      totalFeedback >= LOW_QUALITY_MIN_FEEDBACKS &&
+      totalVotes >= LOW_QUALITY_MIN_FEEDBACKS &&
       positiveRate < LOW_QUALITY_POSITIVE_RATE_THRESHOLD &&
       entry.maintenanceStatus === AiKnowledgeMaintenanceStatus.HEALTHY
     ) {
       actions.push({
         disableDirectAnswer: true,
         newMaintenanceStatus: AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW,
-        reason: `正向反馈率=${(positiveRate * 100).toFixed(0)}%（阈值 ${(LOW_QUALITY_POSITIVE_RATE_THRESHOLD * 100).toFixed(0)}%），反馈数=${totalFeedback}，禁用直接回答，降级为仅注入 Agent。`,
+        reason: `正向反馈率=${(positiveRate * 100).toFixed(0)}%（阈值 ${(LOW_QUALITY_POSITIVE_RATE_THRESHOLD * 100).toFixed(0)}%），反馈数=${totalVotes}，禁用直接回答，降级为仅注入 Agent。`,
         taskPriority: PRIORITY_ORDER.LOW_QUALITY,
         taskType: MAINTENANCE_TASK_TYPES.LOW_QUALITY,
       })

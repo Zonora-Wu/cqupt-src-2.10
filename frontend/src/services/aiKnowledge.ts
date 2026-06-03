@@ -19,6 +19,10 @@ export type AiKnowledgeVisibility = 'PRIVATE' | 'REVIEW_REQUIRED' | 'PLATFORM_PU
 export type AiKnowledgeSensitivity = 'PUBLIC' | 'INTERNAL' | 'SENSITIVE' | 'REJECTED'
 export type AiKnowledgeStatus = 'CANDIDATE' | 'AUTO_APPROVED' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'ARCHIVED' | 'PROMOTED_TO_SKILL'
 export type AiKnowledgeJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'DISCARDED'
+export type AiKnowledgeMaintenanceStatus = 'HEALTHY' | 'STALE_REVIEW' | 'LOW_QUALITY_REVIEW' | 'DUPLICATE_REVIEW' | 'SECURITY_SUSPENDED' | 'ARCHIVED'
+export type AiKnowledgeMaintenanceTaskPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4'
+export type AiKnowledgeMaintenanceTaskStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED'
+export type AiKnowledgeMaintenanceTaskType = 'STALE_REVIEW' | 'LOW_QUALITY' | 'DUPLICATE' | 'SECURITY' | 'ARCHIVE' | 'EXPIRY'
 export type AiKnowledgeConversationStatus = 'ACTIVE' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'
 export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'
 export type AiSkillCandidateStatus = 'DRAFT' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'INSTALLED' | 'FAILED'
@@ -37,6 +41,10 @@ export type AiKnowledgeEntry = {
   visibility: AiKnowledgeVisibility
   sensitivity: AiKnowledgeSensitivity
   status: AiKnowledgeStatus
+  maintenanceStatus: AiKnowledgeMaintenanceStatus
+  retrievalEnabled: boolean
+  directAnswerEnabled: boolean
+  agentInjectEnabled: boolean
   hitCount: number
   helpfulCount: number
   unhelpfulCount: number
@@ -196,6 +204,22 @@ export type AiKnowledgeStats = {
   recentQueue: AiKnowledgeCaptureJob[]
 }
 
+export type AiKnowledgeMaintenanceTask = {
+  id: string
+  knowledgeId: string
+  taskType: AiKnowledgeMaintenanceTaskType | string
+  reason: string
+  priority: AiKnowledgeMaintenanceTaskPriority
+  status: AiKnowledgeMaintenanceTaskStatus
+  dedupeKey: string
+  createdAt: string
+  resolvedAt?: string | null
+  knowledge?: Pick<
+    AiKnowledgeEntry,
+    'id' | 'title' | 'category' | 'status' | 'maintenanceStatus' | 'retrievalEnabled' | 'directAnswerEnabled' | 'agentInjectEnabled'
+  >
+}
+
 export function listAiKnowledgeConversations(params: { page?: number; pageSize?: number; status?: AiKnowledgeConversationStatus } = {}) {
   const search = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -238,6 +262,41 @@ export function listAiKnowledge(params: { page?: number; pageSize?: number; stat
     if (value !== undefined && String(value) !== '') search.set(key, String(value))
   })
   return apiRequest<{ items: AiKnowledgeEntry[]; pagination: Pagination }>(`/ai/knowledge${search.size ? `?${search}` : ''}`, { auth: true, method: 'GET' })
+}
+
+export function listAiKnowledgeMaintenanceTasks(params: {
+  knowledgeId?: string
+  page?: number
+  pageSize?: number
+  priority?: AiKnowledgeMaintenanceTaskPriority | 'ALL'
+  status?: AiKnowledgeMaintenanceTaskStatus | 'ALL'
+  taskType?: AiKnowledgeMaintenanceTaskType | 'ALL'
+} = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && String(value) !== '' && value !== 'ALL') search.set(key, String(value))
+  })
+  return apiRequest<{ items: AiKnowledgeMaintenanceTask[]; pagination: Pagination }>(`/ai/knowledge/maintenance/tasks${search.size ? `?${search}` : ''}`, { auth: true, method: 'GET' })
+}
+
+export function resolveAiKnowledgeMaintenanceTask(id: string, reason?: string) {
+  return apiRequest<AiKnowledgeMaintenanceTask>(`/ai/knowledge/maintenance/tasks/${id}/resolve`, { auth: true, body: { reason }, method: 'POST' })
+}
+
+export function dismissAiKnowledgeMaintenanceTask(id: string, reason?: string) {
+  return apiRequest<AiKnowledgeMaintenanceTask>(`/ai/knowledge/maintenance/tasks/${id}/dismiss`, { auth: true, body: { reason }, method: 'POST' })
+}
+
+export function runAiKnowledgeMaintenance() {
+  return apiRequest<{
+    archived: number
+    errors: string[]
+    processed: number
+    scanned: number
+    securitySuspended: number
+    staleMarked: number
+    tasksCreated: number
+  }>('/ai/knowledge/maintenance/run', { auth: true, method: 'POST' })
 }
 
 export function reviewAiKnowledge(id: string, status: Extract<AiKnowledgeStatus, 'APPROVED' | 'REJECTED' | 'ARCHIVED'>, note?: string) {
