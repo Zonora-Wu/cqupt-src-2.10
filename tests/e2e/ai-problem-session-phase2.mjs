@@ -590,6 +590,8 @@ async function main() {
     assert(entry?.askCount >= 5, 'auto knowledge should store askCount')
   })
 
+  await refreshTokens()
+
   await step('KB-07 refuses low-quality or risky clusters', async () => {
     const lowQuestion = `${marker} 低质量自动入库阻断测试`
     for (let index = 0; index < 5; index += 1) {
@@ -1365,6 +1367,13 @@ async function createResolvedProblemSession({ answer, question }) {
       },
     },
   })
+}
+
+async function refreshTokens() {
+  state.studentToken = (await login({ password: 'E2e123456+-', unifiedCode: state.studentCode })).accessToken
+  state.otherStudentToken = (await login({ password: 'E2e123456+-', unifiedCode: state.otherStudentCode })).accessToken
+  state.adminToken = (await login(accounts.admin)).accessToken
+  assert(state.studentToken && state.otherStudentToken && state.adminToken, 'refreshed student, other student and admin tokens should exist')
 }
 
 async function createTempStudent(code = state.studentCode, suffix = 'main') {

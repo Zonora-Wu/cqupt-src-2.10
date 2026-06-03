@@ -2291,7 +2291,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 
 状态说明：`未开始`、`进行中`、`待验收`、`已完成`、`阻塞`、`待代码确认`。本文档是目标方案，未逐项对照当前代码验证的条目先标为 `待代码确认`。
 
-当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `25/25`，覆盖 KB-01 到 KB-12、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈、KB-11 `maintenanceStatus + retrievalPolicy`、KB-12 `AiKnowledgeMaintenanceWorker`，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。KB-12 覆盖安全举报自动 `SECURITY_SUSPENDED`、重复运行不产生重复 OPEN 任务、低质量反馈触发 `LOW_QUALITY_REVIEW`、管理端任务列表/解决/忽略、以及非管理员拒绝。本轮后端 `npm run build`、`npm run prisma:validate`、`npm run prisma:migrate:deploy` 和 `git diff --check` 已通过。
+当前本地验收证据：`node tests/e2e/ai-problem-session-phase2.mjs` 已通过 `25/25`，覆盖 KB-01 到 KB-13、KB-06A 语义问题族聚类、KB-08A 数据使用路由、KB-08B 管理员知识库使用强度、KB-09 角色/权限过滤、KB-10 来源标注与反馈、KB-11 `maintenanceStatus + retrievalPolicy`、KB-12 `AiKnowledgeMaintenanceWorker`、KB-13 `AiKnowledgeMaintenanceTask` 管理端 P0/P1 优先级过滤、invalid priority 拒绝、任务 knowledge summary、resolve/dismiss 审计与 dedupeKey 去重，以及 KB-05 敏感信息前置脱敏与审核分流；其中 KB-05A 覆盖 legacy `AiKnowledgeConversation` 用户对话重新总结时的确定性脱敏回写，避免 `[REDACTED]` 等安全占位符被二次误判为敏感原文。KB-12/KB-13 覆盖安全举报自动 `SECURITY_SUSPENDED`、重复运行不产生重复 OPEN 任务、低质量反馈触发 `LOW_QUALITY_REVIEW`、管理端任务列表/解决/忽略、resolve/dismiss 写 `AuditLog`、以及非管理员拒绝。本轮后端 `npm run build`、`npm run typecheck`、`npm run prisma:validate`、前端 `npm run build`、`node tests/e2e/ai-problem-session-phase2.mjs` 已通过。
 
 | 编号 | 模块 | 当前状态 | 完成定义：完成什么 | 验收规则：如何证明完成 |
 |---|---|---|---|---|
@@ -2310,7 +2310,7 @@ Authorization: [REDACTED_AUTH_HEADER]
 | KB-10 | 来源标注与反馈 | 已完成 | 前端在 assistant bubble 内展示知识来源，回复底部支持有用/无用/举报 | E2E：使用 KB 的回复返回 `knowledgeSources`、`knowledgeHitIds`、`assistantTurnId`；反馈写入 assistant turn metadata，追加 `AiKnowledgeFeedback` 历史，并更新 helpful/unhelpful/abuse 汇总；前端来源标注位于 assistant bubble 内部 |
 | KB-11 | maintenanceStatus + retrievalPolicy | 已完成 | `AiKnowledgeEntry` 增加 `maintenanceStatus`、`retrievalEnabled`、`directAnswerEnabled`、`agentInjectEnabled`；知识检索先按维护状态和条目级路由开关过滤，再进入 direct/inject 策略选择 | E2E：`STALE_REVIEW`、`SECURITY_SUSPENDED`、`ARCHIVED` 和 `retrievalEnabled=false` 不进入普通候选；`LOW_QUALITY_REVIEW` 只能注入 Agent、不直接回答；`directAnswerEnabled=false` 强制走注入；`agentInjectEnabled=false` 不会在 direct 被策略关闭时被注入 |
 | KB-12 | AiKnowledgeMaintenanceWorker | 已完成 | Worker 计算质量分、新鲜度、反馈趋势、重复风险，生成维护任务或暂停风险知识 | 重复运行不产生重复 OPEN task；安全举报后自动 `SECURITY_SUSPENDED` 且 retrieval disabled |
-| KB-13 | AiKnowledgeMaintenanceTask | 待代码确认 | 待维护任务有 priority、reason、dedupeKey、状态流转 | 管理端可按 P0-P4 查看任务；resolve/dismiss 写 AuditLog；同一 dedupeKey 不重复创建 |
+| KB-13 | AiKnowledgeMaintenanceTask | 已完成 | 待维护任务有 priority、reason、dedupeKey、状态流转 | 管理端可按 P0-P4 查看任务；resolve/dismiss 写 AuditLog；同一 dedupeKey 不重复创建 |
 | KB-14 | AiKnowledgeRevision | 待代码确认 | 手工编辑、合并、过期修复、安全修复都创建不可变 revision snapshot | 修改答案后 version +1；oldSnapshot/newSnapshot 可读；可回滚；归档知识仍保留 revision 和 hit |
 | KB-15 | 知识投毒防护 | 待代码确认 | 入库前和维护扫描计算 poisoningRiskScore，指令型/越权型内容拒绝或安全复审 | 含“忽略规则”“以后都自动通过”等样例不能入库；已入库发现后进入 `SECURITY_SUSPENDED` |
 | KB-16 | Embedding 版本化 | 待代码确认 | embeddingModel、embeddingVersion、contentHash、embeddingUpdatedAt 可追踪 | 更换 embedding 模型后不混用旧阈值；内容变更触发重算任务；重算前可 fallback 到文本相似度 |
