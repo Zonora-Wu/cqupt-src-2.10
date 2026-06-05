@@ -133,6 +133,34 @@ cd backend && npm run prisma:validate
 
 如果需要排查运行失败，可以只读取用户指定的单个日志或 evidence 文件，不要批量扫整个目录。
 
+## Claude Code 项目工具
+
+项目内置了 Claude Code 专用辅助内容：
+
+- `.claude/commands/`：常用工作流命令。
+- `.claude/agents/`：项目专属子代理。
+- `.claude/README.md`：使用说明。
+
+推荐命令：
+
+- `/ai-retest-implement phase-1`：按阶段实现 AI 漏洞自动复测。
+- `/safe-prisma-change <目标>`：安全修改 Prisma schema / migration。
+- `/review-current-diff`：审查当前 diff。
+- `/done-check`：完成前检查。
+- `/backend-build-check`：后端构建检查。
+- `/frontend-build-check`：前端构建检查。
+- `/docs-sync`：文档同步检查。
+- `/claude-probe`：检查 Claude Code 可见性与瘦身是否误伤开发。
+
+推荐子代理：
+
+- `@backend-architect`：后端架构、NestJS、RBAC、AuditLog。
+- `@frontend-ui`：前端 UI、React、Tailwind、AI 卡片交互。
+- `@ai-security-reviewer`：AI/Hermes/Runner/自动复测安全边界。
+- `@prisma-migration-reviewer`：Prisma schema、migration、数据一致性。
+- `@test-evidence-checker`：测试证据与完成度审查。
+- `@technical-docs-syncer`：文档与实现同步。
+
 ## 开发原则
 
 - 不要为了省事做最简单实现，应优先做适合 CQUPT-SRC 平台的生产级实现。
