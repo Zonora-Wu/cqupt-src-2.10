@@ -29,5 +29,6 @@ import { AiToolsService } from './ai.tools.service'
     VulnerabilitiesModule,
   ],
   providers: [AiService, AiToolsService, AiSkillRouterService, AiDataRequestService, AiReportDraftService],
+  exports: [AiService],
 })
 export class AiModule {}

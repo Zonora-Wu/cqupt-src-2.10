@@ -84,6 +84,34 @@ export class AiService {
     @Inject(AiProblemSessionService) private readonly problemSessions: AiProblemSessionService,
   ) {}
 
+  async completeChat(input: {
+    messages: OpenAiChatMessage[]
+    model?: string
+    timeoutMs?: number
+    user?: string
+  }) {
+    const payload: OpenAiChatPayload = {
+      messages: input.messages,
+      model: input.model ?? getOpenAiModel(),
+      tool_choice: 'none',
+      user: input.user,
+    }
+    const result = await this.requestOpenAi('chat/completions', {
+      body: payload,
+      method: 'POST',
+      timeoutMs: input.timeoutMs ?? getRequestTimeoutMs(),
+    })
+
+    return {
+      content: extractOpenAiContent(result.body),
+      modelName: payload.model,
+      response: result.body,
+      runId: extractRunId(result.body),
+      status: result.status,
+      tokensUsed: extractTokenUsage(result.body),
+    }
+  }
+
   async checkAgentHealth() {
     const startedAt = Date.now()
     const result = await this.requestOpenAi('models', {
