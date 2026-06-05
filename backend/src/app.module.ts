@@ -6,6 +6,7 @@ import { AccessModule } from './modules/access/access.module'
 import { AccountModule } from './modules/account/account.module'
 import { AiModule } from './modules/ai/ai.module'
 import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module'
+import { AiVulnerabilityRetestModule } from './modules/ai-vulnerability-retest/ai-vulnerability-retest.module'
 import { AnnouncementsModule } from './modules/announcements/announcements.module'
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module'
 import { AttachmentsModule } from './modules/attachments/attachments.module'
@@ -39,6 +40,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     AccountModule,
     AiModule,
     AiKnowledgeModule,
+    AiVulnerabilityRetestModule,
     AccessModule,
     SecurityExamModule,
     VulnerabilitiesModule,

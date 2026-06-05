@@ -146,6 +146,64 @@ enum AiProposalStatus {
   APPLIED
 }
 
+enum AiRetestJobStatus {
+  PENDING
+  QUEUED
+  PLANNING
+  POLICY_CHECK
+  PLAN_REVIEW
+  ADVISORY_ONLY
+  RUNNING
+  CANCELLING
+  REPORTING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  BLOCKED
+  EXPIRED
+}
+
+enum AiRetestMode {
+  PLAN_ONLY
+  CONTROLLED_RUN
+}
+
+enum AiRetestRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AiRetestPolicyDecision {
+  ALLOW
+  ALLOW_WITH_LIMITS
+  REQUIRE_HUMAN_APPROVAL
+  ADVISORY_ONLY
+  BLOCK
+}
+
+enum AiRetestReproducibility {
+  REPRODUCED
+  NOT_REPRODUCED
+  PARTIALLY_REPRODUCED
+  INSUFFICIENT_EVIDENCE
+  BLOCKED_BY_POLICY
+  NOT_EXECUTED_PLATFORM_BLOCKED
+}
+
+enum AiRetestStepStatus {
+  PENDING
+  ALLOWED
+  BLOCKED
+  WAITING_APPROVAL
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
 
 enum AiKnowledgeCategory {
   VULNERABILITY_REPORTING
@@ -268,6 +326,21 @@ enum AuditAction {
   CHANGE_USER_PERMISSION
   CHANGE_SYSTEM_SETTING
   CALL_AI
+  AI_RETEST_CREATED
+  AI_RETEST_CONTEXT_CREATED
+  AI_RETEST_PLAN_CREATED
+  AI_RETEST_POLICY_CHECKED
+  AI_RETEST_PLAN_APPROVED
+  AI_RETEST_RUNNER_STARTED
+  AI_RETEST_RUNNER_STEP_EXECUTED
+  AI_RETEST_BLOCKED
+  AI_RETEST_CANCELLED
+  AI_RETEST_EXPIRED
+  AI_RETEST_FAILED
+  AI_RETEST_REPORT_CREATED
+  AI_RETEST_REPORT_ADOPTED
+  AI_RETEST_ARTIFACT_VIEWED
+  AI_RETEST_POLICY_UPDATED
 }
 
 model User {
@@ -332,6 +405,9 @@ model User {
   aiProblemSessions     AiProblemSession[]           @relation("AiProblemSessionUser")
   reviewedSkillCandidates AiSkillCandidate[]         @relation("AiSkillCandidateReviewer")
   operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
+  requestedAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestRequester")
+  cancelledAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestCanceller")
+  adoptedAiRetestReports AiVulnerabilityRetestReport[] @relation("AiRetestReportAdopter")
   auditLogs             AuditLog[]                  @relation("AuditActor")
 
   @@index([roleId])
@@ -594,6 +670,7 @@ model VulnerabilityReport {
   certificate         Certificate?
   pointEntries        PointLedgerEntry[]
   aiActionProposals   AiActionProposal[]
+  aiRetestJobs        AiVulnerabilityRetestJob[]
 
   @@index([submitterId])
   @@index([assetId])
@@ -953,6 +1030,161 @@ model AiActionProposal {
 
   @@index([aiSpace, status])
   @@index([reportId])
+}
+
+model AiVulnerabilityRetestJob {
+  id                 String                   @id @default(cuid())
+  vulnerabilityId    String
+  requestedById      String
+  status             AiRetestJobStatus        @default(PENDING)
+  mode               AiRetestMode             @default(CONTROLLED_RUN)
+  riskLevel          AiRetestRiskLevel?
+  policyDecision     AiRetestPolicyDecision?
+  reproducibility    AiRetestReproducibility?
+  idempotencyKey     String
+  requestBodyHash    String
+  statusVersion      Int                      @default(0)
+  attemptCount       Int                      @default(0)
+  maxAttempts        Int                      @default(1)
+  lockedBy           String?
+  lockedAt           DateTime?
+  queuedAt           DateTime?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  expiresAt          DateTime
+  cancelledAt        DateTime?
+  cancelledById      String?
+  reportSnapshot     Json?
+  targetSnapshot     Json
+  attachmentSnapshot Json?
+  sanitizedContext   Json?
+  policySnapshot     Json?
+  runnerBudget       Json?
+  failureCode        String?
+  failureMessage     String?                  @db.Text
+  traceId            String
+  requestMeta        Json?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  vulnerability      VulnerabilityReport      @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
+  requestedBy        User                     @relation("AiRetestRequester", fields: [requestedById], references: [id])
+  cancelledBy        User?                    @relation("AiRetestCanceller", fields: [cancelledById], references: [id])
+  plan               AiVulnerabilityRetestPlan?
+  steps              AiVulnerabilityRetestStep[]
+  artifacts          AiVulnerabilityRetestArtifact[]
+  report             AiVulnerabilityRetestReport?
+
+  @@unique([vulnerabilityId, idempotencyKey])
+  @@index([vulnerabilityId, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([status, createdAt])
+  @@index([expiresAt])
+  @@index([traceId])
+}
+
+model AiVulnerabilityRetestPlan {
+  id               String              @id @default(cuid())
+  jobId            String              @unique
+  modelName        String?
+  modelProvider    String?
+  skills           String[]            @default([])
+  promptVersion    String
+  schemaVersion    String
+  rawPlan          Json
+  normalizedPlan   Json
+  planHash         String
+  overallRisk      AiRetestRiskLevel
+  requiresApproval Boolean             @default(false)
+  manualRetestOnly Boolean             @default(false)
+  runnerAllowed    Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  job              AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model AiVulnerabilityRetestStep {
+  id                String                  @id @default(cuid())
+  jobId             String
+  sequence          Int
+  title             String
+  toolType          String
+  method            String?
+  targetUrl         String?
+  targetHostHash    String?
+  riskLevel         AiRetestRiskLevel
+  status            AiRetestStepStatus      @default(PENDING)
+  policyDecision    AiRetestPolicyDecision?
+  policyReasons     String[]                @default([])
+  policySnapshot    Json?
+  requestBudget     Json?
+  runnerInputHash   String?
+  runnerExecutionId String?
+  durationMs        Int?
+  requestCount      Int                     @default(0)
+  resultSummary     Json?
+  errorCode         String?
+  errorMessage      String?                 @db.Text
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  job               AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  artifacts         AiVulnerabilityRetestArtifact[]
+
+  @@unique([jobId, sequence])
+  @@index([jobId])
+  @@index([status])
+  @@index([runnerExecutionId])
+}
+
+model AiVulnerabilityRetestArtifact {
+  id               String   @id @default(cuid())
+  jobId            String
+  stepId           String?
+  artifactType     String
+  storageKey       String
+  sha256           String
+  sizeBytes        Int
+  mimeType         String
+  sanitizedPreview String?  @db.Text
+  redactionSummary Json?
+  retentionUntil   DateTime
+  createdAt        DateTime @default(now())
+
+  job              AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  step             AiVulnerabilityRetestStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([stepId])
+  @@index([sha256])
+  @@index([retentionUntil])
+}
+
+model AiVulnerabilityRetestReport {
+  id                   String                    @id @default(cuid())
+  jobId                String                    @unique
+  modelName            String?
+  promptVersion        String
+  schemaVersion        String
+  reportJson           Json
+  reportHash           String
+  reproducibility      AiRetestReproducibility
+  confidence           String?
+  manualReviewRequired Boolean                   @default(true)
+  manualRetestOnly     Boolean                   @default(false)
+  runnerAllowed        Boolean                   @default(false)
+  adoptedCommentId     String?
+  adoptedAt            DateTime?
+  adoptedById          String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  job                  AiVulnerabilityRetestJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  adoptedBy            User?                     @relation("AiRetestReportAdopter", fields: [adoptedById], references: [id])
+
+  @@index([reproducibility])
+  @@index([adoptedById])
 }
 
 model AiKnowledgeConversation {

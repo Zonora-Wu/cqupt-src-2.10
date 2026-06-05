@@ -13,6 +13,21 @@ type AuditLogWithActor = Prisma.AuditLogGetPayload<{
 }>
 
 const actionLabels: Record<AuditAction, string> = {
+  AI_RETEST_ARTIFACT_VIEWED: '查看 AI 复测证据',
+  AI_RETEST_BLOCKED: 'AI 复测被策略阻断',
+  AI_RETEST_CANCELLED: '取消 AI 复测',
+  AI_RETEST_CONTEXT_CREATED: '生成 AI 复测上下文',
+  AI_RETEST_CREATED: '创建 AI 复测任务',
+  AI_RETEST_EXPIRED: 'AI 复测任务超时',
+  AI_RETEST_FAILED: 'AI 复测任务失败',
+  AI_RETEST_PLAN_APPROVED: '批准 AI 复测计划',
+  AI_RETEST_PLAN_CREATED: '生成 AI 复测计划',
+  AI_RETEST_POLICY_CHECKED: '检查 AI 复测策略',
+  AI_RETEST_POLICY_UPDATED: '更新 AI 复测策略',
+  AI_RETEST_REPORT_ADOPTED: '引用 AI 复测报告',
+  AI_RETEST_REPORT_CREATED: '生成 AI 复测报告',
+  AI_RETEST_RUNNER_STARTED: '启动 AI 复测 Runner',
+  AI_RETEST_RUNNER_STEP_EXECUTED: '执行 AI 复测步骤',
   CALL_AI: '调用 AI 能力',
   CHANGE_SYSTEM_SETTING: '修改系统设置',
   CHANGE_USER_PERMISSION: '调整用户权限',
@@ -45,6 +60,10 @@ const moduleLabels: Record<AuditModuleCode, string> = {
 }
 
 const highRiskActions = new Set<AuditAction>([
+  AuditAction.AI_RETEST_PLAN_APPROVED,
+  AuditAction.AI_RETEST_POLICY_UPDATED,
+  AuditAction.AI_RETEST_RUNNER_STARTED,
+  AuditAction.AI_RETEST_RUNNER_STEP_EXECUTED,
   AuditAction.CHANGE_SYSTEM_SETTING,
   AuditAction.CHANGE_USER_PERMISSION,
   AuditAction.ISSUE_CERTIFICATE,
@@ -55,6 +74,17 @@ const highRiskActions = new Set<AuditAction>([
 ])
 
 const mediumRiskActions = new Set<AuditAction>([
+  AuditAction.AI_RETEST_ARTIFACT_VIEWED,
+  AuditAction.AI_RETEST_BLOCKED,
+  AuditAction.AI_RETEST_CANCELLED,
+  AuditAction.AI_RETEST_CONTEXT_CREATED,
+  AuditAction.AI_RETEST_CREATED,
+  AuditAction.AI_RETEST_EXPIRED,
+  AuditAction.AI_RETEST_FAILED,
+  AuditAction.AI_RETEST_PLAN_CREATED,
+  AuditAction.AI_RETEST_POLICY_CHECKED,
+  AuditAction.AI_RETEST_REPORT_ADOPTED,
+  AuditAction.AI_RETEST_REPORT_CREATED,
   AuditAction.CALL_AI,
   AuditAction.MANAGE_LEARNING_RESOURCE,
   AuditAction.MANAGE_MALL,
@@ -68,6 +98,21 @@ export function getAuditActionLabel(action: AuditAction) {
 
 export function getAuditModule(action: AuditAction): AuditModuleCode {
   const map: Record<AuditAction, AuditModuleCode> = {
+    AI_RETEST_ARTIFACT_VIEWED: 'AI',
+    AI_RETEST_BLOCKED: 'AI',
+    AI_RETEST_CANCELLED: 'AI',
+    AI_RETEST_CONTEXT_CREATED: 'AI',
+    AI_RETEST_CREATED: 'AI',
+    AI_RETEST_EXPIRED: 'AI',
+    AI_RETEST_FAILED: 'AI',
+    AI_RETEST_PLAN_APPROVED: 'AI',
+    AI_RETEST_PLAN_CREATED: 'AI',
+    AI_RETEST_POLICY_CHECKED: 'AI',
+    AI_RETEST_POLICY_UPDATED: 'AI',
+    AI_RETEST_REPORT_ADOPTED: 'AI',
+    AI_RETEST_REPORT_CREATED: 'AI',
+    AI_RETEST_RUNNER_STARTED: 'AI',
+    AI_RETEST_RUNNER_STEP_EXECUTED: 'AI',
     CALL_AI: 'AI',
     CHANGE_SYSTEM_SETTING: 'SYSTEM',
     CHANGE_USER_PERMISSION: 'USER',
