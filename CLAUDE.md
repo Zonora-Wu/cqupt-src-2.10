@@ -105,7 +105,6 @@ cd backend && npm run prisma:validate
 - Runner 只执行后端策略审查后允许的低风险内置动作模板。
 - 目标范围来自漏洞报告字段提取 + 审核员/管理员人工确认。
 - 人工确认不能绕过 SSRF、内网、metadata、危险协议、DNS rebinding、redirect 越界等技术拦截。
-- Hermes 只做计划和总结，不持有用户 JWT，不直接访问数据库，不直接 curl 后端。
 
 ## 默认不要读取的内容
 

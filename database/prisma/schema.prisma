@@ -166,6 +166,7 @@ enum AiRetestJobStatus {
 enum AiRetestMode {
   PLAN_ONLY
   CONTROLLED_RUN
+  HERMES_DIRECT
 }
 
 enum AiRetestRiskLevel {
@@ -340,6 +341,12 @@ enum AuditAction {
   AI_RETEST_REPORT_CREATED
   AI_RETEST_REPORT_ADOPTED
   AI_RETEST_ARTIFACT_VIEWED
+  AI_RETEST_DIRECT_PROPOSAL_CREATED
+  AI_RETEST_DIRECT_PROPOSAL_CONFIRMED
+  AI_RETEST_DIRECT_STARTED
+  AI_RETEST_DIRECT_EVENT_RECORDED
+  AI_RETEST_DIRECT_FINISHED
+  AI_RETEST_DIRECT_BLOCKED
   AI_RETEST_POLICY_UPDATED
 }
 
@@ -407,6 +414,7 @@ model User {
   operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
   requestedAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestRequester")
   cancelledAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestCanceller")
+  confirmedAiRetestDirectSessions AiVulnerabilityRetestDirectSession[] @relation("AiRetestDirectConfirmer")
   adoptedAiRetestReports AiVulnerabilityRetestReport[] @relation("AiRetestReportAdopter")
   auditLogs             AuditLog[]                  @relation("AuditActor")
 
@@ -1071,6 +1079,7 @@ model AiVulnerabilityRetestJob {
   requestedBy        User                     @relation("AiRetestRequester", fields: [requestedById], references: [id])
   cancelledBy        User?                    @relation("AiRetestCanceller", fields: [cancelledById], references: [id])
   plan               AiVulnerabilityRetestPlan?
+  directSession      AiVulnerabilityRetestDirectSession?
   steps              AiVulnerabilityRetestStep[]
   artifacts          AiVulnerabilityRetestArtifact[]
   report             AiVulnerabilityRetestReport?
@@ -1102,6 +1111,35 @@ model AiVulnerabilityRetestPlan {
   updatedAt        DateTime            @updatedAt
 
   job              AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model AiVulnerabilityRetestDirectSession {
+  id                 String                  @id @default(cuid())
+  jobId              String                  @unique
+  proposalJson       Json
+  proposalHash       String
+  impactScopeJson    Json?
+  riskSummary        String?                 @db.Text
+  policySnapshot     Json?
+  confirmedById      String?
+  confirmedAt        DateTime?
+  confirmationText   String?                 @db.Text
+  acknowledgedRisks  Boolean                 @default(false)
+  hermesSessionId    String?
+  status             String                  @default("PROPOSAL_CREATED")
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  failureCode        String?
+  failureMessage     String?                 @db.Text
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  job                AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  confirmedBy        User?                    @relation("AiRetestDirectConfirmer", fields: [confirmedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([confirmedById])
+  @@index([proposalHash])
 }
 
 model AiVulnerabilityRetestStep {
