@@ -152,6 +152,9 @@ enum AiRetestJobStatus {
   PLANNING
   POLICY_CHECK
   PLAN_REVIEW
+  DIRECT_PLAN_REVIEW
+  DIRECT_RUNNING
+  DIRECT_ACTION_REVIEW
   ADVISORY_ONLY
   RUNNING
   CANCELLING
@@ -203,6 +206,26 @@ enum AiRetestStepStatus {
   FAILED
   CANCELLED
   SKIPPED
+}
+
+enum AiRetestDirectActionStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTING
+  SUCCEEDED
+  FAILED
+  BLOCKED
+  EXPIRED
+}
+
+enum AiRetestCredentialType {
+  USERNAME_PASSWORD
+  COOKIE
+  BEARER_TOKEN
+  CUSTOM_HEADERS
+  CLIENT_CERT_REFERENCE
+  INTERACTIVE_OTP
 }
 
 
@@ -343,6 +366,9 @@ enum AuditAction {
   AI_RETEST_ARTIFACT_VIEWED
   AI_RETEST_DIRECT_PROPOSAL_CREATED
   AI_RETEST_DIRECT_PROPOSAL_CONFIRMED
+  AI_RETEST_DIRECT_ACTION_REQUESTED
+  AI_RETEST_DIRECT_ACTION_APPROVED
+  AI_RETEST_DIRECT_ACTION_REJECTED
   AI_RETEST_DIRECT_STARTED
   AI_RETEST_DIRECT_EVENT_RECORDED
   AI_RETEST_DIRECT_FINISHED
@@ -415,6 +441,8 @@ model User {
   requestedAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestRequester")
   cancelledAiRetestJobs AiVulnerabilityRetestJob[]  @relation("AiRetestCanceller")
   confirmedAiRetestDirectSessions AiVulnerabilityRetestDirectSession[] @relation("AiRetestDirectConfirmer")
+  approvedAiRetestDirectActions AiVulnerabilityRetestDirectAction[] @relation("AiRetestDirectActionApprover")
+  createdAiRetestCredentials AiVulnerabilityRetestCredential[] @relation("AiRetestCredentialCreator")
   adoptedAiRetestReports AiVulnerabilityRetestReport[] @relation("AiRetestReportAdopter")
   auditLogs             AuditLog[]                  @relation("AuditActor")
 
@@ -1080,6 +1108,7 @@ model AiVulnerabilityRetestJob {
   cancelledBy        User?                    @relation("AiRetestCanceller", fields: [cancelledById], references: [id])
   plan               AiVulnerabilityRetestPlan?
   directSession      AiVulnerabilityRetestDirectSession?
+  directCredentials  AiVulnerabilityRetestCredential[]
   steps              AiVulnerabilityRetestStep[]
   artifacts          AiVulnerabilityRetestArtifact[]
   report             AiVulnerabilityRetestReport?
@@ -1119,6 +1148,9 @@ model AiVulnerabilityRetestDirectSession {
   proposalJson       Json
   proposalHash       String
   impactScopeJson    Json?
+  approvedTargetScope Json?
+  approvedToolClasses String[]                @default([])
+  targetScopeHash     String?
   riskSummary        String?                 @db.Text
   policySnapshot     Json?
   confirmedById      String?
@@ -1136,10 +1168,70 @@ model AiVulnerabilityRetestDirectSession {
 
   job                AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   confirmedBy        User?                    @relation("AiRetestDirectConfirmer", fields: [confirmedById], references: [id])
+  actions            AiVulnerabilityRetestDirectAction[]
 
   @@index([status, createdAt])
   @@index([confirmedById])
   @@index([proposalHash])
+  @@index([targetScopeHash])
+}
+
+model AiVulnerabilityRetestDirectAction {
+  id              String                     @id @default(cuid())
+  sessionId       String
+  sequence        Int
+  actionType      String
+  target          String?
+  targetScopeHash String?
+  commandPreview  String?                    @db.Text
+  commandHash     String
+  riskLevel       AiRetestRiskLevel
+  riskSummary     String                     @db.Text
+  expectedImpact  String?                    @db.Text
+  rollbackPlan    String?                    @db.Text
+  status          AiRetestDirectActionStatus @default(PENDING_APPROVAL)
+  approvedById    String?
+  approvedAt      DateTime?
+  approvalNote    String?                    @db.Text
+  expiresAt       DateTime
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  resultSummary   Json?
+  failureCode     String?
+  failureMessage  String?                    @db.Text
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  session         AiVulnerabilityRetestDirectSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  approvedBy      User?                      @relation("AiRetestDirectActionApprover", fields: [approvedById], references: [id])
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, status])
+  @@index([approvedById])
+  @@index([commandHash])
+  @@index([expiresAt])
+}
+
+model AiVulnerabilityRetestCredential {
+  id               String                 @id @default(cuid())
+  jobId            String
+  credentialType   AiRetestCredentialType
+  encryptedPayload Bytes
+  encryptionKeyId  String
+  targetScope      Json
+  allowedUses      String[]               @default([])
+  expiresAt        DateTime
+  destroyedAt      DateTime?
+  createdById      String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  job              AiVulnerabilityRetestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdBy        User                   @relation("AiRetestCredentialCreator", fields: [createdById], references: [id])
+
+  @@index([jobId, expiresAt])
+  @@index([createdById])
+  @@index([destroyedAt])
 }
 
 model AiVulnerabilityRetestStep {

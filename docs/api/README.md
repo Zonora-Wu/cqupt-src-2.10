@@ -1832,6 +1832,27 @@ mall:manage
 - 取消会通过事务返还积分、恢复库存、写入兑换事件。
 - 商品管理、确认领取、取消兑换都会写入 `AuditLog`，动作为 `MANAGE_MALL`。
 
+## AI 漏洞复测 Hermes Direct 审批
+
+复杂或高风险复测先生成不可变方案，再由审核员或管理员批准：
+
+```text
+POST /api/ai-retests/:jobId/direct-plan/approve
+POST /api/ai-retests/:jobId/direct-actions/:actionId/approve
+POST /api/ai-retests/:jobId/direct-actions/:actionId/reject
+```
+
+权限要求：
+
+```text
+vulnerability:ai-retest:approve-direct-plan
+vulnerability:ai-retest:approve-direct-action
+```
+
+方案批准请求必须包含当前 `proposalHash`、确认目标范围、影响范围、允许的工具类别、风险确认和确认文本。动作批准必须携带当前 `commandHash`；内容变化、审批过期或超高危策略命中时拒绝执行。所有 Hermes Direct 复测仍须人工审核最终报告。
+
+当前实现范围为后端状态机、方案/动作审批、RBAC、审计和兼容数据库迁移；Hermes 独立容器的真实执行客户端和事件回传尚未接通。
+
 ## API 安全原则
 
 - 所有业务接口默认需要鉴权。

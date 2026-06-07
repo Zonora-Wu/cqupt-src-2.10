@@ -1,11 +1,11 @@
 # 开发状态
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-07 已按当前代码和 AI 漏洞自动复测进度更新。除既有业务与 AI Knowledge 能力外，AI 复测已完成 Runner 执行段，以及 Hermes Direct 的状态机、方案契约、方案/动作审批、RBAC、审计和兼容数据库迁移。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Hermes Direct 独立服务客户端、动作 proposal 接收、目标授权继承、凭据保险箱、真实工具执行、事件证据回传和报告生成；以及 Knowledge Retrieval 等既有待办。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -51,6 +51,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 - AI 附件：`/api/ai/attachments/text`、`/api/ai/report-drafts`，明确报告意图才生成草稿。
 - AI Knowledge：问题会话、会话 turn 记录、会话总结、AI 评分、规则兜底、重复检测、聚类、合并建议、KB 审核和高频高质自动入库。
 - Skill Candidate：从知识条目生成候选、审批、安装、安装日志、源知识状态联动。
+- AI 漏洞复测：低风险 Runner 执行链路；Hermes Direct 初始方案生成、策略路由、不可变方案审批、逐动作批准/拒绝、超高危硬阻断和审计控制面。
 
 ### 数据库
 
@@ -60,6 +61,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 - 漏洞报告、事件、附件、证书、公告、学习资源、积分商城。
 - AI 相关模型：`AiCallLog`、`AiKnowledgeEntry`、`AiKnowledgeCaptureJob`、`AiKnowledgeConversation`、`AiKnowledgeConversationTurn`、`AiProblemSession`、`AiProblemSessionTurn`、`AiKnowledgeCluster`、`AiKnowledgeHit`、`AiKnowledgeFeedback`、`AiSkillCandidate`、`AiSkillInstallLog`。
 - AI Knowledge Conversation / Problem Session 已包含评分字段、隐私风险、相似知识匹配、重复风险、聚类统计和合并建议。
+- AI 漏洞复测包含 DirectSession、DirectAction、Credential 模型；旧 DirectSession 迁移通过 `20260607100000_ai_retest_hermes_direct_v2` 增量兼容。
 
 ## 当前关键验证结果
 
@@ -79,6 +81,7 @@ curl -s http://localhost:5000/health
 - AI dataRequests 后端托管工具网关已通过后端 TypeScript 构建验证，平台 skill 文件已写入宿主 skills 目录。
 - `backend npm run test:core-e2e` 已覆盖安全答题准入、责任书、漏洞提交、PDF 附件、AI 报告草稿、知识沉淀、Skill 安装与 RBAC 拒绝。
 - `backend npm run test:ai-problem-session` 已覆盖 AI 问题会话生命周期、脱敏 turn 写入、已解决会话总结、敏感信息前置脱敏与审核分流、discard 不入库、管理员审核和高频高质自动入库。
+- AI 复测状态机测试已覆盖 Direct 方案审批、动作审批和超高危阻断，后端 TypeScript 构建通过。
 
 ## 已知限制
 
