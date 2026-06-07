@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isDestinationAllowed, isPrivateOrSpecialIp, normalizeScope } from '../src/scope-policy.js'
+import { evaluateDestination, isDestinationAllowed, isPrivateOrSpecialIp, normalizeScope } from '../src/scope-policy.js'
 
 test('scope allows exact targets, inherited subdomains, and approved ports', () => {
   const scope = normalizeScope({
@@ -31,4 +31,21 @@ test('scope blocks private and metadata destinations unless the IP is explicitly
   assert.equal(isDestinationAllowed(normalizeScope({ ...base, approvedIps: [] }), 'internal.example.test', 80, ['127.0.0.1']), false)
   assert.equal(isDestinationAllowed(normalizeScope({ ...base, approvedIps: ['127.0.0.1'] }), 'internal.example.test', 80, ['127.0.0.1']), true)
   assert.equal(isPrivateOrSpecialIp('169.254.169.254'), true)
+})
+
+test('destination decisions explain scope expansion candidates separately from hard network blocks', () => {
+  const scope = normalizeScope({
+    allowedPorts: [443],
+    allowAllPorts: false,
+    approvedIps: [],
+    domainSuffixes: ['example.test'],
+    exactHosts: ['app.example.test'],
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    sessionId: 'session-1',
+  })
+
+  assert.equal(evaluateDestination(scope, 'outside.test', 443, ['203.0.113.9']).reason, 'HOST_BLOCKED')
+  assert.equal(evaluateDestination(scope, 'app.example.test', 8443, ['203.0.113.9']).reason, 'PORT_BLOCKED')
+  assert.equal(evaluateDestination(scope, 'app.example.test', 443, ['127.0.0.1']).reason, 'PRIVATE_OR_SPECIAL_IP')
+  assert.equal(evaluateDestination(scope, 'outside.test', 443, ['127.0.0.1']).reason, 'PRIVATE_OR_SPECIAL_IP')
 })

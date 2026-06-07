@@ -30,6 +30,8 @@ hermes-retest-agent
 - 轮换时先新增密钥并切换 `AI_RETEST_CREDENTIAL_ACTIVE_KEY_ID`，旧凭据过期或销毁后再移除旧密钥。
 - job 完成、取消或失败后，控制面会清理对应 `session_cqupt-retest-*.json` 和 request dump，避免租用凭据残留在 Hermes 持久目录。
 
+egress proxy 会在内存中保留最多 2000 条待归档网络事件。NestJS 在 Hermes 工具事件后读取并写入审计日志；越界主机或端口会生成 `TARGET_SCOPE_EXPANSION` action，批准后更新 session scope 和代理 allowlist。私网、metadata、DNS 失败和过期 scope 只记录阻断证据，不提供人工放行路径。
+
 ## 验证
 
 ```bash
@@ -38,6 +40,8 @@ docker compose config --quiet
 docker compose up -d --build
 curl http://127.0.0.1:5001/health
 ```
+
+升级后端的 egress 事件归档功能时必须同步重建 `retest-egress-proxy`。旧代理不提供 `/v1/events`，后端会按安全失败策略终止无法完整归档网络证据的 Direct 任务。
 
 真实联网验证只能使用人工确认的漏洞目标。未激活 scope 时，egress proxy 默认拒绝所有目标流量；DeepSeek API 仅作为固定模型基础设施例外。
 

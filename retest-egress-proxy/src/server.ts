@@ -3,7 +3,7 @@ import { readdir, rm } from 'node:fs/promises'
 import http from 'node:http'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
-import { EgressScope, isDestinationAllowed, normalizeScope } from './scope-policy.js'
+import { EgressScope, evaluateDestination, normalizeScope } from './scope-policy.js'
 
 const proxyPort = Number(process.env.PROXY_PORT || 8080)
 const controlPort = Number(process.env.CONTROL_PORT || 8081)
@@ -19,6 +19,9 @@ const infrastructureHosts = new Set(
     .filter(Boolean),
 )
 let activeScope: EgressScope | null = null
+let eventSequence = 0
+const egressEvents: EgressEvent[] = []
+const maxEvents = 2_000
 
 const proxy = http.createServer(async (req, res) => {
   if (!isProxyAuthorized(req.headers['proxy-authorization'])) return rejectProxy(res, 407, 'Proxy authentication required')
@@ -30,12 +33,38 @@ const proxy = http.createServer(async (req, res) => {
   }
   const port = Number(target.port || (target.protocol === 'https:' ? 443 : 80))
   const ips = await resolveHost(target.hostname)
-  if (!isAllowed(target.hostname, port, ips)) return rejectProxy(res, 403, 'Destination blocked')
+  const decision = evaluateRequest(target.hostname, port, ips)
+  recordEgressEvent({
+    allowed: decision.allowed,
+    hostname: target.hostname,
+    kind: 'HTTP_REQUEST',
+    method: req.method || 'GET',
+    port,
+    reason: decision.reason,
+    resolvedIps: ips,
+    target: sanitizeTarget(target),
+  })
+  if (!decision.allowed) return rejectProxy(res, 403, `Destination blocked: ${decision.reason}`)
 
   const upstream = http.request(target, {
     headers: withoutProxyHeaders(req.headers),
     method: req.method,
   }, (upstreamResponse) => {
+    const location = upstreamResponse.headers.location
+    if (location) {
+      recordEgressEvent({
+        allowed: true,
+        hostname: target.hostname,
+        kind: 'HTTP_REDIRECT',
+        method: req.method || 'GET',
+        port,
+        reason: 'REDIRECT_OBSERVED',
+        redirectTo: sanitizeRedirect(location, target),
+        resolvedIps: ips,
+        statusCode: upstreamResponse.statusCode || 0,
+        target: sanitizeTarget(target),
+      })
+    }
     res.writeHead(upstreamResponse.statusCode || 502, upstreamResponse.headers)
     upstreamResponse.pipe(res)
   })
@@ -48,7 +77,18 @@ proxy.on('connect', async (req, clientSocket, head) => {
   const [hostname, rawPort] = (req.url || '').split(':')
   const port = Number(rawPort || 443)
   const ips = await resolveHost(hostname)
-  if (!isAllowed(hostname, port, ips)) return rejectConnect(clientSocket, 403)
+  const decision = evaluateRequest(hostname, port, ips)
+  recordEgressEvent({
+    allowed: decision.allowed,
+    hostname,
+    kind: 'CONNECT',
+    method: 'CONNECT',
+    port,
+    reason: decision.reason,
+    resolvedIps: ips,
+    target: `${hostname}:${port}`,
+  })
+  if (!decision.allowed) return rejectConnect(clientSocket, 403)
 
   const upstream = net.connect(port, ips[0], () => {
     clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
@@ -62,6 +102,13 @@ proxy.on('connect', async (req, clientSocket, head) => {
 const control = http.createServer(async (req, res) => {
   if (req.headers.authorization !== `Bearer ${controlToken}`) return json(res, 401, { error: 'unauthorized' })
   if (req.method === 'GET' && req.url === '/health') return json(res, 200, { activeSessionId: activeScope?.sessionId || null, ok: true })
+  if (req.method === 'GET' && req.url?.startsWith('/v1/events')) {
+    const requestUrl = new URL(req.url, 'http://egress-control.local')
+    const sessionId = requestUrl.searchParams.get('sessionId')?.trim()
+    if (!sessionId) return json(res, 400, { error: 'sessionId is required' })
+    const events = drainEvents(sessionId)
+    return json(res, 200, { events, sessionId })
+  }
   if (req.method === 'DELETE' && req.url === '/v1/scope') {
     activeScope = null
     return json(res, 200, { ok: true })
@@ -112,10 +159,10 @@ function isProxyAuthorized(value: string | undefined) {
   }
 }
 
-function isAllowed(hostname: string, port: number, ips: string[]) {
+function evaluateRequest(hostname: string, port: number, ips: string[]) {
   const host = hostname.trim().toLowerCase().replace(/\.$/, '')
   if (infrastructureHosts.has(host) && port === 443) {
-    return isDestinationAllowed({
+    return evaluateDestination({
       allowAllPorts: false,
       allowedPorts: [443],
       approvedIps: [],
@@ -125,7 +172,7 @@ function isAllowed(hostname: string, port: number, ips: string[]) {
       sessionId: 'infrastructure',
     }, host, port, ips)
   }
-  return isDestinationAllowed(activeScope, host, port, ips)
+  return evaluateDestination(activeScope, host, port, ips)
 }
 
 async function resolveHost(hostname: string) {
@@ -183,4 +230,52 @@ async function cleanupHermesSession(sessionId: string) {
   const matches = files.filter((file) => file === exact || (file.startsWith(dumpPrefix) && file.endsWith('.json')))
   await Promise.all(matches.map((file) => rm(`${hermesSessionDir}/${file}`, { force: true })))
   return matches.length
+}
+
+type EgressEvent = {
+  id: number
+  sessionId: string | null
+  occurredAt: string
+  kind: 'HTTP_REQUEST' | 'HTTP_REDIRECT' | 'CONNECT'
+  method: string
+  target: string
+  hostname: string
+  port: number
+  resolvedIps: string[]
+  allowed: boolean
+  reason: string
+  statusCode?: number
+  redirectTo?: string
+}
+
+function recordEgressEvent(event: Omit<EgressEvent, 'id' | 'occurredAt' | 'sessionId'>) {
+  egressEvents.push({
+    ...event,
+    id: ++eventSequence,
+    occurredAt: new Date().toISOString(),
+    sessionId: activeScope?.sessionId || null,
+  })
+  if (egressEvents.length > maxEvents) egressEvents.splice(0, egressEvents.length - maxEvents)
+}
+
+function drainEvents(sessionId: string) {
+  const matches = egressEvents.filter((event) => event.sessionId === sessionId)
+  if (matches.length === 0) return []
+  const ids = new Set(matches.map((event) => event.id))
+  for (let index = egressEvents.length - 1; index >= 0; index -= 1) {
+    if (ids.has(egressEvents[index].id)) egressEvents.splice(index, 1)
+  }
+  return matches
+}
+
+function sanitizeTarget(target: URL) {
+  return `${target.protocol}//${target.host}${target.pathname}`
+}
+
+function sanitizeRedirect(location: string, base: URL) {
+  try {
+    return sanitizeTarget(new URL(location, base))
+  } catch {
+    return '[invalid redirect]'
+  }
 }
