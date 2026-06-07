@@ -5,7 +5,7 @@
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Hermes Direct 独立服务客户端、动作 proposal 接收、目标授权继承、凭据保险箱、真实工具执行、事件证据回传和报告生成；以及 Knowledge Retrieval 等既有待办。
+> 当前仍待实现/验收：Hermes Direct 目标扩展自动审批 action、完整 DNS/重定向证据、截图和原始 artifact 归档、真实人工确认目标 E2E；以及 Knowledge Retrieval 等既有待办。
 >
 > 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
@@ -51,7 +51,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 - AI 附件：`/api/ai/attachments/text`、`/api/ai/report-drafts`，明确报告意图才生成草稿。
 - AI Knowledge：问题会话、会话 turn 记录、会话总结、AI 评分、规则兜底、重复检测、聚类、合并建议、KB 审核和高频高质自动入库。
 - Skill Candidate：从知识条目生成候选、审批、安装、安装日志、源知识状态联动。
-- AI 漏洞复测：低风险 Runner 执行链路；Hermes Direct 初始方案生成、策略路由、不可变方案审批、逐动作批准/拒绝、超高危硬阻断和审计控制面。
+- AI 漏洞复测：低风险 Runner 执行链路；Hermes Direct 初始方案、策略路由、不可变审批、AES-256-GCM 凭据保险箱、`/v1/runs` 执行、SSE 事件、逐动作批准/拒绝、取消、报告和超高危硬阻断。
 
 ### 数据库
 
@@ -82,6 +82,7 @@ curl -s http://localhost:5000/health
 - `backend npm run test:core-e2e` 已覆盖安全答题准入、责任书、漏洞提交、PDF 附件、AI 报告草稿、知识沉淀、Skill 安装与 RBAC 拒绝。
 - `backend npm run test:ai-problem-session` 已覆盖 AI 问题会话生命周期、脱敏 turn 写入、已解决会话总结、敏感信息前置脱敏与审核分流、discard 不入库、管理员审核和高频高质自动入库。
 - AI 复测状态机测试已覆盖 Direct 方案审批、动作审批和超高危阻断，后端 TypeScript 构建通过。
+- 独立 `hermes-retest-agent` 与动态 egress proxy 已部署；无工具/无目标 smoke run 已通过模型调用和终态状态查询，Hermes SSE 终态断流由 Worker 状态对账兜底。
 
 ## 已知限制
 
@@ -90,6 +91,7 @@ curl -s http://localhost:5000/health
 - 证书模板坐标可视化仍可继续增强。
 - 大规模生产数据下，AI 知识沉淀评分阈值、去重阈值、自动入库阈值和审核工作量需要持续观察。
 - Knowledge Retrieval、来源标注写回、turn 级点赞/点踩持久化、维护任务 Worker、不可变 revision 和知识投毒暂停机制仍处于目标态或待验收。
+- Hermes Direct 当前一次只运行一个 session；新目标被代理阻断，但尚未自动转成可审批的 `TARGET_SCOPE_EXPANSION` action。
 
 ## 近期待办
 

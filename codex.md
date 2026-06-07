@@ -30,6 +30,7 @@ cqupt-src-2.10/
 │   ├── prisma/               # Prisma schema 和数据库迁移
 │   └── seed/                 # 初始化数据
 ├── retest-runner/            # 低风险 AI 漏洞自动复测 Runner
+├── retest-egress-proxy/      # Hermes Direct 动态目标白名单与隔离出站代理
 ├── deploy/                   # Docker、Nginx、启动和部署脚本
 ├── tests/
 │   ├── e2e/                  # 端到端测试

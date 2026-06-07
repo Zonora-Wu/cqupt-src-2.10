@@ -1840,6 +1840,8 @@ mall:manage
 POST /api/ai-retests/:jobId/direct-plan/approve
 POST /api/ai-retests/:jobId/direct-actions/:actionId/approve
 POST /api/ai-retests/:jobId/direct-actions/:actionId/reject
+POST /api/ai-retests/:jobId/direct-credentials
+POST /api/ai-retests/:jobId/direct-credentials/:credentialId/destroy
 ```
 
 权限要求：
@@ -1847,11 +1849,14 @@ POST /api/ai-retests/:jobId/direct-actions/:actionId/reject
 ```text
 vulnerability:ai-retest:approve-direct-plan
 vulnerability:ai-retest:approve-direct-action
+vulnerability:ai-retest:manage-credentials
 ```
 
 方案批准请求必须包含当前 `proposalHash`、确认目标范围、影响范围、允许的工具类别、风险确认和确认文本。动作批准必须携带当前 `commandHash`；内容变化、审批过期或超高危策略命中时拒绝执行。所有 Hermes Direct 复测仍须人工审核最终报告。
 
-当前实现范围为后端状态机、方案/动作审批、RBAC、审计和兼容数据库迁移；Hermes 独立容器的真实执行客户端和事件回传尚未接通。
+凭据创建支持 `USERNAME_PASSWORD`、`COOKIE`、`BEARER_TOKEN`、`CUSTOM_HEADERS`、`CLIENT_CERT_REFERENCE`、`INTERACTIVE_OTP`。请求必须包含 `credentialType`、`payload`、`targetScope`、`allowedUses` 和 5 至 1440 分钟的 `expiresInMinutes`；响应只返回元数据，不回显明文。
+
+当前已接通 Hermes `/v1/runs`、SSE events、一次性 approval、stop、动态 egress scope、AES-256-GCM 凭据保险箱和最终报告。目标扩展 action 与完整原始 artifact 归档仍待完成。
 
 ## API 安全原则
 

@@ -1,0 +1,19 @@
+{
+  "name": "cqupt-src-retest-egress-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dynamic outbound allowlist proxy for Hermes Direct retesting",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "node --import tsx --test tests/scope-policy.test.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
+  }
+}
