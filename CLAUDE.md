@@ -161,7 +161,7 @@ cd backend && npm run prisma:validate
 - `@technical-docs-syncer`：文档与实现同步。
 
 ## 开发原则
-
+- 每次开发调用合适的skill，并在最后的回复本次使用了哪些skill。
 - 不要为了省事做最简单实现，应优先做适合 CQUPT-SRC 平台的生产级实现。
 - 不要修改编译产物；应该修改 `backend/src/`、`frontend/src/`、`database/prisma/` 或相关源码/文档。
 - 任何涉及权限、漏洞复测、AI 数据注入、敏感信息处理的改动，都必须保留 RBAC、审计日志、后端策略审查和人工确认边界。
