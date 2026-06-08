@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   FileCheck2,
   FileSearch,
   Gauge,
@@ -9,6 +10,7 @@ import {
   ServerCog,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Store,
   Sun,
   UserCog,
@@ -27,6 +29,12 @@ import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../..
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
+)
+const AdminAiRetestDashboard = lazy(() =>
+  import('./AdminAiRetestDashboard').then((module) => ({ default: module.AdminAiRetestDashboard })),
+)
+const AdminAiRetestPolicy = lazy(() =>
+  import('./AdminAiRetestPolicy').then((module) => ({ default: module.AdminAiRetestPolicy })),
 )
 const AdminAnnouncementManagement = lazy(() =>
   import('./AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
@@ -66,6 +74,7 @@ const adminMenuItems = [
   '公告管理',
   '学习管理',
   '积分商城',
+  'AI 复测',
   '审计日志',
   'AI 知识库',
   '系统设置',
@@ -183,6 +192,8 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <AdminLearningManagement />
           ) : activeMenu === '积分商城' ? (
             <AdminPointsMallManagement />
+          ) : activeMenu === 'AI 复测' ? (
+            <AiRetestHub />
           ) : activeMenu === '审计日志' ? (
             <AdminAuditLogManagement />
           ) : activeMenu === 'AI 知识库' ? (
@@ -360,6 +371,41 @@ function AdminPageLoading() {
       <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
         正在加载管理页面...
       </SurfacePanel>
+    </section>
+  )
+}
+
+function AiRetestHub() {
+  const [subTab, setSubTab] = useState<'dashboard' | 'policy'>('dashboard')
+  return (
+    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            subTab === 'dashboard'
+              ? 'bg-brand-600 text-white'
+              : 'border border-black/[0.08] bg-white text-slate-700 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-[#0f1511] dark:text-slate-300 dark:hover:bg-white/[0.04]'
+          }`}
+          onClick={() => setSubTab('dashboard')}
+          type="button"
+        >
+          <BarChart3 className="mr-1.5 inline-block h-4 w-4" />
+          运营看板
+        </button>
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            subTab === 'policy'
+              ? 'bg-brand-600 text-white'
+              : 'border border-black/[0.08] bg-white text-slate-700 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-[#0f1511] dark:text-slate-300 dark:hover:bg-white/[0.04]'
+          }`}
+          onClick={() => setSubTab('policy')}
+          type="button"
+        >
+          <SlidersHorizontal className="mr-1.5 inline-block h-4 w-4" />
+          策略配置
+        </button>
+      </div>
+      {subTab === 'dashboard' ? <AdminAiRetestDashboard /> : <AdminAiRetestPolicy />}
     </section>
   )
 }

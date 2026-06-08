@@ -34,11 +34,13 @@ done
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 log_info()    { echo -e "${CYAN}▶ $1${NC}"; }
 log_success() { echo -e "${GREEN}✔ $1${NC}"; }
 log_warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
+log_error()   { echo -e "${RED}✘ $1${NC}" >&2; }
 
 echo ""
 echo -e "${GREEN}=== CQUPT-SRC 本地开发环境关闭 ===${NC}"
@@ -89,5 +91,10 @@ if [[ "$KEEP_MINIO" == false ]]; then
 fi
 
 echo ""
-log_success "关闭完成"
+log_success "CQUPT-SRC 本地开发环境已关闭"
+echo ""
+echo -e "${YELLOW}注意：平台 Hermes（端口 5000）和 Hermes Direct（端口 5001）未自动停止。${NC}"
+echo "  它们是独立容器，由 /home/cocking/cqupt-src-hermes-linux/docker/ 管理。"
+echo "  如需停止 Hermes 容器："
+echo "    cd /home/cocking/cqupt-src-hermes-linux && docker compose down"
 echo ""

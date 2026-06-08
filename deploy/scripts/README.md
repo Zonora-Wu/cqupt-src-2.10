@@ -1,13 +1,11 @@
 # Scripts
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-08。当前项目包含 AI 漏洞自动复测（Phase 1-9 + 7.5），使用双通道 Runner + Hermes Direct。
+> 启动脚本不管理 Hermes 容器（端口 5000/5001）、Runner 服务 — 它们作为独立外部依赖，需单独启动。
+> 脚本会检查这些外部服务是否运行并在最终输出中显示状态，不影响脚本正常执行。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
->
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
->
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/HERMES_RUNTIME.md`、`docs/deployment/HERMES_DIRECT.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 ## 本地一键启动 / 关闭
@@ -34,8 +32,14 @@ powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
 ## 启动后检查
 
 ```bash
+# 后端健康检查
 curl -s http://localhost:3000/api/health
+
+# 平台 Hermes Agent（独立容器，需单独启动）
 curl -s http://localhost:5000/health
+
+# Hermes Direct 复测容器（独立容器，需单独启动）
+curl -s http://localhost:5001/health
 ```
 
 访问：
@@ -45,10 +49,27 @@ curl -s http://localhost:5000/health
 | 前端 | http://localhost:5173 |
 | 后端 | http://localhost:3000/api/health |
 | 平台 Hermes | http://localhost:5000/health |
+| Hermes Direct | http://localhost:5001/health |
 | MinIO Console | http://localhost:9001 |
 
-## 维护脚本原则
+## 外部依赖说明
 
-- 脚本只管理本项目依赖与开发服务，不直接写入真实密钥。
-- 平台 Hermes 的技能同步、模型路由和权限问题以 `docs/HERMES_RUNTIME.md` 为准。
-- 涉及数据库迁移和 seed 的脚本必须显式提示环境，避免误操作生产库。
+启动脚本只管理 PostgreSQL、Redis、MinIO 容器和前后端开发服务器。以下服务需单独启动：
+
+| 服务 | 管理方式 | 说明 |
+|------|---------|------|
+| 平台 Hermes Agent (端口 5000) | `cd /home/cocking/cqupt-src-hermes-linux && docker compose up -d` | AI 助手、AI 复测计划生成 |
+| Hermes Direct (端口 5001) | 同上 docker compose（含 `hermes-retest-agent` + `retest-egress-proxy`） | AI 复测 HERMES_DIRECT 模式 |
+| Runner (端口未固定) | 手动启动 `retest-runner/` | AI 复测 CONTROLLED_RUN 模式 |
+
+脚本启动时会检查这些服务是否可达并在最终输出中显示状态。不可达时仅警告，不阻断启动。
+
+## Windows PowerShell 启动 / 关停
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1
+```
