@@ -51,7 +51,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 - AI 附件：`/api/ai/attachments/text`、`/api/ai/report-drafts`，明确报告意图才生成草稿。
 - AI Knowledge：问题会话、会话 turn 记录、会话总结、AI 评分、规则兜底、重复检测、聚类、合并建议、KB 审核和高频高质自动入库。
 - Skill Candidate：从知识条目生成候选、审批、安装、安装日志、源知识状态联动。
-- AI 漏洞复测：低风险 Runner 执行链路；Hermes Direct 初始方案、策略路由、不可变审批、AES-256-GCM 凭据保险箱、`/v1/runs` 执行、SSE 事件、逐动作批准/拒绝、取消、报告和超高危硬阻断。
+- AI 漏洞复测：低风险 Runner 执行链路；Hermes Direct 初始方案、策略路由、不可变审批、AES-256-GCM 凭据保险箱、`/v1/runs` 执行、SSE 事件、逐动作批准/拒绝、目标范围扩展审批、取消和超高危硬阻断；Runner、人工计划和 Direct 报告统一使用 `ai-retest-report-schema-v2`，执行结论受证据约束并支持幂等引用审核意见草稿。
 
 ### 数据库
 

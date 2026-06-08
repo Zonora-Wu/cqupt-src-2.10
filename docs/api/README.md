@@ -1856,7 +1856,25 @@ vulnerability:ai-retest:manage-credentials
 
 凭据创建支持 `USERNAME_PASSWORD`、`COOKIE`、`BEARER_TOKEN`、`CUSTOM_HEADERS`、`CLIENT_CERT_REFERENCE`、`INTERACTIVE_OTP`。请求必须包含 `credentialType`、`payload`、`targetScope`、`allowedUses` 和 5 至 1440 分钟的 `expiresInMinutes`；响应只返回元数据，不回显明文。
 
-当前已接通 Hermes `/v1/runs`、SSE events、一次性 approval、stop、动态 egress scope、AES-256-GCM 凭据保险箱和最终报告。目标扩展 action 与完整原始 artifact 归档仍待完成。
+当前已接通 Hermes `/v1/runs`、SSE events、一次性 approval、stop、动态 egress scope、AES-256-GCM 凭据保险箱、`TARGET_SCOPE_EXPANSION` 审批和最终报告。完整原始 artifact 统一归档仍待完成。
+
+## AI 漏洞复测报告
+
+```text
+GET /api/ai-retests/:jobId
+POST /api/ai-retests/:jobId/adopt-review-comment
+```
+
+任务详情中的 `report` 返回：
+
+- `schemaVersion`：当前统一为 `ai-retest-report-schema-v2`。
+- `confidence`、`reproducibility`、`manualReviewRequired`、`manualRetestOnly`、`runnerAllowed`。
+- `reportHash`、`promptVersion`、`createdAt` 和审核意见草稿引用状态。
+- `reportJson`：统一包含 `conclusion`、`steps`、`evidenceSummary`、`impactAssessment`、三段式 `remediationAdvice`、`limitations`、`manualRetestAdvice` 和 `reviewCommentDraft`。
+
+Runner、`ADVISORY_ONLY` 和 Hermes Direct 报告保存前均经过同一后端契约校验。`REPRODUCED`、`NOT_REPRODUCED` 和 `PARTIALLY_REPRODUCED` 必须至少存在一项已执行证据；否则平台将结论降级为 `INSUFFICIENT_EVIDENCE`。Hermes Direct 的步骤状态来自平台审计的 action，不采用模型自行声明的执行状态。
+
+`adopt-review-comment` 只创建或更新同一条审核意见草稿，`decision=null`，不会改变漏洞状态。重复调用保持同一 `commentId`，并持续写入 `AI_RETEST_REPORT_ADOPTED` 审计日志。
 
 ## API 安全原则
 
