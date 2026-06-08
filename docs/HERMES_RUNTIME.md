@@ -1,13 +1,13 @@
 # CQUPT-SRC 平台 Hermes 运行目录说明
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路、AI 漏洞自动复测（双通道 Runner + Hermes Direct）。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台有三套 Hermes 环境：(1) 主 Hermes Agent — `/home/cocking/cqupt-src-hermes-linux/`（端口 5000，DeepSeek 系列模型，服务 AI Gateway）；(2) Hermes Retest Agent — 独立容器 `hermes-retest-agent`（端口 5001，经 `retest-egress-proxy` 动态授权出网，服务 AI 漏洞复测）；(3) CLI Hermes — `/home/cocking/.hermes/`（开发者本地工具，不参与平台请求）。前端禁止直连模型。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Hermes Direct 原始 artifact 统一归档（Phase 7.5 Step 10）。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/AI_SKILLS.md`、`docs/deployment/HERMES_DIRECT.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 本文档记录 CQUPT-SRC 平台实际接入的 Hermes Agent 独立容器目录、挂载关系、skills 存放位置和维护注意事项。
@@ -625,4 +625,45 @@ Hermes Agent 的 OpenAI-compatible `/v1/chat/completions` 网关当前不执行�
 写操作：AiActionProposal + 用户确认。
 审计：AiCallLog + AuditLog。
 ```
+
+---
+
+## 14. Hermes Retest Agent（独立复测容器）
+
+AI 漏洞自动复测使用独立 Hermes 容器，与主 Hermes Agent 网络隔离、凭据隔离。
+
+### 14.1 部署拓扑
+
+```text
+CQUPT-SRC NestJS (localhost)
+  ├─ 主 Hermes Agent (localhost:5000)  — 平台 AI Gateway、AI 助手
+  └─ Hermes Direct Client (localhost:5001) — 复测专用
+       └─ retest-egress-proxy            — 动态 scope 控制，双网卡
+            └─ hermes-retest-agent:5000  — Docker 内部网络 retest-isolated
+```
+
+### 14.2 关键组件
+
+| 组件 | 说明 |
+|------|------|
+| `hermes-retest-agent` | 独立 Hermes 容器，使用 `retest-isolated` 内部网络，经 egress proxy 出网。不持平台 JWT、DB 凭据、MinIO 凭据。 |
+| `retest-egress-proxy` | 动态网络授权代理。根据后端下发的 session scope（确认主机、IP、端口、关联子域、重定向目标）控制 hermes-retest-agent 的出网流。私网/metadata/DNS rebinding 在代理层阻断。 |
+| `.env.retest` | Hermes Direct 专用环境文件，包含专用 service token、模型配置和资源限制。 |
+
+### 14.3 安全边界
+
+- Hermes Retest Agent 不接收用户 JWT、数据库连接、MinIO 管理凭据或平台主密钥。
+- 网络只允许确认目标及其授权继承集合（DNS 解析 IP、同确认主机端口、同注册域关联子域和重定向目标）。
+- 跳出继承集合时必须进入 `DIRECT_ACTION_REVIEW` 等待二次审批。
+- 私网/metadata 目标不可通过范围扩展审批放行。
+- Hermes SSE 流中断后 Worker 通过 `reconcileRunStatus` 对账兜底（60s default timeout，失败写 errorCode）。
+
+### 14.4 凭据保险箱
+
+支持 `USERNAME_PASSWORD / COOKIE / BEARER_TOKEN / CUSTOM_HEADERS / CLIENT_CERT_REFERENCE / INTERACTIVE_OTP` 六种凭据类型，使用可轮换 AES-256-GCM 密钥环加密存储。AAD 绑定 `jobId + credentialType + targetScopeHash + keyId`，过期和销毁后解密失败。凭据注入 session 时签发一次性短期租约，不进入 Hermes prompt、审计日志、报告或普通 artifact。
+
+### 14.5 参考文档
+
+- `docs/deployment/HERMES_DIRECT.md`：完整部署文档、网络策略、密钥轮换命令。
+- `docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`：Phase 7.5 完整实施设计。
 

@@ -1,13 +1,11 @@
 # 技术栈
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台有三套 Hermes 环境：主 Hermes Agent（端口 5000）、Hermes Retest Agent（端口 5001，独立容器+动态 egress proxy）、CLI Hermes（`/home/cocking/.hermes/`，不参与平台请求）。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
->
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/HERMES_RUNTIME.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`、`docs/deployment/HERMES_DIRECT.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 ## 当前采用的主技术栈
@@ -22,13 +20,15 @@
 | 数据库 | PostgreSQL | 主业务库，包含 AI 知识沉淀数据 |
 | ORM | Prisma | schema、migration、client 生成均使用 Prisma |
 | 队列/缓存 | Redis + BullMQ | 作为异步捕获、后续 worker 与缓存扩展基础 |
-| 文件存储 | MinIO | 已接入 PDF 附件、证书模板、证书 PDF |
+| 文件存储 | MinIO | 已接入 PDF 附件、证书模板、证书 PDF、AI 复测证据 artifact |
 | 认证 | JWT Access Token + Refresh Token | 已接入登录、当前用户、权限守卫与 refresh token 撤销 |
 | API | REST API | 后端所有业务接口通过 `/api/*` 暴露 |
 | AI | NestJS AI Gateway + Hermes Agent OpenAI-compatible API | 已接入邮宝、角色 skill 路由、知识沉淀和 Skill Candidate |
+| AI 复测 Runner | 独立 Node.js 服务 `retest-runner/` | HTTP/Playwright 安全 fallback 模板，DNS/同源/redirect 双重校验，非 root Docker |
+| AI 复测 Hermes Direct | 独立容器 `hermes-retest-agent` + `retest-egress-proxy` | 动态 scope 授权出网，AES-256-GCM 凭据保险箱，逐次高风险审批 |
 | 模型 | 平台 Hermes config 路由，当前平台/微信回复使用 DeepSeek 系列 | CLI 对话可继续使用 GPT，不与平台容器混用 |
 | 部署 | Docker Compose + Nginx | 本地依赖与平台 Hermes 容器已可运行，Ubuntu 部署待最终联调 |
-| 测试 | TypeScript build、Vite build、核心 API 冒烟、服务层 E2E | AI 知识沉淀链路已用临时 targetRoot 验证 |
+| 测试 | TypeScript build、Vite build、核心 API 冒烟、服务层 E2E、安全回归 E2E | AI 知识沉淀链路已用临时 targetRoot 验证 |
 
 ## 架构原则
 
@@ -39,7 +39,8 @@
   -> NestJS 后端 API
   -> PostgreSQL / Redis / MinIO
   -> AI Gateway
-  -> 平台 Hermes Agent Docker 容器
+  -> 主 Hermes Agent Docker 容器（端口 5000）
+  -> Hermes Retest Agent Docker 容器（端口 5001，retest-isolated 网络）
   -> DeepSeek / OpenAI / 其他模型供应商
 ```
 
@@ -50,6 +51,9 @@
 - Hermes Skill 保存平台语义、角色边界、输出协议和稳定流程，不保存实时用户数据。
 - AI Knowledge Base 存在 PostgreSQL；Skill Candidate 只有管理员批准后才可安装到平台 Hermes skills 目录。
 - 平台 Hermes 目录：`/home/cocking/cqupt-src-hermes-linux/`；CLI Hermes 目录：`/home/cocking/.hermes/`。
+- AI 漏洞复测 Hermes Direct 使用独立 `hermes-retest-agent` 容器（端口 5001），经 `retest-egress-proxy` 动态授权出网，与主 Hermes Agent 网络和凭据隔离。
+- AI 复测 Runner 只执行低风险内置模板，不持用户 JWT、DB 凭据、MinIO 凭据，不加 Docker socket。
+- 凭据保险箱使用 AES-256-GCM 密钥环，AAD 绑定 job/类型/目标范围，到期销毁。
 
 ## 为什么这样选
 

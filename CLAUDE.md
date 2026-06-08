@@ -1,168 +1,54 @@
-# CQUPT-SRC Claude Code Guide
+# CQUPT-SRC 项目说明
 
-## 项目定位
+CQUPT-SRC 是校园漏洞响应与安全学习平台，面向学生、审核员和管理员，覆盖漏洞提交、审核、修复、复测、归档、证书、积分、学习资源、审计日志和 AI 辅助复测等业务。
 
-CQUPT-SRC 是校园漏洞响应与安全学习平台，前后端分离：
+项目采用前后端分离架构：
 
-- `frontend/`：Vite + React + TypeScript + Tailwind CSS 4。
-- `backend/`：NestJS 11 + Prisma + PostgreSQL。
-- `database/prisma/schema.prisma`：数据库模型权威来源。
-- `docs/`：项目架构、AI/Hermes、API、安全、实施方案文档。
+- `frontend/`：React 19、TypeScript、Vite、Tailwind CSS。
+- `backend/`：NestJS 11、Prisma。
+- `database/`：PostgreSQL 数据模型和迁移。
+- `retest-runner/`：AI 漏洞复测的受限 Runner。
+- `docs/`：架构、API、实施方案和开发状态文档。
+- 平台 Hermes 独立部署在 `/home/cocking/cqupt-src-hermes-linux/`，所有平台 AI 能力由 NestJS 后端统一控制。
 
-## 不影响开发的阅读策略
+当前重点是 AI 漏洞自动复测：低危、标准化验证由 Runner 执行；复杂或高风险验证由 Hermes Direct 在人工审批范围内执行；最终报告必须由审核员或管理员人工确认。
 
-不要无目的扫描整个仓库。先按任务类型读取最小必要入口，再扩展到相关模块。
+## 目录结构
 
-### 通用入口
-
-优先读取：
-
-- `package.json`
-- `backend/package.json`
-- `frontend/package.json`
-- `docs/PROJECT_STRUCTURE.md`
-- `docs/TECH_STACK.md`
-- `database/prisma/schema.prisma`
-
-### 前端任务
-
-优先读取：
-
-- `frontend/src/App.tsx`
-- `frontend/src/pages/`
-- `frontend/src/components/`
-- `frontend/src/services/`
-- `frontend/vite.config.ts`
-- `frontend/tsconfig*.json`
-
-修改前端后至少运行：
-
-```bash
-cd frontend && npm run build
+```text
+cqupt-src-2.10/
+├── frontend/                 # React 前端，包含学生端、审核员端和管理员端页面
+├── backend/
+│   ├── src/
+│   │   ├── modules/          # 认证、漏洞、AI、复测、积分等业务模块
+│   │   ├── common/           # Guard、装饰器、异常处理等公共能力
+│   │   ├── config/           # 环境变量和应用配置
+│   │   ├── integrations/     # Hermes、MinIO、邮件等外部集成
+│   │   └── jobs/             # 后台任务和队列
+│   └── test/                 # 后端测试
+├── database/
+│   ├── prisma/               # Prisma schema 和数据库迁移
+│   └── seed/                 # 初始化数据
+├── retest-runner/            # 低风险 AI 漏洞自动复测 Runner
+├── retest-egress-proxy/      # Hermes Direct 动态目标白名单与隔离出站代理
+├── deploy/                   # Docker、Nginx、启动和部署脚本
+├── tests/
+│   ├── e2e/                  # 端到端测试
+│   └── fixtures/             # 测试数据
+├── docs/
+│   ├── plans/                # 功能实施方案
+│   ├── architecture/         # 架构设计
+│   ├── api/                  # API 文档
+│   ├── security/             # 安全说明
+│   └── deployment/           # 部署说明
+├── README.md                 # 项目总览和运行方式
+├── PROJECT_HANDOFF.md        # 项目交接说明
+└── codex.md                  # Codex 项目说明和协作规则
 ```
 
-如任务涉及 lint，再运行：
+## Codex 协作规则
 
-```bash
-cd frontend && npm run lint
-```
-
-### 后端任务
-
-优先读取：
-
-- `backend/src/main.ts`
-- `backend/src/app.module.ts`
-- `backend/src/modules/`
-- `backend/src/common/`
-- `backend/src/config/`
-- `backend/package.json`
-- `database/prisma/schema.prisma`
-
-修改后端后至少运行：
-
-```bash
-cd backend && npm run build
-```
-
-涉及 Prisma 时优先运行：
-
-```bash
-cd backend && npm run prisma:validate
-```
-
-### AI / Hermes 任务
-
-必须先读取：
-
-- `docs/AI.md`
-- `docs/HERMES_RUNTIME.md`
-- `docs/AI_KNOWLEDGE_BASE.md`
-- `docs/architecture/AI_CONTEXT_INJECTION.md`
-- `backend/src/modules/ai/`
-- `backend/src/modules/ai-knowledge/`
-
-关键边界：
-
-- 前端不能直连 Hermes 或模型。
-- 所有 AI 调用必须经过 NestJS 后端 AI Gateway。
-- 平台 Hermes 与当前 CLI Hermes 是两套环境。
-- 平台 Hermes 运行目录在 `/home/cocking/cqupt-src-hermes-linux/`，不是当前仓库内部目录。
-
-### AI 漏洞自动复测任务
-
-必须先读取：
-
-- `docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`
-- `docs/HERMES_RUNTIME.md`
-- `backend/src/modules/ai-vulnerability-retest/`
-- `database/prisma/schema.prisma`
-- 相关 Prisma migration
-
-必须保持这些边界：
-
-- 高风险漏洞进入 `ADVISORY_ONLY`，不进入 Runner。
-- Runner 只执行后端策略审查后允许的低风险内置动作模板。
-- 目标范围来自漏洞报告字段提取 + 审核员/管理员人工确认。
-- 人工确认不能绕过 SSRF、内网、metadata、危险协议、DNS rebinding、redirect 越界等技术拦截。
-
-## 默认不要读取的内容
-
-除非用户明确要求分析某个具体失败证据或运行产物，不要读取：
-
-- `node_modules/`
-- `frontend/node_modules/`
-- `backend/node_modules/`
-- `dist/`
-- `frontend/dist/`
-- `backend/dist/`
-- `coverage/`
-- `storage/`
-- `tmp/`
-- `uploads/`
-- `generated/`
-- `.docker-data/`
-- `playwright-report/`
-- `test-results/`
-- `tests/e2e/evidence/`
-- `.env` / `.env.*`
-- 日志文件
-- 大型二进制压缩包
-- `frontend/public/models/*.glb|*.gltf|*.bin`
-
-如果需要排查运行失败，可以只读取用户指定的单个日志或 evidence 文件，不要批量扫整个目录。
-
-## Claude Code 项目工具
-
-项目内置了 Claude Code 专用辅助内容：
-
-- `.claude/commands/`：常用工作流命令。
-- `.claude/agents/`：项目专属子代理。
-- `.claude/README.md`：使用说明。
-
-推荐命令：
-
-- `/ai-retest-implement phase-1`：按阶段实现 AI 漏洞自动复测。
-- `/safe-prisma-change <目标>`：安全修改 Prisma schema / migration。
-- `/review-current-diff`：审查当前 diff。
-- `/done-check`：完成前检查。
-- `/backend-build-check`：后端构建检查。
-- `/frontend-build-check`：前端构建检查。
-- `/docs-sync`：文档同步检查。
-- `/claude-probe`：检查 Claude Code 可见性与瘦身是否误伤开发。
-
-推荐子代理：
-
-- `@backend-architect`：后端架构、NestJS、RBAC、AuditLog。
-- `@frontend-ui`：前端 UI、React、Tailwind、AI 卡片交互。
-- `@ai-security-reviewer`：AI/Hermes/Runner/自动复测安全边界。
-- `@prisma-migration-reviewer`：Prisma schema、migration、数据一致性。
-- `@test-evidence-checker`：测试证据与完成度审查。
-- `@technical-docs-syncer`：文档与实现同步。
-
-## 开发原则
-- 每次开发调用合适的skill，并在最后的回复本次使用了哪些skill。
-- 不要为了省事做最简单实现，应优先做适合 CQUPT-SRC 平台的生产级实现。
-- 不要修改编译产物；应该修改 `backend/src/`、`frontend/src/`、`database/prisma/` 或相关源码/文档。
-- 任何涉及权限、漏洞复测、AI 数据注入、敏感信息处理的改动，都必须保留 RBAC、审计日志、后端策略审查和人工确认边界。
-- 文档和代码不一致时，以已验证代码为准，并同步更新权威文档。
+1. 遇到项目实现细节、产品边界或技术方案存在疑问时，必须提前询问用户，确认后再开始实现。
+2. 不采用只求跑通的最小实现。实现应覆盖完整业务流程、安全边界、异常处理、审计、测试和可维护性。
+3. 每次对话应根据任务选择并使用合适的 Skill；没有匹配的 Skill 时可以不使用,最后加入一句这次使用了哪些skill。
+4. 每次修改代码后，必须同步更新相关文档，确保实现、接口、架构说明和开发状态保持一致。

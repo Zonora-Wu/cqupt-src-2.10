@@ -1,13 +1,13 @@
 # 企业级 SRC 平台 AI 接入框架
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路、AI 漏洞自动复测（双通道 Runner + Hermes Direct）。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列）。复测用 Hermes Direct 容器 `hermes-retest-agent`（端口 5001）与主 Hermes Agent 网络隔离，经 `retest-egress-proxy` 动态授权出网。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类（canonicalProblem + hybrid retrieval + embedding/reranker + merge review）、数据使用路由（直接返回 vs AI 处理）、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、语义问题族聚类、数据使用路由、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环、Hermes Direct 原始 artifact 统一归档（Phase 7.5 Step 10）。
 >
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`、`docs/deployment/HERMES_DIRECT.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 本文档定义 CQUPT-SRC 平台的企业级 AI 接入框架。目标不是简单把聊天框接入大模型，而是在 SRC 平台内部构建一个安全、可审计、可扩展、可降级、按角色隔离的 AI Gateway 能力层。
@@ -32,6 +32,7 @@ AI 在平台中的定位是“安全运营智能层”：辅助用户理解平�
 
 - `backend/src/modules/ai/`：负责 AI 健康检查、外观配置、配额、Skill 路由、`/api/ai/chat`、附件文本提取、报告草稿、Action Proposal 确认。
 - `backend/src/modules/ai-knowledge/`：负责 AI Knowledge Base、问题会话式知识沉淀、AI 评分、相似去重、问题聚类、管理员审核、反馈、Skill Candidate 与受控安装。
+- `backend/src/modules/ai-vulnerability-retest/`：负责 AI 漏洞自动复测，包含双通道（Runner 低风险自动执行 + Hermes Direct 复杂高风险人工审批执行）、策略引擎、凭据保险箱、Worker 异步编排、报告生成与审核意见引用。详见 `docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`。
 - `frontend/src/pages/user/UserAIAssistant.tsx`：用户端邮宝助手，目标交互包含 Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片、问题会话、离开过久后的解决确认弹框和知识库来源标注。
 - `frontend/src/pages/admin/AdminAiKnowledgeManagement.tsx`：管理员知识沉淀页面，目标展示问题会话队列、AI 总结、评分、重复风险、相似知识、合并建议、自动入库条目和 Skill Candidate 状态。
 - 平台 Hermes 运行于 `/home/cocking/cqupt-src-hermes-linux/`，对后端暴露 `http://localhost:5000/v1/chat/completions`；CLI Hermes 的 `/home/cocking/.hermes/` 不参与平台用户请求。

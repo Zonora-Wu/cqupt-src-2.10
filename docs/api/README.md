@@ -1,13 +1,11 @@
 # API Docs
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路、AI 漏洞自动复测（双通道 Runner + Hermes Direct）。
 >
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+> 平台 Hermes 与 CLI Hermes 是两套环境；前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
-> 当前仍待实现/验收：问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
->
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 关键权威文档：`docs/AI.md`、`docs/HERMES_RUNTIME.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`、`docs/deployment/HERMES_DIRECT.md`、`database/prisma/schema.prisma`。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway、AI 助手外观/配额/Skill 路由、安全答题题库、AI Knowledge Base 与 Skill Candidate 接口。新版目标方案将 AI 知识沉淀升级为问题会话式链路：问题会话 API、历史会话侧栏、已解决确认、AI 回复点赞/点踩、知识聚类、自动入库和知识库来源标注均在本文件给出目标契约。
@@ -29,6 +27,7 @@ API 文档目录。当前已完成健康检查、认证注册、账号中心、�
 | AI 问题会话 | 已实现：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback`；目标态：title/archive/fork |
 | AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`GET /api/ai/knowledge/clusters`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback`、`POST /api/ai/knowledge/:id/merge` |
 | Skill Candidate | `GET /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates/:id/review`、`POST /api/ai/knowledge/skill-candidates/:id/install` |
+| AI 漏洞复测 | `POST /api/vulnerabilities/:id/ai-retests`、`GET /api/vulnerabilities/:id/ai-retests`、`GET /api/ai-retests/:jobId`、`POST /api/ai-retests/:jobId/cancel`、`POST /api/ai-retests/:jobId/approve-plan`、`POST /api/ai-retests/:jobId/adopt-review-comment`、`GET /api/ai-retests/:jobId/artifacts/:artifactId`、`POST /api/ai-retests/:jobId/direct-plan/approve`、`POST /api/ai-retests/:jobId/direct-actions/:actionId/approve`、`POST /api/ai-retests/:jobId/direct-actions/:actionId/reject`、`POST /api/ai-retests/:jobId/direct-credentials`、`POST /api/ai-retests/:jobId/direct-credentials/:credentialId/destroy` |
 | 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/ai-knowledge-usage`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
 
 > 说明：旧版 `POST /api/access/security-exam/submit` 仅记录分数；当前真实安全答题准入使用 `GET /api/security-exam/paper` 随机组卷和 `POST /api/security-exam/submit` 后端判分。
