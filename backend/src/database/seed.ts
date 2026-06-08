@@ -42,7 +42,7 @@ const authorizationPolicies: Array<{ level: AuthorizationLevel; scope: AssetScop
 const seedUsers = [
   {
     unifiedCode: '2025001',
-    password: '123456+-',
+    password: 'tmp202501',
     email: 'student@example.edu.cn',
     name: '学生用户',
     studentNo: '2025001',
@@ -55,7 +55,7 @@ const seedUsers = [
   },
   {
     unifiedCode: '0000001',
-    password: 'auditor123456+-',
+    password: 'tmp202501',
     email: 'auditor@example.edu.cn',
     name: '审核员',
     studentNo: null,
