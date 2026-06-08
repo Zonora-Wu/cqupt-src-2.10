@@ -219,6 +219,9 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     setInput('')
     onInitialPromptConsumed?.()
     void sendMessage(content)
+    // The consumed-content ref makes this a one-shot handoff. Depending on
+    // callbacks recreated by the parent would re-run the effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt])
 
   useEffect(() => {

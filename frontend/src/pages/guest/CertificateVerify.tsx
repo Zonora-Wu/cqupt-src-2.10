@@ -19,6 +19,9 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
     if (!normalized) return
     setCertificateNo(normalized)
     void searchCertificate(normalized)
+    // queryNonce intentionally retriggers the one-shot query without coupling
+    // the effect to the editable certificate number.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCertificateNo, queryNonce])
 
   async function searchCertificate(nextCertificateNo = certificateNo) {

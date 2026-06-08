@@ -68,3 +68,14 @@ npm run test:ai-problem-session
 - `tests/api/core-api-smoke.mjs`：只验证主要 API 是否可达、认证账号是否可用。
 - `tests/e2e/core-e2e.mjs`：创建隔离临时用户，真实执行跨模块状态流转，更适合作为 P0 回归验收。
 - `tests/e2e/ai-problem-session-phase2.mjs`：聚焦 AI 问题会话式知识沉淀，不覆盖漏洞提交、附件、Skill 安装等跨模块 P0 链路。
+
+## AI 复测浏览器 UI：`frontend/e2e/ai-retest-ui.spec.ts`
+
+先启动本地前后端与 PostgreSQL，再运行：
+
+```bash
+cd frontend
+npm run test:e2e:ai-retest
+```
+
+该用例使用隔离数据库 fixture，覆盖管理员进入漏洞详情、查看 AI 复测报告、按需读取脱敏证据、引用审核意见草稿并带入人工审核弹窗、启动确认弹窗和浏览器 console/page error 监控。真实 Hermes 规划、RBAC、策略、审批和报告后端链路仍由 `tests/e2e/ai-vulnerability-retest.mjs` 覆盖。

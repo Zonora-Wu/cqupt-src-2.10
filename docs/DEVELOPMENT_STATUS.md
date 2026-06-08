@@ -1,7 +1,7 @@
 # 开发状态
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-07 已按当前代码和 AI 漏洞自动复测进度更新。除既有业务与 AI Knowledge 能力外，AI 复测已完成 Runner 执行段，以及 Hermes Direct 的状态机、方案契约、方案/动作审批、RBAC、审计和兼容数据库迁移。
+> 文档同步状态：2026-06-08 已按当前代码和 AI 漏洞自动复测进度更新。除既有业务与 AI Knowledge 能力外，AI 复测已完成 Runner 执行段、Hermes Direct 控制链路、统一报告，以及管理员/审核员漏洞详情页的 Phase 9 操作界面。
 >
 > 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
 >
@@ -37,6 +37,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 - 安全答题准入与提交前缺失条件提示。
 - 邮宝 AI 助手：聊天、Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片。
 - 管理端 AI 知识沉淀页面：知识条目、会话队列、AI 评分、重复风险、合并建议、Skill Candidate 审核。
+- 管理员/审核员 AI 漏洞复测面板：启动确认、任务轮询、Runner/Direct 审批、临时凭据、脱敏证据、统一报告和审核意见草稿引用；学生端不展示。
 
 ### 后端
 
@@ -82,6 +83,8 @@ curl -s http://localhost:5000/health
 - `backend npm run test:core-e2e` 已覆盖安全答题准入、责任书、漏洞提交、PDF 附件、AI 报告草稿、知识沉淀、Skill 安装与 RBAC 拒绝。
 - `backend npm run test:ai-problem-session` 已覆盖 AI 问题会话生命周期、脱敏 turn 写入、已解决会话总结、敏感信息前置脱敏与审核分流、discard 不入库、管理员审核和高频高质自动入库。
 - AI 复测状态机测试已覆盖 Direct 方案审批、动作审批和超高危阻断，后端 TypeScript 构建通过。
+- AI 复测 API E2E 已通过 `15/15`；Phase 9 Playwright 浏览器回归通过 `1/1`，覆盖脱敏证据、审核意见草稿引用和启动授权确认。
+- 前端全仓 ESLint 已清零，前后端生产构建、Phase 8 报告测试、Phase 9 展示策略测试和 npm 完整安全审计均通过。
 - 独立 `hermes-retest-agent` 与动态 egress proxy 已部署；无工具/无目标 smoke run 已通过模型调用和终态状态查询，Hermes SSE 终态断流由 Worker 状态对账兜底。
 
 ## 已知限制

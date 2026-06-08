@@ -391,17 +391,18 @@ function ProductDetailModal({
   onRedeem: (product: MallProductItem) => void
   product: MallProductItem | null
 }) {
-  if (!product) return null
-
-  const Icon = productIcons[product.category] ?? Gift
-  const canExchange = product.stock > 0 && product.canRedeem
-  const disabledReason = product.stock <= 0 ? '库存不足' : '积分不足'
   const [lightbox, setLightbox] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.add('auth-modal-open')
     return () => document.documentElement.classList.remove('auth-modal-open')
   }, [])
+
+  if (!product) return null
+
+  const Icon = productIcons[product.category] ?? Gift
+  const canExchange = product.stock > 0 && product.canRedeem
+  const disabledReason = product.stock <= 0 ? '库存不足' : '积分不足'
 
   return (
     <div className="fixed inset-0 z-[100] isolate flex items-center justify-center p-4">

@@ -1876,6 +1876,19 @@ Runner、`ADVISORY_ONLY` 和 Hermes Direct 报告保存前均经过同一后端�
 
 `adopt-review-comment` 只创建或更新同一条审核意见草稿，`decision=null`，不会改变漏洞状态。重复调用保持同一 `commentId`，并持续写入 `AI_RETEST_REPORT_ADOPTED` 审计日志。
 
+### 管理员/审核员前端交互
+
+共享漏洞详情页通过 `frontend/src/components/ai-retest/AiRetestPanel.tsx` 提供 Phase 9 交互闭环：
+
+- 创建任务时要求人工确认目标、授权风险、账号和验证码需求，并发送 `Idempotency-Key`。
+- 仅对非终态任务每 3 秒轮询一次；终态或组件卸载后停止轮询。
+- Runner 方案、Hermes Direct 方案和高风险动作分别展示审批信息；Direct 动作批准提交详情接口返回的当前 `commandHash`。
+- 临时凭据明文只存在于弹窗局部状态，提交或关闭后清除；服务端响应不回显明文。
+- artifact 仅在人工点击后读取后端脱敏 preview，前端不展示存储键。
+- 引用报告只填充现有审核意见草稿，不提交审核决定，也不改变漏洞状态。
+
+该面板仅挂载在管理员/审核员共用的漏洞管理页面，学生端没有入口。RBAC 和资源级授权仍以后端为准。
+
 ## API 安全原则
 
 - 所有业务接口默认需要鉴权。
