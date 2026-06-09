@@ -53,3 +53,17 @@ export type AiQuotaSettings = {
   quotaPeriod: 'DAY' | 'WEEK' | 'MONTH'
   resetAt: Date
 }
+
+export type AiKnowledgeUsagePolicySettings = {
+  knowledgeUsageStrength: number
+  retrievalEnabled: boolean
+  directAnswerEnabled: boolean
+  agentInjectEnabled: boolean
+  directThresholdOverride?: number
+  injectThresholdOverride?: number
+  directTopKOverride?: number
+  injectTopKOverride?: number
+  allowAttachmentKnowledgeInjection: boolean
+  requireSourceBadge: boolean
+  auditCandidateHits: boolean
+}

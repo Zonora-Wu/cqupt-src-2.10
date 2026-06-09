@@ -8,6 +8,7 @@ import { AnnouncementsService } from './announcements.service'
   imports: [AuthModule, RbacModule],
   controllers: [AnnouncementsController],
   providers: [AnnouncementsService],
+  exports: [AnnouncementsService],
 })
 export class AnnouncementsModule {}
 

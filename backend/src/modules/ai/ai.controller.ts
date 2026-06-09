@@ -1,11 +1,25 @@
-import { Body, Controller, Get, Inject, Post, Req, UseGuards } from '@nestjs/common'
-import { CurrentUser } from '../auth/auth.decorators'
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { UploadedPdfFile } from '../attachments/attachment.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AiChatBody } from './ai.types'
+import { AiReportDraftService } from './ai.report-draft.service'
 import { AiService } from './ai.service'
-import { normalizeAiChatBody } from './ai.validation'
+import { normalizeAiChatBody, normalizeAiRoutePreviewBody } from './ai.validation'
 
 type RequestLike = {
   ip?: string
@@ -30,7 +44,10 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @Controller('ai')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AiController {
-  constructor(@Inject(AiService) private readonly ai: AiService) {}
+  constructor(
+    @Inject(AiService) private readonly ai: AiService,
+    @Inject(AiReportDraftService) private readonly reportDrafts: AiReportDraftService,
+  ) {}
 
   @Get('health')
   health() {
@@ -47,9 +64,53 @@ export class AiController {
     return this.ai.getQuota(user.id)
   }
 
+  @Get('skills')
+  skills(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.ai.getSkillLibrary(user)
+  }
+
   @Post('chat')
-  chat(@Body() body: AiChatBody, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+  chat(
+    @Body() body: AiChatBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
     const input = normalizeAiChatBody(body)
     return this.ai.chat(input, user, getRequestMeta(req))
+  }
+
+  @Post('knowledge/route-preview')
+  @RequirePermissions('ai:manage_skills')
+  routePreview(
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.ai.routePreview(normalizeAiRoutePreviewBody(body), user, getRequestMeta(req))
+  }
+
+  @Post('report-drafts')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined) {
+    return this.reportDrafts.extractVulnerabilityDrafts(file)
+  }
+
+  @Post('attachments/text')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  extractAttachmentText(@UploadedFile() file: UploadedPdfFile | undefined) {
+    return this.reportDrafts.extractAttachmentText(file)
+  }
+
+  @Post('actions/:actionId/confirm')
+  confirmAction(
+    @Param('actionId') actionId: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    // 后续实现：验证 actionId → 执行对应业务逻辑（兑换/打开资源等）
+    return {
+      actionId,
+      message: '待确认动作接口预留',
+      status: 'not_implemented',
+    }
   }
 }

@@ -1,0 +1,79 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-01T11:41:22.442Z",
+  "marker": "[phase2_mpv4z6c3_76933c]",
+  "runId": "phase2_mpv4z6c3_76933c",
+  "status": "passed",
+  "steps": [
+    {
+      "duration": 310,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 73,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 3000,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 15,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 37,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects sensitive summary content",
+      "ok": true
+    },
+    {
+      "duration": 108,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 47,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects PII, real asset URL and raw request content",
+      "ok": true
+    },
+    {
+      "duration": 72,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 45446,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 53637,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 28,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 24,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    }
+  ]
+}

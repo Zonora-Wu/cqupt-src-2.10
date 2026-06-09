@@ -1,0 +1,109 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T11:01:02.216Z",
+  "marker": "[phase2_mpwiy7tz_43fb1b]",
+  "runId": "phase2_mpwiy7tz_43fb1b",
+  "status": "passed",
+  "steps": [
+    {
+      "duration": 294,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 67,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 108,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 88,
+      "label": "KB-08A routes write intent to action proposal with audit record",
+      "ok": true
+    },
+    {
+      "duration": 14,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 37,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 45,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 40,
+      "label": "KB-05 redacts sensitive content before summary and keeps it review-only",
+      "ok": true
+    },
+    {
+      "duration": 103,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 38,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 70,
+      "label": "KB-05 redacts PII, real asset URL and raw request before KB approval",
+      "ok": true
+    },
+    {
+      "duration": 8226,
+      "label": "KB-05A legacy user conversation resummarizes after deterministic redaction",
+      "ok": true
+    },
+    {
+      "duration": 76,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 105,
+      "label": "KB-06A semantically clusters same problem and separates variants",
+      "ok": true
+    },
+    {
+      "duration": 42372,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 39353,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 29,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 25,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    },
+    {
+      "duration": 97,
+      "label": "KB-08 reuses approved knowledge with source and used hit record",
+      "ok": true
+    },
+    {
+      "duration": 55339,
+      "label": "KB-08 injects medium-confidence knowledge and keeps source record",
+      "ok": true
+    }
+  ]
+}

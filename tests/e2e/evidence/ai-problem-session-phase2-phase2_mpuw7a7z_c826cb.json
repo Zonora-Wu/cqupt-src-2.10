@@ -1,0 +1,54 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-01T07:34:04.897Z",
+  "marker": "[phase2_mpuw7a7z_c826cb]",
+  "runId": "phase2_mpuw7a7z_c826cb",
+  "status": "passed",
+  "steps": [
+    {
+      "duration": 359,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 78,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 2855,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 17,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 34,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 24,
+      "label": "KB-05 rejects sensitive summary content",
+      "ok": true
+    },
+    {
+      "duration": 120,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 32,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 32,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    }
+  ]
+}

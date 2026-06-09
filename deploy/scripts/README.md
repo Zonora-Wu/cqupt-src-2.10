@@ -1,137 +1,75 @@
 # Scripts
 
-部署辅助脚本目录。
-
----
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-06-08。当前项目包含 AI 漏洞自动复测（Phase 1-9 + 7.5），使用双通道 Runner + Hermes Direct。
+> 启动脚本不管理 Hermes 容器（端口 5000/5001）、Runner 服务 — 它们作为独立外部依赖，需单独启动。
+> 脚本会检查这些外部服务是否运行并在最终输出中显示状态，不影响脚本正常执行。
+>
+> 关键权威文档：`docs/AI.md`、`docs/HERMES_RUNTIME.md`、`docs/deployment/HERMES_DIRECT.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
 
 ## 本地一键启动 / 关闭
 
-### Linux / WSL / macOS（推荐）
-
-一键启动本地开发环境：
+### Linux / WSL / macOS
 
 ```bash
-cd ~/projects/cqupt-src-2.10
+cd /home/cocking/projects/cqupt-src-2.10
 bash deploy/scripts/start-local.sh
 ```
 
-启动后服务地址：
-
-| 服务 | 地址 |
-|---|---|
-| 前端 | http://localhost:5173 |
-| 后端 API | http://localhost:3000/api/health |
-| PostgreSQL | 127.0.0.1:15432 |
-| MinIO 控制台 | http://localhost:9001 |
-
-一键关闭本地开发环境：
+停止：
 
 ```bash
 bash deploy/scripts/stop-local.sh
 ```
 
-只想关闭前后端，保留数据库容器：
-
-```bash
-bash deploy/scripts/stop-local.sh --keep-postgres
-```
-
-只想关闭前后端，保留数据库和 MinIO 容器：
-
-```bash
-bash deploy/scripts/stop-local.sh --keep-postgres --keep-minio
-```
-
-数据库已手动启动，只想启动前后端：
-
-```bash
-bash deploy/scripts/start-local.sh --skip-postgres
-```
-
-MinIO 已手动启动，跳过 MinIO 检查：
-
-```bash
-bash deploy/scripts/start-local.sh --skip-minio
-```
-
-数据库已初始化，跳过迁移和 seed：
-
-```bash
-bash deploy/scripts/start-local.sh --skip-db-init
-```
-
-所有容器已手动启动，只启动前后端：
-
-```bash
-bash deploy/scripts/start-local.sh --skip-postgres --skip-minio --skip-redis --skip-db-init
-```
-
-关闭但保留全部容器（仅停止前后端进程）：
-
-```bash
-bash deploy/scripts/stop-local.sh --keep-postgres --keep-minio --keep-redis
-```
-
----
-
-### Windows（PowerShell）
-
-一键启动本地开发环境：
+### Windows PowerShell
 
 ```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10
 powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
 ```
 
-它会启动：
+## 启动后检查
 
-- Docker PostgreSQL：`127.0.0.1:15432`
-- Docker MinIO：`http://localhost:9001`
-- 后端开发服务：`http://localhost:3000/api/health`
-- 前端开发服务：`http://localhost:5173`
+```bash
+# 后端健康检查
+curl -s http://localhost:3000/api/health
 
-一键关闭本地开发环境：
+# 平台 Hermes Agent（独立容器，需单独启动）
+curl -s http://localhost:5000/health
+
+# Hermes Direct 复测容器（独立容器，需单独启动）
+curl -s http://localhost:5001/health
+```
+
+访问：
+
+| 服务 | 地址 |
+|---|---|
+| 前端 | http://localhost:5173 |
+| 后端 | http://localhost:3000/api/health |
+| 平台 Hermes | http://localhost:5000/health |
+| Hermes Direct | http://localhost:5001/health |
+| MinIO Console | http://localhost:9001 |
+
+## 外部依赖说明
+
+启动脚本只管理 PostgreSQL、Redis、MinIO 容器和前后端开发服务器。以下服务需单独启动：
+
+| 服务 | 管理方式 | 说明 |
+|------|---------|------|
+| 平台 Hermes Agent (端口 5000) | `cd /home/cocking/cqupt-src-hermes-linux && docker compose up -d` | AI 助手、AI 复测计划生成 |
+| Hermes Direct (端口 5001) | 同上 docker compose（含 `hermes-retest-agent` + `retest-egress-proxy`） | AI 复测 HERMES_DIRECT 模式 |
+| Runner (端口未固定) | 手动启动 `retest-runner/` | AI 复测 CONTROLLED_RUN 模式 |
+
+脚本启动时会检查这些服务是否可达并在最终输出中显示状态。不可达时仅警告，不阻断启动。
+
+## Windows PowerShell 启动 / 关停
 
 ```powershell
-cd D:\Code\CQUPT_SRC\cqupt-src-2.10
+powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
+```
+
+```powershell
 powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1
 ```
-
-如果只想关闭前后端，保留数据库容器：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1 -KeepPostgres
-```
-
-如果只想关闭前后端，保留数据库和 MinIO 容器：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1 -KeepPostgres -KeepMinio
-```
-
-如果数据库已经手动启动，只想打开前后端：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1 -SkipPostgres
-```
-
-如果 MinIO 已经手动启动，可以跳过 MinIO 启动检查：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1 -SkipMinio
-```
-
-如果数据库已经确认初始化完成，想跳过迁移和 seed：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1 -SkipDbInit
-```
-
----
-
-## 后续可放置
-
-- 云服务器初始化脚本
-- 数据库备份脚本
-- 日志清理脚本
-- 发布检查脚本

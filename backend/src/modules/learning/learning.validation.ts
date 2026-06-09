@@ -6,6 +6,7 @@ export function normalizeLearningResourceBody(body: LearningResourceBody): Norma
   return {
     active: normalizeBoolean(body.active, true),
     category: requireText(body.category, '资源分类', 2, 40),
+    coverUrl: normalizeOptionalUrl(body.coverUrl, '封面图片链接'),
     description: requireText(body.description, '资源说明', 5, 1000),
     externalUrl: normalizeUrl(body.externalUrl),
     kind: normalizeKind(body.kind),
@@ -72,3 +73,20 @@ function normalizeUrl(value: unknown) {
   }
 }
 
+function normalizeOptionalUrl(value: unknown, label: string) {
+  if (value === undefined || value === null || value === '') {
+    return ''
+  }
+
+  const url = requireText(value, label, 8, 1000)
+
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('invalid protocol')
+    }
+    return parsed.toString()
+  } catch {
+    throw new BadRequestException(`${label}必须是 http:// 或 https:// 开头的有效地址`)
+  }
+}

@@ -17,6 +17,7 @@ BACKEND_DIR="$REPO_ROOT/backend"
 FRONTEND_DIR="$REPO_ROOT/frontend"
 STATE_DIR="$REPO_ROOT/tmp"
 STATE_FILE="$STATE_DIR/local-dev-processes.json"
+HERMES_DIR="/home/cocking/cqupt-src-hermes-linux"
 
 # ---- 参数解析 ----
 SKIP_POSTGRES=false
@@ -50,13 +51,66 @@ log_success() { echo -e "${GREEN}✔ $1${NC}"; }
 log_warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
 log_error()   { echo -e "${RED}✘ $1${NC}" >&2; }
 
-# ---- 工具检查 ----
-for cmd in docker node npm; do
-  if ! command -v "$cmd" &>/dev/null; then
-    log_error "$cmd 未安装，请先安装后再运行此脚本"
-    exit 1
+# ---- 外部服务检查 ----
+log_info "检查外部依赖服务..."
+HERMES_OK=false
+RUNNER_OK=false
+HERMES_DIRECT_OK=false
+
+if curl -sf http://localhost:5000/health &>/dev/null; then
+  HERMES_OK=true
+  log_success "平台 Hermes Agent 已运行 (localhost:5000)"
+else
+  log_warn "平台 Hermes Agent 未检测到 (localhost:5000/health)"
+  echo "  AI 助手和 AI 复测计划生成将不可用。"
+  echo "  如需启动 Hermes，请: cd $HERMES_DIR && docker compose up -d"
+fi
+
+if curl -sf http://localhost:5001/health &>/dev/null; then
+  HERMES_DIRECT_OK=true
+  log_success "Hermes Direct 复测容器已运行 (localhost:5001)"
+else
+  log_warn "Hermes Direct 复测容器未检测到 (localhost:5001/health)"
+  echo "  Hermes Direct 模式不可用。CONTROLLED_RUN 和 PLAN_ONLY 模式不受影响。"
+fi
+
+# MinIO bucket 自动创建
+if [[ "$SKIP_MINIO" == false ]]; then
+  log_info "检查 MinIO bucket..."
+  BUCKET_NAME="cqupt-src"
+  if command -v mc &>/dev/null; then
+    mc alias set local-minio http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
+    if mc ls "local-minio/$BUCKET_NAME" &>/dev/null; then
+      log_success "MinIO bucket '$BUCKET_NAME' 已存在"
+    else
+      mc mb "local-minio/$BUCKET_NAME" 2>/dev/null && log_success "MinIO bucket '$BUCKET_NAME' 已创建" || log_warn "无法创建 MinIO bucket，请手动创建"
+    fi
+  else
+    log_warn "未安装 mc (MinIO Client)，跳过 bucket 检查"
+    echo "  安装: curl https://dl.min.io/client/mc/release/linux-amd64/mc -o ~/bin/mc && chmod +x ~/bin/mc"
   fi
-done
+fi
+
+# AI retest 环境变量检查
+log_info "检查 AI 复测环境变量..."
+ENV_FILE="$BACKEND_DIR/.env"
+MISSING_VARS=""
+if [[ -f "$ENV_FILE" ]]; then
+  for var in AI_RETEST_HERMES_BASE_URL AI_RETEST_HERMES_TOKEN AI_RETEST_CREDENTIAL_ACTIVE_KEY_ID AI_RETEST_CREDENTIAL_KEYS; do
+    if ! grep -q "^${var}=" "$ENV_FILE" 2>/dev/null; then
+      MISSING_VARS="$MISSING_VARS  $var\n"
+    fi
+  done
+  if [[ -n "$MISSING_VARS" ]]; then
+    log_warn "以下 AI 复测环境变量未配置:"
+    echo -e "$MISSING_VARS"
+    echo "  AI 复测功能将不可用。CONTROLLED_RUN 需要 AI_RETEST_RUNNER_BASE_URL。"
+  else
+    log_success "AI 复测环境变量已配置"
+  fi
+else
+  log_warn "未找到 backend/.env，请检查环境配置"
+fi
 
 mkdir -p "$STATE_DIR"
 
@@ -146,6 +200,8 @@ cat > "$STATE_FILE" <<EOF
   "startedAt": "$(date -Iseconds)",
   "repoRoot": "$REPO_ROOT",
   "composeFile": "$COMPOSE_FILE",
+  "hermesOk": $([ "$HERMES_OK" == true ] && echo true || echo false),
+  "hermesDirectOk": $([ "$HERMES_DIRECT_OK" == true ] && echo true || echo false),
   "postgres": { "enabled": $([ "$SKIP_POSTGRES" == false ] && echo true || echo false), "container": "cqupt-src-local-postgres" },
   "redis":    { "enabled": $([ "$SKIP_REDIS" == false ]    && echo true || echo false), "container": "cqupt-src-local-redis" },
   "minio":    { "enabled": $([ "$SKIP_MINIO" == false ]    && echo true || echo false), "container": "cqupt-src-local-minio" },
@@ -178,10 +234,14 @@ echo ""
 echo "  后端日志      $LOG_DIR/backend.log"
 echo "  前端日志      $LOG_DIR/frontend.log"
 echo ""
-echo -e "${CYAN}演示账号：${NC}"
-echo "  学生      2025001@stu.cqupt.edu.cn  /  123456+-"
-echo "  审核员    0000001@cqupt.edu.cn       /  auditor123456+-"
-echo "  管理员    0000000@cqupt.edu.cn       /  admin123456+-"
+echo -e "${CYAN}外部依赖状态：${NC}"
+echo "  平台 Hermes Agent  $([ "$HERMES_OK" == true ] && echo '✓ 已运行 (localhost:5000)' || echo '✗ 未运行 — AI 助手不可用')"
+echo "  Hermes Direct     $([ "$HERMES_DIRECT_OK" == true ] && echo '✓ 已运行 (localhost:5001)' || echo '✗ 未运行 — HERMES_DIRECT 模式不可用')"
+echo ""
+echo -e "${CYAN}演示账号（unifiedCode / 密码）：${NC}"
+echo "  学生      2025001  /  tmp202501"
+echo "  审核员    0000001  /  tmp202501"
+echo "  管理员    0000000  /  admin123456+-"
 echo "  验证码    123456（开发环境固定值）"
 echo ""
 echo -e "${CYAN}停止所有服务：${NC}"

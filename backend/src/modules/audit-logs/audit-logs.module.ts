@@ -9,5 +9,6 @@ import { AuditLogsService } from './audit-logs.service'
   controllers: [AuditLogsController],
   imports: [PrismaModule, AuthModule, RbacModule],
   providers: [AuditLogsService],
+  exports: [AuditLogsService],
 })
 export class AuditLogsModule {}

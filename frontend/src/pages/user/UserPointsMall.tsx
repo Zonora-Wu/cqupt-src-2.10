@@ -408,11 +408,9 @@ function ProductDetailModal({
   const [lightbox, setLightbox] = useState(false)
 
   useEffect(() => {
-    if (!product) return
-
     document.documentElement.classList.add('auth-modal-open')
     return () => document.documentElement.classList.remove('auth-modal-open')
-  }, [product])
+  }, [])
 
   if (!product) return null
 

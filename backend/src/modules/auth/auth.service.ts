@@ -8,7 +8,6 @@ import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { CaptchaService } from '../captcha/captcha.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { RbacService } from '../rbac/rbac.service'
-import { SchoolPolicyService } from '../school/school-policy.service'
 import { ClientRequestMeta, LoginResponse } from './auth.types'
 import { NormalizedRegisterInput } from './auth.validation'
 
@@ -26,8 +25,6 @@ export class AuthService {
     private readonly rbac: RbacService,
     @Inject(CaptchaService)
     private readonly captcha: CaptchaService,
-    @Inject(SchoolPolicyService)
-    private readonly schoolPolicy: SchoolPolicyService,
   ) {}
 
   async loginWithPassword(unifiedCode: string, password: string, meta: ClientRequestMeta): Promise<LoginResponse> {
@@ -101,7 +98,6 @@ export class AuthService {
   async sendRegisterEmailCode(email: string, captchaToken: string, meta: ClientRequestMeta) {
     const normalizedEmail = email.trim().toLowerCase()
     await this.captcha.consumeCaptchaToken(captchaToken, 'REGISTER_EMAIL_CODE', meta)
-    await this.schoolPolicy.assertSchoolEmail(normalizedEmail)
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -132,7 +128,6 @@ export class AuthService {
   }
 
   async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse | PendingRegistrationResponse> {
-    await this.schoolPolicy.assertSchoolEmail(input.email)
     await this.assertRegisterCode(input.email, input.code)
 
     const [existingCode, existingEmail, existingStudentNo, studentRole, registrationSetting] = await Promise.all([

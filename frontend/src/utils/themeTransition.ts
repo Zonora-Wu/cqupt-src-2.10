@@ -1,0 +1,57 @@
+import type { MouseEvent } from 'react'
+
+export type ColorTheme = 'dark' | 'light'
+
+const THEME_STORAGE_KEY = 'cqupt-theme'
+const FALLBACK_TRANSITION_CLASS = 'theme-color-transition'
+const TRANSITION_DURATION = 760
+
+export function getSavedColorTheme(defaultTheme: ColorTheme = 'dark'): ColorTheme {
+  try {
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+    return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : defaultTheme
+  } catch {
+    return defaultTheme
+  }
+}
+
+export function applyColorTheme(theme: ColorTheme) {
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // Storage may be unavailable in restricted browsing modes.
+  }
+}
+
+export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLElement>) {
+  const root = document.documentElement
+
+  if (root.dataset.motion === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    applyColorTheme(theme)
+    return
+  }
+
+  const x = event?.clientX ?? window.innerWidth - 40
+  const y = event?.clientY ?? 40
+  root.style.setProperty('--theme-transition-x', `${x}px`)
+  root.style.setProperty('--theme-transition-y', `${y}px`)
+
+  const overlay = document.createElement('div')
+  overlay.className = 'theme-transition-overlay'
+  overlay.style.background = root.classList.contains('dark') ? '#0f1511' : '#f7f9f7'
+  document.body.appendChild(overlay)
+
+  root.classList.add(FALLBACK_TRANSITION_CLASS)
+  window.requestAnimationFrame(() => {
+    applyColorTheme(theme)
+    overlay.classList.add('theme-transition-overlay-exit')
+  })
+
+  window.setTimeout(() => {
+    overlay.remove()
+    root.classList.remove(FALLBACK_TRANSITION_CLASS)
+    root.style.removeProperty('--theme-transition-x')
+    root.style.removeProperty('--theme-transition-y')
+  }, TRANSITION_DURATION + 80)
+}

@@ -19,8 +19,17 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
+      // These diagnostics target React Compiler constraints. The project does
+      // not enable React Compiler, while the core Hooks rules remain enforced.
+      'react-hooks/immutability': 'off',
+      'react-hooks/refs': 'off',
       'react-hooks/set-state-in-effect': 'off',
-      'react-refresh/only-export-components': 'off',
+      'react-refresh/only-export-components': ['error', {
+        allowExportNames: [
+          'preloadKaliLaptopShowcaseResources',
+          'retestItems',
+        ],
+      }],
     },
   },
 ])

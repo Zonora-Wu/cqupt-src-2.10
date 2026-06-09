@@ -1,233 +1,66 @@
-# CQUPT-SRC 项目目录结构
+# CQUPT-SRC 正式项目结构
 
-本文档记录当前仓库的真实目录组织，用于交接、部署排查和后续功能开发定位。
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列）。Hermes Direct 复测使用独立容器 `hermes-retest-agent`（端口 5001），经 `retest-egress-proxy` 动态 scope 控制出网。当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环、Hermes Direct 原始 artifact 统一归档（Phase 7.5 Step 10）。
+>
+> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`、`docs/deployment/HERMES_DIRECT.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
+当前项目采用前后端分离结构。前端、后端、数据库、AI Gateway、平台 Hermes 运行环境、部署配置和测试目录均已按独立边界组织。
 
 ```text
 cqupt-src-2.10/
-├── README.md                         # 项目总览与启动入口
-├── PROJECT_HANDOFF.md                # 项目交接说明
-├── VibeCoding.md                     # 开发流程与协作约束
-├── .env.example                      # 环境变量示例
-├── package.json                      # 根级 Prisma 依赖
-├── CQUPT/                            # 学校 / 平台 Logo 原始资源
-├── backend/                          # NestJS 后端服务
-├── frontend/                         # React + TypeScript + Vite 前端
-├── database/                         # 数据库设计、Prisma schema、迁移与种子说明
-├── deploy/                           # Docker、Nginx、本地启停与部署脚本
-├── docs/                             # 面向开发、部署、接口、AI 的结构化文档
-├── tests/                            # API smoke、E2E 与测试夹具目录
-├── storage/                          # 本地对象存储 / 上传文件目录，运行数据不应提交
-├── tmp/                              # 本地临时文件与日志目录，运行数据不应提交
-└── 文档/                             # 原始需求、设计材料与中文补充说明
+├── frontend/                 # React + TypeScript + Vite 前端
+├── backend/                  # NestJS 后端，已完成基础初始化
+│   ├── src/
+│   │   ├── modules/          # 业务模块（auth、vulnerability、ai、ai-vulnerability-retest、ai-knowledge 等）
+│   │   ├── common/           # Guards、Pipes、Decorators、Filters 等通用能力
+│   │   ├── config/           # 环境变量读取和配置校验
+│   │   ├── jobs/             # Redis + BullMQ 后台任务
+│   │   └── integrations/     # Hermes Agent、AI retest Runner/egress proxy、邮箱、统一认证、MinIO 等集成
+│   └── test/                 # 后端测试
+├── database/
+│   ├── prisma/               # Prisma schema 与迁移
+│   └── seed/                 # 初始化数据
+├── deploy/
+│   ├── nginx/                # Nginx 配置
+│   ├── docker/               # Dockerfile 与容器构建文件
+│   └── scripts/              # 部署、备份、运维脚本
+├── docs/
+│   ├── AI.md                 # AI 目标效果、当前进度、部署和接口链路
+│   ├── DEVELOPMENT_STATUS.md # 当前开发状态
+│   ├── TECH_STACK.md         # 技术栈说明
+│   ├── api/                  # API 契约文档
+│   ├── architecture/         # 架构设计文档
+│   ├── security/             # 安全设计与检查清单
+│   └── deployment/           # 部署文档
+├── tests/
+│   ├── e2e/                  # 端到端测试
+│   └── fixtures/             # 测试数据
+├── storage/                  # 本地开发临时存储，不提交真实上传文件
+├── tmp/                      # 临时文件，不提交真实运行数据
+├── CQUPT/                    # Logo 原始资源
+├── 文档/                     # 现有项目文档
+├── PROJECT_HANDOFF.md        # 交接说明
+├── VibeCoding.md             # 开发流程约束
+└── 文档/总体建议.md           # 总体技术推进建议
 ```
 
-## 前端
+## 结构原则
 
-```text
-frontend/
-├── public/
-│   └── assets/                       # 静态公开资源
-├── src/
-│   ├── App.tsx                       # 前端应用入口组件
-│   ├── main.tsx                      # React 挂载入口
-│   ├── index.css                     # 全局样式
-│   ├── assets/                       # 前端内置图片资源
-│   ├── components/
-│   │   ├── auth/                     # 登录、注册、认证相关弹窗
-│   │   ├── layout/                   # 页面布局与区块容器
-│   │   ├── navigation/               # 导航栏、用户菜单、通知入口
-│   │   ├── theme/                    # 主题相关组件
-│   │   └── ui/                       # 通用 UI：提示、搜索、选择器、面板、滑块验证等
-│   ├── hooks/                        # 前端自定义 Hook
-│   ├── pages/
-│   │   ├── admin/                    # 管理员端页面
-│   │   ├── auditor/                  # 审核员端页面
-│   │   ├── guest/                    # 访客公开页面
-│   │   └── user/                     # 学生 / 普通用户端页面
-│   ├── routes/                       # 路由预留目录
-│   ├── services/                     # API 请求封装
-│   ├── stores/                       # 状态管理预留目录
-│   ├── types/                        # 前端共享类型预留目录
-│   └── utils/                        # 严重等级、漏洞状态等工具函数
-├── package.json
-└── vite.config.ts
-```
+1. 前端继续保留在 `frontend/`，不移动现有代码。
+2. 后端独立放在 `backend/`，避免和前端依赖混在一起。
+3. 数据库模型统一放在 `database/prisma/`，后端通过 Prisma 使用。
+4. Docker 与 Nginx 部署配置统一放在 `deploy/`。
+5. Hermes Agent 不直接由前端访问，后续通过后端 `ai` 模块和 `integrations/` 代理。
+6. AI 漏洞复测使用独立 `retest-runner/` 服务 + 独立 Hermes Direct 容器（`hermes-retest-agent`，经 `retest-egress-proxy` 动态授权出网），不混用主 Hermes Agent 网络和凭据。
+6. 安全文档、API 文档、部署文档都放入 `docs/`，便于后续交接。
 
-前端重点业务文件：
-
-```text
-frontend/src/services/ai.ts                 # 用户端 AI 对话、外观、额度接口
-frontend/src/services/systemSettings.ts     # 管理员系统设置接口
-frontend/src/services/users.ts              # 管理员用户管理接口
-frontend/src/pages/user/UserAIAssistant.tsx # 用户端 AI 助手页面
-frontend/src/pages/admin/AdminSystemSettings.tsx
-frontend/src/pages/admin/AdminUserManagement.tsx
-```
-
-## 后端
-
-```text
-backend/
-├── .env                              # 后端本地环境变量，不应提交真实密钥
-├── assets/
-│   └── fonts/                        # PDF 证书等后端生成能力使用的字体
-├── scripts/                          # Prisma generate / migrate 脚本
-├── src/
-│   ├── main.ts                       # NestJS 启动入口
-│   ├── app.module.ts                 # 根模块
-│   ├── common/
-│   │   └── crypto/                   # 密码哈希等通用加密能力
-│   ├── config/                       # 配置读取与环境变量管理
-│   ├── database/                     # 后端种子入口
-│   ├── integrations/
-│   │   └── object-storage/           # 本地 / MinIO 对象存储抽象
-│   ├── jobs/                         # 后台任务预留
-│   └── modules/                      # 业务模块
-├── test/                             # 后端测试目录
-├── package.json
-└── tsconfig*.json
-```
-
-后端业务模块：
-
-```text
-backend/src/modules/
-├── access/           # 准入状态、责任书、安全考试
-├── account/          # 个人中心、头像、邮箱、密码、个人审计日志
-├── ai/               # Hermes Agent 代理、AI 对话、AI 外观、AI token 额度
-├── announcements/    # 公告发布、可见公告、公开公告
-├── attachments/      # 漏洞附件上传与预览
-├── audit-logs/       # 审计日志、脱敏、统计、详情
-├── auth/             # 登录、注册、JWT、权限守卫
-├── captcha/          # 可复用滑块验证
-├── certificates/     # 证书签发、撤销、PDF 生成、公开核验
-├── dashboard/        # 用户 / 审核员 / 管理员首页统计
-├── health/           # 健康检查
-├── learning/         # 学习中心、靶场资源、后台管理
-├── notifications/    # 通知中心
-├── points-mall/      # 积分商城、商品、兑换、领取
-├── prisma/           # PrismaService 注入模块
-├── rbac/             # 权限点与 RBAC 服务
-├── school/           # 校内策略、责任书 / 考试策略
-├── system-settings/  # 系统设置、证书模板、AI 头像、默认 AI 额度
-├── users/            # 管理员用户管理、角色、状态、AI 额度
-└── vulnerabilities/  # 漏洞提交、审核、复测、状态流转
-```
-
-后端模块通常采用以下文件约定：
-
-```text
-*.module.ts       # NestJS 模块声明
-*.controller.ts   # HTTP 路由
-*.service.ts      # 业务逻辑
-*.types.ts        # DTO / 领域类型
-*.validation.ts   # 请求参数归一化与校验
-```
-
-## 数据库
-
-```text
-database/
-├── DATABASE_DESIGN.md                # 数据库设计说明
-├── README.md
-├── prisma/
-│   ├── schema.prisma                 # Prisma 数据模型
-│   ├── README.md
-│   └── migrations/                   # 已应用 / 待应用迁移
-└── seed/
-    └── README.md                     # 种子数据说明
-```
-
-当前重要迁移包括：
-
-```text
-20260429080513_init
-20260429125156_certificate_templates
-20260430093000_learning_resources
-20260430103000_points_mall
-20260430111000_user_management
-20260430143000_captcha
-20260502090000_user_avatar
-20260512090000_ai_user_quota
-20260512133000_ai_quota_periods
-```
-
-## 部署
-
-```text
-deploy/
-├── README.md
-├── docker/
-│   ├── README.md
-│   └── docker-compose.local.yml      # 本地 PostgreSQL、Redis、MinIO 等依赖
-├── nginx/
-│   └── README.md                     # Nginx 反代说明
-└── scripts/
-    ├── README.md
-    ├── start-local.sh
-    ├── stop-local.sh
-    ├── start-local.ps1
-    └── stop-local.ps1
-```
-
-Hermes Agent 当前作为独立 Docker 容器运行，平台后端按 OpenAI-compatible API 调用，相关配置在 `backend/.env` 中维护。
-
-## 文档
-
-```text
-docs/
-├── PROJECT_STRUCTURE.md              # 当前文件
-├── DEVELOPMENT_STATUS.md             # 开发进度与已完成能力
-├── TECH_STACK.md                     # 技术栈说明
-├── AI.md                             # AI 目标效果、当前进度、部署与接口链路
-├── api/
-│   └── README.md                     # API 文档
-├── architecture/
-│   ├── README.md
-│   └── DATABASE_MODEL.md             # 数据模型说明
-├── deployment/
-│   └── README.md                     # 部署说明
-└── security/
-    └── README.md                     # 安全说明
-```
-
-原始材料和补充设计位于：
-
-```text
-文档/
-├── 用户端AI助手.md
-├── 总体建议.md
-├── 步骤.md
-├── 提交GitHub.md
-├── 数据库提示词.md
-├── cqupt.md
-├── 初始提案.txt
-└── 校级漏洞响应平台项目需求 / 设计说明书
-```
-
-## 测试
-
-```text
-tests/
-├── README.md
-├── api/
-│   └── core-api-smoke.mjs            # 核心 API 冒烟测试
-├── e2e/
-│   └── README.md
-└── fixtures/
-    └── README.md
-```
-
-## 目录约定
-
-1. 前端所有接口调用统一放在 `frontend/src/services/`，页面不直接拼接后端基础 URL。
-2. 后端所有业务能力按领域放入 `backend/src/modules/`，避免跨模块随意访问数据库。
-3. Prisma schema 和迁移统一维护在 `database/prisma/`，后端通过 `PrismaService` 使用。
-4. 上传文件、临时日志、构建产物、依赖目录不应提交到 Git。
-5. Hermes Agent 不直接暴露给前端，统一由后端 `ai` 模块代理。
-6. 新增接口需同步更新 `docs/api/README.md`，新增 AI 能力需同步更新 `docs/AI.md` 或 `文档/用户端AI助手.md`。
-
-## 常用入口
+## 常用入口文档
 
 ```text
 README.md
@@ -235,8 +68,6 @@ PROJECT_HANDOFF.md
 docs/DEVELOPMENT_STATUS.md
 docs/TECH_STACK.md
 docs/AI.md
-docs/api/README.md
-docs/deployment/README.md
 database/DATABASE_DESIGN.md
-文档/用户端AI助手.md
+文档/总体建议.md
 ```

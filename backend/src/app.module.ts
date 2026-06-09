@@ -5,6 +5,8 @@ import { ObjectStorageModule } from './integrations/object-storage/object-storag
 import { AccessModule } from './modules/access/access.module'
 import { AccountModule } from './modules/account/account.module'
 import { AiModule } from './modules/ai/ai.module'
+import { AiKnowledgeModule } from './modules/ai-knowledge/ai-knowledge.module'
+import { AiVulnerabilityRetestModule } from './modules/ai-vulnerability-retest/ai-vulnerability-retest.module'
 import { AnnouncementsModule } from './modules/announcements/announcements.module'
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module'
 import { AttachmentsModule } from './modules/attachments/attachments.module'
@@ -18,6 +20,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PointsMallModule } from './modules/points-mall/points-mall.module'
 import { PrismaModule } from './modules/prisma/prisma.module'
 import { SchoolPolicyModule } from './modules/school/school-policy.module'
+import { SecurityExamModule } from './modules/security-exam/security-exam.module'
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module'
 import { UsersModule } from './modules/users/users.module'
 import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities.module'
@@ -36,7 +39,10 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     AuthModule,
     AccountModule,
     AiModule,
+    AiKnowledgeModule,
+    AiVulnerabilityRetestModule,
     AccessModule,
+    SecurityExamModule,
     VulnerabilitiesModule,
     AttachmentsModule,
     CaptchaModule,

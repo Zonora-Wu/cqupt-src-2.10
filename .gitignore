@@ -40,10 +40,15 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Claude Code local-only settings
+.claude/settings.local.json
+
 # Playwright
 .playwright-cli/
 playwright-report/
 test-results/
+tests/e2e/evidence/
 
 # Docker local data
 .docker-data/
+frontend/public/models/*.glb

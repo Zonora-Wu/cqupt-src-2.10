@@ -1,0 +1,83 @@
+services:
+  hermes-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-agent
+    restart: unless-stopped
+    env_file:
+      - ./env/.env.agent
+    ports:
+      - "5000:5000"
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    volumes:
+      - ../data:/opt/data
+      - ../platform-skills/cqupt-src:/opt/data/skills/cqupt-src
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: gateway run --replace
+
+  retest-egress-proxy:
+    build:
+      context: /home/cocking/projects/cqupt-src-2.10/retest-egress-proxy
+    container_name: cqupt-retest-egress-proxy
+    restart: unless-stopped
+    env_file:
+      - ./env/.env.retest
+    environment:
+      EGRESS_INFRASTRUCTURE_HOSTS: api.deepseek.com
+      HERMES_FORWARD_TARGET: tcp://hermes-retest-agent:5000
+      HERMES_SESSION_DIR: /opt/hermes-retest-data/sessions
+    networks:
+      - retest-egress
+      - retest-isolated
+    ports:
+      - "127.0.0.1:18081:8081"
+      - "127.0.0.1:5001:5002"
+    volumes:
+      - ../retest-data:/opt/hermes-retest-data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health',{headers:{Authorization:'Bearer '+process.env.EGRESS_CONTROL_TOKEN}}).then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  hermes-retest-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-retest-agent
+    restart: unless-stopped
+    depends_on:
+      retest-egress-proxy:
+        condition: service_healthy
+    env_file:
+      - ./env/.env.agent
+      - ./env/.env.retest
+    environment:
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: 5000
+      NO_PROXY: 127.0.0.1,localhost,retest-egress-proxy
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    networks:
+      - retest-isolated
+    volumes:
+      - ../retest-data:/opt/data
+      - ../platform-skills/cqupt-src:/opt/data/skills/cqupt-src:ro
+      - ./start-retest.sh:/opt/cqupt/start-retest.sh:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: /opt/cqupt/start-retest.sh
+
+networks:
+  retest-egress:
+  retest-isolated:
+    internal: true

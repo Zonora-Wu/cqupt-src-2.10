@@ -1,0 +1,95 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T04:10:40.039Z",
+  "marker": "[phase2_mpw4bobp_eb75ed]",
+  "runId": "phase2_mpw4bobp_eb75ed",
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 300,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 65,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 85,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 88,
+      "label": "KB-08A routes write intent to action proposal with audit record",
+      "ok": true
+    },
+    {
+      "duration": 14,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 30,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 46,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects sensitive summary content",
+      "ok": true
+    },
+    {
+      "duration": 108,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 40,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects PII, real asset URL and raw request content",
+      "ok": true
+    },
+    {
+      "duration": 78,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 104,
+      "label": "KB-06A semantically clusters same problem and separates variants",
+      "ok": true
+    },
+    {
+      "duration": 55271,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 34377,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 30,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 12,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "message": "/ai/problem-sessions/cmpw4bor6000fukrn6539m1jf/review expected 2xx, got 400: 该会话不适合沉淀：评分不足或复用价值不足",
+      "ok": false
+    }
+  ]
+}

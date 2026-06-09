@@ -518,6 +518,7 @@ function summarizeManagedUser(user: ManagedUser, quotaContext: QuotaContext) {
     accessStatus: getAccessStatus(latestExam, latestSignature),
     accountStatus: formatUserStatus(user.status),
     authorizationLevel: user.authorizationLevel,
+    avatarUrl: user.avatarUrl ?? null,
     certificates: user._count.receivedCertificates,
     college: user.college ?? '',
     createdAt: user.createdAt,

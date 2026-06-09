@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
-  CheckCircle2,
   Eye,
   FileCheck2,
   FileSearch,
@@ -29,12 +28,14 @@ import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { ModalShell } from '../../components/ui/ModalShell'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard } from '../../services/dashboard'
+import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import {
   listRetestQueue,
   listReviewQueue,
@@ -301,13 +302,10 @@ const announcementStatusStyles: Record<AnnouncementStatus, string> = {
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch { /* ignore storage access errors */ }
+    applyColorTheme(theme)
   }, [theme])
 
   return (
@@ -321,7 +319,11 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={(event) => {
+                const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                transitionColorTheme(nextTheme, event)
+                setTheme(nextTheme)
+              }}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
@@ -749,11 +751,7 @@ export function AuditorReviewQueue() {
           title="漏洞审核"
           description="处理分派给你的漏洞报告，结合 AI 初评完成复现、价值判断、补充材料要求和审核结论。"
         />
-        {errorMessage && (
-          <SurfacePanel className="mt-4 border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
-            {errorMessage}
-          </SurfacePanel>
-        )}
+        {errorMessage && <FloatingNotice message={errorMessage} onClose={() => setErrorMessage('')} variant="error" />}
         {done && <SuccessNotice>{done}</SuccessNotice>}
         <FilterBar>
           <SearchInput label="搜索漏洞" onChange={setKeyword} placeholder="编号、标题、资产或提交人" value={keyword} />
@@ -1557,10 +1555,7 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 
 function SuccessNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-      <CheckCircle2 className="h-4 w-4" />
-      {children}
-    </div>
+    <FloatingNotice message={children} variant="success" />
   )
 }
 

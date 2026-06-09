@@ -9,5 +9,6 @@ import { VulnerabilitiesService } from './vulnerabilities.service'
   imports: [AuthModule, RbacModule, AccessModule],
   controllers: [VulnerabilitiesController],
   providers: [VulnerabilitiesService],
+  exports: [VulnerabilitiesService],
 })
 export class VulnerabilitiesModule {}

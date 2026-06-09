@@ -1,4 +1,5 @@
 import { Building2, GraduationCap, Network, ShieldCheck, Target, Users } from 'lucide-react'
+import { KaliLaptopShowcase } from '../../components/guest/KaliLaptopShowcase'
 
 const values = [
   {
@@ -36,6 +37,10 @@ export function AboutPlatform() {
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
           CQUPT-SRC 希望以较低建设成本，形成一个连接漏洞响应、安全学习、证书激励和校园安全治理的长期平台，推动高校网络安全产教融合实践。
         </p>
+      </section>
+
+      <section className="mt-12">
+        <KaliLaptopShowcase />
       </section>
 
       <section className="mt-16 grid gap-5 md:grid-cols-3">

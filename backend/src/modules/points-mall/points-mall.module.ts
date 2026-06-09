@@ -9,5 +9,6 @@ import { PointsMallService } from './points-mall.service'
   controllers: [PointsMallController],
   imports: [PrismaModule, AuthModule, RbacModule],
   providers: [PointsMallService],
+  exports: [PointsMallService],
 })
 export class PointsMallModule {}

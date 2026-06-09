@@ -15,6 +15,8 @@ type LayoutPoint = {
   y?: number
 }
 
+type CertificateFontFamily = 'notoSansCjk' | 'simHei' | 'microsoftYaHei' | 'systemSans'
+
 export type CertificatePdfTemplate = {
   layoutJson: unknown
   sealMimeType: string | null
@@ -25,6 +27,7 @@ export type CertificatePdfTemplate = {
 export type CertificatePdfInput = {
   assetName: string
   certificateNo: string
+  certificateType?: string
   contribution: string
   issuedAt: Date
   recipientName: string
@@ -40,6 +43,7 @@ export type CertificatePdfInput = {
 type CertificateLayout = {
   assetName: LayoutPoint
   certificateNo: LayoutPoint
+  certificateType: LayoutPoint
   contribution: LayoutPoint
   issuedAt: LayoutPoint
   recipientName: LayoutPoint
@@ -48,27 +52,37 @@ type CertificateLayout = {
   severity: LayoutPoint
   title: LayoutPoint
   verifyCode: LayoutPoint
+  fontFamily: CertificateFontFamily
 }
 
 const DEFAULT_LAYOUT: CertificateLayout = {
-  assetName: { fontSize: 12, maxWidth: 360, x: 118, y: 392 },
-  certificateNo: { fontSize: 11, x: 86, y: 68 },
+  assetName: { fontSize: 28, maxWidth: 360, x: 118, y: 392 },
+  certificateNo: { fontSize: 28, x: 86, y: 68 },
+  certificateType: { align: 'center', fontSize: 28, x: 421, y: 150 },
   contribution: { align: 'center', fontSize: 13, lineHeight: 22, maxWidth: 430, x: 300, y: 330 },
-  issuedAt: { fontSize: 12, x: 420, y: 520 },
-  recipientName: { align: 'center', fontSize: 28, x: 300, y: 220 },
-  reportNo: { fontSize: 12, x: 118, y: 424 },
+  issuedAt: { fontSize: 28, x: 420, y: 520 },
+  recipientName: { align: 'center', fontSize: 28, x: 421, y: 220 },
+  reportNo: { fontSize: 28, x: 118, y: 424 },
   seal: { width: 118, x: 430, y: 420 },
-  severity: { fontSize: 12, x: 118, y: 456 },
+  severity: { fontSize: 28, x: 118, y: 456 },
   title: { align: 'center', fontSize: 15, maxWidth: 430, x: 300, y: 292 },
   verifyCode: { fontSize: 10, x: 86, y: 94 },
+  fontFamily: 'notoSansCjk',
 }
 
-const BUNDLED_FONT_DIR = join(__dirname, '..', '..', '..', 'assets', 'fonts')
+const BUNDLED_FONT_DIRS = [
+  join(process.cwd(), 'assets', 'fonts'),
+  join(__dirname, '..', '..', '..', 'assets', 'fonts'),
+  join(__dirname, '..', '..', '..', '..', 'assets', 'fonts'),
+]
+
+const BUNDLED_FONT_REGULAR_PATHS = BUNDLED_FONT_DIRS.map((dir) => join(dir, 'NotoSansCJKsc-Regular.otf'))
+const BUNDLED_FONT_BOLD_PATHS = BUNDLED_FONT_DIRS.map((dir) => join(dir, 'NotoSansCJKsc-Bold.otf'))
 
 const FONT_PATH_CANDIDATES = [
   process.env.CERTIFICATE_FONT_PATH,
   // 项目内置单体字体（fonttools 从 TTC 中提取，fontkit 兼容）
-  `${BUNDLED_FONT_DIR}/NotoSansCJKsc-Regular.otf`,
+  ...BUNDLED_FONT_REGULAR_PATHS,
   'C:\\Windows\\Fonts\\simhei.ttf',
   'C:\\Windows\\Fonts\\msyh.ttc',
   '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
@@ -81,18 +95,15 @@ export async function generateCertificatePdf(input: CertificatePdfInput) {
   const pdfDoc = await loadTemplateDocument(input.template.templateMimeType, input.templateBuffer)
   const page = pdfDoc.getPage(0)
   const layout = mergeLayout(input.template.layoutJson)
-  const regularFont = await embedPreferredFont(pdfDoc, false)
-  const boldFont = await embedPreferredFont(pdfDoc, true)
+  const regularFont = await embedPreferredFont(pdfDoc, false, layout.fontFamily)
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
 
-  drawText(page, input.certificateNo, layout.certificateNo, regularFont)
-  drawText(page, input.verifyCode, layout.verifyCode, regularFont)
-  drawText(page, input.recipientName, layout.recipientName, boldFont)
-  drawText(page, input.title, layout.title, regularFont)
-  drawText(page, `报告编号：${input.reportNo}`, layout.reportNo, regularFont)
-  drawText(page, `最终等级：${input.severity}`, layout.severity, regularFont)
-  drawText(page, `影响资产：${input.assetName}`, layout.assetName, regularFont)
+  drawText(page, input.certificateNo, layout.certificateNo, latinFont)
+  drawText(page, input.recipientName, layout.recipientName, regularFont)
+  drawText(page, input.reportNo, layout.reportNo, latinFont)
+  drawText(page, input.severity, layout.severity, regularFont)
   drawText(page, formatDate(input.issuedAt), layout.issuedAt, regularFont)
-  drawMultilineText(page, input.contribution, layout.contribution, regularFont)
+  drawText(page, input.certificateType ?? '漏洞贡献证书', layout.certificateType, regularFont)
 
   if (input.sealBuffer && input.template.sealStorageKey) {
     await drawSeal(pdfDoc, page, input.sealBuffer, layout.seal)
@@ -122,36 +133,61 @@ async function loadTemplateDocument(templateMimeType: string, templateBuffer: Bu
   throw new Error('不支持的证书模板格式')
 }
 
-async function embedPreferredFont(pdfDoc: PDFDocument, bold: boolean) {
-  const fontPath = resolveFontPath(bold)
+async function embedPreferredFont(pdfDoc: PDFDocument, bold: boolean, family: CertificateFontFamily) {
+  const fontPath = resolveFontPath(bold, family)
 
   if (fontPath) {
     pdfDoc.registerFontkit(fontkit)
-    // TTC 是字体集合，fontkit 不支持对其做 subset；单体 OTF/TTF 可以安全开启
-    const useSubset = /\.(otf|ttf)$/i.test(fontPath)
-    return pdfDoc.embedFont(readFileSync(fontPath), { subset: useSubset })
+    return pdfDoc.embedFont(readFileSync(fontPath), { subset: false })
   }
 
   return pdfDoc.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica)
 }
 
-function resolveFontPath(bold: boolean) {
+function resolveFontPath(bold: boolean, family: CertificateFontFamily) {
   const explicitPath = process.env.CERTIFICATE_FONT_PATH
   if (explicitPath && existsSync(explicitPath)) {
     return explicitPath
   }
 
-  const preferred = bold
+  const preferred = getFontCandidates(family, bold)
+
+  return preferred.find((path) => existsSync(path))
+}
+
+function getFontCandidates(family: CertificateFontFamily, bold: boolean) {
+  if (family === 'simHei') {
+    return [
+      'C:\\Windows\\Fonts\\simhei.ttf',
+      '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+      ...(bold ? BUNDLED_FONT_BOLD_PATHS : BUNDLED_FONT_REGULAR_PATHS),
+    ]
+  }
+
+  if (family === 'microsoftYaHei') {
+    return [
+      bold ? 'C:\\Windows\\Fonts\\msyhbd.ttc' : 'C:\\Windows\\Fonts\\msyh.ttc',
+      ...(bold ? BUNDLED_FONT_BOLD_PATHS : BUNDLED_FONT_REGULAR_PATHS),
+    ]
+  }
+
+  if (family === 'systemSans') {
+    return [
+      bold ? '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc' : '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+      bold ? '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc' : '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+      ...(bold ? BUNDLED_FONT_BOLD_PATHS : BUNDLED_FONT_REGULAR_PATHS),
+    ]
+  }
+
+  return bold
     ? [
-        `${BUNDLED_FONT_DIR}/NotoSansCJKsc-Bold.otf`,
+        ...BUNDLED_FONT_BOLD_PATHS,
         'C:\\Windows\\Fonts\\simhei.ttf',
         'C:\\Windows\\Fonts\\msyhbd.ttc',
         '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
         '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
       ]
     : FONT_PATH_CANDIDATES
-
-  return preferred.find((path) => existsSync(path))
 }
 
 async function drawSeal(pdfDoc: PDFDocument, page: PDFPage, sealBuffer: Buffer, point: LayoutPoint) {
@@ -253,6 +289,7 @@ function mergeLayout(value: unknown): CertificateLayout {
   return {
     assetName: mergePoint(DEFAULT_LAYOUT.assetName, input.assetName),
     certificateNo: mergePoint(DEFAULT_LAYOUT.certificateNo, input.certificateNo),
+    certificateType: mergePoint(DEFAULT_LAYOUT.certificateType, input.certificateType),
     contribution: mergePoint(DEFAULT_LAYOUT.contribution, input.contribution),
     issuedAt: mergePoint(DEFAULT_LAYOUT.issuedAt, input.issuedAt),
     recipientName: mergePoint(DEFAULT_LAYOUT.recipientName, input.recipientName),
@@ -261,6 +298,7 @@ function mergeLayout(value: unknown): CertificateLayout {
     severity: mergePoint(DEFAULT_LAYOUT.severity, input.severity),
     title: mergePoint(DEFAULT_LAYOUT.title, input.vulnerabilityTitle ?? input.title),
     verifyCode: mergePoint(DEFAULT_LAYOUT.verifyCode, input.verifyCode),
+    fontFamily: normalizeFontFamily(input.fontFamily) ?? DEFAULT_LAYOUT.fontFamily,
   }
 }
 
@@ -293,6 +331,13 @@ function normalizeAlign(value: unknown) {
 
 function normalizeNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function normalizeFontFamily(value: unknown): CertificateFontFamily | undefined {
+  if (value === 'notoSansCjk' || value === 'simHei' || value === 'microsoftYaHei' || value === 'systemSans') {
+    return value
+  }
+  return undefined
 }
 
 function parseColor(value: string | undefined) {

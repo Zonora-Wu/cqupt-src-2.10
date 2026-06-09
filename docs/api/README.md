@@ -1,6 +1,36 @@
 # API Docs
 
-API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway 与 AI 助手外观配置接口初版。
+<!-- CQUPT-SRC-DOCS-SYNC:START -->
+> 文档同步状态：2026-06-08 已按当前代码、运行环境和 AI 漏洞自动复测 Phase 1-9 + 7.5 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路、AI 漏洞自动复测（双通道 Runner + Hermes Direct）。
+>
+> 平台 Hermes 与 CLI Hermes 是两套环境；前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
+>
+> 关键权威文档：`docs/AI.md`、`docs/HERMES_RUNTIME.md`、`docs/plans/AI_VULNERABILITY_RETEST_IMPLEMENTATION_PLAN.md`、`docs/deployment/HERMES_DIRECT.md`、`database/prisma/schema.prisma`。
+<!-- CQUPT-SRC-DOCS-SYNC:END -->
+
+API 文档目录。当前已完成健康检查、认证注册、账号中心、准入中心、漏洞提交、PDF 附件上传与受控预览、证书签发与公开核验、公告管理、学习资源与靶场资源、积分商城、AI Gateway、AI 助手外观/配额/Skill 路由、安全答题题库、AI Knowledge Base 与 Skill Candidate 接口。新版目标方案将 AI 知识沉淀升级为问题会话式链路：问题会话 API、历史会话侧栏、已解决确认、AI 回复点赞/点踩、知识聚类、自动入库和知识库来源标注均在本文件给出目标契约。
+
+## 当前接口索引（2026-05-31）
+
+| 模块 | 主要接口 |
+|---|---|
+| 健康检查 | `GET /api/health` |
+| 认证 | `POST /api/auth/login/password`、`POST /api/auth/login/email-code`、`POST /api/auth/register`、`GET /api/auth/me` |
+| 账号中心 | `GET /api/account/profile`、`POST /api/account/avatar`、`POST /api/account/password/change`、`POST /api/account/email/identity-code`、`POST /api/account/email/change`、`GET /api/account/audit-logs` |
+| 准入 | `GET /api/access/status`、`GET /api/access/responsibility-agreement/current`、`POST /api/access/responsibility-agreement/sign` |
+| 安全答题 | `GET /api/security-exam/paper`、`POST /api/security-exam/submit`；管理员题库在 `/api/system-settings/security-exam/*` |
+| 漏洞 | `POST /api/vulnerabilities`、`GET /api/vulnerabilities/my`、`GET /api/vulnerabilities/:reportId`、`POST /api/vulnerabilities/:reportId/review`、`POST /api/vulnerabilities/:reportId/retest`、`POST /api/vulnerabilities/my/:reportId/supplement` |
+| 附件 | `POST /api/vulnerabilities/:reportId/attachments`、`GET /api/attachments/:attachmentId/preview` |
+| 证书 | `GET /api/certificates/my`、`GET /api/certificates/manage`、`POST /api/certificates`、`POST /api/certificates/:certificateId/revoke`、`GET /api/certificates/:certificateId/preview`、`GET /api/certificates/public/:certificateNo` |
+| 公告/学习/商城 | `/api/announcements/*`、`/api/learning/*`、`/api/points/*`、`/api/mall/*` |
+| AI Gateway | `GET /api/ai/health`、`GET /api/ai/appearance`、`GET /api/ai/quota`、`GET /api/ai/skills`、`POST /api/ai/chat`、`POST /api/ai/report-drafts`、`POST /api/ai/attachments/text`、`POST /api/ai/actions/:actionId/confirm` |
+| AI 问题会话 | 已实现：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback`；目标态：title/archive/fork |
+| AI 知识沉淀 | `GET /api/ai/knowledge`、`GET /api/ai/knowledge/stats`、`GET /api/ai/knowledge/conversations`、`POST /api/ai/knowledge/conversations/:id/summarize`、`POST /api/ai/knowledge/conversations/:id/review`、`GET /api/ai/knowledge/clusters`、`POST /api/ai/knowledge/:id/review`、`POST /api/ai/knowledge/:id/feedback`、`POST /api/ai/knowledge/:id/merge` |
+| Skill Candidate | `GET /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates`、`POST /api/ai/knowledge/skill-candidates/:id/review`、`POST /api/ai/knowledge/skill-candidates/:id/install` |
+| AI 漏洞复测 | `POST /api/vulnerabilities/:id/ai-retests`、`GET /api/vulnerabilities/:id/ai-retests`、`GET /api/ai-retests/:jobId`、`POST /api/ai-retests/:jobId/cancel`、`POST /api/ai-retests/:jobId/approve-plan`、`POST /api/ai-retests/:jobId/adopt-review-comment`、`GET /api/ai-retests/:jobId/artifacts/:artifactId`、`POST /api/ai-retests/:jobId/direct-plan/approve`、`POST /api/ai-retests/:jobId/direct-actions/:actionId/approve`、`POST /api/ai-retests/:jobId/direct-actions/:actionId/reject`、`POST /api/ai-retests/:jobId/direct-credentials`、`POST /api/ai-retests/:jobId/direct-credentials/:credentialId/destroy` |
+| 管理设置 | `GET/POST /api/system-settings/platform`、`GET/POST /api/system-settings/ai-quota`、`GET/POST /api/system-settings/ai-knowledge-usage`、`GET/POST /api/system-settings/registration-mode`、证书模板与 AI 外观配置接口 |
+
+> 说明：旧版 `POST /api/access/security-exam/submit` 仅记录分数；当前真实安全答题准入使用 `GET /api/security-exam/paper` 随机组卷和 `POST /api/security-exam/submit` 后端判分。
 
 ## 当前接口
 
@@ -76,7 +106,7 @@ POST /api/auth/email-code
 - 登录验证码有效期 10 分钟。
 - 同一邮箱 60 秒内不能重复发送，10 分钟内最多发送 5 次。
 - 发送新验证码后，旧的未使用登录验证码会自动失效。
-- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除该字段。
+- 开发环境会返回 `devCode: "123456"`，生产接入 SMTP 后移除该字段。
 
 ```text
 POST /api/auth/login/email-code
@@ -91,7 +121,7 @@ POST /api/auth/login/email-code
 }
 ```
 
-说明：登录时只消费 `LOGIN` 用途验证码，且验证码只能使用一次。当前验证码生成接口为开发版本，真实邮件发送后续接入 SMTP。
+说明：登录时只消费 `LOGIN` 用途验证码，且验证码只能使用一次。当前本地开发环境返回固定 `devCode`，生产环境应接入 SMTP 发送真实邮件。
 
 ### 注册邮箱验证码
 
@@ -177,7 +207,7 @@ POST /api/auth/register/email-code
 
 - 仅允许校内邮箱域名注册。
 - 当前允许域名来自 `SCHOOL_EMAIL_DOMAINS`、学校配置 `SchoolProfile.emailDomain`，并兼容本地开发域名。
-- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除。
+- 开发环境会返回 `devCode: "123456"`，生产接入 SMTP 后移除。
 
 ### 学生注册
 
@@ -325,7 +355,7 @@ POST /api/account/email/change
 说明：
 
 - 新邮箱必须是校内邮箱，且不能被其他账号绑定。
-- 开发环境会返回 `devCode: "123456"`，后续接入 SMTP 后移除。
+- 开发环境会返回 `devCode: "123456"`，生产接入 SMTP 后移除。
 - 修改成功会更新 `emailVerifiedAt`，并写入审计日志。
 
 ### 提交准入状态
@@ -513,6 +543,7 @@ POST /api/ai/chat
 ```json
 {
   "mode": "student",
+  "sessionId": "cuid_problem_session_xxx",
   "message": "帮我检查这份漏洞报告还缺什么材料",
   "context": {
     "source": "user-ai-assistant"
@@ -520,12 +551,33 @@ POST /api/ai/chat
 }
 ```
 
+说明：
+
+- `sessionId` 是新版问题会话式知识沉淀的会话 ID。
+- 用户每次进入 AI 助手默认创建新的问题会话。
+- 后端必须校验 `sessionId` 属于当前 JWT 用户。
+- 未带 `sessionId` 时，后端可以为兼容旧前端临时创建会话，但正式前端应始终传入。
+
 返回示例：
 
 ```json
 {
   "mode": "student",
+  "sessionId": "cuid_problem_session_xxx",
+  "userTurnId": "turn_user_xxx",
+  "assistantTurnId": "turn_assistant_xxx",
   "content": "这份报告建议补充影响范围、复现截图和修复建议。",
+  "usedKnowledge": true,
+  "knowledgeSources": [
+    {
+      "id": "knowledge_xxx",
+      "title": "漏洞报告补充材料写作清单",
+      "sourceType": "PLATFORM_KB",
+      "confidence": 0.91,
+      "status": "APPROVED"
+    }
+  ],
+  "knowledgeHitIds": ["hit_xxx"],
   "response": {
     "id": "chatcmpl_xxx",
     "object": "chat.completion",
@@ -548,8 +600,233 @@ admin: ai:use_admin
 - 后端本机运行默认使用 `OPENAI_BASE_URL=http://localhost:5000/v1`。
 - 若后端也运行在 Docker 容器中，应使用 Docker 网络服务名，例如 `OPENAI_BASE_URL=http://hermes-agent:5000/v1`。
 - 默认模型为 `hermes-agent`，对应 `OPENAI_MODEL=hermes-agent`。
-- 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 `CALL_AI` 审计日志。
-- 前端会按当前登录用户在浏览器本地保存最近 80 条 AI 对话，用于刷新页面或切换菜单后恢复展示；该历史记录当前不上传后端。
+- 后端会对常见 Token、Cookie、密码字段做基础脱敏，并写入 AI 审计日志。
+- 新版知识沉淀不依赖浏览器本地聊天历史。前端可以继续本地缓存最近消息用于显示恢复，但平台知识沉淀以后端 `AiProblemSession` 和脱敏 turns 为准。
+- 如果 `usedKnowledge=true`，前端必须在 AI 回复框底部展示“本回答参考了平台知识库”的来源标注。
+- 当前已实现的 `/api/ai/chat` 会返回 `sessionId`、`userTurnId`、`assistantTurnId` 和脱敏后的 turn 记录，用于问题会话沉淀。
+- `usedKnowledge`、`knowledgeSources`、`knowledgeHitIds` 已由 Knowledge Retrieval 返回；turn 级有用/无用/举报反馈已持久化到后端。前端不应把 knowledgeId 当作可信评分对象。
+
+管理员 route preview：
+
+```text
+POST /api/ai/knowledge/route-preview
+```
+
+权限要求：
+
+```text
+ai:manage_skills
+```
+
+请求示例：
+
+```json
+{
+  "mode": "student",
+  "message": "SQL 注入报告影响范围怎么写？",
+  "knowledgeUsageStrength": 7
+}
+```
+
+返回包含 `route`、`reasonCode`、`thresholds`、`candidateKnowledgeIds`、`selectedKnowledgeIds`、`blockedRoutes`、`topKnowledgeSimilarity` 和 `latencyMs`。该接口只读预览路由，不调用模型，也不写 `AiKnowledgeHit`，但会写 `AuditLog`，`targetType` 为 `AI_KNOWLEDGE_ROUTE_PREVIEW`。
+
+预览和正式检索都会在相似度排序前过滤 `roleScope`、`visibility`、`sensitivity` 和 `status`。例如 student mode 只能召回 `STUDENT` / `ALL` 范围且已审核、非敏感、可见的知识；auditor mode 不会召回 admin scoped 知识。
+
+### AI 问题会话
+
+当前已实现接口：`POST /api/ai/problem-sessions`、`GET /api/ai/problem-sessions/active`、`GET /api/ai/problem-sessions/history`、`GET /api/ai/problem-sessions/review-queue`、`GET /api/ai/problem-sessions/:id`、`POST /api/ai/problem-sessions/:id/heartbeat`、`POST /api/ai/problem-sessions/:id/leave`、`POST /api/ai/problem-sessions/:id/resolve`、`POST /api/ai/problem-sessions/:id/summarize`、`POST /api/ai/problem-sessions/:id/review`、`POST /api/ai/problem-sessions/:id/discard`、`POST /api/ai/problem-sessions/:id/turns/:turnId/feedback`。
+
+目标态但当前未实现或未验收接口：`PATCH /api/ai/problem-sessions/:id/title`、`POST /api/ai/problem-sessions/:id/archive`、`POST /api/ai/problem-sessions/:id/fork`。
+
+创建新的问题会话：
+
+```text
+POST /api/ai/problem-sessions
+```
+
+请求示例：
+
+```json
+{
+  "mode": "student",
+  "initialQuestion": "SQL 注入靶场启动失败怎么办？"
+}
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_problem_session_xxx",
+  "status": "ACTIVE",
+  "startedAt": "2026-05-31T10:00:00.000Z"
+}
+```
+
+查询当前用户历史问题会话，用于 AI 助手左侧侧栏：
+
+```text
+GET /api/ai/problem-sessions/history?limit=30
+```
+
+返回示例：
+
+```json
+{
+  "items": [
+    {
+      "sessionId": "cuid_problem_session_xxx",
+      "title": "SQL 注入靶场启动失败排查",
+      "status": "RESOLVED",
+      "preview": "最后通过更换 8080 端口解决",
+      "lastActiveAt": "2026-05-31T10:18:00.000Z",
+      "turnCount": 8,
+      "usedKnowledge": true,
+      "feedbackSummary": {
+        "upCount": 3,
+        "downCount": 0
+      },
+      "knowledgeEntryId": "knowledge_xxx"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+说明：
+
+- 后端按当前 JWT 用户过滤，前端不得传 `userId`。
+- 历史列表只返回轻量摘要，不返回完整 turns。
+- 当前实现支持 `limit`；`cursor`、`q`、多状态过滤属于目标态。
+- 左侧历史会话只作为恢复/查看入口，不自动注入当前新会话上下文。
+- 已结束会话如果继续追问，目标态应 fork 新 session；当前后端 fork 接口尚未实现。
+
+查询当前活跃或等待确认的问题会话：
+
+```text
+GET /api/ai/problem-sessions/active
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_problem_session_xxx",
+  "status": "AWAITING_RESOLUTION",
+  "shouldAskResolution": true,
+  "inactiveMinutes": 18,
+  "previewTitle": "SQL 注入靶场启动失败排查"
+}
+```
+
+心跳：
+
+```text
+POST /api/ai/problem-sessions/:id/heartbeat
+```
+
+离开 AI 页面：
+
+```text
+POST /api/ai/problem-sessions/:id/leave
+```
+
+确认问题已解决：
+
+```text
+POST /api/ai/problem-sessions/:id/resolve
+```
+
+请求示例：
+
+```json
+{
+  "resolved": true,
+  "allowKnowledgeCapture": true,
+  "userOutcomeNote": "最后发现是 8080 端口被占用了，换端口后解决"
+}
+```
+
+说明：
+
+- 只有当前 JWT 用户自己的 session 可以 resolve。
+- `allowKnowledgeCapture=true` 才进入知识沉淀候选。
+- 后端会脱敏 `userOutcomeNote`。
+- resolve 后触发会话总结、AI + 规则评分、相似知识去重和管理员审核或自动入库判定。
+
+丢弃本次会话：
+
+```text
+POST /api/ai/problem-sessions/:id/discard
+```
+
+请求示例：
+
+```json
+{
+  "reason": "问题未解决，不沉淀"
+}
+```
+
+目标态：基于历史会话创建新问题会话：
+
+```text
+POST /api/ai/problem-sessions/:id/fork
+```
+
+请求示例：
+
+```json
+{
+  "message": "我想基于上次端口占用的问题继续问 Docker 场景",
+  "mode": "student"
+}
+```
+
+返回示例：
+
+```json
+{
+  "sessionId": "cuid_new_problem_session_xxx",
+  "forkedFromSessionId": "cuid_problem_session_xxx",
+  "status": "ACTIVE"
+}
+```
+
+提交某条 AI 回复的有用、无用或举报反馈：
+
+```text
+POST /api/ai/problem-sessions/:id/turns/:turnId/feedback
+```
+
+请求示例：
+
+```json
+{
+  "rating": "DOWN",
+  "reasonCode": "OUTDATED",
+  "reasonText": "这个靶场现在已经不用 docker-compose 这个命令启动了"
+}
+```
+
+返回示例：
+
+```json
+{
+  "turnId": "turn_assistant_xxx",
+  "rating": "DOWN",
+  "knowledgeHitIds": ["hit_xxx"],
+  "knowledgeFeedbackUpdated": true,
+  "requiresReview": true
+}
+```
+
+说明：
+
+- 使用当前 JWT 用户鉴权，用户只能反馈自己的 assistant turn。
+- 前端只传 `assistantTurnId`、`rating` 和原因，不传可信 `knowledgeId`。
+- 后端通过 assistant turn metadata 反查 `knowledgeHitIds`，写入 turn metadata、`AiKnowledgeFeedback` 历史，并更新 `helpfulCount` / `unhelpfulCount` / `abuseReportCount`。
+- `rating` 支持 `UP`、`DOWN`、`REPORT`、`CLEARED`；`REPORT` 或 `SAFETY_RISK` 返回 `requiresReview=true`。
 
 ### 提交漏洞
 
@@ -774,6 +1051,47 @@ Content-Disposition: inline
 ```
 
 ### AI 助手外观配置
+
+### AI 知识库使用强度配置
+
+管理员读取当前知识库路由策略：
+
+```text
+GET /api/system-settings/ai-knowledge-usage
+```
+
+管理员更新策略：
+
+```text
+POST /api/system-settings/ai-knowledge-usage
+```
+
+权限要求：
+
+```text
+system:manage
+```
+
+请求字段：
+
+```json
+{
+  "knowledgeUsageStrength": 7,
+  "retrievalEnabled": true,
+  "directAnswerEnabled": true,
+  "agentInjectEnabled": true,
+  "directThresholdOverride": 0.86,
+  "injectThresholdOverride": 0.72,
+  "directTopKOverride": 1,
+  "injectTopKOverride": 3,
+  "allowAttachmentKnowledgeInjection": false,
+  "requireSourceBadge": true,
+  "auditCandidateHits": true,
+  "changeReason": "知识库验收后调高复用强度"
+}
+```
+
+`changeReason` 必填并写入 `AuditLog`。强度和覆盖项只影响 KB 直答/注入阈值、topK、来源展示和候选命中审计，不会绕过实时数据优先、附件阻断、写操作提案、RBAC 和知识状态过滤。
 
 管理员读取当前 AI 助手外观：
 
@@ -1512,6 +1830,63 @@ mall:manage
 - 仅待领取订单可取消。
 - 取消会通过事务返还积分、恢复库存、写入兑换事件。
 - 商品管理、确认领取、取消兑换都会写入 `AuditLog`，动作为 `MANAGE_MALL`。
+
+## AI 漏洞复测 Hermes Direct 审批
+
+复杂或高风险复测先生成不可变方案，再由审核员或管理员批准：
+
+```text
+POST /api/ai-retests/:jobId/direct-plan/approve
+POST /api/ai-retests/:jobId/direct-actions/:actionId/approve
+POST /api/ai-retests/:jobId/direct-actions/:actionId/reject
+POST /api/ai-retests/:jobId/direct-credentials
+POST /api/ai-retests/:jobId/direct-credentials/:credentialId/destroy
+```
+
+权限要求：
+
+```text
+vulnerability:ai-retest:approve-direct-plan
+vulnerability:ai-retest:approve-direct-action
+vulnerability:ai-retest:manage-credentials
+```
+
+方案批准请求必须包含当前 `proposalHash`、确认目标范围、影响范围、允许的工具类别、风险确认和确认文本。动作批准必须携带当前 `commandHash`；内容变化、审批过期或超高危策略命中时拒绝执行。所有 Hermes Direct 复测仍须人工审核最终报告。
+
+凭据创建支持 `USERNAME_PASSWORD`、`COOKIE`、`BEARER_TOKEN`、`CUSTOM_HEADERS`、`CLIENT_CERT_REFERENCE`、`INTERACTIVE_OTP`。请求必须包含 `credentialType`、`payload`、`targetScope`、`allowedUses` 和 5 至 1440 分钟的 `expiresInMinutes`；响应只返回元数据，不回显明文。
+
+当前已接通 Hermes `/v1/runs`、SSE events、一次性 approval、stop、动态 egress scope、AES-256-GCM 凭据保险箱、`TARGET_SCOPE_EXPANSION` 审批和最终报告。完整原始 artifact 统一归档仍待完成。
+
+## AI 漏洞复测报告
+
+```text
+GET /api/ai-retests/:jobId
+POST /api/ai-retests/:jobId/adopt-review-comment
+```
+
+任务详情中的 `report` 返回：
+
+- `schemaVersion`：当前统一为 `ai-retest-report-schema-v2`。
+- `confidence`、`reproducibility`、`manualReviewRequired`、`manualRetestOnly`、`runnerAllowed`。
+- `reportHash`、`promptVersion`、`createdAt` 和审核意见草稿引用状态。
+- `reportJson`：统一包含 `conclusion`、`steps`、`evidenceSummary`、`impactAssessment`、三段式 `remediationAdvice`、`limitations`、`manualRetestAdvice` 和 `reviewCommentDraft`。
+
+Runner、`ADVISORY_ONLY` 和 Hermes Direct 报告保存前均经过同一后端契约校验。`REPRODUCED`、`NOT_REPRODUCED` 和 `PARTIALLY_REPRODUCED` 必须至少存在一项已执行证据；否则平台将结论降级为 `INSUFFICIENT_EVIDENCE`。Hermes Direct 的步骤状态来自平台审计的 action，不采用模型自行声明的执行状态。
+
+`adopt-review-comment` 只创建或更新同一条审核意见草稿，`decision=null`，不会改变漏洞状态。重复调用保持同一 `commentId`，并持续写入 `AI_RETEST_REPORT_ADOPTED` 审计日志。
+
+### 管理员/审核员前端交互
+
+共享漏洞详情页通过 `frontend/src/components/ai-retest/AiRetestPanel.tsx` 提供 Phase 9 交互闭环：
+
+- 创建任务时要求人工确认目标、授权风险、账号和验证码需求，并发送 `Idempotency-Key`。
+- 仅对非终态任务每 3 秒轮询一次；终态或组件卸载后停止轮询。
+- Runner 方案、Hermes Direct 方案和高风险动作分别展示审批信息；Direct 动作批准提交详情接口返回的当前 `commandHash`。
+- 临时凭据明文只存在于弹窗局部状态，提交或关闭后清除；服务端响应不回显明文。
+- artifact 仅在人工点击后读取后端脱敏 preview，前端不展示存储键。
+- 引用报告只填充现有审核意见草稿，不提交审核决定，也不改变漏洞状态。
+
+该面板仅挂载在管理员/审核员共用的漏洞管理页面，学生端没有入口。RBAC 和资源级授权仍以后端为准。
 
 ## API 安全原则
 

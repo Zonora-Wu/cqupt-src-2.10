@@ -4,19 +4,11 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  build: {
-    cssCodeSplit: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          motion: ['motion'],
-          pretext: ['@chenglou/pretext'],
-        },
-      },
-    },
-  },
   plugins: [react(), tailwindcss()],
+  build: {
+    // The optional, route-lazy 3D laptop showcase intentionally carries Three.js.
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     proxy: {
       '/api': {

@@ -1,0 +1,84 @@
+{
+  "apiBaseUrl": "http://localhost:3000/api",
+  "generatedAt": "2026-06-02T02:40:58.176Z",
+  "marker": "[phase2_mpw145sg_e0ceac]",
+  "runId": "phase2_mpw145sg_e0ceac",
+  "status": "passed",
+  "steps": [
+    {
+      "duration": 299,
+      "label": "prepare accounts",
+      "ok": true
+    },
+    {
+      "duration": 67,
+      "label": "KB-01 validates problem session lifecycle and ownership",
+      "ok": true
+    },
+    {
+      "duration": 2586,
+      "label": "KB-01 chat writes sanitized turn pair with sessionId",
+      "ok": true
+    },
+    {
+      "duration": 13,
+      "label": "KB-02 rejects unresolved session summarization",
+      "ok": true
+    },
+    {
+      "duration": 34,
+      "label": "KB-03 summarizes resolved session with required schema",
+      "ok": true
+    },
+    {
+      "duration": 39,
+      "label": "KB-03 prevents direct-answer conversations from becoming skill candidates",
+      "ok": true
+    },
+    {
+      "duration": 17,
+      "label": "KB-05 rejects sensitive summary content",
+      "ok": true
+    },
+    {
+      "duration": 112,
+      "label": "KB-02 marks greeting and realtime data sessions as non-reusable",
+      "ok": true
+    },
+    {
+      "duration": 50,
+      "label": "KB-04 rejects high-risk and low-quality sessions with rule fallback",
+      "ok": true
+    },
+    {
+      "duration": 18,
+      "label": "KB-05 rejects PII, real asset URL and raw request content",
+      "ok": true
+    },
+    {
+      "duration": 66,
+      "label": "KB-06 clusters similar resolved sessions and blocks duplicate auto-ingest",
+      "ok": true
+    },
+    {
+      "duration": 48817,
+      "label": "KB-07 auto-approves high-frequency high-quality cluster only after full sessions resolve",
+      "ok": true
+    },
+    {
+      "duration": 46114,
+      "label": "KB-07 refuses low-quality or risky clusters",
+      "ok": true
+    },
+    {
+      "duration": 27,
+      "label": "KB-02 discard does not create knowledge candidate",
+      "ok": true
+    },
+    {
+      "duration": 25,
+      "label": "KB-02/KB-03 admin review creates knowledge only after approval",
+      "ok": true
+    }
+  ]
+}

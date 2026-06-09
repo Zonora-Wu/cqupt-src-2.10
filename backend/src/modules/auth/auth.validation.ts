@@ -12,18 +12,22 @@ export type NormalizedRegisterInput = {
   unifiedCode: string
 }
 
+const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
+
 export function normalizeRegisterBody(body: Record<string, unknown>): NormalizedRegisterInput {
   const password = requireText(body.password, '密码', 8, 128)
+  const identityText = requireText(body.identityText, '身份', 2, 40)
+  const studentNo = optionalText(body.studentNo, 40)
 
   return {
     code: normalizeEmailCode(body.code),
     college: requireText(body.college, '学院', 2, 80),
     email: normalizeEmail(body.email),
     grade: optionalText(body.grade, 20),
-    identityText: requireText(body.identityText, '身份', 2, 40),
+    identityText,
     name: requireText(body.name, '姓名', 2, 40),
     password: validatePassword(password),
-    studentNo: optionalText(body.studentNo, 40),
+    studentNo: teacherIdentityTypes.has(identityText) ? '' : requireStudentNo(studentNo),
     unifiedCode: normalizeUnifiedCode(body.unifiedCode),
   }
 }
@@ -46,13 +50,21 @@ export function normalizeEmailCode(value: unknown) {
   return code
 }
 
-function normalizeUnifiedCode(value: unknown) {
-  const code = requireText(value, '统一认证码', 4, 32)
-  if (!/^[A-Za-z0-9_-]+$/.test(code)) {
-    throw new BadRequestException('统一认证码只能包含字母、数字、下划线或短横线')
+export function normalizeUnifiedCode(value: unknown) {
+  const code = requireText(value, '统一认证码', 7, 7)
+  if (!/^\d{7}$/.test(code)) {
+    throw new BadRequestException('统一认证码必须是 7 位数字')
   }
 
   return code
+}
+
+function requireStudentNo(value: string) {
+  if (!value) {
+    throw new BadRequestException('请填写学号')
+  }
+
+  return value
 }
 
 function validatePassword(password: string) {

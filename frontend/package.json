@@ -7,21 +7,26 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:e2e:ai-retest": "env -u NO_COLOR playwright test e2e/ai-retest-ui.spec.ts",
     "preview": "vite preview"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.6",
+    "@react-three/fiber": "^9.6.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^22.19.17",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^10.2.1",

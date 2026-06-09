@@ -1,0 +1,78 @@
+# Claude Code context slimming for CQUPT-SRC
+# Goal: reduce noise without hiding source code, Prisma schema, docs, or test scripts.
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+.pnpm-store/
+.yarn/
+.cache/
+
+# Build outputs and generated compile artifacts
+/dist/
+/frontend/dist/
+/backend/dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime data, uploads, generated files
+storage/
+tmp/
+uploads/
+generated/
+.docker-data/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# Playwright / E2E generated outputs
+.playwright-cli/
+playwright-report/
+test-results/
+tests/e2e/evidence/
+**/screenshots/
+**/trace.zip
+**/*.har
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+!frontend/.env.example
+!backend/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+**/id_rsa*
+**/id_ed25519*
+**/*secret*
+**/*token*
+**/*credential*
+**/*credentials*
+**/*private-key*
+
+# Large binary / model assets that are not useful for code reasoning
+frontend/public/models/*.glb
+frontend/public/models/*.gltf
+frontend/public/models/*.bin
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# Claude worktree/cache noise; keep .claude/settings*.json visible by not ignoring .claude itself
+.claude/worktrees/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

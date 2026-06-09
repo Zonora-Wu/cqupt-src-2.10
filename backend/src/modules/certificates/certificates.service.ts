@@ -177,6 +177,7 @@ export class CertificatesService {
     const certificatePdf = await generateCertificatePdf({
       assetName: report.assetName,
       certificateNo,
+      certificateType: '漏洞贡献证书',
       contribution: input.contribution,
       issuedAt,
       recipientName: report.submitter.name,
@@ -416,6 +417,24 @@ export class CertificatesService {
   async publicVerify(certificateNo: string) {
     const certificate = await this.prisma.certificate.findUnique({
       where: { certificateNo },
+      select: {
+        id: true,
+        publicVerify: true,
+        status: true,
+      },
+    })
+
+    if (!certificate || !certificate.publicVerify || certificate.status !== CertificateStatus.ISSUED) {
+      throw new NotFoundException('未查询到可公开核验的证书')
+    }
+
+    const verified = await this.prisma.certificate.update({
+      where: { id: certificate.id },
+      data: {
+        publicVerifyCount: {
+          increment: 1,
+        },
+      },
       include: {
         recipient: {
           select: {
@@ -427,28 +446,23 @@ export class CertificatesService {
           select: {
             finalSeverity: true,
             reportNo: true,
-            title: true,
           },
         },
       },
     })
 
-    if (!certificate || !certificate.publicVerify || certificate.status !== CertificateStatus.ISSUED) {
-      throw new NotFoundException('未查询到可公开核验的证书')
-    }
-
     return {
-      certificateNo: certificate.certificateNo,
-      issuedAt: certificate.issuedAt,
-      recipientName: maskName(certificate.recipient.name),
+      certificateNo: verified.certificateNo,
+      issuedAt: verified.issuedAt,
+      publicVerifyCount: verified.publicVerifyCount,
+      recipientName: maskName(verified.recipient.name),
       status: '有效',
-      unifiedCode: maskUnifiedCode(certificate.recipient.unifiedCode),
+      unifiedCode: maskUnifiedCode(verified.recipient.unifiedCode),
       vulnerability: {
-        finalSeverity: certificate.vulnerability.finalSeverity
-          ? formatSeverity(certificate.vulnerability.finalSeverity)
+        finalSeverity: verified.vulnerability.finalSeverity
+          ? formatSeverity(verified.vulnerability.finalSeverity)
           : null,
-        reportNo: certificate.vulnerability.reportNo,
-        title: certificate.vulnerability.title,
+        reportNo: verified.vulnerability.reportNo,
       },
     }
   }

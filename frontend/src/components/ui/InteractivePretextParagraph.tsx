@@ -34,16 +34,12 @@ export function InteractivePretextParagraph({
   pointer: pagePointer,
   text,
 }: InteractivePretextParagraphProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const hiddenTextRef = useRef<HTMLParagraphElement | null>(null)
+  const containerRef = useRef<HTMLParagraphElement | null>(null)
+  const hiddenTextRef = useRef<HTMLSpanElement | null>(null)
   const [characters, setCharacters] = useState<CharacterBox[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
 
   const characterOffsets = useMemo(() => {
-    // The pointer-following effect must use the latest viewport rect because the
-    // intro block moves while the page scrolls. Reading the ref here keeps the
-    // hover displacement aligned with the actual on-screen text.
-    // eslint-disable-next-line react-hooks/refs
     const pointer = getLocalPointer(containerRef.current, pagePointer)
     if (!pointer) return characters.map(() => zeroOffset())
 
@@ -121,16 +117,16 @@ export function InteractivePretextParagraph({
   }
 
   return (
-    <div className={`${className} relative [text-indent:0]`} ref={containerRef} role="presentation">
-      <p
+    <p className={`${className} relative`} ref={containerRef}>
+      <span
         aria-hidden="true"
-        className="invisible whitespace-normal [text-align-last:left] [text-indent:2em]"
+        className="invisible block whitespace-normal [text-align-last:left] [text-indent:inherit]"
         ref={hiddenTextRef}
       >
         {text}
-      </p>
+      </span>
 
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 block">
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 block [text-indent:0]">
         {characters.map((character, index) => {
           const offset = characterOffsets[index] ?? zeroOffset()
 
@@ -150,7 +146,7 @@ export function InteractivePretextParagraph({
           )
         })}
       </span>
-    </div>
+    </p>
   )
 }
 
