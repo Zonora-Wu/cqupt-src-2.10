@@ -252,11 +252,10 @@ function performHttpRequest(url: URL, step: StepInput, budget: Budget, signal: A
     let timeout: NodeJS.Timeout
 
     const req = transport(url, {
-      headers: {
-        Accept: '*/*',
-        'Content-Type': method === 'POST' ? 'application/json' : undefined,
-        'User-Agent': DEFAULT_USER_AGENT,
-      },
+      headers: Object.assign(
+        { Accept: '*/*', 'User-Agent': DEFAULT_USER_AGENT },
+        method === 'POST' ? { 'Content-Type': 'application/json' } : {},
+      ),
       lookup: asyncLookup,
       method,
       signal,
@@ -617,9 +616,8 @@ function readInteger(value: unknown, fallback: number, min: number, max: number)
   return Math.max(min, Math.min(max, Math.floor(parsed)))
 }
 
-function asyncLookup(hostname: string, _options: unknown, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void) {
-  const options: LookupOneOptions = { all: false, verbatim: true }
-  lookupCallback(hostname, options, callback)
+function asyncLookup(hostname: string, opts: unknown, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void) {
+  lookupCallback(hostname, opts as LookupOneOptions, callback)
 }
 
 function runnerError(code: string, message: string, statusCode: number) {
