@@ -2,6 +2,7 @@
 
 > 漏洞：CQUPT-SRC-20260608-DNUMD7 — 证书查询板块 水平越权
 > 诊断时间：2026-06-08
+> 修复时间：2026-06-08
 > 诊断方式：数据库审计日志 + Hermes Direct 端点连通性验证 + 手动复测
 
 ---
@@ -168,6 +169,44 @@ if (user.role !== 'ADMIN' && certificate.recipientId !== user.id) {
 1. **Hermes Direct 端到端测试**：用 curl 模拟完整 SSE 流，确认 retest-egress-proxy → hermes-retest-agent 转发稳定性
 2. **Docker 日志检查**：`docker logs hermes-retest-agent` 和 `docker logs cqupt-retest-egress-proxy` 查看崩溃/OOM 记录
 3. **增加 Job errorCode 写入**：修改 `monitor()` 的 catch 块和 `reconcileRunStatus()` 的 failure 路径，确保 errorCode 写入 job 记录
+
+---
+
+## 五、修复记录（2026-06-08）
+
+### P1-1：fetch 重试（hermes-direct.client.ts）
+
+- `fetch()` 新增 `remainingRetries` 参数，瞬态错误（ECONNREFUSED/ECONNRESET/fetch failed/socket hang up 等）自动重试最多 2 次，指数退避 1s → 2s
+- `request()` 对 GET 和带 Idempotency-Key 的 POST 自动启用重试
+- 新增 `isTransientError()` 辅助函数，匹配 Node.js fetch 的典型网络错误消息
+
+### P1-2：SSE 流重连（hermes-direct.client.ts）
+
+- `getEvents()` 新增 SSE 断流重连，最多 3 次，指数退避 2s → 4s → 8s
+- 重连后事件去重（event + timestamp + payload size 三元组）
+- 成功收到事件后重置重试计数
+- 重连耗尽抛出 `AI_RETEST_HERMES_SSE_RECONNECT_EXHAUSTED`
+- 新增 `Logger` 用于记录重连/重试日志
+
+### P2-1：执行阶段按计划步骤执行（hermes-direct-session.service.ts）
+
+- `buildDirectInstructions` 新增 9 条显式执行规则，明确要求：
+  - 严格按 `approvedProposal.steps` 步骤和顺序执行
+  - 每步记录操作、观察和证据
+  - 不跳步、不乱序
+- `buildDirectPrompt` 的 `reportRequirements` 新增 `steps` 字段描述，要求 Hermes 为每个步骤返回 evidence 数组
+
+### P2-2：报告 Evidence 提取（hermes-direct-session.service.ts）
+
+- `normalizeHermesDirectReport` 从 Hermes 输出 JSON 中解析 `steps[].evidence`
+- 按 sequence 匹配到 DB 中的 direct action 记录
+- 新增 `normalizeEvidenceItems()` 辅助函数，解析 evidence 对象（id/sha256/type）
+- 当 Hermes 未返回 evidence 时退回到空数组（向后兼容）
+
+### 文档更新
+
+- `docs/deployment/HERMES_DIRECT.md`：新增工作流、执行 Prompt、报告 Evidence 提取、可靠性（fetch 重试 + SSE 重连）章节
+- `docs/plans/AI_RETEST_FAILURE_DIAGNOSIS.md`：追加修复记录
 
 ---
 

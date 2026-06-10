@@ -200,6 +200,8 @@ export async function createAiRetestJob(
     confirmedTargets: string[]
     confirmationText: string
     credentialRequest: { needsAccount: boolean; needsCaptcha: boolean; notes?: string }
+    scopeConfirmed: boolean
+    riskAcknowledged: boolean
   },
   idempotencyKey: string,
 ) {
