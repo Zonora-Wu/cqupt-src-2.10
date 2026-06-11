@@ -8,8 +8,6 @@ type StartInput = {
   confirmedTargets: string[]
   confirmationText: string
   credentialRequest: { needsAccount: boolean; needsCaptcha: boolean; notes?: string }
-  scopeConfirmed: boolean
-  riskAcknowledged: boolean
 }
 
 export function AiRetestStartDialog({
@@ -137,8 +135,6 @@ export function AiRetestStartDialog({
                 ...(credentialNotes.trim() ? { notes: credentialNotes.trim() } : {}),
               },
               mode,
-              scopeConfirmed: true,
-              riskAcknowledged: true,
               ...(note.trim() ? { note: note.trim() } : {}),
             })}
             type="button"

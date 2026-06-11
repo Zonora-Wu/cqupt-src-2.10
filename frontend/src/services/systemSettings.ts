@@ -1,4 +1,4 @@
-import { apiFormRequest, apiBlobRequest, apiRequest } from './apiClient'
+import { apiFormRequest, apiBlobRequest, apiBlobResponse, apiRequest } from './apiClient'
 
 export type CertificateTemplateSummary = {
   active: boolean
@@ -87,6 +87,42 @@ export async function previewCertificateTemplate() {
   window.setTimeout(() => URL.revokeObjectURL(url), 60 * 1000)
 }
 
+export async function previewCertificateTemplateLayout(layoutJson: unknown) {
+  const blob = await apiBlobRequest('/system-settings/certificate-template/layout-preview', {
+    auth: true,
+    method: 'POST',
+    unauthenticatedMessage: '请先登录后再预览证书模板',
+    body: { layoutJson },
+  })
+  return URL.createObjectURL(blob)
+}
+
+export async function getCertificateTemplateBackgroundPreview() {
+  const { blob, response } = await apiBlobResponse('/system-settings/certificate-template/background-preview', {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录后再配置证书模板',
+  })
+  return {
+    height: readHeaderNumber(response, 'X-Certificate-Page-Height'),
+    url: URL.createObjectURL(blob),
+    width: readHeaderNumber(response, 'X-Certificate-Page-Width'),
+  }
+}
+
+export async function getCertificateSealPreview() {
+  const { blob, response } = await apiBlobResponse('/system-settings/certificate-template/seal-preview', {
+    auth: true,
+    method: 'GET',
+    unauthenticatedMessage: '请先登录后再配置证书模板',
+  })
+  return {
+    height: readHeaderNumber(response, 'X-Certificate-Seal-Height'),
+    url: URL.createObjectURL(blob),
+    width: readHeaderNumber(response, 'X-Certificate-Seal-Width'),
+  }
+}
+
 export async function getPlatformSettings() {
   return request<PlatformSettings>('/system-settings/platform', { method: 'GET' })
 }
@@ -156,4 +192,9 @@ async function requestForm<T>(path: string, formData: FormData) {
     formData,
     unauthenticatedMessage: '请先登录后再管理系统设置',
   })
+}
+
+function readHeaderNumber(response: Response, name: string) {
+  const value = Number(response.headers.get(name))
+  return Number.isFinite(value) && value > 0 ? value : null
 }

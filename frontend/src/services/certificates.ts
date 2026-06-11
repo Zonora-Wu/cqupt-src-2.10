@@ -63,13 +63,13 @@ export type IssuedCertificate = {
 export type PublicCertificateVerifyResult = {
   certificateNo: string
   issuedAt: string | null
+  publicVerifyCount: number
   recipientName: string
   status: string
   unifiedCode: string
   vulnerability: {
     finalSeverity: SeverityLabel | null
     reportNo: string
-    title: string
   }
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
 import { InteractivePretextParagraph } from '../ui/InteractivePretextParagraph'
-import { usePretextBlockMetrics } from '../../hooks/usePretextBlockMetrics'
+
+const INTERACTIVE_COPY_KEY = 'cqupt-src-intro-copy-interactive'
 
 const introParagraphs = [
   {
@@ -24,30 +25,91 @@ const introParagraphs = [
 ]
 
 export function IntroCopySection() {
-  const { clearPointer, handlePointerLeave, handlePointerMove, pointer } = useRafPointer()
+  const [interactiveEnabled, setInteractiveEnabled] = useState(() => readInteractiveCopyPreference())
+  const { clearPointer, handlePointerLeave, handlePointerMove, pointer } = useRafPointer(interactiveEnabled)
+
+  const toggleInteractive = () => {
+    setInteractiveEnabled((current) => {
+      const next = !current
+      saveInteractiveCopyPreference(next)
+      if (!next) clearPointer()
+      return next
+    })
+  }
 
   return (
     <section
       className="relative z-10 mx-auto max-w-6xl border-t border-black/[0.08] px-5 py-20 md:px-8 dark:border-white/[0.06]"
-      onPointerLeave={handlePointerLeave}
-      onPointerMove={handlePointerMove}
-      onWheel={clearPointer}
+      onPointerLeave={interactiveEnabled ? handlePointerLeave : undefined}
+      onPointerMove={interactiveEnabled ? handlePointerMove : undefined}
+      onWheel={interactiveEnabled ? clearPointer : undefined}
     >
+      <div className="mb-8">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+          Platform Introduction
+        </p>
+      </div>
+
       <div className="grid gap-x-20 gap-y-8 lg:grid-cols-2">
         <div className="h-1 w-12 rounded-lg bg-brand-600" />
         <div className="hidden h-1 w-12 rounded-lg bg-slate-700 lg:block" />
         {introParagraphs.map((paragraph) => (
           <div className="contents" key={paragraph.zh}>
-            <MeasuredParagraph className={paragraph.zhClass} locale="zh-CN" pointer={pointer} text={paragraph.zh} />
-            <MeasuredParagraph className={paragraph.enClass} locale="en-US" pointer={pointer} text={paragraph.en} />
+            <IntroParagraph
+              className={paragraph.zhClass}
+              interactiveEnabled={interactiveEnabled}
+              locale="zh-CN"
+              pointer={pointer}
+              text={paragraph.zh}
+            />
+            <IntroParagraph
+              className={paragraph.enClass}
+              interactiveEnabled={interactiveEnabled}
+              locale="en-US"
+              pointer={pointer}
+              text={paragraph.en}
+            />
           </div>
         ))}
       </div>
+
+      <button
+        aria-label="切换文字避让效果"
+        aria-pressed={interactiveEnabled}
+        className={`absolute bottom-6 right-5 h-2.5 w-2.5 rounded-full transition md:right-8 ${
+          interactiveEnabled
+            ? 'bg-brand-600 shadow-[0_0_0_4px_rgba(42,100,56,0.14)] dark:bg-green-300 dark:shadow-[0_0_0_4px_rgba(134,239,172,0.12)]'
+            : 'bg-slate-300 opacity-45 hover:opacity-80 dark:bg-white/25'
+        }`}
+        onClick={toggleInteractive}
+        title={interactiveEnabled ? '关闭文字避让效果' : '开启文字避让效果'}
+        type="button"
+      />
     </section>
   )
 }
 
-function useRafPointer() {
+function IntroParagraph({
+  className,
+  interactiveEnabled,
+  locale,
+  pointer,
+  text,
+}: {
+  className: string
+  interactiveEnabled: boolean
+  locale: string
+  pointer: { x: number; y: number } | null
+  text: string
+}) {
+  if (!interactiveEnabled) {
+    return <p className={className}>{text}</p>
+  }
+
+  return <InteractivePretextParagraph className={className} locale={locale} pointer={pointer} text={text} />
+}
+
+function useRafPointer(enabled: boolean) {
   const frameRef = useRef<number | null>(null)
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null)
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
@@ -68,12 +130,13 @@ function useRafPointer() {
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLElement>) => {
+      if (!enabled) return
       pendingPointerRef.current = { x: event.clientX, y: event.clientY }
       if (frameRef.current === null) {
         frameRef.current = window.requestAnimationFrame(flushPointer)
       }
     },
-    [flushPointer],
+    [enabled, flushPointer],
   )
 
   const handlePointerLeave = useCallback(() => {
@@ -81,6 +144,11 @@ function useRafPointer() {
   }, [clearPointer])
 
   useEffect(() => {
+    if (!enabled) {
+      clearPointer()
+      return undefined
+    }
+
     window.addEventListener('scroll', clearPointer, { passive: true })
 
     return () => {
@@ -89,27 +157,23 @@ function useRafPointer() {
         window.cancelAnimationFrame(frameRef.current)
       }
     }
-  }, [clearPointer])
+  }, [clearPointer, enabled])
 
   return { clearPointer, handlePointerLeave, handlePointerMove, pointer }
 }
 
-function MeasuredParagraph({
-  className,
-  locale,
-  pointer,
-  text,
-}: {
-  className: string
-  locale: string
-  pointer: { x: number; y: number } | null
-  text: string
-}) {
-  const { metrics, ref } = usePretextBlockMetrics<HTMLParagraphElement>(text, { locale })
+function readInteractiveCopyPreference() {
+  try {
+    return localStorage.getItem(INTERACTIVE_COPY_KEY) === 'enabled'
+  } catch {
+    return false
+  }
+}
 
-  return (
-    <div data-pretext-height={Math.round(metrics.height)} data-pretext-lines={metrics.lineCount} ref={ref}>
-      <InteractivePretextParagraph className={className} locale={locale} pointer={pointer} text={text} />
-    </div>
-  )
+function saveInteractiveCopyPreference(enabled: boolean) {
+  try {
+    localStorage.setItem(INTERACTIVE_COPY_KEY, enabled ? 'enabled' : 'disabled')
+  } catch {
+    // Ignore unavailable storage; the current render state still updates.
+  }
 }

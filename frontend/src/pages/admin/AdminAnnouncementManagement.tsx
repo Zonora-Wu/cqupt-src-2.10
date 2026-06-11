@@ -438,7 +438,7 @@ function EditAnnouncementModal({
   useEffect(() => {
     setForm(toPayload(source))
     setError('')
-  }, [announcement])
+  }, [source])
 
   if (!announcement) return null
 

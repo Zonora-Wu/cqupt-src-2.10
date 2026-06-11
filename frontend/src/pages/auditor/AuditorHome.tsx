@@ -34,6 +34,7 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard } from '../../services/dashboard'
+import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import {
   listRetestQueue,
   listReviewQueue,
@@ -300,13 +301,10 @@ const announcementStatusStyles: Record<AnnouncementStatus, string> = {
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch {}
+    applyColorTheme(theme)
   }, [theme])
 
   return (
@@ -320,7 +318,11 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={(event) => {
+                const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                transitionColorTheme(nextTheme, event)
+                setTheme(nextTheme)
+              }}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}

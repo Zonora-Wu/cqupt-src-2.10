@@ -6,6 +6,7 @@ import { SlideVerify } from '../ui/SlideVerify'
 import {
   type AuthUser,
   isValidEmail,
+  normalizeUnifiedCode,
   loginWithEmailCode,
   loginWithUnifiedCode,
   sendEmailLoginCode,
@@ -206,7 +207,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
               password={password}
               unifiedCode={unifiedCode}
               onPasswordChange={setPassword}
-              onUnifiedCodeChange={setUnifiedCode}
+              onUnifiedCodeChange={(value) => setUnifiedCode(normalizeUnifiedCode(value))}
             />
           ) : (
             <EmailLoginFields
@@ -301,7 +302,10 @@ function SsoLoginFields({
         <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
         <input
           className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          inputMode="numeric"
+          maxLength={7}
           onChange={(event) => onUnifiedCodeChange(event.target.value)}
+          pattern="\d{7}"
           placeholder="统一认证码"
           type="text"
           value={unifiedCode}

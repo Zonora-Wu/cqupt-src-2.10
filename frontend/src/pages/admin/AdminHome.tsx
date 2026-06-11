@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   FileCheck2,
   FileSearch,
   Gauge,
@@ -9,6 +10,7 @@ import {
   ServerCog,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Store,
   Sun,
   UserCog,
@@ -23,9 +25,16 @@ import { NotificationBell, NotificationPanel } from '../../components/ui/Notific
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getAdminDashboard } from '../../services/dashboard'
+import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
+)
+const AdminAiRetestDashboard = lazy(() =>
+  import('./AdminAiRetestDashboard').then((module) => ({ default: module.AdminAiRetestDashboard })),
+)
+const AdminAiRetestPolicy = lazy(() =>
+  import('./AdminAiRetestPolicy').then((module) => ({ default: module.AdminAiRetestPolicy })),
 )
 const AdminAnnouncementManagement = lazy(() =>
   import('./AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
@@ -65,6 +74,7 @@ const adminMenuItems = [
   '公告管理',
   '学习管理',
   '积分商城',
+  'AI 复测',
   '审计日志',
   'AI 知识库',
   '系统设置',
@@ -96,9 +106,7 @@ const auditLogs = [
 
 export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
   const [dashStats, setDashStats] = useState({
     pendingVulnerabilities: 0,
     pendingCerts: 0,
@@ -129,8 +137,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   ]
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    try { localStorage.setItem('cqupt-theme', theme) } catch { void 0 }
+    applyColorTheme(theme)
   }, [theme])
 
   return (
@@ -146,7 +153,11 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={(event) => {
+                const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                transitionColorTheme(nextTheme, event)
+                setTheme(nextTheme)
+              }}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
@@ -181,6 +192,8 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <AdminLearningManagement />
           ) : activeMenu === '积分商城' ? (
             <AdminPointsMallManagement />
+          ) : activeMenu === 'AI 复测' ? (
+            <AiRetestHub />
           ) : activeMenu === '审计日志' ? (
             <AdminAuditLogManagement />
           ) : activeMenu === 'AI 知识库' ? (
@@ -358,6 +371,41 @@ function AdminPageLoading() {
       <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
         正在加载管理页面...
       </SurfacePanel>
+    </section>
+  )
+}
+
+function AiRetestHub() {
+  const [subTab, setSubTab] = useState<'dashboard' | 'policy'>('dashboard')
+  return (
+    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            subTab === 'dashboard'
+              ? 'bg-brand-600 text-white'
+              : 'border border-black/[0.08] bg-white text-slate-700 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-[#0f1511] dark:text-slate-300 dark:hover:bg-white/[0.04]'
+          }`}
+          onClick={() => setSubTab('dashboard')}
+          type="button"
+        >
+          <BarChart3 className="mr-1.5 inline-block h-4 w-4" />
+          运营看板
+        </button>
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            subTab === 'policy'
+              ? 'bg-brand-600 text-white'
+              : 'border border-black/[0.08] bg-white text-slate-700 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-[#0f1511] dark:text-slate-300 dark:hover:bg-white/[0.04]'
+          }`}
+          onClick={() => setSubTab('policy')}
+          type="button"
+        >
+          <SlidersHorizontal className="mr-1.5 inline-block h-4 w-4" />
+          策略配置
+        </button>
+      </div>
+      {subTab === 'dashboard' ? <AdminAiRetestDashboard /> : <AdminAiRetestPolicy />}
     </section>
   )
 }
