@@ -34,8 +34,8 @@ export function InteractivePretextParagraph({
   pointer: pagePointer,
   text,
 }: InteractivePretextParagraphProps) {
-  const containerRef = useRef<HTMLParagraphElement | null>(null)
-  const hiddenTextRef = useRef<HTMLSpanElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const hiddenTextRef = useRef<HTMLParagraphElement | null>(null)
   const [characters, setCharacters] = useState<CharacterBox[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
 
@@ -117,16 +117,16 @@ export function InteractivePretextParagraph({
   }
 
   return (
-    <p className={`${className} relative`} ref={containerRef}>
-      <span
+    <div className={`${className} relative [text-indent:0]`} ref={containerRef} role="presentation">
+      <p
         aria-hidden="true"
-        className="invisible block whitespace-normal [text-align-last:left] [text-indent:inherit]"
+        className="invisible whitespace-normal [text-align-last:left] [text-indent:2em]"
         ref={hiddenTextRef}
       >
         {text}
-      </span>
+      </p>
 
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 block [text-indent:0]">
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 block">
         {characters.map((character, index) => {
           const offset = characterOffsets[index] ?? zeroOffset()
 
@@ -146,7 +146,7 @@ export function InteractivePretextParagraph({
           )
         })}
       </span>
-    </p>
+    </div>
   )
 }
 

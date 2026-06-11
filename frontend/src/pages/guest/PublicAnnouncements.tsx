@@ -40,7 +40,7 @@ export function PublicAnnouncements() {
         </button>
 
         <article className="mt-6 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
-          <aside className="rounded-lg border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#131a15]">
+          <aside className="rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-green-300">
                 {selectedAnnouncement.category}
@@ -58,12 +58,12 @@ export function PublicAnnouncements() {
               <p>发布时间：{formatDate(selectedAnnouncement.publishedAt)}</p>
               <p>发布范围：{selectedAnnouncement.range}</p>
             </div>
-            <p className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-[#131a15] dark:text-slate-400">
+            <p className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
               {selectedAnnouncement.summary}
             </p>
           </aside>
 
-          <section className="rounded-lg border border-black/10 bg-white p-7 dark:border-white/10 dark:bg-[#131a15]">
+          <section className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">公告原文</p>
             <div className="mt-5 whitespace-pre-line text-base leading-8 text-slate-700 dark:text-slate-300">
               {selectedAnnouncement.content}
@@ -89,7 +89,7 @@ export function PublicAnnouncements() {
 
       <section className="mt-16 grid gap-5">
         {loading && (
-          <div className="rounded-lg border border-black/10 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:bg-[#131a15]">
+          <div className="rounded-lg border border-black/10 bg-white/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
             正在加载公开公告...
           </div>
         )}
@@ -101,7 +101,7 @@ export function PublicAnnouncements() {
         {!loading &&
           announcements.map((item) => (
             <article
-              className="group rounded-lg border border-black/10 bg-white p-6 transition hover:bg-white dark:border-white/10 dark:bg-[#131a15] dark:hover:bg-[#0f1511]"
+              className="group rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]"
               key={item.id}
             >
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -136,7 +136,7 @@ export function PublicAnnouncements() {
           ))}
 
         {!loading && announcements.length === 0 && !error && (
-          <div className="rounded-lg border border-black/10 bg-white p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:bg-[#131a15]">
+          <div className="rounded-lg border border-black/10 bg-white/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
             暂无公开公告。
           </div>
         )}

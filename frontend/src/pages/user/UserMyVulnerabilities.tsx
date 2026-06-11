@@ -210,24 +210,24 @@ export function UserMyVulnerabilities() {
         </button>
       </div>
 
-      <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-black/10 bg-black/10 md:grid-cols-4 dark:border-white/10 dark:bg-white/10">
+      <div className="mt-6 grid gap-4 md:grid-cols-4">
         {vulnerabilityStats.map((item) => {
           const Icon = item.icon
           return (
-            <div className="bg-white p-5 dark:bg-[#131a15]" key={item.label}>
-              <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                <span className="text-xs text-slate-500 dark:text-slate-400">{item.label}</span>
+            <SurfacePanel className="p-5" key={item.label}>
+              <div className="flex items-start justify-between gap-4">
+                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <span className="text-3xl font-semibold">{item.value}</span>
               </div>
-              <p className="mt-2 text-3xl font-semibold tracking-tight">{item.value}</p>
+              <p className="mt-3 text-sm font-medium">{item.label}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-            </div>
+            </SurfacePanel>
           )
         })}
       </div>
 
-      <SurfacePanel className="mt-6 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px_auto] md:items-end">
+      <SurfacePanel className="relative z-30 mt-6 p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
           <SearchInput
             label="搜索漏洞"
             onChange={setKeyword}
@@ -237,7 +237,7 @@ export function UserMyVulnerabilities() {
           <SelectInput label="审核状态" onChange={setStatus} options={statusOptions} value={status} />
           <SelectInput label="风险等级" onChange={setLevel} options={levelOptions} value={level} />
           <button
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-black/10 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:text-slate-400 dark:hover:text-green-300"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
             onClick={() => {
               setKeyword('')
               setStatus('全部状态')
@@ -245,7 +245,7 @@ export function UserMyVulnerabilities() {
             }}
             type="button"
           >
-            <Filter className="h-3.5 w-3.5" />
+            <Filter className="h-4 w-4" />
             重置
           </button>
         </div>
@@ -263,69 +263,78 @@ export function UserMyVulnerabilities() {
         )}
 
         {filteredVulnerabilities.map((item) => (
-          <SurfacePanel className="p-5 transition hover:border-brand-600/30 dark:hover:border-brand-600/30" key={item.id}>
-            {/* 第一行：编号 + 等级 + 状态 + 标题 + 积分 */}
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
+          <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+              <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.reportNo}</span>
                   <SeverityBadge level={(item.finalSeverity ?? item.selfSeverity) as import('../../utils/severity').SeverityLevel} />
                   <StatusBadge status={item.status as import('../../utils/vulnStatus').VulnStatus} />
-                  <span className="ml-auto text-sm font-semibold text-brand-700 dark:text-green-300">+{item.points}</span>
                 </div>
-                <h2 className="mt-2 text-lg font-semibold">{item.title}</h2>
+                <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
+                <div className="mt-3 grid gap-2 text-sm text-slate-500 sm:grid-cols-2 dark:text-slate-400">
+                  <p>影响资产：{item.assetName}</p>
+                  <p>责任单位：{item.ownerUnit || '待确认'}</p>
+                  <p>漏洞类型：{item.vulnerabilityType}</p>
+                  <p>提交时间：{formatDateTime(item.submittedAt)}</p>
+                  <p>最近更新：{formatDateTime(item.updatedAt)}</p>
+                  <p>附件数量：{item.attachments.length}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Sparkles className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                    AI 建议
+                  </div>
+                  <span className="text-sm font-semibold text-brand-700 dark:text-green-300">+{item.points}</span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{getReportHint(item)}</p>
               </div>
             </div>
 
-            {/* 第二行：元数据网格 + AI 提示 */}
-            <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_260px]">
-              <div className="grid gap-1.5 text-sm text-slate-500 sm:grid-cols-3 dark:text-slate-400">
-                <p>影响资产：{item.assetName}</p>
-                <p>责任单位：{item.ownerUnit || '待确认'}</p>
-                <p>漏洞类型：{item.vulnerabilityType}</p>
-                <p>提交：{formatDateTime(item.submittedAt)}</p>
-                <p>更新：{formatDateTime(item.updatedAt)}</p>
-                <p>附件：{item.attachments.length} 个</p>
-              </div>
-              <div className="rounded-lg border border-brand-600/15 bg-brand-600/[0.04] p-3 text-sm leading-6 text-slate-600 dark:border-green-300/20 dark:bg-green-300/[0.05] dark:text-slate-300">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-brand-700 dark:text-green-300">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI 分析
-                </p>
-                <p className="mt-1.5">{getReportHint(item)}</p>
-              </div>
-            </div>
-
-            {/* 附件区 */}
             {item.attachments.length > 0 && (
-              <div className="mt-4 rounded-lg border border-black/10 bg-[#f7f9f7] p-3 dark:border-white/10 dark:bg-[#0f1511]">
-                <div className="flex flex-wrap gap-2">
+              <div className="mt-5 rounded-lg border border-black/10 bg-white/45 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                  <Paperclip className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                  PDF 附件
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
                   {item.attachments.map((attachment) => (
-                    <button
-                      className="inline-flex items-center gap-1.5 rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:bg-[#131a15] dark:text-slate-300 dark:hover:text-green-300"
-                      disabled={previewingAttachmentId === attachment.id}
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white/60 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.045]"
                       key={attachment.id}
-                      onClick={() => void handlePreviewAttachment(attachment.id)}
-                      type="button"
                     >
-                      <Paperclip className="h-3 w-3" />
-                      {attachment.originalName}
-                      <span className="text-slate-400">({formatFileSize(attachment.sizeBytes)})</span>
-                    </button>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{attachment.originalName}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          {formatFileSize(attachment.sizeBytes)} · {formatDateTime(attachment.uploadedAt)}
+                        </p>
+                      </div>
+                      <button
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        disabled={previewingAttachmentId === attachment.id}
+                        onClick={() => void handlePreviewAttachment(attachment.id)}
+                        type="button"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {previewingAttachmentId === attachment.id ? '打开中' : '预览'}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 底部操作栏 */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
               <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <CalendarClock className="h-3.5 w-3.5" />
-                最后更新：{formatDateTime(item.updatedAt)}
+                <CalendarClock className="h-4 w-4" />
+                流程节点将根据审核员操作自动更新
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
-                  className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:text-slate-400 dark:hover:text-green-300"
+                  className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
                   onClick={() => void openDetail(item)}
                   type="button"
                 >
@@ -432,10 +441,10 @@ function VulnerabilityDetailDrawer({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-end bg-black/40"
+      className="fixed inset-0 z-[80] flex items-start justify-end bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl dark:bg-[#131a15]">
+      <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#f7f9f7] shadow-2xl dark:bg-[#0f1511]">
         {/* 头部 */}
         <div className="flex shrink-0 items-center gap-3 border-b border-black/10 px-6 py-4 dark:border-white/10">
           <ShieldAlert className="h-5 w-5 text-brand-600 dark:text-green-400" />
@@ -629,10 +638,10 @@ function SupplementMaterialsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="w-full max-w-lg rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+      <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
         {/* 头部 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">

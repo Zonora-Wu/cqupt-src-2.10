@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   ArrowRight,
   Award,
   Bell,
@@ -8,9 +9,10 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  FileSignature,
   FilePlus2,
   FileSearch,
-  Lightbulb,
+  Gauge,
   Moon,
   SearchCheck,
   ShieldCheck,
@@ -19,15 +21,19 @@ import {
   Sun,
   Target,
   Trophy,
-  WandSparkles,
+  X,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
-import { SectionHeader } from '../../components/ui/SectionHeader'
+import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
+import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { getAccessStatus, type AccessStatus } from '../../services/access'
+import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard } from '../../services/dashboard'
 import { getAccountProfile } from '../../services/account'
@@ -83,10 +89,10 @@ type UserHomeProps = {
 }
 
 const quickActions = [
-  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2, meta: '报告入口', cta: '开始提交' },
-  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target, meta: '训练建议', cta: '继续训练' },
-  { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen, meta: '资料库', cta: '查看路径' },
-  { title: '积分商城', description: '查看可兑换奖励和申请记录', icon: Store, meta: '权益中心', cta: '兑换权益' },
+  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2 },
+  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target },
+  { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen },
+  { title: '积分商城', description: '查看可兑换奖励和申请记录', icon: Store },
 ]
 
 const aiCapabilities = [
@@ -107,22 +113,34 @@ const aiCapabilities = [
   },
 ]
 
-const aiTasks = [
-  { label: '待 AI 补全报告', value: '2', priority: '高', description: '缺少影响截图与资产边界说明', icon: WandSparkles },
-  { label: '建议复测漏洞', value: '1', priority: '中', description: '责任单位已标记修复完成', icon: ClipboardCheck },
-  { label: '今日学习建议', value: '4', priority: '低', description: '根据靶场进度生成练习清单', icon: Lightbulb },
+const fallbackAiSkills: AiSkillLibraryItem[] = [
+  {
+    aiSpace: 'STUDENT',
+    content: '辅助整理漏洞标题、影响资产、复现步骤、影响说明、修复建议与附件清单。',
+    id: 'local-report-polish',
+    source: 'platform-default',
+    title: '漏洞报告整理',
+  },
+  {
+    aiSpace: 'STUDENT',
+    content: '提醒 token、Cookie、密码、手机号、学号等敏感信息先脱敏再提交。',
+    id: 'local-redaction',
+    source: 'platform-default',
+    title: '敏感信息脱敏',
+  },
+  {
+    aiSpace: 'STUDENT',
+    content: '结合 Web 安全基础、权限控制、注入与文件上传方向推荐下一步训练。',
+    id: 'local-learning-path',
+    source: 'platform-default',
+    title: '学习路径推荐',
+  },
 ]
 
 const activities = [
-  { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600', type: '报告优化' },
-  { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500', type: '学习推荐' },
-  { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500', type: '训练进度' },
-]
-
-const learningProgress = [
-  { label: '报告完整度', value: '78%', width: 'w-[78%]' },
-  { label: '靶场进度', value: '64%', width: 'w-[64%]' },
-  { label: '本周活跃', value: '5 天', width: 'w-[72%]' },
+  { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600' },
+  { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500' },
+  { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500' },
 ]
 
 const menuItems = [
@@ -133,9 +151,16 @@ const menuItems = [
   '积分商城',
   '排行榜',
   '学习中心',
-  'AI 助手',
+  'AI助手',
   '平台公告',
 ]
+
+function hasPendingAccessTasks(status: AccessStatus | null) {
+  if (!status) return false
+  const needsAgreement = status.responsibilityAgreementRequired && !status.responsibilitySigned
+  const needsExam = status.securityExamRequired && !status.securityExamPassed
+  return needsAgreement || needsExam
+}
 
 export function UserHome({ onLogout, user }: UserHomeProps) {
   const preferenceKey = user.id ?? user.unifiedCode
@@ -148,7 +173,24 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
   const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
+  const [aiSkills, setAiSkills] = useState<AiSkillLibraryItem[]>(fallbackAiSkills)
   const [navAvatarUrl, setNavAvatarUrl] = useState<string | null>(null)
+  const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
+  const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
+  const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
+
+  // 加载准入状态，新用户未完成责任书或安全答题时进入首页弹窗提醒
+  useEffect(() => {
+    let active = true
+    getAccessStatus()
+      .then((status) => {
+        if (!active) return
+        setAccessStatus(status)
+        setShowAccessTodoDialog(hasPendingAccessTasks(status))
+      })
+      .catch(() => { /* 静默失败，提交时后端仍会强制校验 */ })
+    return () => { active = false }
+  }, [])
 
   // 加载头像用于导航栏
   useEffect(() => {
@@ -162,6 +204,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     getUserDashboard()
       .then((data) => setDashStats(data))
       .catch(() => { /* 静默失败，福贝默认值 */ })
+  }, [])
+
+  // 加载平台公共 AI skill 库
+  useEffect(() => {
+    getAiSkills()
+      .then((data) => setAiSkills(data.skills.length > 0 ? data.skills : fallbackAiSkills))
+      .catch(() => { /* 静默失败，保留内置 skill 展示 */ })
   }, [])
 
   const stats = [
@@ -179,7 +228,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark')
     document.documentElement.dataset.motion = preferences.reduceMotion ? 'reduced' : 'default'
     saveUserDevicePreferences(preferenceKey, preferences)
-    try { localStorage.setItem('cqupt-theme', nextTheme) } catch { /* ignore storage access errors */ }
+    try { localStorage.setItem('cqupt-theme', nextTheme) } catch {}
   }, [preferenceKey, preferences])
 
   useEffect(() => {
@@ -214,12 +263,29 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setPendingAiPrompt(content)
     setAiPrompt('')
     setAiFocused(false)
-    setActiveMenu('AI 助手')
+    setActiveMenu('AI助手')
+  }
+
+  const refreshAccessStatus = async () => {
+    const status = await getAccessStatus()
+    setAccessStatus(status)
+    setShowAccessTodoDialog(hasPendingAccessTasks(status))
+    return status
+  }
+
+  const openResponsibilityDialog = () => {
+    setShowAccessTodoDialog(false)
+    setShowResponsibilityDialog(true)
+  }
+
+  const openSecurityExamPage = () => {
+    setShowAccessTodoDialog(false)
+    setActiveMenu('安全答题')
   }
 
   return (
     <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/95 backdrop-blur-sm transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/95">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <div className="flex min-w-0 items-center gap-4">
             <BrandLogo />
@@ -259,20 +325,29 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             />
           </div>
         </div>
-        <div className="border-t border-black/10 px-5 py-2 md:hidden dark:border-white/10">
+        <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
           <ScrollableNav activeItem={activeMenu} items={menuItems} mobile onChange={setActiveMenu} />
         </div>
       </header>
 
       {activeMenu !== '首页' ? (
         <Suspense fallback={<UserPageLoading />}>
-          {activeMenu === '提交漏洞' ? (
+          {activeMenu === '安全答题' ? (
+            <SecurityExamPage
+              onBack={() => setActiveMenu('首页')}
+              onPassed={() => {
+                void refreshAccessStatus().then((status) => {
+                  if (!hasPendingAccessTasks(status)) setActiveMenu('首页')
+                })
+              }}
+            />
+          ) : activeMenu === '提交漏洞' ? (
             <UserSubmitVulnerability />
           ) : activeMenu === '我的漏洞' ? (
             <UserMyVulnerabilities />
           ) : activeMenu === '学习中心' ? (
             <UserLearningCenter />
-          ) : activeMenu === 'AI 助手' ? (
+          ) : activeMenu === 'AI助手' ? (
             <UserAIAssistant
               initialPrompt={pendingAiPrompt}
               onInitialPromptConsumed={() => setPendingAiPrompt(null)}
@@ -302,34 +377,36 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         </Suspense>
       ) : (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-          <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.3fr)_410px]">
+          <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.45fr)_390px]">
             <SurfacePanel
               className="h-full overflow-hidden p-0"
               onMouseLeave={() => {
                 if (!aiPrompt.trim()) setAiFocused(false)
               }}
             >
-              <div className="relative flex min-h-[420px] h-full flex-col p-6 md:p-8">
+              <div className="relative flex min-h-[500px] h-full flex-col p-7 md:p-10">
+                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-brand-600/25 to-transparent dark:via-green-300/25" />
+                <div className="pointer-events-none absolute right-12 top-12 hidden h-40 w-40 rounded-full bg-brand-600/10 blur-3xl md:block dark:bg-green-300/10" />
 
                 <div className="flex h-full flex-col">
                   <div>
                     <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
                       <Sparkles className="h-3.5 w-3.5" />
-                      AI Assistant
+                      YouBao AI
                     </p>
 
-                    <div className="mt-10 max-w-3xl">
-                      <h1 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+                    <div className="mt-12 max-w-3xl">
+                      <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
                         欢迎回来，{user.name}
-                        <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给 AI 先整理一遍。</span>
+                        <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给邮宝先整理一遍。</span>
                       </h1>
                       <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-400">
-                        AI 可以辅助提取报告关键信息、检查复现材料完整度，并根据你的学习进度推荐下一步训练内容。
+                        邮宝可以辅助提取报告关键信息、检查复现材料完整度，并根据你的学习进度推荐下一步训练内容。
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-auto pt-10">
+                  <div className="mt-auto pt-12">
                     <div
                       className={`group flex w-full items-center justify-between gap-4 rounded-lg border px-5 py-4 text-left shadow-sm transition-all duration-500 ease-out ${
                         aiFocused
@@ -350,7 +427,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                               submitHomeAiPrompt()
                             }
                           }}
-                          placeholder="让 AI 帮我分析报告、补全漏洞信息或规划学习路径"
+                          placeholder="让邮宝帮我分析报告、补全漏洞信息或规划学习路径"
                           type="text"
                           value={aiPrompt}
                         />
@@ -398,117 +475,106 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             </SurfacePanel>
 
             <div className="grid h-full gap-5 xl:grid-rows-[auto_1fr]">
-              <SurfacePanel className="overflow-hidden p-0">
-                <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
-                  <SectionHeader description="漏洞提交、积分、证书与训练状态" title="个人安全实践看板" />
+              <SurfacePanel className="p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">个人数据汇总</p>
+                    <h2 className="mt-1 text-xl font-semibold">安全实践概览</h2>
+                  </div>
+                  <ShieldCheck className="h-9 w-9 text-brand-700 dark:text-green-300" />
                 </div>
-                <div className="grid grid-cols-2 gap-px bg-black/10 dark:bg-white/10">
-                  {stats.map((item) => (
-                    <div className="bg-white p-4 dark:bg-[#131a15]" key={item.label}>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{item.label}</p>
-                      <p className="mt-2 text-2xl font-semibold tracking-tight">{item.value}</p>
-                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-500">{item.hint}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="space-y-3 p-5">
-                  {learningProgress.map((item) => (
-                    <div key={item.label}>
-                      <div className="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                        <span>{item.label}</span>
-                        <span>{item.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10">
-                        <div className={`h-full rounded-full bg-brand-600 dark:bg-green-300 ${item.width}`} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </SurfacePanel>
-
-              <SurfacePanel className="flex h-full flex-col overflow-hidden p-0">
-                <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
-                  <SectionHeader description="智能体已生成 7 条建议" title="AI 今日待办" />
-                </div>
-                <div className="grid flex-1 content-start divide-y divide-black/10 dark:divide-white/10">
-                  {aiTasks.map((item) => {
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {stats.map((item) => {
                     const Icon = item.icon
                     return (
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-5 py-4" key={item.label}>
-                        <Icon className="mt-1 h-4 w-4 text-brand-700 dark:text-green-300" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-medium">{item.label}</p>
-                            <span className="rounded-md border border-black/10 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{item.priority}</span>
-                          </div>
-                          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
+                      <div
+                        className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
+                        key={item.label}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                          <span className="text-2xl font-semibold">{item.value}</span>
                         </div>
-                        <span className="text-lg font-semibold">{item.value}</span>
+                        <p className="mt-2 text-sm font-medium">{item.label}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
                       </div>
                     )
                   })}
+                </div>
+              </SurfacePanel>
+
+              <SurfacePanel className="flex h-full flex-col p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">AI Skill 库</p>
+                    <h2 className="mt-1 text-xl font-semibold">平台公共能力沉淀</h2>
+                  </div>
+                  <Gauge className="h-9 w-9 text-brand-700 dark:text-green-300" />
+                </div>
+                <div className="mt-4 grid flex-1 content-start gap-3">
+                  {aiSkills.slice(0, 4).map((item) => (
+                    <div
+                      className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
+                      key={item.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Brain className="h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
+                          <span className="truncate text-sm font-medium">{item.title}</span>
+                        </div>
+                        <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-green-300/10 dark:text-green-300">
+                          {item.aiSpace === 'STUDENT' ? '学生' : item.aiSpace === 'AUDITOR' ? '审核' : '管理'}
+                        </span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.content}</p>
+                    </div>
+                  ))}
                 </div>
               </SurfacePanel>
             </div>
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-            <SurfacePanel className="overflow-hidden p-0">
-              <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
-                <div className="flex items-center justify-between gap-4">
-                  <SectionHeader description="按常用工作流组织入口" title="快捷工作流" />
-                  <Clock3 className="h-5 w-5 text-slate-400" />
-                </div>
+            <SurfacePanel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold">快捷入口</h2>
+                <Clock3 className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="divide-y divide-black/10 dark:divide-white/10">
-                {quickActions.map((item, index) => {
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {quickActions.map((item) => {
                   const Icon = item.icon
                   return (
                     <button
-                      className="group grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 text-left transition hover:bg-brand-600/[0.04] dark:hover:bg-green-300/[0.04]"
+                      className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
                       key={item.title}
                       onClick={() => setActiveMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
                       type="button"
                     >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-md border border-brand-600/15 bg-brand-600/[0.04] text-brand-700 dark:border-green-300/20 dark:bg-green-300/[0.05] dark:text-green-300">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-slate-400">0{index + 1}</span>
-                          <span className="font-semibold">{item.title}</span>
-                          <span className="rounded-md border border-black/10 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-white/10 dark:text-slate-400">{item.meta}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-sm text-slate-500 dark:text-slate-400">{item.description}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 dark:text-green-300">
-                        {item.cta}
-                        <ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" />
-                      </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                        <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
+                      </div>
+                      <p className="mt-4 font-semibold">{item.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
                     </button>
                   )
                 })}
               </div>
             </SurfacePanel>
 
-            <SurfacePanel className="overflow-hidden p-0">
-              <div className="border-b border-black/10 bg-[#f7f9f7] px-5 py-4 dark:border-white/10 dark:bg-[#0f1511]">
-                <div className="flex items-center justify-between gap-4">
-                  <SectionHeader description="按时间线汇总 AI 与学习系统动作" title="动态与学习提醒" />
-                  <Sparkles className="h-5 w-5 text-slate-400" />
-                </div>
+            <SurfacePanel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold">AI 动态与学习提醒</h2>
+                <Sparkles className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="divide-y divide-black/10 dark:divide-white/10">
+              <div className="mt-5 space-y-4">
                 {activities.map((item) => (
-                  <div className="grid grid-cols-[92px_minmax(0,1fr)_76px] gap-4 px-5 py-4 text-sm" key={item.title}>
-                    <span className="w-fit rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.type}</span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{item.title}</p>
-                      <div className="mt-2 h-1 rounded-full bg-black/10 dark:bg-white/10">
-                        <div className={`h-full w-1/2 rounded-full ${item.tone}`} />
-                      </div>
+                  <div className="flex gap-4 rounded-lg border border-black/5 p-4 dark:border-white/10" key={item.title}>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone}`} />
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.time}</p>
                     </div>
-                    <span className="text-right text-xs text-slate-500 dark:text-slate-400">{item.time}</span>
                   </div>
                 ))}
               </div>
@@ -516,6 +582,21 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
         </section>
       )}
+      <AccessTodoDialog
+        accessStatus={accessStatus}
+        onClose={() => setShowAccessTodoDialog(false)}
+        onOpenAgreement={openResponsibilityDialog}
+        onStartExam={openSecurityExamPage}
+        open={showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
+      />
+      <ResponsibilityAgreementDialog
+        accessStatus={accessStatus}
+        onClose={() => setShowResponsibilityDialog(false)}
+        onSigned={async () => {
+          await refreshAccessStatus()
+        }}
+        open={showResponsibilityDialog}
+      />
     </AppBackground>
   )
 }
@@ -526,6 +607,144 @@ function UserPageLoading() {
       <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
         正在加载页面...
       </SurfacePanel>
+    </section>
+  )
+}
+
+function AccessTodoDialog({
+  accessStatus,
+  onClose,
+  onOpenAgreement,
+  onStartExam,
+  open,
+}: {
+  accessStatus: AccessStatus | null
+  onClose: () => void
+  onOpenAgreement: () => void
+  onStartExam: () => void
+  open: boolean
+}) {
+  if (!open || typeof document === 'undefined') return null
+
+  const needsAgreement = Boolean(accessStatus?.responsibilityAgreementRequired && !accessStatus.responsibilitySigned)
+  const needsExam = Boolean(accessStatus?.securityExamRequired && !accessStatus.securityExamPassed)
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+        <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
+          <div>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">还有待完成的准入事项</h2>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              完成责任书签署和安全答题后，即可获得完整的漏洞提交权限。
+            </p>
+          </div>
+          <button
+            aria-label="关闭"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 p-5">
+          <AccessTaskCard
+            actionLabel={needsAgreement ? '签署责任书' : '已完成'}
+            description="请阅读平台授权测试责任书，阅读 60 秒后可签署当前版本。"
+            disabled={!needsAgreement}
+            icon={<FileSignature className="h-5 w-5" />}
+            onClick={onOpenAgreement}
+            status={needsAgreement ? '待完成' : '已完成'}
+            title="责任书签署"
+          />
+          <AccessTaskCard
+            actionLabel={needsExam ? '去答题' : '已通过'}
+            description={`完成网络安全知识答题，达到 ${accessStatus?.examThreshold ?? 80} 分后通过准入。`}
+            disabled={!needsExam}
+            icon={<ClipboardCheck className="h-5 w-5" />}
+            onClick={onStartExam}
+            status={needsExam ? '待完成' : '已通过'}
+            title="安全准入答题"
+          />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function AccessTaskCard({
+  actionLabel,
+  description,
+  disabled,
+  icon,
+  onClick,
+  status,
+  title,
+}: {
+  actionLabel: string
+  description: string
+  disabled: boolean
+  icon: ReactNode
+  onClick: () => void
+  status: string
+  title: string
+}) {
+  return (
+    <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold text-slate-950 dark:text-white">{title}</h3>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${disabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'}`}>
+                {status}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{description}</p>
+          </div>
+        </div>
+        <button
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55"
+          disabled={disabled}
+          onClick={onClick}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: () => void }) {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-5 pb-10 pt-24 md:px-8">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-green-300">SECURITY ACCESS</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
+          <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
+            完成答题并达到平台要求分数后，即可更新准入状态。
+          </p>
+        </div>
+        <button
+          className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+          onClick={onBack}
+          type="button"
+        >
+          返回首页
+        </button>
+      </div>
+      <SecurityExamDialog embedded onClose={onBack} onPassed={onPassed} open />
     </section>
   )
 }

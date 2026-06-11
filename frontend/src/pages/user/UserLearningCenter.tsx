@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -8,6 +9,7 @@ import {
   Layers3,
   PlayCircle,
   ShieldCheck,
+  Sparkles,
   Target,
   TerminalSquare,
 } from 'lucide-react'
@@ -23,9 +25,9 @@ import type { LearningResourceItem } from '../../services/learning'
 const kindOptions = ['全部资源', '工具资料', '靶场资源']
 
 const learningPath = [
-  { title: '准入规则', detail: '完成授权测试规则答题，确认测试边界', status: '基础门槛', icon: ShieldCheck },
-  { title: '报告规范', detail: '阅读漏洞提交规范，按模板组织证据链', status: '提交前必读', icon: BookOpen },
-  { title: '靶场训练', detail: '优先练习权限控制、越权和代码审计专题', status: 'AI 推荐', icon: Target },
+  { title: '完成授权测试规则答题', status: '已完成', icon: ShieldCheck },
+  { title: '阅读漏洞提交规范手册', status: '建议今天完成', icon: BookOpen },
+  { title: '进入权限控制专题靶场', status: 'AI 推荐', icon: Target },
 ]
 
 const categoryStyles: Record<string, string> = {
@@ -74,10 +76,10 @@ export function UserLearningCenter() {
     const resourceCount = resources.filter((item) => item.kind === 'RESOURCE').length
     const rangeCount = resources.filter((item) => item.kind === 'RANGE').length
     return [
-      { label: '工具资料', value: String(resourceCount), hint: '文档 / 工具 / 模板', icon: TerminalSquare },
-      { label: '靶场资源', value: String(rangeCount), hint: '授权训练入口', icon: Target },
-      { label: '累计访问', value: String(resources.reduce((total, item) => total + item.downloadCount, 0)), hint: '资源使用统计', icon: FileText },
-      { label: '已上架', value: String(resources.length), hint: '当前可用内容', icon: CheckCircle2 },
+      { label: '工具资料', value: String(resourceCount), hint: '登录后可访问', icon: TerminalSquare },
+      { label: '靶场资源', value: String(rangeCount), hint: '外部链接入口', icon: Target },
+      { label: '累计访问', value: String(resources.reduce((total, item) => total + item.downloadCount, 0)), hint: '平台统计', icon: FileText },
+      { label: '已上架', value: String(resources.length), hint: '可用资源', icon: CheckCircle2 },
     ]
   }, [resources])
 
@@ -114,77 +116,66 @@ export function UserLearningCenter() {
 
   return (
     <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-      <SurfacePanel className="overflow-hidden p-0">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="p-6 md:p-8">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SurfacePanel className="overflow-hidden p-0">
+          <div className="relative p-7 md:p-8">
             <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
               <GraduationCap className="h-3.5 w-3.5" />
               Learning Center
             </p>
-            <div className="mt-5 max-w-4xl">
-              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">学习中心</h1>
-              <p className="mt-4 leading-7 text-slate-600 dark:text-slate-400">
-                将工具资料、报告规范和授权靶场整理成可执行的训练台。页面从“资源卡片墙”调整为“学习路径 + 资源队列”，方便快速判断下一步该看什么、练什么、提交什么。
-              </p>
-            </div>
-
-            <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">学习中心</h1>
+            <p className="mt-4 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
+              下载安全工具、阅读学习资料，并进入授权靶场资源进行练习。所有资源需要登录后访问，点击访问会记录资源使用次数。
+            </p>
+            <div className="mt-7 grid gap-3 md:grid-cols-4">
               {overview.map((item) => {
                 const Icon = item.icon
                 return (
-                  <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]" key={item.label}>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{item.label}</p>
-                      <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                    </div>
-                    <p className="mt-3 text-3xl font-semibold tracking-tight">{item.value}</p>
+                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
+                    <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                    <p className="mt-4 text-3xl font-semibold">{item.value}</p>
+                    <p className="mt-1 text-sm font-medium">{item.label}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
                   </div>
                 )
               })}
             </div>
           </div>
+        </SurfacePanel>
 
-          <div className="border-t border-black/10 bg-[#f7f9f7] p-6 dark:border-white/10 dark:bg-[#0f1511] lg:border-l lg:border-t-0">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Training Route</p>
-                <h2 className="mt-1 text-xl font-semibold">建议训练顺序</h2>
-              </div>
-              <span className="rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1.5 text-xs font-medium text-brand-700 dark:text-green-300">
-                今日优先
-              </span>
+        <SurfacePanel className="p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">AI 学习建议</p>
+              <h2 className="mt-1 text-xl font-semibold">下一步训练</h2>
             </div>
-            <div className="mt-5 space-y-3">
-              {learningPath.map((item, index) => {
-                const Icon = item.icon
-                return (
-                  <div className="rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#131a15]" key={item.title}>
-                    <div className="flex gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-sm font-semibold text-brand-700 dark:text-green-300">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
-                          <p className="font-medium">{item.title}</p>
-                          <span className="rounded-md border border-black/10 px-2 py-0.5 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-                            {item.status}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.detail}</p>
-                      </div>
+            <Sparkles className="h-8 w-8 text-brand-700 dark:text-green-300" />
+          </div>
+          <div className="mt-5 space-y-3">
+            {learningPath.map((item) => {
+              const Icon = item.icon
+              return (
+                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
+                  <div className="flex items-start gap-3">
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
+                    <div>
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.status}</p>
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })}
           </div>
-        </div>
-      </SurfacePanel>
+          <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700" type="button">
+            <Bot className="h-4 w-4" />
+            让 AI 生成学习计划
+          </button>
+        </SurfacePanel>
+      </div>
 
-      <SurfacePanel className="relative z-30 mt-6 p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_190px] lg:items-end">
+      <SurfacePanel className="relative z-30 mt-6 p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px] lg:items-end">
           <SearchInput label="搜索资源" onChange={setKeyword} placeholder="输入工具、资料、靶场或分类" value={keyword} />
           <SelectInput label="资源类型" onChange={setKind} options={kindOptions} value={kind} />
           <SelectInput label="分类" onChange={setCategory} options={categoryOptions} value={category} />
@@ -194,55 +185,50 @@ export function UserLearningCenter() {
       {message && <AlertMessage className="mt-4" message={message} onClose={() => setMessage('')} variant="error" />}
       {error && <AlertMessage className="mt-4" message={error} onClose={() => setError('')} variant="error" />}
 
-      <div className="mt-6 space-y-3">
-        {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</SurfacePanel>}
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400 lg:col-span-2">正在加载学习资源...</SurfacePanel>}
 
         {!loading &&
           filteredResources.map((item) => (
-            <SurfacePanel className="p-0 transition hover:border-brand-600/30" key={item.id}>
-              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_220px]">
-                <div className="p-5">
+            <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[item.category] ?? categoryStyles.工具资源}`}>{item.category}</span>
                     <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
-                    <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-                      更新于 {formatDate(item.updatedAt)}
-                    </span>
                   </div>
-                  <h2 className="mt-3 text-lg font-semibold tracking-tight">{item.title}</h2>
-                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                  <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
                 </div>
+                {item.kind === 'RANGE' ? (
+                  <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
+                ) : (
+                  <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
+                )}
+              </div>
 
-                <div className="flex flex-col justify-between gap-4 border-t border-black/10 bg-[#f7f9f7] p-5 dark:border-white/10 dark:bg-[#0f1511] lg:border-l lg:border-t-0">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">累计访问</p>
-                      <p className="mt-1 text-2xl font-semibold">{item.downloadCount}</p>
-                    </div>
-                    {item.kind === 'RANGE' ? (
-                      <PlayCircle className="h-6 w-6 text-brand-700 dark:text-green-300" />
-                    ) : (
-                      <Layers3 className="h-6 w-6 text-brand-700 dark:text-green-300" />
-                    )}
-                  </div>
-                  <button
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:border-brand-600/30 hover:text-brand-700 dark:border-white/10 dark:bg-[#131a15] dark:text-slate-300 dark:hover:text-green-300"
-                    onClick={() => void openResource(item)}
-                    type="button"
-                  >
-                    {item.kind === 'RANGE' ? (
-                      <>
-                        <ExternalLink className="h-4 w-4" />
-                        进入靶场
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        访问资源
-                      </>
-                    )}
-                  </button>
+              <p className="mt-3 min-h-12 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  访问 {item.downloadCount} 次 · 更新于 {formatDate(item.updatedAt)}
                 </div>
+                <button
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                  onClick={() => void openResource(item)}
+                  type="button"
+                >
+                  {item.kind === 'RANGE' ? (
+                    <>
+                      <ExternalLink className="h-4 w-4" />
+                      进入靶场
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      访问资源
+                    </>
+                  )}
+                </button>
               </div>
             </SurfacePanel>
           ))}

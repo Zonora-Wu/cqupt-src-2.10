@@ -1,11 +1,16 @@
 import { AlertTriangle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 export type FloatingNoticeVariant = 'error' | 'info' | 'success' | 'warning'
 
 type FloatingNoticeProps = {
+  action?: ReactNode
+  autoCloseMs?: number
+  className?: string
   message: ReactNode
-  onClose: () => void
+  onClose?: () => void
+  title?: string
   variant?: FloatingNoticeVariant
 }
 
@@ -23,26 +28,68 @@ const iconMap: Record<FloatingNoticeVariant, ReactNode> = {
   warning: <TriangleAlert className="h-4 w-4" />,
 }
 
-export function FloatingNotice({ message, onClose, variant = 'info' }: FloatingNoticeProps) {
-  if (!message) return null
+export function FloatingNotice({
+  action,
+  autoCloseMs = 6400,
+  className = '',
+  message,
+  onClose,
+  title,
+  variant = 'info',
+}: FloatingNoticeProps) {
+  const [visible, setVisible] = useState(Boolean(message))
+  const onCloseRef = useRef(onClose)
 
-  return (
-    <div className="pointer-events-none fixed right-5 top-24 z-[120] w-[min(360px,calc(100vw-40px))]">
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!message) {
+      setVisible(false)
+      return undefined
+    }
+
+    setVisible(true)
+    if (autoCloseMs <= 0) return undefined
+
+    const timer = window.setTimeout(() => {
+      setVisible(false)
+      onCloseRef.current?.()
+    }, autoCloseMs)
+
+    return () => window.clearTimeout(timer)
+  }, [autoCloseMs, message])
+
+  if (!message || !visible || typeof document === 'undefined') return null
+
+  const close = () => {
+    setVisible(false)
+    onCloseRef.current?.()
+  }
+
+  return createPortal(
+    <div className="pointer-events-none fixed left-1/2 top-[4.75rem] z-[120] w-[min(520px,calc(100vw-40px))] -translate-x-1/2">
       <div
-        className={`pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl ${variantStyles[variant]}`}
+        className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${variantStyles[variant]} ${className}`}
         role={variant === 'error' || variant === 'warning' ? 'alert' : 'status'}
       >
-        <span className="shrink-0">{iconMap[variant]}</span>
-        <p className="min-w-0 flex-1 leading-5">{message}</p>
+        <span className="mt-0.5 shrink-0">{iconMap[variant]}</span>
+        <div className="min-w-0 flex-1 leading-5">
+          {title && <p className="font-semibold">{title}</p>}
+          <div className={title ? 'mt-0.5' : ''}>{message}</div>
+          {action && <div className="mt-2">{action}</div>}
+        </div>
         <button
           aria-label="关闭提示"
-          className="shrink-0 rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
-          onClick={onClose}
+          className="-mr-1 shrink-0 rounded-md p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+          onClick={close}
           type="button"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

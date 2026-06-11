@@ -26,7 +26,6 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
-import { ModalShell } from '../../components/ui/ModalShell'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -35,7 +34,6 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard } from '../../services/dashboard'
-import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import {
   listRetestQueue,
   listReviewQueue,
@@ -302,15 +300,18 @@ const announcementStatusStyles: Record<AnnouncementStatus, string> = {
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
   const [activeMenu, setActiveMenu] = useState('首页')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('cqupt-theme') as 'dark' | 'light' | null) ?? 'dark' } catch { return 'dark' }
+  })
 
   useEffect(() => {
-    applyColorTheme(theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    try { localStorage.setItem('cqupt-theme', theme) } catch {}
   }, [theme])
 
   return (
-    <AppBackground variant="admin">
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/95 backdrop-blur-sm transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/95">
+    <AppBackground>
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
           <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={setActiveMenu} />
@@ -319,11 +320,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={(event) => {
-                const nextTheme = theme === 'dark' ? 'light' : 'dark'
-                transitionColorTheme(nextTheme, event)
-                setTheme(nextTheme)
-              }}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               type="button"
             >
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
@@ -337,7 +334,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
             />
           </div>
         </div>
-        <div className="border-t border-black/10 px-5 py-2 md:hidden dark:border-white/10">
+        <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
           <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} mobile onChange={setActiveMenu} />
         </div>
       </header>
@@ -411,7 +408,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
           const Icon = item.icon
           return (
             <button
-              className="rounded-lg border border-black/10 bg-white/95 p-5 text-left shadow-sm transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-[#131a15]"
+              className="rounded-lg border border-black/10 bg-white/75 p-5 text-left shadow-sm backdrop-blur-xl transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-white/[0.035]"
               key={item.label}
               onClick={() => onNavigate(item.menu)}
               type="button"
@@ -435,7 +432,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
           </div>
           <div className="mt-5 space-y-3">
             {reviewReports.slice(0, 3).map((item) => (
-              <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]" key={item.id}>
+              <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.id}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
                   <LevelBadge level={item.level} />
@@ -456,7 +453,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
             <Bot className="h-5 w-5 text-brand-700 dark:text-green-300" />
           </div>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
+            <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
               <p className="font-medium">建议优先处理统一认证相关报告</p>
               <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">该类漏洞影响面较大，应先确认授权边界、复现材料和实际风险。</p>
             </div>
@@ -581,7 +578,7 @@ export function AuditorReviewQueue() {
           </button>
           {done && <SuccessNotice>{done}</SuccessNotice>}
           <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <div className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
+            <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
               <SurfacePanel className="p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{selectedReport.id}</span>
@@ -621,7 +618,7 @@ export function AuditorReviewQueue() {
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">审核意见</span>
                     <textarea
-                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
                       onChange={(event) => setReviewNote(event.target.value)}
                       placeholder="请填写审核依据、复现结论、补充要求或驳回原因"
                       value={reviewNote}
@@ -632,7 +629,7 @@ export function AuditorReviewQueue() {
                     <label className="block">
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">奖励积分</span>
                       <input
-                        className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
                         min={0}
                         max={10000}
                         onChange={(event) => setReviewPoints(event.target.value)}
@@ -689,7 +686,7 @@ export function AuditorReviewQueue() {
                 </section>
                 <section className="mt-5">
                   <h3 className="text-sm font-semibold">复现步骤</h3>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-7 dark:border-white/10 dark:bg-[#131a15]">
+                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-7 dark:border-white/10 dark:bg-white/[0.035]">
                     {selectedReport.reproduce}
                   </pre>
                 </section>
@@ -703,7 +700,7 @@ export function AuditorReviewQueue() {
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {selectedReport.attachments.map((attachment) => (
                         <div
-                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-[#131a15]"
+                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.035]"
                           key={attachment.id}
                         >
                           <div className="min-w-0">
@@ -1048,7 +1045,7 @@ function AuditorAIAssistant() {
         <SurfacePanel className="mx-auto w-full max-w-3xl p-3">
           <div className="flex items-end gap-2">
             <textarea
-              className="min-h-16 flex-1 resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="min-h-16 flex-1 resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               placeholder="询问漏洞价值、复现材料、修复建议或审核结论风险..."
             />
             <button
@@ -1272,8 +1269,9 @@ function EditAuditorAnnouncementModal({
   if (!announcement) return null
 
   return (
-    <ModalShell maxWidth="xl" onClose={onClose} scrollable>
-      <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
               <PenLine className="h-5 w-5" />
@@ -1296,7 +1294,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               defaultValue={announcement.title}
               placeholder="请输入公告标题"
             />
@@ -1309,7 +1307,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告摘要</span>
             <textarea
-              className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               defaultValue={announcement.summary}
               placeholder="用于公告列表展示的简短说明"
             />
@@ -1317,7 +1315,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告正文</span>
             <textarea
-              className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               defaultValue={announcement.content}
               placeholder="请输入公告正文，支持分段"
             />
@@ -1345,7 +1343,8 @@ function EditAuditorAnnouncementModal({
             保存草稿
           </button>
         </div>
-    </ModalShell>
+      </div>
+    </div>
   )
 }
 
@@ -1546,7 +1545,7 @@ function RetestStatusBadge({ status }: { status: RetestStatus }) {
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
+    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
@@ -1587,8 +1586,12 @@ function RetestActionDialog({
   const noteValid = note.trim().length >= 4
 
   return (
-    <ModalShell className="rounded-lg" onClose={onCancel}>
-      <div className="flex items-start gap-3">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div className="w-full max-w-[520px] rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
+        <div className="flex items-start gap-3">
           <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -1609,7 +1612,7 @@ function RetestActionDialog({
             说明 <span className="text-red-500">*</span>
           </label>
           <textarea
-            className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+            className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="请填写复测说明（至少 4 个字）"
             rows={3}
@@ -1636,7 +1639,8 @@ function RetestActionDialog({
             {submitting ? '提交中...' : meta.label}
           </button>
         </div>
-    </ModalShell>
+      </div>
+    </div>
   )
 }
 
@@ -1652,8 +1656,9 @@ function ConfirmDialog({
   if (!state) return null
 
   return (
-    <ModalShell onClose={onCancel}>
-      <div className="flex gap-3">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -1686,6 +1691,7 @@ function ConfirmDialog({
             {state.confirmLabel ?? '确认'}
           </button>
         </div>
-    </ModalShell>
+      </div>
+    </div>
   )
 }

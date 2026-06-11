@@ -72,9 +72,8 @@ type BackendEmailCodeResponse = {
 
 const AUTH_SESSION_KEY = 'cqupt-src-auth-session'
 export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
-  const unifiedCode = normalizeUnifiedCode(payload.code)
-  if (!isValidUnifiedCode(unifiedCode)) {
-    throw new Error('请输入 7 位数字统一认证码')
+  if (!payload.code.trim()) {
+    throw new Error('请输入统一认证码')
   }
 
   if (!payload.password) {
@@ -84,7 +83,7 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
   const result = await apiRequest<BackendLoginResponse>('/auth/login/password', {
     body: {
       password: payload.password,
-      unifiedCode,
+      unifiedCode: payload.code.trim(),
     },
     method: 'POST',
   })
@@ -129,11 +128,6 @@ export async function sendRegisterEmailCode(email: string, captchaToken: string)
 }
 
 export async function registerAccount(payload: RegisterPayload): Promise<RegisterResult> {
-  const unifiedCode = normalizeUnifiedCode(payload.unifiedCode)
-  if (!isValidUnifiedCode(unifiedCode)) {
-    throw new Error('请输入 7 位数字统一认证码')
-  }
-
   const result = await apiRequest<BackendLoginResponse | BackendPendingRegistrationResponse>('/auth/register', {
     body: {
       code: payload.code,
@@ -144,7 +138,7 @@ export async function registerAccount(payload: RegisterPayload): Promise<Registe
       name: payload.name.trim(),
       password: payload.password,
       studentNo: payload.studentNo.trim(),
-      unifiedCode,
+      unifiedCode: payload.unifiedCode.trim(),
     },
     method: 'POST',
   })
@@ -223,14 +217,6 @@ export function clearSavedSession() {
 
 export function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-export function normalizeUnifiedCode(value: string) {
-  return value.replace(/\D/g, '').slice(0, 7)
-}
-
-export function isValidUnifiedCode(value: string) {
-  return /^\d{7}$/.test(value)
 }
 
 function normalizeLoginResponse(response: BackendLoginResponse): AuthSession {

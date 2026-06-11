@@ -157,7 +157,7 @@ export function AdminCertificateManagement() {
         )}
 
         <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
+          <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
             <SurfacePanel className="p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{selectedCertificate.vulnId}</span>
@@ -221,7 +221,7 @@ export function AdminCertificateManagement() {
 
             <SurfacePanel className="p-6">
               <h2 className="text-xl font-semibold">证书内容</h2>
-              <div className="mt-5 rounded-lg border border-black/10 bg-[#f7f9f7] p-5 dark:border-white/10 dark:bg-[#0f1511]">
+              <div className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-5 dark:border-white/10 dark:bg-white/[0.035]">
                 <p className="text-sm leading-7 text-slate-600 dark:text-slate-400">{selectedCertificate.contribution}</p>
               </div>
             </SurfacePanel>
@@ -325,7 +325,7 @@ export function AdminCertificateManagement() {
 
           {!loading &&
             filteredCertificates.map((item) => (
-              <SurfacePanel className="p-5 transition hover:border-brand-600/30 hover:bg-brand-600/[0.04] dark:hover:bg-green-300/[0.04]" key={item.id}>
+              <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -345,7 +345,7 @@ export function AdminCertificateManagement() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]">
+                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <ShieldCheck className="h-4 w-4 text-brand-700 dark:text-green-300" />
                       证书内容
@@ -466,7 +466,7 @@ function IssueCertificateModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
@@ -489,7 +489,7 @@ function IssueCertificateModal({
         </div>
 
         <div className="mt-6 grid gap-4">
-          <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]">
+          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
             <p className="text-sm font-semibold">{certificate.type}</p>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{certificate.vulnTitle}</p>
             <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 dark:text-slate-400">
@@ -502,7 +502,7 @@ function IssueCertificateModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">贡献说明</span>
             <textarea
-              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(event) => setContribution(event.target.value)}
               value={contribution}
             />

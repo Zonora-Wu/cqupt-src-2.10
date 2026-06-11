@@ -10,7 +10,7 @@ import {
   Sun,
   SunMoon,
 } from 'lucide-react'
-import { type MouseEvent, type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -19,7 +19,6 @@ import {
   type ThemeMode,
   type UserDevicePreferences,
 } from '../../services/userPreferences'
-import { transitionColorTheme } from '../../utils/themeTransition'
 
 type UserSystemSettingsProps = {
   effectiveTheme: 'dark' | 'light'
@@ -57,10 +56,7 @@ export function UserSystemSettings({
     return () => window.clearTimeout(timer)
   }, [message])
 
-  const setThemeMode = (themeMode: ThemeMode, event?: MouseEvent<HTMLElement>) => {
-    if (themeMode === 'light' || themeMode === 'dark') {
-      transitionColorTheme(themeMode, event)
-    }
+  const setThemeMode = (themeMode: ThemeMode) => {
     updatePreferences({ ...preferences, themeMode })
   }
 
@@ -78,7 +74,7 @@ export function UserSystemSettings({
   return (
     <>
       <FloatingNotice message={message} variant="success" onClose={() => setMessage('')} />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrow="Device Settings"
@@ -88,8 +84,8 @@ export function UserSystemSettings({
           />
         </div>
 
-        <div className="mt-6 flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:flex-row">
-          <aside className="shrink-0 lg:max-h-full lg:overflow-y-auto lg:w-[280px] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-24 xl:self-start">
             <SurfacePanel className="overflow-hidden p-0">
               <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
                 <p className="text-sm font-semibold">设置</p>
@@ -120,7 +116,7 @@ export function UserSystemSettings({
             </SurfacePanel>
           </aside>
 
-          <div className="min-w-0 flex-1 space-y-6 lg:overflow-y-auto lg:pb-8 lg:pr-2 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
+          <div className="space-y-6">
             {activeCategory === 'appearance' && (
               <SettingsCard
                 description="调整平台在当前设备上的视觉显示模式和界面行为。"
@@ -138,13 +134,13 @@ export function UserSystemSettings({
                       active={preferences.themeMode === 'light'}
                       icon={<Sun className="h-5 w-5" />}
                       label="浅色"
-                      onClick={(event) => setThemeMode('light', event)}
+                      onClick={() => setThemeMode('light')}
                     />
                     <ThemeOption
                       active={preferences.themeMode === 'dark'}
                       icon={<Moon className="h-5 w-5" />}
                       label="深色"
-                      onClick={(event) => setThemeMode('dark', event)}
+                      onClick={() => setThemeMode('dark')}
                     />
                     <ThemeOption
                       active={preferences.themeMode === 'system'}
@@ -357,7 +353,7 @@ function ThemeOption({
   description?: string
   icon: ReactNode
   label: string
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void
+  onClick: () => void
 }) {
   return (
     <button

@@ -14,6 +14,7 @@ import {
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
+import { SelectInput } from '../ui/SelectInput'
 import { SlideVerify } from '../ui/SlideVerify'
 import { isValidEmail, registerAccount, sendRegisterEmailCode, type AuthUser, type RegisterResult } from '../../services/auth'
 
@@ -24,6 +25,27 @@ type RegisterModalProps = {
 }
 
 const identityTypes = ['本科生', '研究生', '教师', '信息化办老师', '社团/工作室成员']
+const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
+const collegeOptions = [
+  '通信与信息工程学院',
+  '计算机科学与技术学院（示范性软件学院）',
+  '人工智能学院（重邮科大讯飞人工智能学院）',
+  '自动化学院 / 工业互联网学院',
+  '电子科学与工程学院',
+  '集成电路学院（重庆国际半导体学院）',
+  '生命健康信息科学与工程学院',
+  '网络空间安全与信息法学院',
+  '数学与统计学院',
+  '国际学院',
+  '经济管理学院',
+  '现代邮政学院',
+  '传媒艺术学院',
+  '外国语学院',
+  '马克思主义学院',
+  '体育学院',
+  '创新创业教育学院 / 继续教育学院',
+  '远东联邦大学联合学院（国际合作学院）',
+]
 
 export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: RegisterModalProps) {
   const [error, setError] = useState('')
@@ -51,9 +73,14 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const normalizedEmail = form.email.trim().toLowerCase()
   const emailCodeIsActive = normalizedEmail === emailCodeSentTo && countdown > 0
   const shouldShowSlider = !emailCodeIsActive
+  const shouldCollectStudentInfo = !teacherIdentityTypes.has(form.identityText)
 
   const updateField = (key: keyof typeof form, value: string) => {
-    setForm((current) => ({ ...current, [key]: value }))
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === 'identityText' && teacherIdentityTypes.has(value) ? { grade: '', studentNo: '' } : {}),
+    }))
     if (key === 'email' && value.trim().toLowerCase() !== emailCodeSentTo) {
       setEmailCodeSentTo('')
     }
@@ -122,6 +149,16 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       return
     }
 
+    if (!form.college) {
+      setError('请选择学院')
+      return
+    }
+
+    if (!form.identityText) {
+      setError('请选择身份类型')
+      return
+    }
+
     if (!form.password || form.password.length < 8) {
       setError('密码至少需要 8 位')
       return
@@ -129,6 +166,11 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
     if (form.password !== form.passwordConfirm) {
       setError('两次输入的密码不一致')
+      return
+    }
+
+    if (shouldCollectStudentInfo && !form.studentNo.trim()) {
+      setError('请填写学号')
       return
     }
 
@@ -161,7 +203,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white p-8 text-slate-950 shadow-2xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#131a15] dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -209,39 +251,37 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
           <>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Input icon={<User />} onChange={(value) => updateField('name', value)} placeholder="姓名" required type="text" value={form.name} />
+              <SelectInput
+                icon={<GraduationCap />}
+                onChange={(value) => updateField('college', value)}
+                options={collegeOptions}
+                placeholder="学院"
+                value={form.college}
+              />
+
+              <SelectInput
+                icon={<GraduationCap />}
+                onChange={(value) => updateField('identityText', value)}
+                options={identityTypes}
+                placeholder="身份类型"
+                value={form.identityText}
+              />
+
               <Input icon={<Badge />} onChange={(value) => updateField('unifiedCode', value)} placeholder="统一认证码" required type="text" value={form.unifiedCode} />
-              <Input icon={<GraduationCap />} onChange={(value) => updateField('college', value)} placeholder="学院" required type="text" value={form.college} />
 
-              <label className="relative block">
-                <GraduationCap className="absolute left-3 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
-                <select
-                  className="w-full appearance-none rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
-                  onChange={(event) => updateField('identityText', event.target.value)}
-                  required
-                  value={form.identityText}
-                >
-                  <option disabled value="">
-                    身份类型
-                  </option>
-                  {identityTypes.map((item) => (
-                    <option className="bg-white text-slate-950 dark:bg-[#111411] dark:text-white" key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {shouldCollectStudentInfo && (
+                <div className="grid gap-3">
+                  <Input icon={<Badge />} onChange={(value) => updateField('studentNo', value)} placeholder="学号" required type="text" value={form.studentNo} />
+                  <Input icon={<GraduationCap />} onChange={(value) => updateField('grade', value)} placeholder="年级" type="text" value={form.grade} />
+                </div>
+              )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input icon={<Badge />} onChange={(value) => updateField('studentNo', value)} placeholder="学号（教师可留空）" type="text" value={form.studentNo} />
-                <Input icon={<GraduationCap />} onChange={(value) => updateField('grade', value)} placeholder="年级（教师可留空）" type="text" value={form.grade} />
-              </div>
-
-              <Input icon={<Mail />} onChange={(value) => updateField('email', value)} placeholder="校内邮箱" required type="email" value={form.email} />
+              <Input icon={<Mail />} onChange={(value) => updateField('email', value)} placeholder="邮箱" required type="email" value={form.email} />
 
               <div className="flex gap-3">
                 <Input className="flex-1" icon={<Mail />} onChange={(value) => updateField('code', value)} placeholder="邮箱验证码" required type="text" value={form.code} />
                 <button
-                  className="rounded-lg border border-black/10 bg-white/95 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                  className="rounded-lg border border-black/10 bg-white/70 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                   disabled={countdown > 0 || sendingCode}
                   onClick={() => void handleSendCode()}
                   type="button"
@@ -254,7 +294,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 <div className="group relative">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
                   <input
-                    className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                    className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
                     onChange={(event) => updateField('password', event.target.value)}
                     placeholder="密码"
                     required
@@ -316,7 +356,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               )}
             </form>
 
-            <footer className="mt-5 border-t border-black/10 pt-5 text-center text-sm dark:border-white/5">
+            <footer className="mt-5 border-t border-black/5 pt-5 text-center text-sm dark:border-white/5">
               <button className="text-slate-500 transition hover:text-brand-800 dark:text-white/45 dark:hover:text-brand-100" onClick={onSwitchToLogin} type="button">
                 已有账号？立即登录
               </button>
@@ -356,7 +396,7 @@ function Input({
         {icon}
       </span>
       <input
-        className="w-full rounded-lg border border-black/10 bg-white/95 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+        className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
         onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder}
         required={required}
@@ -370,7 +410,7 @@ function Input({
 function CheckboxText({ required, text }: { required?: boolean; text: string }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600 transition hover:text-slate-900 dark:text-white/60 dark:hover:text-white/80">
-      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/95 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
+      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/70 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
       <span>{text}</span>
     </label>
   )

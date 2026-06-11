@@ -1,4 +1,4 @@
-import { apiFormRequest, apiRequest } from './apiClient'
+import { apiRequest } from './apiClient'
 
 export type LearningKind = 'RESOURCE' | 'RANGE'
 export type LearningKindLabel = '工具资料' | '靶场资源'
@@ -6,7 +6,6 @@ export type LearningKindLabel = '工具资料' | '靶场资源'
 export type LearningResourceItem = {
   active: boolean
   category: string
-  coverUrl: string
   createdAt: string
   description: string
   downloadCount: number
@@ -22,7 +21,6 @@ export type LearningResourceItem = {
 export type LearningResourcePayload = {
   active: boolean
   category: string
-  coverUrl: string
   description: string
   externalUrl: string
   kind: LearningKind
@@ -81,16 +79,6 @@ export function disableLearningResource(id: string) {
 
 export function deleteLearningResource(id: string) {
   return request<LearningResourceItem>(`/learning/${id}`, { method: 'DELETE' })
-}
-
-export function uploadLearningCover(file: File) {
-  const form = new FormData()
-  form.append('file', file)
-  return apiFormRequest<{ coverUrl: string }>('/learning/manage/upload-cover', {
-    auth: true,
-    formData: form,
-    unauthenticatedMessage: '请先登录后再访问学习资源',
-  })
 }
 
 async function request<T>(

@@ -56,7 +56,7 @@ export function UserLeaderboard() {
       </div>
 
       <div className="mt-7 flex justify-center">
-        <div className="inline-flex rounded-lg border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-[#131a15]">
+        <div className="inline-flex rounded-lg border border-black/10 bg-white/60 p-1 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
           {tabs.map((tab) => (
             <button
               className={`rounded-md px-5 py-2 text-sm font-medium transition ${
@@ -101,7 +101,7 @@ export function UserLeaderboard() {
                   <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-lg text-lg font-semibold ${medalClass(item.rank)}`}>
                     {item.rank}
                   </div>
-                  <div className="mx-auto mt-5 flex h-14 w-14 items-center justify-center rounded-lg border border-black/10 bg-white/95 text-slate-500 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
+                  <div className="mx-auto mt-5 flex h-14 w-14 items-center justify-center rounded-lg border border-black/10 bg-white/70 text-slate-500 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
                     {item.rank === 1 ? <Trophy className="h-6 w-6" /> : <UserRound className="h-6 w-6" />}
                   </div>
                   <h2 className="mt-5 text-xl font-semibold">
@@ -120,14 +120,14 @@ export function UserLeaderboard() {
             <SurfacePanel className="mt-8 overflow-hidden p-0">
               {restItems.map((item) => (
                 <div
-                  className={`flex items-center justify-between gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10 ${
+                  className={`flex items-center justify-between gap-4 border-b border-black/5 px-5 py-4 last:border-b-0 dark:border-white/10 ${
                     item.isCurrent ? 'bg-brand-600/8 dark:bg-green-300/8' : ''
                   }`}
                   key={item.id}
                 >
                   <div className="flex min-w-0 items-center gap-4">
                     <span className="w-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">{item.rank}</span>
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white/95 text-slate-500 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white/70 text-slate-500 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
                       <UserRound className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">

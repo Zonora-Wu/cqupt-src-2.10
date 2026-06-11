@@ -5,16 +5,14 @@ import {
   Filter,
   GraduationCap,
   Layers3,
-  Loader2,
   Plus,
   Power,
   RefreshCw,
   Target,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react'
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -28,7 +26,6 @@ import {
   enableLearningResource,
   listManagedLearningResources,
   updateLearningResource,
-  uploadLearningCover,
 } from '../../services/learning'
 import type { LearningKind, LearningResourceItem, LearningResourcePayload } from '../../services/learning'
 
@@ -47,7 +44,6 @@ type FormState = LearningResourcePayload & {
 const emptyForm: FormState = {
   active: true,
   category: '工具资源',
-  coverUrl: '',
   description: '',
   externalUrl: '',
   kind: 'RESOURCE',
@@ -56,10 +52,7 @@ const emptyForm: FormState = {
 
 const kindOptions = ['全部类型', '工具资料', '靶场资源']
 const statusOptions = ['全部状态', '已上架', '已下架']
-const categoryPresets: Record<LearningKind, string[]> = {
-  RESOURCE: ['工具资源', '文档资料', '报告规范', '学习资料', '环境配置'],
-  RANGE: ['Web靶场', '权限控制靶场', '代码审计靶场', '内网渗透靶场', '综合演练靶场'],
-}
+const categoryPresets = ['工具资源', '文档资料', 'Web靶场', '权限控制靶场', '代码审计靶场', '报告规范']
 
 export function AdminLearningManagement() {
   const [resources, setResources] = useState<LearningResourceItem[]>([])
@@ -145,7 +138,6 @@ export function AdminLearningManagement() {
     setEditing({
       active: item.active,
       category: item.category,
-      coverUrl: item.coverUrl,
       description: item.description,
       externalUrl: item.externalUrl,
       id: item.id,
@@ -273,8 +265,17 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-6 space-y-3">
-          {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</SurfacePanel>}
+        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
+            <span>内容</span>
+            <span>类型</span>
+            <span>分类</span>
+            <span>状态</span>
+            <span>使用次数</span>
+            <span className="text-right">操作</span>
+          </div>
+
+          {loading && <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</div>}
 
           {!loading &&
             filteredResources.map((item) => (
@@ -348,68 +349,53 @@ function LearningResourceRow({
   const Icon = item.kind === 'RANGE' ? Target : Layers3
 
   return (
-    <SurfacePanel className="overflow-hidden p-0 transition hover:border-brand-600/30">
-      <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.kindLabel}</span>
-            <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">{item.category}</span>
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-medium ${
-                item.active
-                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
-              }`}
+    <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10">
+      <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">{item.title}</h2>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
+            <a
+              className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
+              href={item.externalUrl}
+              rel="noreferrer"
+              target="_blank"
             >
-              {item.status}
-            </span>
-          </div>
-
-          <div className="mt-4 flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base font-semibold tracking-tight">{item.title}</h2>
-              <p className="mt-2 line-clamp-2 max-w-4xl text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
-              <a
-                className="mt-3 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
-                href={item.externalUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{item.externalUrl}</span>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col justify-between gap-4 border-t border-black/10 bg-[#f7f9f7] p-5 dark:border-white/10 dark:bg-[#0f1511] xl:border-l xl:border-t-0">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">
-              <p className="text-xs text-slate-500 dark:text-slate-400">使用次数</p>
-              <p className="mt-1 text-xl font-semibold">{item.downloadCount}</p>
-            </div>
-            <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#131a15]">
-              <p className="text-xs text-slate-500 dark:text-slate-400">当前状态</p>
-              <p className="mt-1 text-sm font-semibold">{item.status}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <IconButton label="编辑" onClick={onEdit}>
-              <Edit3 className="h-4 w-4" />
-            </IconButton>
-            <IconButton label={item.active ? '下架' : '上架'} onClick={onToggle}>
-              <Power className="h-4 w-4" />
-            </IconButton>
-            <IconButton danger label="删除" onClick={onDelete}>
-              <Trash2 className="h-4 w-4" />
-            </IconButton>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{item.externalUrl}</span>
+            </a>
           </div>
         </div>
       </div>
-    </SurfacePanel>
+      <TableCell>{item.kindLabel}</TableCell>
+      <TableCell>{item.category}</TableCell>
+      <TableCell>
+        <span
+          className={`rounded-md border px-2 py-1 text-xs font-medium ${
+            item.active
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
+          }`}
+        >
+          {item.status}
+        </span>
+      </TableCell>
+      <TableCell>{item.downloadCount} 次</TableCell>
+      <div className="flex items-center justify-end gap-2">
+        <IconButton label="编辑" onClick={onEdit}>
+          <Edit3 className="h-4 w-4" />
+        </IconButton>
+        <IconButton label={item.active ? '下架' : '上架'} onClick={onToggle}>
+          <Power className="h-4 w-4" />
+        </IconButton>
+        <IconButton danger label="删除" onClick={onDelete}>
+          <Trash2 className="h-4 w-4" />
+        </IconButton>
+      </div>
+    </div>
   )
 }
 
@@ -425,17 +411,10 @@ function LearningResourceModal({
   saving: boolean
 }) {
   const [form, setForm] = useState<FormState>(emptyForm)
-  const [coverUploading, setCoverUploading] = useState(false)
-  const [coverNotice, setCoverNotice] = useState('')
-  const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (initialValue) {
-      const categoryOptions = categoryPresets[initialValue.kind]
-      setForm({
-        ...initialValue,
-        category: categoryOptions.includes(initialValue.category) ? initialValue.category : categoryOptions[0],
-      })
+      setForm(initialValue)
     }
   }, [initialValue])
 
@@ -445,54 +424,15 @@ function LearningResourceModal({
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  function updateKind(nextKind: LearningKind) {
-    setForm((current) => {
-      const nextCategoryOptions = categoryPresets[nextKind]
-      return {
-        ...current,
-        category: nextCategoryOptions[0],
-        kind: nextKind,
-      }
-    })
-  }
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     onSave(form)
   }
 
-  async function handleCoverUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (event.target) event.target.value = ''
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setCoverNotice('请选择图片文件')
-      return
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setCoverNotice('图片大小不能超过 2MB')
-      return
-    }
-
-    setCoverUploading(true)
-    setCoverNotice('')
-    try {
-      const result = await uploadLearningCover(file)
-      updateField('coverUrl', result.coverUrl)
-      setCoverNotice('封面已上传')
-      window.setTimeout(() => setCoverNotice(''), 2000)
-    } catch (uploadError) {
-      setCoverNotice(uploadError instanceof Error ? uploadError.message : '上传失败')
-    } finally {
-      setCoverUploading(false)
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
       <form
-        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]"
+        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95"
         onSubmit={submit}
       >
         <div className="flex items-start justify-between gap-4">
@@ -512,82 +452,17 @@ function LearningResourceModal({
         </div>
 
         <div className="mt-6 grid gap-4">
-          <div>
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              封面图片 <span className="font-normal text-slate-400">（可选）</span>
-            </span>
-            {form.coverUrl ? (
-              <div className="mt-2 flex items-center gap-4 rounded-lg border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                <img
-                  alt="资源封面预览"
-                  className="h-20 w-28 shrink-0 rounded-lg object-cover"
-                  src={form.coverUrl}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{form.coverUrl}</p>
-                  <button
-                    className="mt-2 rounded-lg border border-black/10 px-3 py-1.5 text-xs text-slate-600 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                    onClick={() => updateField('coverUrl', '')}
-                    type="button"
-                  >
-                    移除封面
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button
-                  className="mt-2 flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-black/10 px-6 py-8 text-slate-500 transition hover:border-brand-600/40 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-70 dark:border-white/10 dark:hover:border-brand-200/40 dark:hover:text-brand-200"
-                  disabled={coverUploading}
-                  onClick={() => coverInputRef.current?.click()}
-                  type="button"
-                >
-                  {coverUploading ? (
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  ) : (
-                    <Upload className="h-8 w-8" />
-                  )}
-                  <span className="text-sm">{coverUploading ? '上传中...' : '点击上传本地封面'}</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">支持 JPG、PNG、WebP、GIF，最大 2MB</span>
-                </button>
-                <input
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={handleCoverUpload}
-                  ref={coverInputRef}
-                  type="file"
-                />
-              </>
-            )}
-            {coverNotice && (
-              <p className={`mt-2 text-xs ${coverNotice === '封面已上传' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                {coverNotice}
-              </p>
-            )}
-            <div className="mt-3 flex items-center gap-2">
-              <div className="flex-1 border-t border-black/10 dark:border-white/10" />
-              <span className="text-xs text-slate-400 dark:text-slate-500">或输入图片 URL</span>
-              <div className="flex-1 border-t border-black/10 dark:border-white/10" />
-            </div>
-            <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
-              onChange={(event) => updateField('coverUrl', event.target.value)}
-              placeholder="https://example.com/cover.png"
-              value={form.coverUrl}
-            />
-          </div>
-
           <div className="grid gap-4 md:grid-cols-3">
             <SelectInput
               label="类型"
-              onChange={(value) => updateKind(value === '靶场资源' ? 'RANGE' : 'RESOURCE')}
+              onChange={(value) => updateField('kind', value === '靶场资源' ? 'RANGE' : 'RESOURCE')}
               options={['工具资料', '靶场资源']}
               value={form.kind === 'RANGE' ? '靶场资源' : '工具资料'}
             />
             <SelectInput
               label="分类"
               onChange={(value) => updateField('category', value)}
-              options={categoryPresets[form.kind]}
+              options={categoryPresets}
               value={form.category}
             />
             <SelectInput
@@ -608,7 +483,7 @@ function LearningResourceModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">说明</span>
             <textarea
-              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
               onChange={(event) => updateField('description', event.target.value)}
               placeholder="说明资源用途、适合对象、使用边界和注意事项"
               value={form.description}
@@ -652,7 +527,7 @@ function Field({
     <label className="block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <input
-        className="mt-2 w-full rounded-lg border border-black/10 bg-white/95 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -688,6 +563,9 @@ function IconButton({
   )
 }
 
+function TableCell({ children }: { children: ReactNode }) {
+  return <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">{children}</div>
+}
 
 function ConfirmDialog({
   onCancel,
@@ -702,7 +580,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

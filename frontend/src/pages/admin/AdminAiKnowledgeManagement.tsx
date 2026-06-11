@@ -1,36 +1,25 @@
-import { Archive, Bot, CheckCircle2, DatabaseZap, FileText, Hammer, History, Library, PackageCheck, RefreshCw, ShieldCheck, Sparkles, Wrench, XCircle } from 'lucide-react'
+import { Bot, CheckCircle2, DatabaseZap, FileText, Hammer, PackageCheck, RefreshCw, ShieldCheck, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   createAiSkillCandidate,
-  dismissAiKnowledgeMaintenanceTask,
   getAiKnowledgeStats,
   installAiSkillCandidate,
   listAiKnowledge,
   listAiKnowledgeCaptureJobs,
   listAiKnowledgeConversations,
-  listAiKnowledgeMaintenanceTasks,
-  listAiProblemSessionsForReview,
   listAiSkillCandidates,
   processAiKnowledgeCaptures,
-  resolveAiKnowledgeMaintenanceTask,
   reviewAiKnowledge,
   reviewAiKnowledgeConversation,
-  reviewAiProblemSession,
   reviewAiSkillCandidate,
-  runAiKnowledgeMaintenance,
   summarizeAiKnowledgeConversation,
-  summarizeAiProblemSession,
   type AiKnowledgeConversation,
   type AiKnowledgeEntry,
-  type AiKnowledgeMaintenanceTask,
-  type AiKnowledgeMaintenanceTaskPriority,
-  type AiKnowledgeMaintenanceTaskStatus,
   type AiKnowledgeStats,
   type AiKnowledgeStatus,
-  type AiProblemSession,
   type AiSkillCandidate,
 } from '../../services/aiKnowledge'
 
@@ -42,17 +31,14 @@ const statusLabels: Record<string, string> = {
   CANDIDATE: '候选',
   COMPLETED: '已完成',
   DISCARDED: '已丢弃',
-  DISMISSED: '已忽略',
   FAILED: '失败',
   INSTALLED: '已安装',
   NEEDS_REVIEW: '待审核',
-  OPEN: '待处理',
   PENDING: '待处理',
   PROCESSING: '处理中',
   PROMOTED_TO_SKILL: '已晋升 Skill',
   READY_REVIEW: '待沉淀审核',
   REJECTED: '已拒绝',
-  RESOLVED: '已解决',
   SKILL_CANDIDATE: 'Skill 候选会话',
 }
 
@@ -64,7 +50,6 @@ const roleScopeLabels: Record<string, string> = {
 }
 
 type KnowledgeStatusFilter = AiKnowledgeStatus | 'ALL'
-type KnowledgeWorkspaceTab = 'AUTO_APPROVED' | 'ENTRIES' | 'MAINTENANCE' | 'REVIEW' | 'SKILLS'
 
 const promotableStatuses = new Set<AiKnowledgeStatus>(['APPROVED', 'AUTO_APPROVED', 'PROMOTED_TO_SKILL'])
 
@@ -83,36 +68,13 @@ const categoryLabels: Record<string, string> = {
   XSS: 'XSS',
 }
 
-const maintenanceTaskTypeLabels: Record<string, string> = {
-  ARCHIVE: '待归档复审',
-  DUPLICATE: '疑似重复',
-  EXPIRY: '过期复审',
-  LOW_QUALITY: '低质量复审',
-  SECURITY: '安全复核',
-  STALE_REVIEW: '过期内容复审',
-}
-
-const maintenanceStatusLabels: Record<string, string> = {
-  ARCHIVED: '已归档',
-  DUPLICATE_REVIEW: '重复复审',
-  HEALTHY: '健康',
-  LOW_QUALITY_REVIEW: '低质量复审',
-  SECURITY_SUSPENDED: '安全暂停',
-  STALE_REVIEW: '过期复审',
-}
-
 export function AdminAiKnowledgeManagement() {
   const [entries, setEntries] = useState<AiKnowledgeEntry[]>([])
-  const [maintenanceTasks, setMaintenanceTasks] = useState<AiKnowledgeMaintenanceTask[]>([])
-  const [maintenancePriority, setMaintenancePriority] = useState<AiKnowledgeMaintenanceTaskPriority | 'ALL'>('ALL')
-  const [maintenanceStatus, setMaintenanceStatus] = useState<AiKnowledgeMaintenanceTaskStatus | 'ALL'>('OPEN')
   const [conversations, setConversations] = useState<AiKnowledgeConversation[]>([])
-  const [problemSessions, setProblemSessions] = useState<AiProblemSession[]>([])
   const [candidates, setCandidates] = useState<AiSkillCandidate[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [stats, setStats] = useState<AiKnowledgeStats | null>(null)
   const [captureJobs, setCaptureJobs] = useState<AiKnowledgeStats['recentQueue']>([])
-  const [activeTab, setActiveTab] = useState<KnowledgeWorkspaceTab>('REVIEW')
   const [status, setStatus] = useState<KnowledgeStatusFilter>('NEEDS_REVIEW')
   const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(true)
@@ -129,29 +91,25 @@ export function AdminAiKnowledgeManagement() {
     setLoading(true)
     setError('')
     try {
-      const [statsData, entriesData, candidatesData, jobsData, conversationData, problemSessionData, maintenanceTaskData] = await Promise.all([
+      const [statsData, entriesData, candidatesData, jobsData, conversationData] = await Promise.all([
         getAiKnowledgeStats(),
-        listAiKnowledge({ page: 1, pageSize: 20, status: activeTab === 'AUTO_APPROVED' ? 'AUTO_APPROVED' : activeTab === 'SKILLS' ? undefined : status === 'ALL' ? undefined : status, keyword }),
+        listAiKnowledge({ page: 1, pageSize: 20, status: status === 'ALL' ? undefined : status, keyword }),
         listAiSkillCandidates(),
         listAiKnowledgeCaptureJobs({ page: 1, pageSize: 8 }),
         listAiKnowledgeConversations({ page: 1, pageSize: 8 }),
-        listAiProblemSessionsForReview({ page: 1, pageSize: 8 }),
-        listAiKnowledgeMaintenanceTasks({ page: 1, pageSize: 30, priority: maintenancePriority, status: maintenanceStatus }),
       ])
       setStats(statsData)
       setEntries(entriesData.items)
       setCandidates(candidatesData)
       setCaptureJobs(jobsData.items)
       setConversations(conversationData.items)
-      setProblemSessions(problemSessionData.items)
-      setMaintenanceTasks(maintenanceTaskData.items)
       setSelectedIds((current) => current.filter((id) => entriesData.items.some((entry) => entry.id === id && promotableStatuses.has(entry.status))))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'AI 知识库数据加载失败')
     } finally {
       setLoading(false)
     }
-  }, [activeTab, keyword, maintenancePriority, maintenanceStatus, status])
+  }, [keyword, status])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadAll(), 0)
@@ -183,22 +141,6 @@ export function AdminAiKnowledgeManagement() {
     setSelectedIds([])
     setSkillName('')
     setSkillDescription('')
-  }
-
-  function promptMaintenanceReason(defaultReason: string) {
-    return window.prompt('请输入处理原因，将写入审计记录：', defaultReason)?.trim()
-  }
-
-  async function resolveMaintenance(task: AiKnowledgeMaintenanceTask) {
-    const reason = promptMaintenanceReason('管理员确认维护事项已处理')
-    if (reason === undefined) return
-    await runAction(task.id, () => resolveAiKnowledgeMaintenanceTask(task.id, reason), '维护任务已解决')
-  }
-
-  async function dismissMaintenance(task: AiKnowledgeMaintenanceTask) {
-    const reason = promptMaintenanceReason('管理员确认暂不处理该维护事项')
-    if (reason === undefined) return
-    await runAction(task.id, () => dismissAiKnowledgeMaintenanceTask(task.id, reason), '维护任务已忽略')
   }
 
   return (
@@ -246,107 +188,8 @@ export function AdminAiKnowledgeManagement() {
         <StatCard icon={PackageCheck} label="已安装 Skill" value={stats?.totals.installedSkills ?? 0} />
       </div>
 
-      <div className="ai-chat-input-scroll mt-6 flex gap-2 overflow-x-auto border-b border-black/10 pb-3 dark:border-white/10" role="tablist" aria-label="AI 知识库工作台">
-        <WorkspaceTab active={activeTab === 'REVIEW'} icon={History} label="待审核会话" onClick={() => setActiveTab('REVIEW')} />
-        <WorkspaceTab active={activeTab === 'AUTO_APPROVED'} icon={Sparkles} label="自动入库" onClick={() => setActiveTab('AUTO_APPROVED')} />
-        <WorkspaceTab active={activeTab === 'ENTRIES'} icon={Library} label="知识库条目" onClick={() => setActiveTab('ENTRIES')} />
-        <WorkspaceTab active={activeTab === 'SKILLS'} icon={Hammer} label="Skill Candidate" onClick={() => setActiveTab('SKILLS')} />
-        <WorkspaceTab active={activeTab === 'MAINTENANCE'} icon={Wrench} label="待维护" onClick={() => setActiveTab('MAINTENANCE')} />
-      </div>
-
-      <div className={`mt-6 grid gap-6 ${activeTab === 'REVIEW' ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : activeTab === 'SKILLS' ? 'xl:grid-cols-[minmax(0,1fr)_380px]' : ''}`}>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
-          {activeTab === 'REVIEW' ? (
-            <>
-          <SurfacePanel className="p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">问题会话审核队列</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">用户确认已解决后生成结构化总结、规则评分和重复风险，管理员确认后才进入知识库。</p>
-              </div>
-              <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">刷新会话</button>
-            </div>
-          </SurfacePanel>
-
-          {problemSessions.map((session) => {
-            const summary = session.summaryJson
-            return (
-              <SurfacePanel className="p-5" key={session.id}>
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={session.status} />
-                      <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{formatProblemSessionMode(session.mode)}</span>
-                      <span className="rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700 dark:text-emerald-200">用户已确认解决</span>
-                      <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{session.turnCount} 条 turn</span>
-                      {summary ? <span className="rounded-lg bg-brand-700/10 px-2.5 py-1 text-xs text-brand-800 dark:text-green-200">建议：{summary.recommendation}</span> : null}
-                      {summary ? <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">重复风险 {formatPercent(getProblemSessionDuplicateRisk(summary))}</span> : null}
-                    </div>
-                    <h3 className="mt-3 text-lg font-semibold">{session.title || session.initialQuestion}</h3>
-                    {summary ? (
-                      <>
-                        <div className="mt-3 grid gap-2 md:grid-cols-6">
-                          <ScorePill label="质量" value={summary.scores.quality} />
-                          <ScorePill label="复用" value={summary.scores.reuse} />
-                          <ScorePill label="安全" value={summary.scores.safety} />
-                          <ScorePill label="隐私风险" value={summary.scores.privacy} inverse />
-                          <ScorePill label="投毒风险" value={summary.scores.poisoningRisk} inverse />
-                          <ScorePill label="置信" value={summary.scores.confidence} />
-                        </div>
-                        <p className="mt-3 rounded-lg border border-black/5 bg-black/[0.025] p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">{summary.resolution}</p>
-                        {summary.rejectionReason ? <p className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">拒绝原因：{summary.rejectionReason}</p> : null}
-                        {summary.pitfalls.length > 0 ? <TagList label="踩坑" items={summary.pitfalls} /> : null}
-                        {summary.successfulSteps.length > 0 ? <TagList label="有效步骤" items={summary.successfulSteps} /> : null}
-                        {summary.mergeSuggestion ? <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-100">{summary.mergeSuggestion}</p> : null}
-                        {summary.similarKnowledgeMatches.length > 0 ? (
-                          <div className="mt-3 grid gap-2 md:grid-cols-2">
-                            {summary.similarKnowledgeMatches.map((match) => (
-                              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs" key={match.id}>
-                                <p className="font-medium text-slate-900 dark:text-slate-100">{match.title}</p>
-                                <p className="mt-1 text-slate-500 dark:text-slate-400">相似度 {formatPercent(match.similarity)} · {statusLabels[match.status] ?? match.status}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="mt-3 rounded-lg border border-black/5 bg-black/[0.025] p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">{session.initialQuestion}</p>
-                    )}
-                    {session.turns && session.turns.length > 0 ? (
-                      <details className="mt-3 rounded-lg border border-black/5 p-3 text-xs dark:border-white/10">
-                        <summary className="cursor-pointer font-medium">查看脱敏会话 turn</summary>
-                        <div className="mt-3 space-y-2">
-                          {session.turns.map((turn) => <p className="line-clamp-3 rounded-lg bg-black/[0.025] p-2 dark:bg-white/[0.035]" key={turn.id}><b>{turn.role}：</b>{turn.content}</p>)}
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2 xl:w-40 xl:flex-col">
-                    <button className="rounded-lg border border-brand-600/20 px-3 py-2 text-sm font-medium text-brand-700 disabled:opacity-60 dark:text-green-200" disabled={busy === session.id} onClick={() => void runAction(session.id, () => summarizeAiProblemSession(session.id), '问题会话已重新总结')} type="button">重新总结</button>
-                    <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === session.id || summary?.recommendation === 'DISCARD'} onClick={() => void runAction(session.id, () => reviewAiProblemSession(session.id, 'APPROVED_TO_KB', '管理员批准问题会话入库'), '问题会话已沉入知识库')} type="button">沉入知识库</button>
-                    <button className="rounded-lg border border-amber-500/30 px-3 py-2 text-sm font-medium text-amber-700 disabled:opacity-60 dark:text-amber-200" disabled={busy === session.id} onClick={() => void runAction(session.id, () => reviewAiProblemSession(session.id, 'SKILL_CANDIDATE', '复杂流程，进入 Skill 候选'), '问题会话已标为 Skill 候选')} type="button">标为 Skill</button>
-                    <button className="rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60 dark:text-red-200" disabled={busy === session.id} onClick={() => void runAction(session.id, () => reviewAiProblemSession(session.id, 'DISCARDED', '不适合沉淀'), '问题会话已丢弃')} type="button">丢弃</button>
-                  </div>
-                </div>
-              </SurfacePanel>
-            )
-          })}
-
-          {problemSessions.length === 0 && !loading ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">暂无用户确认已解决的问题会话。</SurfacePanel> : null}
-
-          <details>
-            <summary className="cursor-pointer list-none">
-              <SurfacePanel className="p-4 transition hover:border-brand-600/30">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold">旧版多轮会话沉淀队列</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">兼容旧链路，默认收起。新会话统一进入上方问题会话审核队列。</p>
-                  </div>
-                  <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">{conversations.length} 条</span>
-                </div>
-              </SurfacePanel>
-            </summary>
-            <div className="mt-4 space-y-4">
           <SurfacePanel className="p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -419,22 +262,15 @@ export function AdminAiKnowledgeManagement() {
           ))}
 
           {conversations.length === 0 && !loading ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">暂无待沉淀的多轮会话。用户完成一次多轮排错后会自动出现在这里。</SurfacePanel> : null}
-            </div>
-          </details>
-            </>
-          ) : null}
 
-          {activeTab === 'AUTO_APPROVED' || activeTab === 'ENTRIES' ? (
-            <>
           <SurfacePanel className="p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">{activeTab === 'AUTO_APPROVED' ? '自动入库知识' : '知识库条目'}</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeTab === 'AUTO_APPROVED' ? '集中复核系统自动沉淀的知识；当前可确认审核或归档，撤回与降级将在聚类链路完成后接入。' : '按状态检索知识条目，确认脱敏、泛化和适用边界。'}</p>
+                <h2 className="text-lg font-semibold">知识审核队列</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">只批准已脱敏、可泛化、可撤回的长期知识。</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <input className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 dark:border-white/10 dark:bg-[#101711]" onChange={(event) => setKeyword(event.target.value)} placeholder="搜索问题/答案" value={keyword} />
-                {activeTab === 'ENTRIES' ? (
                 <SelectInput
                   className="min-w-32"
                   onChange={(value) => setStatus(value as KnowledgeStatusFilter)}
@@ -446,7 +282,6 @@ export function AdminAiKnowledgeManagement() {
                   ]}
                   value={status}
                 />
-                ) : null}
                 <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">查询</button>
               </div>
             </div>
@@ -489,11 +324,6 @@ export function AdminAiKnowledgeManagement() {
                   <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === entry.id || entry.status === 'APPROVED'} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'APPROVED', '管理员审核通过'), '知识条目已批准')} type="button">
                     <CheckCircle2 className="mr-1.5 inline h-4 w-4" />批准
                   </button>
-                  {activeTab === 'AUTO_APPROVED' ? (
-                    <button className="rounded-lg border border-amber-500/20 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60 dark:text-amber-200 dark:hover:bg-amber-950/30" disabled={busy === entry.id} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'ARCHIVED', '管理员归档自动入库知识'), '自动入库知识已归档')} type="button">
-                      <Archive className="mr-1.5 inline h-4 w-4" />归档
-                    </button>
-                  ) : null}
                   <button className="rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:text-red-200 dark:hover:bg-red-950/30" disabled={busy === entry.id || entry.status === 'REJECTED'} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'REJECTED', '未达到沉淀标准或存在风险'), '知识条目已拒绝')} type="button">
                     <XCircle className="mr-1.5 inline h-4 w-4" />拒绝
                   </button>
@@ -501,116 +331,8 @@ export function AdminAiKnowledgeManagement() {
               </div>
             </SurfacePanel>
           ))}
-            </>
-          ) : null}
-
-          {activeTab === 'MAINTENANCE' ? (
-            <>
-              <SurfacePanel className="p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">待维护任务</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">按 P0-P4 优先级查看维护任务；解决或忽略会写入审计日志。修订、合并和回滚不在 KB-13 范围内。</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <SelectInput
-                      className="min-w-32"
-                      onChange={(value) => setMaintenanceStatus(value as AiKnowledgeMaintenanceTaskStatus | 'ALL')}
-                      options={[
-                        { label: '待处理', value: 'OPEN' },
-                        { label: '已解决', value: 'RESOLVED' },
-                        { label: '已忽略', value: 'DISMISSED' },
-                        { label: '全部状态', value: 'ALL' },
-                      ]}
-                      value={maintenanceStatus}
-                    />
-                    <button className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">查询</button>
-                    <button
-                      className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60 dark:bg-green-500 dark:text-[#07100a]"
-                      disabled={busy === 'maintenance-run'}
-                      onClick={() => void runAction('maintenance-run', runAiKnowledgeMaintenance, '维护扫描已完成')}
-                      type="button"
-                    >
-                      <Wrench className="mr-1.5 inline h-4 w-4" />运行扫描
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(['ALL', 'P0', 'P1', 'P2', 'P3', 'P4'] as const).map((priority) => (
-                    <button
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${maintenancePriority === priority ? 'border-brand-600/40 bg-brand-600/10 text-brand-800 dark:text-green-200' : 'border-black/10 text-slate-500 hover:bg-black/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10'}`}
-                      key={priority}
-                      onClick={() => setMaintenancePriority(priority)}
-                      type="button"
-                    >
-                      {priority === 'ALL' ? '全部优先级' : priority}
-                    </button>
-                  ))}
-                </div>
-              </SurfacePanel>
-
-              {loading ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载维护任务...</SurfacePanel> : null}
-              {!loading && maintenanceTasks.length === 0 ? <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">当前筛选条件下暂无维护任务。</SurfacePanel> : null}
-
-              {maintenanceTasks.map((task) => (
-                <SurfacePanel className="p-5" key={task.id}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <PriorityBadge priority={task.priority} />
-                        <StatusBadge status={task.status} />
-                        <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{maintenanceTaskTypeLabels[task.taskType] ?? task.taskType}</span>
-                        {task.knowledge ? <span className="rounded-lg bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">{categoryLabels[task.knowledge.category] ?? task.knowledge.category}</span> : null}
-                      </div>
-                      <h3 className="mt-3 text-lg font-semibold">{task.knowledge?.title ?? task.knowledgeId}</h3>
-                      {task.knowledge ? (
-                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                          知识状态：{statusLabels[task.knowledge.status] ?? task.knowledge.status} · 维护状态：{maintenanceStatusLabels[task.knowledge.maintenanceStatus] ?? task.knowledge.maintenanceStatus} · 检索 {task.knowledge.retrievalEnabled ? '开启' : '关闭'} · 直接回答 {task.knowledge.directAnswerEnabled ? '开启' : '关闭'} · Agent 注入 {task.knowledge.agentInjectEnabled ? '开启' : '关闭'}
-                        </p>
-                      ) : null}
-                      <p className="mt-3 whitespace-pre-wrap rounded-lg border border-black/5 bg-black/[0.025] p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300">{task.reason}</p>
-                      <p className="mt-3 break-all text-xs text-slate-500 dark:text-slate-400">
-                        dedupeKey: {task.dedupeKey} · 创建：{formatDateTime(task.createdAt)}
-                        {task.resolvedAt ? ` · 处理：${formatDateTime(task.resolvedAt)}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2 lg:w-36 lg:flex-col">
-                      <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === task.id || task.status !== 'OPEN'} onClick={() => void resolveMaintenance(task)} type="button">解决</button>
-                      <button className="rounded-lg border border-amber-500/30 px-3 py-2 text-sm font-medium text-amber-700 disabled:opacity-60 dark:text-amber-200" disabled={busy === task.id || task.status !== 'OPEN'} onClick={() => void dismissMaintenance(task)} type="button">忽略</button>
-                    </div>
-                  </div>
-                </SurfacePanel>
-              ))}
-            </>
-          ) : null}
-
-          {activeTab === 'SKILLS' ? (
-            <SurfacePanel className="p-5">
-              <h2 className="text-lg font-semibold">可晋升知识</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">选择已批准或自动入库的稳定知识，再在右侧生成候选 Skill。</p>
-              <div className="mt-4 space-y-2">
-                {entries.filter((entry) => promotableStatuses.has(entry.status)).length === 0 ? <p className="py-4 text-sm text-slate-500 dark:text-slate-400">暂无可晋升知识条目。</p> : null}
-                {entries.filter((entry) => promotableStatuses.has(entry.status)).map((entry) => (
-                  <button
-                    aria-pressed={selectedIds.includes(entry.id)}
-                    className={`flex w-full items-start justify-between gap-4 rounded-lg border p-3 text-left transition ${selectedIds.includes(entry.id) ? 'border-brand-600/40 bg-brand-600/10' : 'border-black/10 hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10'}`}
-                    key={entry.id}
-                    onClick={() => toggleSelected(entry)}
-                    type="button"
-                  >
-                    <span>
-                      <span className="block text-sm font-medium">{entry.title}</span>
-                      <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{categoryLabels[entry.category] ?? entry.category} · 命中 {entry.hitCount} · 有用 {entry.helpfulCount}</span>
-                    </span>
-                    <span className="shrink-0 rounded-lg border border-black/10 px-2 py-1 text-xs dark:border-white/10">{selectedIds.includes(entry.id) ? '已选择' : '选择'}</span>
-                  </button>
-                ))}
-              </div>
-            </SurfacePanel>
-          ) : null}
         </div>
 
-        {activeTab === 'SKILLS' ? (
         <aside className="space-y-6">
           <SurfacePanel className="p-5">
             <h2 className="text-lg font-semibold">Skill 晋升</h2>
@@ -650,11 +372,6 @@ export function AdminAiKnowledgeManagement() {
             </div>
           </SurfacePanel>
 
-        </aside>
-        ) : null}
-
-        {activeTab === 'REVIEW' ? (
-        <aside className="space-y-6">
           <SurfacePanel className="p-5">
             <h2 className="text-lg font-semibold">捕获队列</h2>
             <div className="mt-4 space-y-2">
@@ -672,24 +389,8 @@ export function AdminAiKnowledgeManagement() {
             </div>
           </SurfacePanel>
         </aside>
-        ) : null}
       </div>
     </section>
-  )
-}
-
-function WorkspaceTab({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof FileText; label: string; onClick: () => void }) {
-  return (
-    <button
-      aria-selected={active}
-      className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${active ? 'border-brand-600/30 bg-brand-600/10 text-brand-800 dark:border-green-300/20 dark:text-green-200' : 'border-transparent text-slate-500 hover:border-black/10 hover:bg-black/[0.035] hover:text-slate-900 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-white/[0.05] dark:hover:text-white'}`}
-      onClick={onClick}
-      role="tab"
-      type="button"
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
   )
 }
 
@@ -722,18 +423,6 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium dark:border-white/10">{statusLabels[status] ?? status}</span>
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const tone =
-    priority === 'P0'
-      ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
-      : priority === 'P1'
-        ? 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-200'
-        : priority === 'P2'
-          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-          : 'border-black/10 bg-black/[0.025] text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300'
-  return <span className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${tone}`}>{priority}</span>
-}
-
 function ScorePill({ inverse, label, value }: { inverse?: boolean; label: string; value: number }) {
   const effective = inverse ? 1 - (value ?? 0) : (value ?? 0)
   const tone = effective >= 0.82 ? 'text-emerald-700 dark:text-emerald-200' : effective >= 0.62 ? 'text-amber-700 dark:text-amber-200' : 'text-red-700 dark:text-red-200'
@@ -752,18 +441,6 @@ function ScorePill({ inverse, label, value }: { inverse?: boolean; label: string
 
 function formatPercent(value: number) {
   return `${Math.round((value ?? 0) * 100)}%`
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
-}
-
-function formatProblemSessionMode(mode: string) {
-  return mode === 'admin' ? '管理员' : mode === 'auditor' ? '审核员' : '学生'
-}
-
-function getProblemSessionDuplicateRisk(summary: AiProblemSession['summaryJson']) {
-  return Math.max(0, ...(summary?.similarKnowledgeMatches ?? []).map((match) => match.similarity))
 }
 
 function Metric({ inverse, label, raw, value }: { inverse?: boolean; label: string; raw?: boolean; value: number }) {

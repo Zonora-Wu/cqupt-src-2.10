@@ -168,7 +168,7 @@ export function AdminAuditLogManagement() {
 
         {log && (
           <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <SurfacePanel className="max-h-[calc(100vh-5rem)] overflow-y-auto p-6 lg:sticky lg:top-20 lg:self-start">
+            <SurfacePanel className="p-6 xl:sticky xl:top-24 xl:self-start">
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
                   <Icon className="h-5 w-5" />
@@ -209,7 +209,7 @@ export function AdminAuditLogManagement() {
                   <InfoBox label="目标类型" value={log.targetType || '未记录'} />
                   <InfoBox label="目标 ID" value={log.targetId || '未记录'} />
                 </div>
-                <p className="mt-4 break-all rounded-lg border border-black/10 bg-[#f7f9f7] p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-[#0f1511] dark:text-slate-400">
+                <p className="mt-4 break-all rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
                   {log.userAgent || '未记录 User-Agent'}
                 </p>
               </SurfacePanel>
@@ -387,7 +387,7 @@ function StatCard({ label, value, hint }: { label: string; value: number; hint: 
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-[#f7f9f7] p-4 dark:border-white/10 dark:bg-[#0f1511]">
+    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 break-all text-sm font-medium">{value}</p>
     </div>

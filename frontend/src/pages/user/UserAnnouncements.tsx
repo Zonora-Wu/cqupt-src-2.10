@@ -72,7 +72,7 @@ export function UserAnnouncements() {
         </button>
 
         <article className="mt-6 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
-          <SurfacePanel className="max-h-[calc(100vh-5rem)] overflow-y-auto p-5 lg:sticky lg:top-20 lg:self-start">
+          <SurfacePanel className="p-5 lg:sticky lg:top-24">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-md border px-2 py-1 text-xs font-medium ${categoryStyles[selectedAnnouncement.category] ?? categoryStyles.平台通知}`}>
                 {selectedAnnouncement.category}
@@ -96,7 +96,7 @@ export function UserAnnouncements() {
               <p>发布范围：{selectedAnnouncement.range}</p>
             </div>
 
-            <div className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-[#131a15]">
+            <div className="mt-5 rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
               <p className="text-sm font-medium">概要</p>
               <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{selectedAnnouncement.summary}</p>
             </div>
@@ -144,7 +144,7 @@ export function UserAnnouncements() {
 
         {!loading &&
           filteredAnnouncements.map((item) => (
-            <SurfacePanel className="p-5 transition hover:border-brand-600/30 hover:bg-brand-600/[0.04] dark:hover:bg-green-300/[0.04]" key={item.id}>
+            <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_120px] lg:items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
