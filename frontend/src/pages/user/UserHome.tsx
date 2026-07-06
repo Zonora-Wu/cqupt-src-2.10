@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
@@ -32,6 +33,7 @@ import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
 import { type AuthUser } from '../../services/auth'
@@ -144,17 +146,7 @@ const activities = [
   { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500' },
 ]
 
-const menuItems = [
-  '首页',
-  '提交漏洞',
-  '我的漏洞',
-  '我的证书',
-  '积分商城',
-  '排行榜',
-  '学习中心',
-  'AI助手',
-  '平台公告',
-]
+const menuItems = userNavItems.map((item) => item.label)
 
 function hasPendingAccessTasks(status: AccessStatus | null) {
   if (!status) return false
@@ -165,7 +157,6 @@ function hasPendingAccessTasks(status: AccessStatus | null) {
 
 export function UserHome({ onLogout, user }: UserHomeProps) {
   const preferenceKey = user.id ?? user.unifiedCode
-  const [activeMenu, setActiveMenu] = useState('首页')
   const [aiFocused, setAiFocused] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null)
@@ -179,6 +170,20 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
   const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
   const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeMenu = getLabelFromPath(location.pathname, userNavItems, userUtilityPaths)
+
+  const openMenu = (label: string) => {
+    const path = getPathFromLabel(label, userNavItems, userUtilityPaths)
+    if (path) navigate(path)
+  }
+
+  useEffect(() => {
+    if (!isKnownWorkspacePath(location.pathname, userNavItems, userUtilityPaths)) {
+      navigate('/user', { replace: true })
+    }
+  }, [location.pathname, navigate])
 
   // 加载准入状态，新用户未完成责任书或安全答题时进入首页弹窗提醒
   useEffect(() => {
@@ -266,7 +271,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setPendingAiPrompt(content)
     setAiPrompt('')
     setAiFocused(false)
-    setActiveMenu('AI助手')
+    navigate('/user/ai')
   }
 
   const refreshAccessStatus = async () => {
@@ -283,7 +288,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
   const openSecurityExamPage = () => {
     setShowAccessTodoDialog(false)
-    setActiveMenu('安全答题')
+    navigate('/user/security-exam')
   }
 
   return (
@@ -294,13 +299,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <BrandLogo />
           </div>
 
-          <ScrollableNav activeItem={activeMenu} items={menuItems} onChange={setActiveMenu} />
+          <ScrollableNav activeItem={activeMenu} items={menuItems} onChange={openMenu} />
 
           <div className="flex items-center justify-end gap-2">
             <button
               aria-label="通知"
               className="relative rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setActiveMenu('通知')}
+              onClick={() => navigate('/user/notifications')}
               type="button"
             >
               <Bell className="h-5 w-5" />
@@ -321,15 +326,15 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <UserAvatarMenu
               avatarUrl={navAvatarUrl}
               name={user.name}
-              onAccountSecurity={() => setActiveMenu('账号安全')}
+              onAccountSecurity={() => navigate('/user/account-security')}
               onLogout={onLogout}
-              onProfile={() => setActiveMenu('个人中心')}
-              onSystemSettings={() => setActiveMenu('系统设置')}
+              onProfile={() => navigate('/user/profile')}
+              onSystemSettings={() => navigate('/user/settings')}
             />
           </div>
         </div>
         <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} items={menuItems} mobile onChange={setActiveMenu} />
+          <ScrollableNav activeItem={activeMenu} items={menuItems} mobile onChange={openMenu} />
         </div>
       </header>
 
@@ -337,10 +342,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         <Suspense fallback={<UserPageLoading />}>
           {activeMenu === '安全答题' ? (
             <SecurityExamPage
-              onBack={() => setActiveMenu('首页')}
+              onBack={() => navigate('/user')}
               onPassed={() => {
                 void refreshAccessStatus().then((status) => {
-                  if (!hasPendingAccessTasks(status)) setActiveMenu('首页')
+                  if (!hasPendingAccessTasks(status)) navigate('/user')
                 })
               }}
             />
@@ -550,7 +555,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <button
                       className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
                       key={item.title}
-                      onClick={() => setActiveMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
+                      onClick={() => openMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-4">

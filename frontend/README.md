@@ -20,6 +20,18 @@
 - 管理员端：首页、漏洞管理、证书管理、用户管理、公告管理、学习管理、积分商城、审计日志、系统设置、AI 知识沉淀管理。
 - AI 助手支持 Markdown、代码块复制、卡片内操作、附件待发送区、报告草稿卡片、回到底部按钮。
 
+## 前端路由
+
+前端使用 `react-router-dom` 的 BrowserRouter。公开页面走 `/`、`/rules`、`/announcements`、`/certificates`、`/about`；登录后按角色进入 `/user/*`、`/auditor/*`、`/admin/*`。
+
+生产 Nginx 必须为前端静态站点配置 SPA fallback：
+
+```nginx
+location / {
+  try_files $uri $uri/ /index.html;
+}
+```
+
 ## 本地开发
 
 ```bash

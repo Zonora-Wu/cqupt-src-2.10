@@ -68,7 +68,7 @@ nginx -v
 
 ```bash
 cd /home/cocking/projects/cqupt-src-2.10
-bash deploy/scripts/start-local.sh
+bash start-local.sh
 ```
 
 脚本会启动 PostgreSQL、Redis、MinIO，安装依赖，执行 Prisma Client 生成、迁移和 seed，并启动前后端开发服务器。
@@ -84,7 +84,7 @@ curl -s http://localhost:5000/health
 停止前后端开发进程：
 
 ```bash
-bash deploy/scripts/stop-local.sh
+bash stop-local.sh
 ```
 
 如果只想停 Docker 依赖：
@@ -419,6 +419,8 @@ server {
     }
 }
 ```
+
+前端使用 BrowserRouter。生产环境必须保留 `try_files $uri $uri/ /index.html;`，否则刷新 `/user/ai`、`/auditor/review`、`/admin/users` 等前端路由会被 Nginx 当作静态路径并返回 404。
 
 启用：
 

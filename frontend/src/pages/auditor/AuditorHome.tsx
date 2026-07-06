@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { lazy, Suspense, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
@@ -32,6 +33,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { auditorNavItems, auditorUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
@@ -119,7 +121,7 @@ type ConfirmAction = {
   onConfirm: () => void | Promise<void>
 } | null
 
-const auditorMenuItems = ['首页', '漏洞审核', '复测归档', '证书管理', 'AI 辅助', '审核记录', '公告管理']
+const auditorMenuItems = auditorNavItems.map((item) => item.label)
 const reviewStatusOptions = ['全部状态', '待初审', '审核中', '待补充', '已确认', '已驳回']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
 
@@ -300,8 +302,21 @@ const announcementStatusStyles: Record<AnnouncementStatus, string> = {
 }
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
-  const [activeMenu, setActiveMenu] = useState('首页')
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeMenu = getLabelFromPath(location.pathname, auditorNavItems, auditorUtilityPaths)
+
+  const openMenu = (label: string) => {
+    const path = getPathFromLabel(label, auditorNavItems, auditorUtilityPaths)
+    if (path) navigate(path)
+  }
+
+  useEffect(() => {
+    if (!isKnownWorkspacePath(location.pathname, auditorNavItems, auditorUtilityPaths)) {
+      navigate('/auditor', { replace: true })
+    }
+  }, [location.pathname, navigate])
 
   useEffect(() => {
     applyColorTheme(theme)
@@ -312,9 +327,9 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
-          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={setActiveMenu} />
+          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={openMenu} />
           <div className="flex items-center justify-end gap-2">
-            <NotificationBell onClick={() => setActiveMenu('通知')} />
+            <NotificationBell onClick={() => navigate('/auditor/notifications')} />
             <button
               aria-label="切换主题"
               className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -329,22 +344,22 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
             </button>
             <UserAvatarMenu
               name={user.name}
-              onAccountSecurity={() => setActiveMenu('个人中心')}
+              onAccountSecurity={() => navigate('/auditor/profile')}
               onLogout={onLogout}
-              onProfile={() => setActiveMenu('个人中心')}
-              onSystemSettings={() => setActiveMenu('个人中心')}
+              onProfile={() => navigate('/auditor/profile')}
+              onSystemSettings={() => navigate('/auditor/profile')}
             />
           </div>
         </div>
         <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} mobile onChange={setActiveMenu} />
+          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} mobile onChange={openMenu} />
         </div>
       </header>
 
       {activeMenu === '通知' ? (
-        <NotificationPanel onClose={() => setActiveMenu('首页')} />
+        <NotificationPanel onClose={() => navigate('/auditor')} />
       ) : activeMenu === '首页' ? (
-        <AuditorDashboard onNavigate={setActiveMenu} />
+        <AuditorDashboard onNavigate={openMenu} />
       ) : activeMenu === '漏洞审核' ? (
         <Suspense fallback={<AuditorPageLoading />}>
           <AdminVulnerabilityManagement />

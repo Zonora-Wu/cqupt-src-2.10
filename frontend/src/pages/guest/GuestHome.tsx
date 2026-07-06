@@ -7,8 +7,10 @@ import {
   X,
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
+import { getPublicPageFromPath, publicPagePaths, type PublicPage } from '../../routes/routeConfig'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const IntroCopySection = lazy(() =>
@@ -75,9 +77,7 @@ const processItems = [
     description: '有效报告进入奖励流程，形成积分、证书和可验证的个人贡献记录。',
   },
 ]
-type GuestPage = 'home' | 'rules' | 'announcements' | 'certificates' | 'about'
-
-const navPageMap: Record<string, GuestPage> = {
+const navPageMap: Record<string, PublicPage> = {
   首页: 'home',
   平台规则: 'rules',
   公开公告: 'announcements',
@@ -88,21 +88,23 @@ const navPageMap: Record<string, GuestPage> = {
 export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
-  const [activePage, setActivePage] = useState<GuestPage>('home')
   const [homeCertificateNo, setHomeCertificateNo] = useState('')
   const [certificateSearchNo, setCertificateSearchNo] = useState('')
   const [certificateQueryNonce, setCertificateQueryNonce] = useState(0)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activePage = getPublicPageFromPath(location.pathname)
 
   useEffect(() => {
     applyColorTheme(theme)
   }, [theme])
 
-  const openPage = (page: GuestPage) => {
+  const openPage = (page: PublicPage) => {
     if (page === 'certificates') {
       setCertificateSearchNo('')
     }
-    setActivePage(page)
     setMobileOpen(false)
+    navigate(publicPagePaths[page])
     window.scrollTo({ top: 0 })
   }
 
@@ -110,8 +112,8 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
     const normalized = certificateNo.trim()
     setCertificateSearchNo(normalized)
     setCertificateQueryNonce((value) => value + 1)
-    setActivePage('certificates')
     setMobileOpen(false)
+    navigate(publicPagePaths.certificates)
     window.scrollTo({ top: 0 })
   }
 
@@ -119,9 +121,9 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
     <AppBackground>
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 md:px-8">
-          <a className="flex items-center" href="#">
+          <button className="flex items-center" onClick={() => openPage('home')} type="button">
             <BrandLogo />
-          </a>
+          </button>
 
           <div className="hidden items-center gap-8 md:flex">
             {navItems.map((item) => (

@@ -1,5 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { GuestHome } from './pages/guest/GuestHome'
+import { PublicOnly, RequireRole } from './routes/guards'
+import { getDefaultPathForRole } from './routes/routeConfig'
 import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
 import { clearSavedSession, getCurrentUser, getSavedSession, type AuthUser } from './services/auth'
 
@@ -20,10 +23,20 @@ const UserHome = lazy(() =>
 )
 
 function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
+  )
+}
+
+function AppShell() {
   const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getSavedSession()?.user ?? null)
   const [isCheckingSession, setIsCheckingSession] = useState(() => Boolean(getSavedSession()?.accessToken))
   const [sessionNotice, setSessionNotice] = useState('')
+  const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     let active = true
@@ -57,12 +70,21 @@ function App() {
   useEffect(() => {
     let noticeTimer: number | undefined
 
+    const routeNotice = (location.state as { notice?: string } | null)?.notice
+    if (routeNotice) {
+      setSessionNotice(routeNotice)
+      window.clearTimeout(noticeTimer)
+      noticeTimer = window.setTimeout(() => setSessionNotice(''), 3200)
+      window.history.replaceState({}, document.title, location.pathname)
+    }
+
     function handleSessionExpired() {
       clearSavedSession()
       setCurrentUser(null)
       setAuthModal(null)
       setIsCheckingSession(false)
       setSessionNotice('登录状态已失效，请重新登录。')
+      navigate('/', { replace: true })
       window.clearTimeout(noticeTimer)
       noticeTimer = window.setTimeout(() => setSessionNotice(''), 3200)
     }
@@ -73,7 +95,7 @@ function App() {
       window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired)
       window.clearTimeout(noticeTimer)
     }
-  }, [])
+  }, [location.pathname, location.state, navigate])
 
   if (isCheckingSession) {
     return (
@@ -85,19 +107,57 @@ function App() {
 
   return (
     <>
-      {currentUser ? (
-        <Suspense fallback={<AppLoading text="正在加载工作台..." />}>
-          {currentUser.role === 'admin' ? (
-            <AdminHome onLogout={handleLogout} user={currentUser} />
-          ) : currentUser.role === 'auditor' ? (
-            <AuditorHome onLogout={handleLogout} user={currentUser} />
-          ) : (
-            <UserHome onLogout={handleLogout} user={currentUser} />
+      <Routes>
+        {['/', '/rules', '/announcements', '/certificates', '/about'].map((path) => (
+          <Route
+            element={(
+              <PublicOnly user={currentUser}>
+                <GuestHome onLogin={() => setAuthModal('login')} onRegister={() => setAuthModal('register')} />
+              </PublicOnly>
+            )}
+            key={path}
+            path={path}
+          />
+        ))}
+        <Route
+          element={(
+            <RequireRole allowedRole="student" user={currentUser}>
+              <Suspense fallback={<AppLoading text="正在加载用户工作台..." />}>
+                {currentUser && <UserHome onLogout={handleLogout} user={currentUser} />}
+              </Suspense>
+            </RequireRole>
           )}
-        </Suspense>
-      ) : (
-        <GuestHome onLogin={() => setAuthModal('login')} onRegister={() => setAuthModal('register')} />
-      )}
+          path="/user/*"
+        />
+        <Route
+          element={(
+            <RequireRole allowedRole="auditor" user={currentUser}>
+              <Suspense fallback={<AppLoading text="正在加载审核工作台..." />}>
+                {currentUser && <AuditorHome onLogout={handleLogout} user={currentUser} />}
+              </Suspense>
+            </RequireRole>
+          )}
+          path="/auditor/*"
+        />
+        <Route
+          element={(
+            <RequireRole allowedRole="admin" user={currentUser}>
+              <Suspense fallback={<AppLoading text="正在加载管理工作台..." />}>
+                {currentUser && <AdminHome onLogout={handleLogout} user={currentUser} />}
+              </Suspense>
+            </RequireRole>
+          )}
+          path="/admin/*"
+        />
+        <Route
+          element={(
+            currentUser
+              ? <Navigate replace to={getDefaultPathForRole(currentUser.role)} />
+              : <Navigate replace state={{ notice: '请先登录后访问该页面。' }} to="/" />
+          )}
+          path="*"
+        />
+      </Routes>
       <Suspense fallback={null}>
         {authModal === 'login' && (
           <LoginModal
@@ -105,6 +165,7 @@ function App() {
             onLoginSuccess={(user) => {
               setCurrentUser(user)
               setAuthModal(null)
+              navigate(getDefaultPathForRole(user.role), { replace: true })
             }}
             onSwitchToRegister={() => setAuthModal('register')}
           />
@@ -115,6 +176,7 @@ function App() {
             onRegisterSuccess={(user) => {
               setCurrentUser(user)
               setAuthModal(null)
+              navigate(getDefaultPathForRole(user.role), { replace: true })
             }}
             onSwitchToLogin={() => setAuthModal('login')}
           />
@@ -132,6 +194,7 @@ function App() {
     clearSavedSession()
     setCurrentUser(null)
     setAuthModal(null)
+    navigate('/', { replace: true })
   }
 }
 

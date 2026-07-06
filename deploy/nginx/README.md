@@ -19,3 +19,4 @@ Nginx 配置目录。
 - HTTPS 配置
 - 安全响应头
 - 上传大小限制
+- 前端 BrowserRouter 路由回退：`try_files $uri $uri/ /index.html;`
