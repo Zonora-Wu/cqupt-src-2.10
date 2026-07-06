@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$repoRoot = Resolve-Path $PSScriptRoot
 $stateDir = Join-Path $repoRoot "tmp"
 $stateFile = Join-Path $stateDir "local-dev-processes.json"
 $composeFile = Join-Path $repoRoot "deploy\docker\docker-compose.local.yml"
@@ -148,4 +148,4 @@ Write-Host "Postgres: 127.0.0.1:15432"
 Write-Host "MinIO:    http://localhost:9001"
 Write-Host ""
 Write-Host "To stop everything:"
-Write-Host "powershell -ExecutionPolicy Bypass -File deploy\scripts\stop-local.ps1"
+Write-Host "powershell -ExecutionPolicy Bypass -File .\stop-local.ps1"

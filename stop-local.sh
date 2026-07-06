@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CQUPT-SRC 本地开发环境一键关闭脚本（Linux / WSL / macOS）
-# 用法：bash deploy/scripts/stop-local.sh [选项]
+# 用法：bash stop-local.sh [选项]
 #
 # 选项：
 #   --keep-postgres   保留 PostgreSQL 容器运行
@@ -9,8 +9,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$REPO_ROOT/deploy/docker/docker-compose.local.yml"
 STATE_FILE="$REPO_ROOT/tmp/local-dev-processes.json"
 
@@ -25,7 +24,7 @@ for arg in "$@"; do
     --keep-redis)    KEEP_REDIS=true ;;
     *)
       echo "未知参数: $arg"
-      echo "用法: bash deploy/scripts/stop-local.sh [--keep-postgres] [--keep-minio] [--keep-redis]"
+      echo "用法: bash stop-local.sh [--keep-postgres] [--keep-minio] [--keep-redis]"
       exit 1
       ;;
   esac

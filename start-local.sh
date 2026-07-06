@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CQUPT-SRC 本地开发环境一键启动脚本（Linux / WSL / macOS）
-# 用法：bash deploy/scripts/start-local.sh [选项]
+# 用法：bash start-local.sh [选项]
 #
 # 选项：
 #   --skip-postgres   跳过启动 PostgreSQL 容器
@@ -10,8 +10,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$REPO_ROOT/deploy/docker/docker-compose.local.yml"
 BACKEND_DIR="$REPO_ROOT/backend"
 FRONTEND_DIR="$REPO_ROOT/frontend"
@@ -32,7 +31,7 @@ for arg in "$@"; do
     --skip-db-init)  SKIP_DB_INIT=true ;;
     *)
       echo "未知参数: $arg"
-      echo "用法: bash deploy/scripts/start-local.sh [--skip-postgres] [--skip-minio] [--skip-redis] [--skip-db-init]"
+      echo "用法: bash start-local.sh [--skip-postgres] [--skip-minio] [--skip-redis] [--skip-db-init]"
       exit 1
       ;;
   esac
@@ -185,7 +184,7 @@ echo "  管理员    0000000@cqupt.edu.cn       /  admin123456+-"
 echo "  验证码    123456（开发环境固定值）"
 echo ""
 echo -e "${CYAN}停止所有服务：${NC}"
-echo "  bash deploy/scripts/stop-local.sh"
+echo "  bash stop-local.sh"
 echo ""
 
 # ---- 保持前台运行，Ctrl+C 时自动清理 ----

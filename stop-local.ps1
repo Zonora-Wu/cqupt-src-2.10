@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$repoRoot = Resolve-Path $PSScriptRoot
 $stateFile = Join-Path $repoRoot "tmp\local-dev-processes.json"
 $composeFile = Join-Path $repoRoot "deploy\docker\docker-compose.local.yml"
 

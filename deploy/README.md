@@ -18,10 +18,10 @@
 
 ```text
 deploy/docker/docker-compose.local.yml   # 本地 PostgreSQL / Redis / MinIO 依赖编排
-deploy/scripts/start-local.sh            # Linux / WSL / macOS 本地一键启动
-deploy/scripts/start-local.ps1           # Windows PowerShell 本地一键启动
-deploy/scripts/stop-local.sh             # Linux / WSL / macOS 停止脚本
-deploy/scripts/stop-local.ps1            # Windows PowerShell 停止脚本
+start-local.sh                           # Linux / WSL / macOS 本地一键启动（项目根目录）
+start-local.ps1                          # Windows PowerShell 本地一键启动（项目根目录）
+stop-local.sh                            # Linux / WSL / macOS 停止脚本（项目根目录）
+stop-local.ps1                           # Windows PowerShell 停止脚本（项目根目录）
 deploy/nginx/README.md                   # Nginx 职责说明，完整示例见部署文档
 ```
 

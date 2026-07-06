@@ -9,7 +9,6 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
-import { preloadLaptopShowcaseAssets } from '../../components/guest/laptopShowcaseAssets'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const IntroCopySection = lazy(() =>
@@ -99,9 +98,6 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   }, [theme])
 
   const openPage = (page: GuestPage) => {
-    if (page === 'about') {
-      preloadLaptopShowcaseAssets()
-    }
     if (page === 'certificates') {
       setCertificateSearchNo('')
     }
@@ -136,13 +132,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
                     : 'text-slate-600 dark:text-slate-400'
                 }`}
                 key={item}
-                onFocus={() => {
-                  if (navPageMap[item] === 'about') preloadLaptopShowcaseAssets()
-                }}
                 onClick={() => openPage(navPageMap[item])}
-                onMouseEnter={() => {
-                  if (navPageMap[item] === 'about') preloadLaptopShowcaseAssets()
-                }}
                 type="button"
               >
                 {item}
@@ -195,13 +185,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
                 <button
                   className="rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                   key={item}
-                  onFocus={() => {
-                    if (navPageMap[item] === 'about') preloadLaptopShowcaseAssets()
-                  }}
                   onClick={() => openPage(navPageMap[item])}
-                  onTouchStart={() => {
-                    if (navPageMap[item] === 'about') preloadLaptopShowcaseAssets()
-                  }}
                   type="button"
                 >
                   {item}

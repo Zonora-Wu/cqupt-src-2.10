@@ -99,6 +99,8 @@ cqupt-src-2.10/
 ├── tests/          # E2E 测试和测试数据
 ├── storage/        # 本地上传文件临时目录，不提交真实文件
 ├── tmp/            # 临时文件目录，不提交真实文件
+├── start-local.sh / .ps1
+├── stop-local.sh / .ps1
 ├── PROJECT_HANDOFF.md
 ├── VibeCoding.md
 └── 文档/           # 早期需求与过程记录，已加同步说明
@@ -347,9 +349,7 @@ deploy/
 ├── nginx/
 │   └── README.md                   # Nginx 职责说明与配置示例
 └── scripts/
-    ├── start-local.sh / .ps1       # 一键启动本地开发环境
-    ├── stop-local.sh / .ps1        # 停止本地开发环境
-    └── README.md                   # 脚本使用指南
+    └── README.md                   # 脚本迁移说明；本地启动脚本位于项目根目录
 ```
 
 ### `tests/` — 测试
@@ -388,6 +388,8 @@ docs/
 ```text
 ├── storage/                      # 本地开发临时存储（不提交真实上传文件）
 ├── tmp/                          # 临时文件（不提交真实运行数据）
+├── start-local.sh / .ps1         # 一键启动本地开发环境
+├── stop-local.sh / .ps1          # 停止本地开发环境
 ├── CQUPT/                        # Logo 原始资源
 ├── 文档/                         # 早期需求与过程记录
 │   └── 总体建议.md               # 总体技术推进建议
@@ -403,19 +405,25 @@ docs/
 Linux / WSL / macOS：
 
 ```bash
-bash deploy/scripts/start-local.sh
+bash start-local.sh
 ```
 
 关闭：
 
 ```bash
-bash deploy/scripts/stop-local.sh
+bash stop-local.sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
+powershell -ExecutionPolicy Bypass -File .\start-local.ps1
+```
+
+Windows 关闭：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\stop-local.ps1
 ```
 
 启动后访问：
@@ -427,7 +435,12 @@ powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
 | 平台 Hermes Gateway | http://localhost:5000/health |
 | MinIO 控制台 | http://localhost:9001 |
 
-更多启动选项见 `deploy/scripts/README.md`。
+可选参数：
+
+```bash
+bash start-local.sh --skip-postgres --skip-minio --skip-redis --skip-db-init
+bash stop-local.sh --keep-postgres --keep-minio --keep-redis
+```
 
 ### 方式二：手动分步启动
 

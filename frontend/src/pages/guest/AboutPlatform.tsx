@@ -1,5 +1,4 @@
 import { Building2, GraduationCap, Network, ShieldCheck, Target, Users } from 'lucide-react'
-import { KaliLaptopShowcase } from '../../components/guest/KaliLaptopShowcase'
 
 const values = [
   {
@@ -27,23 +26,36 @@ const stakeholders = [
 
 export function AboutPlatform() {
   return (
-    <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
-      <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-green-300">
-          <Target className="h-4 w-4" />
-          关于平台
+    <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-36 md:px-8 md:pt-40">
+      <section className="grid items-end gap-10 lg:grid-cols-[1.08fr_0.92fr]">
+        <div>
+          <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-green-300">
+            <Target className="h-4 w-4" />
+            关于平台
+          </div>
+          <h1 className="max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">不只是漏洞库，而是安全教育与治理系统</h1>
+          <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
+            CQUPT-SRC 希望以较低建设成本，形成一个连接漏洞响应、安全学习、证书激励和校园安全治理的长期平台，推动高校网络安全产教融合实践。
+          </p>
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">不只是漏洞库，而是安全教育与治理系统</h1>
-        <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
-          CQUPT-SRC 希望以较低建设成本，形成一个连接漏洞响应、安全学习、证书激励和校园安全治理的长期平台，推动高校网络安全产教融合实践。
-        </p>
+
+        <div className="rounded-lg border border-black/10 bg-white/75 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+          <div className="text-sm font-medium text-brand-700 dark:text-green-300">平台定位</div>
+          <p className="mt-4 text-2xl font-semibold leading-snug text-slate-950 dark:text-white">
+            以授权测试为边界，以真实反馈为闭环，以可追溯数据支撑校园安全治理。
+          </p>
+          <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+            {['响应', '学习', '激励'].map((item) => (
+              <div className="rounded-lg border border-black/10 bg-black/[0.025] px-3 py-4 dark:border-white/10 dark:bg-white/[0.04]" key={item}>
+                <div className="text-lg font-semibold text-brand-700 dark:text-green-300">{item}</div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">闭环能力</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <section className="mt-12">
-        <KaliLaptopShowcase />
-      </section>
-
-      <section className="mt-16 grid gap-5 md:grid-cols-3">
+      <section className="mt-14 grid gap-5 md:grid-cols-3">
         {values.map((item) => {
           const Icon = item.icon
           return (
@@ -58,24 +70,26 @@ export function AboutPlatform() {
         })}
       </section>
 
-      <section className="mt-16 rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
-        <h2 className="text-2xl font-semibold">平台愿景</h2>
-        <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400 [text-indent:2em]">
-          平台的核心目标不是简单收集漏洞，而是建立一个可持续的校园安全正循环：学生在真实场景中学习和成长，学校在规范流程中发现和处置风险，学院获得可观测的人才培养数据，最终形成可复制、可推广的高校网络安全产教融合案例。
-        </p>
-      </section>
+      <section className="mt-14 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <article className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <h2 className="text-2xl font-semibold">平台愿景</h2>
+          <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
+            平台的核心目标不是简单收集漏洞，而是建立一个可持续的校园安全正循环：学生在真实场景中学习和成长，学校在规范流程中发现和处置风险，学院获得可观测的人才培养数据，最终形成可复制、可推广的高校网络安全产教融合案例。
+          </p>
+        </article>
 
-      <section className="mt-16 grid gap-5 md:grid-cols-3">
-        {stakeholders.map((item) => {
-          const Icon = item.icon
-          return (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-6 text-center backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
-              <Icon className="mx-auto mb-4 h-8 w-8 text-brand-700 dark:text-green-300" />
-              <h3 className="text-lg font-semibold">{item.label}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.desc}</p>
-            </article>
-          )
-        })}
+        <section className="grid gap-5 md:grid-cols-3">
+          {stakeholders.map((item) => {
+            const Icon = item.icon
+            return (
+              <article className="rounded-lg border border-black/10 bg-white/70 p-6 text-center backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
+                <Icon className="mx-auto mb-4 h-8 w-8 text-brand-700 dark:text-green-300" />
+                <h3 className="text-lg font-semibold">{item.label}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.desc}</p>
+              </article>
+            )
+          })}
+        </section>
       </section>
     </main>
   )

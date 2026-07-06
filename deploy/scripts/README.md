@@ -12,23 +12,25 @@
 
 ## 本地一键启动 / 关闭
 
+本地启动和停止脚本已迁移到项目根目录，便于直接从仓库根目录执行。
+
 ### Linux / WSL / macOS
 
 ```bash
 cd /home/cocking/projects/cqupt-src-2.10
-bash deploy/scripts/start-local.sh
+bash start-local.sh
 ```
 
 停止：
 
 ```bash
-bash deploy/scripts/stop-local.sh
+bash stop-local.sh
 ```
 
 ### Windows PowerShell
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\scripts\start-local.ps1
+powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 ```
 
 ## 启动后检查
