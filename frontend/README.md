@@ -45,7 +45,7 @@ npm run dev
 http://localhost:5173
 ```
 
-开发环境通过 Vite proxy 将 `/api` 转发到 `http://localhost:3000`。
+开发环境通过 Vite proxy 将 `/api` 转发到 `http://127.0.0.1:3001`。
 
 ## 构建
 

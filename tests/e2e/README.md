@@ -21,7 +21,7 @@ cd backend
 npm run test:core-e2e
 ```
 
-默认目标：`API_BASE_URL=http://localhost:3000/api`。
+默认目标：`API_BASE_URL=http://localhost:3001/api`。
 
 当前覆盖 P0 核心链路：
 
@@ -51,7 +51,7 @@ cd backend
 npm run test:ai-problem-session
 ```
 
-默认目标：`API_BASE_URL=http://localhost:3000/api`。
+默认目标：`API_BASE_URL=http://localhost:3001/api`。
 
 当前覆盖 AI Knowledge Base 进度表中的这些验收点：
 

@@ -25,7 +25,7 @@
 | 组件 | 默认端口 | 说明 |
 |---|---:|---|
 | Nginx | 80 / 443 | 对外入口，HTTPS、前端静态文件、`/api` 反代 |
-| Backend | 3000 | NestJS API，健康检查 `/api/health` |
+| Backend | 3001 | NestJS API，健康检查 `/api/health` |
 | Frontend | 静态文件 | Vite 构建产物 `frontend/dist` |
 | PostgreSQL | 5432 / 本地 15432 | 主业务库，Prisma schema 在 `database/prisma/schema.prisma` |
 | Redis | 6379 | 队列、缓存与后续异步任务扩展 |
@@ -76,8 +76,8 @@ bash start-local.sh
 验证：
 
 ```bash
-curl -s http://localhost:3000/api/health
-curl -s http://localhost:3000/api/ai/health
+curl -s http://localhost:3001/api/health
+curl -s http://localhost:3001/api/ai/health
 curl -s http://localhost:5000/health
 ```
 
@@ -145,7 +145,7 @@ chmod 600 /opt/cqupt-src/shared/backend.env
 
 ```env
 NODE_ENV=production
-PORT=3000
+PORT=3001
 API_PREFIX=api
 
 # CORS。多个来源用英文逗号分隔。
@@ -404,7 +404,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     location /api/ {
-        proxy_pass http://127.0.0.1:3000/api/;
+        proxy_pass http://127.0.0.1:3001/api/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -453,8 +453,8 @@ npm run build
 健康检查：
 
 ```bash
-curl -s http://127.0.0.1:3000/api/health
-curl -s http://127.0.0.1:3000/api/ai/health
+curl -s http://127.0.0.1:3001/api/health
+curl -s http://127.0.0.1:3001/api/ai/health
 curl -s http://127.0.0.1:5000/health
 curl -I https://src.example.edu.cn/
 curl -s https://src.example.edu.cn/api/health

@@ -8,7 +8,7 @@ async function bootstrap() {
 
   const apiPrefix = process.env.API_PREFIX ?? 'api'
   const frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173'
-  const port = Number(process.env.PORT ?? 3000)
+  const port = Number(process.env.PORT ?? 3001)
 
   app.use(json({ limit: '5mb' }))
   app.setGlobalPrefix(apiPrefix)

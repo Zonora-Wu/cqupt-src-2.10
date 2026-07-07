@@ -131,7 +131,7 @@ fi
 LOG_DIR="$STATE_DIR/logs"
 mkdir -p "$LOG_DIR"
 
-log_info "启动后端开发服务器（端口 3000）..."
+log_info "启动后端开发服务器（端口 3001）..."
 (cd "$BACKEND_DIR" && npm run dev > "$LOG_DIR/backend.log" 2>&1) &
 BACKEND_PID=$!
 
@@ -156,7 +156,7 @@ EOF
 # ---- 等待服务就绪 ----
 log_info "等待后端启动..."
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:3000/api/health &>/dev/null; then
+  if curl -sf http://localhost:3001/api/health &>/dev/null; then
     log_success "后端已就绪"
     break
   fi
@@ -170,7 +170,7 @@ echo ""
 echo -e "${GREEN}=== 启动完成 ===${NC}"
 echo ""
 echo "  前端          http://localhost:5173"
-echo "  后端 API      http://localhost:3000/api/health"
+echo "  后端 API      http://localhost:3001/api/health"
 echo "  PostgreSQL    127.0.0.1:15432"
 echo "  MinIO 控制台  http://localhost:9001  (minioadmin / minioadmin)"
 echo ""

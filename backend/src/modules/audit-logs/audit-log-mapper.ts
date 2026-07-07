@@ -12,7 +12,7 @@ type AuditLogWithActor = Prisma.AuditLogGetPayload<{
   }
 }>
 
-const actionLabels: Record<AuditAction, string> = {
+const actionLabels: Partial<Record<AuditAction, string>> = {
   CALL_AI: '调用 AI 能力',
   CHANGE_SYSTEM_SETTING: '修改系统设置',
   CHANGE_USER_PERMISSION: '调整用户权限',
@@ -30,6 +30,8 @@ const actionLabels: Record<AuditAction, string> = {
   SUBMIT_VULNERABILITY: '提交漏洞',
   VIEW_SENSITIVE_ATTACHMENT: '查看敏感附件',
 }
+
+const aiRetestActions = Object.values(AuditAction).filter((action) => action.startsWith('AI_RETEST_')) as AuditAction[]
 
 const moduleLabels: Record<AuditModuleCode, string> = {
   AI: 'AI 调用',
@@ -60,6 +62,7 @@ const mediumRiskActions = new Set<AuditAction>([
   AuditAction.MANAGE_MALL,
   AuditAction.PUBLISH_ANNOUNCEMENT,
   AuditAction.SUBMIT_VULNERABILITY,
+  ...aiRetestActions,
 ])
 
 export function getAuditActionLabel(action: AuditAction) {
@@ -67,7 +70,9 @@ export function getAuditActionLabel(action: AuditAction) {
 }
 
 export function getAuditModule(action: AuditAction): AuditModuleCode {
-  const map: Record<AuditAction, AuditModuleCode> = {
+  if (action.startsWith('AI_RETEST_')) return 'AI'
+
+  const map: Partial<Record<AuditAction, AuditModuleCode>> = {
     CALL_AI: 'AI',
     CHANGE_SYSTEM_SETTING: 'SYSTEM',
     CHANGE_USER_PERMISSION: 'USER',

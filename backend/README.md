@@ -42,7 +42,7 @@ npm run dev
 cd /home/cocking/projects/cqupt-src-2.10/backend
 npm run build
 npm run prisma:validate
-curl -s http://localhost:3000/api/health
+curl -s http://localhost:3001/api/health
 ```
 
 ## AI 运行依赖

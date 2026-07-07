@@ -9,7 +9,7 @@ const { PrismaClient } = require('../../backend/node_modules/@prisma/client')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = resolve(__dirname, '../..')
-const API_BASE_URL = (process.env.API_BASE_URL ?? 'http://localhost:3000/api').replace(/\/$/, '')
+const API_BASE_URL = (process.env.API_BASE_URL ?? 'http://localhost:3001/api').replace(/\/$/, '')
 const EVIDENCE_DIR = process.env.E2E_EVIDENCE_DIR ?? resolve(PROJECT_ROOT, 'tests/e2e/evidence')
 const runId = `phase2_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`
 const marker = `[${runId}]`

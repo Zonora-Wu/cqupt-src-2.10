@@ -27,7 +27,7 @@ CQUPT-SRC 是校园漏洞响应与安全学习平台，覆盖学生提交漏洞�
 | 文件存储 | MinIO |
 | 平台 Hermes | `/home/cocking/cqupt-src-hermes-linux/` Docker 容器 |
 | Hermes API | `http://localhost:5000/v1/chat/completions` |
-| 后端健康检查 | `http://localhost:3000/api/health` |
+| 后端健康检查 | `http://localhost:3001/api/health` |
 | 前端开发地址 | `http://localhost:5173` |
 
 ## 3. 已完成主线
@@ -58,7 +58,7 @@ CQUPT-SRC 是校园漏洞响应与安全学习平台，覆盖学生提交漏洞�
 ```bash
 cd /home/cocking/projects/cqupt-src-2.10
 bash deploy/scripts/start-local.sh
-curl -s http://localhost:3000/api/health
+curl -s http://localhost:3001/api/health
 curl -s http://localhost:5000/health
 ```
 

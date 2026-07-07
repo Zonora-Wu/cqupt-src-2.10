@@ -143,7 +143,7 @@ $state | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $stateFile
 Write-Host ""
 Write-Host "Startup commands have been launched." -ForegroundColor Green
 Write-Host "Frontend: http://localhost:5173"
-Write-Host "Backend:  http://localhost:3000/api/health"
+Write-Host "Backend:  http://localhost:3001/api/health"
 Write-Host "Postgres: 127.0.0.1:15432"
 Write-Host "MinIO:    http://localhost:9001"
 Write-Host ""

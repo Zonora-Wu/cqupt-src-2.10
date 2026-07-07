@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 ## 启动后检查
 
 ```bash
-curl -s http://localhost:3000/api/health
+curl -s http://localhost:3001/api/health
 curl -s http://localhost:5000/health
 ```
 
@@ -45,7 +45,7 @@ curl -s http://localhost:5000/health
 | 服务 | 地址 |
 |---|---|
 | 前端 | http://localhost:5173 |
-| 后端 | http://localhost:3000/api/health |
+| 后端 | http://localhost:3001/api/health |
 | 平台 Hermes | http://localhost:5000/health |
 | MinIO Console | http://localhost:9001 |
 

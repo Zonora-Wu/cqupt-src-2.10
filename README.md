@@ -431,7 +431,7 @@ powershell -ExecutionPolicy Bypass -File .\stop-local.ps1
 | 服务 | 地址 |
 |---|---|
 | 前端页面 | http://localhost:5173 |
-| 后端 API 健康检查 | http://localhost:3000/api/health |
+| 后端 API 健康检查 | http://localhost:3001/api/health |
 | 平台 Hermes Gateway | http://localhost:5000/health |
 | MinIO 控制台 | http://localhost:9001 |
 
@@ -476,7 +476,7 @@ npm run build
 npm run lint
 
 # 健康检查
-curl -s http://localhost:3000/api/health
+curl -s http://localhost:3001/api/health
 curl -s http://localhost:5000/health
 ```
 

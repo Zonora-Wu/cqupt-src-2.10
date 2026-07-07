@@ -66,7 +66,7 @@ AI：后端 AI Gateway 代理平台 Hermes；邮宝支持最小上下文、dataR
 ```bash
 cd backend && npm run build
 cd frontend && npm run build
-curl -s http://localhost:3000/api/health
+curl -s http://localhost:3001/api/health
 curl -s http://localhost:5000/health
 ```
 

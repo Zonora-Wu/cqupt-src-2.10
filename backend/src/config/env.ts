@@ -9,7 +9,7 @@ export function validateEnv(config: EnvConfig) {
     throw new Error(`Missing required environment variables: ${missingKeys.join(', ')}`)
   }
 
-  const port = Number(config.PORT ?? 3000)
+  const port = Number(config.PORT ?? 3001)
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error('PORT must be a valid TCP port')
   }

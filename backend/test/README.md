@@ -19,7 +19,7 @@
 默认目标：
 
 ```text
-http://localhost:3000/api
+http://localhost:3001/api
 ```
 
 运行：
@@ -32,7 +32,7 @@ npm.cmd run test:core-api
 如后端不在默认地址，可指定：
 
 ```powershell
-$env:API_BASE_URL="http://localhost:3000/api"
+$env:API_BASE_URL="http://localhost:3001/api"
 npm.cmd run test:core-api
 ```
 
