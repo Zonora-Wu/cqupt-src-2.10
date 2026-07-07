@@ -15,7 +15,7 @@ export function PageHeader({ eyebrowIcon, eyebrow, title, description, align = '
 
   return (
     <div className={centerClass}>
-      <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+      <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
         {eyebrowIcon}
         {eyebrow}
       </p>

@@ -66,8 +66,8 @@ export function PlatformRules() {
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
       <section className="mx-auto max-w-4xl text-center">
         <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1">
-          <span className="h-2 w-2 rounded-full bg-brand-600 dark:bg-green-300" />
-          <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-green-300">PLATFORM RULES</span>
+          <span className="h-2 w-2 rounded-full bg-brand-600 dark:bg-brand-300" />
+          <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">PLATFORM RULES</span>
         </div>
         <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
           规范参与，安全共建
@@ -79,8 +79,8 @@ export function PlatformRules() {
 
       <section className="mx-auto mt-14 grid max-w-5xl gap-5 md:grid-cols-3">
         {principles.map((item, index) => (
-          <article className="rounded-lg border border-black/10 bg-white/70 p-6 text-left backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
-            <div className="font-mono text-sm text-brand-700 dark:text-green-300">{String(index + 1).padStart(2, '0')}</div>
+          <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 text-left backdrop-blur-xl dark:border-white/10 " key={item.title}>
+            <div className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
             <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
           </article>
@@ -98,9 +98,9 @@ export function PlatformRules() {
         <div className="mt-10 hidden overflow-x-auto pb-2 md:block">
           <div className="grid min-w-[980px] grid-cols-7 gap-3">
             {process.map((item, index) => (
-              <article className="relative min-h-[190px] rounded-lg border border-black/10 bg-white/70 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
+              <article className="relative min-h-[190px] rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl dark:border-white/10 " key={item.title}>
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-sm text-brand-700 dark:text-green-300">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</span>
                   {index < process.length - 1 && <ArrowRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
                 </div>
                 <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
@@ -112,8 +112,8 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:hidden">
           {process.map((item, index) => (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
-              <div className="font-mono text-sm text-brand-700 dark:text-green-300">{String(index + 1).padStart(2, '0')}</div>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10 " key={item.title}>
+              <div className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
               <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.text}</p>
             </article>
@@ -121,7 +121,7 @@ export function PlatformRules() {
         </div>
       </section>
 
-      <section className="mx-auto mt-20 max-w-5xl rounded-lg border border-black/10 bg-white/65 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+      <section className="mx-auto mt-20 max-w-5xl rounded-lg border border-black/10 bg-white/65 p-7 backdrop-blur-xl dark:border-white/10 ">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight">一份合格报告应包含什么</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
@@ -131,8 +131,8 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {reportFocus.map(([title, text], index) => (
-            <article className="rounded-lg border border-black/10 bg-white/75 p-4 dark:border-white/10 dark:bg-black/20" key={title}>
-              <div className="font-mono text-xs text-brand-700 dark:text-green-300">{String(index + 1).padStart(2, '0')}</div>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10 dark:bg-black/20" key={title}>
+              <div className="font-mono text-xs text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
               <h3 className="mt-3 font-semibold">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{text}</p>
             </article>
@@ -141,13 +141,13 @@ export function PlatformRules() {
 
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
           {reportSections.map((section) => (
-            <article className="rounded-lg border border-black/10 bg-white/75 p-5 dark:border-white/10 dark:bg-black/20" key={section.title}>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-5 dark:border-white/10 dark:bg-black/20" key={section.title}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
               <ul className="mt-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
                 {section.items.map((item) => (
                   <li className="flex items-center justify-between gap-3 border-b border-black/5 pb-2 last:border-b-0 last:pb-0 dark:border-white/5" key={item}>
                     <span>{item}</span>
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600/70 dark:bg-green-300/80" />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600/70 dark:bg-brand-300/80" />
                   </li>
                 ))}
               </ul>
@@ -155,13 +155,13 @@ export function PlatformRules() {
           ))}
         </div>
 
-        <div className="mt-6 rounded-lg border border-black/10 bg-white/75 p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-400">
+        <div className="mt-6 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-400">
           证明材料应按平台支持格式提交。截图、请求示例或附件只保留验证漏洞所需内容，主动遮挡账号、Cookie、Token、验证码、个人信息和业务敏感数据。
         </div>
       </section>
 
       <section className="mx-auto mt-20 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <article className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
           <h2 className="text-3xl font-semibold tracking-tight">禁止行为</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             以下行为会导致报告驳回、扣除积分、撤销证书、限制账号，严重时将移交相关单位处理。
@@ -176,7 +176,7 @@ export function PlatformRules() {
           </ul>
         </article>
 
-        <article className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+        <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
           <h2 className="text-3xl font-semibold tracking-tight">邮宝使用边界</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             邮宝可以辅助整理漏洞标题、复现步骤、影响说明和修复建议，也可以推荐学习路径、检查敏感信息。
@@ -196,7 +196,7 @@ export function PlatformRules() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {reviewRules.map(([title, text]) => (
-            <article className="rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]" key={title}>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10 " key={title}>
               <h3 className="text-lg font-semibold">{title}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{text}</p>
             </article>

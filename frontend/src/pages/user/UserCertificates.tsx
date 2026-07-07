@@ -34,7 +34,7 @@ const statusOptions = ['全部状态', '已签发', '已撤销']
 const certStatusStyles: Record<string, string> = {
   已撤销: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   已签发: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  待签发: 'border-black/10 bg-black/[0.035] text-slate-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300',
+  待签发: 'border-black/10 bg-[var(--app-panel-muted-bg)] text-slate-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300',
 }
 
 export function UserCertificates() {
@@ -196,7 +196,7 @@ export function UserCertificates() {
           return (
             <SurfacePanel className="p-5" key={item.label}>
               <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 <span className="text-3xl font-semibold">{item.value}</span>
               </div>
               <p className="mt-3 text-sm font-medium">{item.label}</p>
@@ -240,7 +240,7 @@ export function UserCertificates() {
             </div>
             <div className="mt-5 flex gap-2">
               <input
-                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
+                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30"
                 onChange={(event) => setQueryCode(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void searchCertificate()
@@ -258,10 +258,10 @@ export function UserCertificates() {
             </div>
 
             {queryTouched && (
-              <div className="mt-4 rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="mt-4 rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                 {queryResult ? (
                   <>
-                    <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300">
+                    <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-300">
                       <CheckCircle2 className="h-4 w-4" />
                       查询有效
                     </div>
@@ -289,14 +289,14 @@ export function UserCertificates() {
           filteredCertificates.map((item) => (
             <SurfacePanel className="overflow-hidden p-0 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
               <div className="grid gap-0 lg:grid-cols-[300px_minmax(0,1fr)]">
-                <div className="relative min-h-56 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-amber-50 dark:from-emerald-950/40 dark:via-white/[0.06] dark:to-amber-950/25">
-                  <div className="absolute inset-6 rounded-lg border border-white/70 bg-white/45 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06]" />
+                <div className="relative min-h-56 overflow-hidden bg-gradient-to-br from-brand-100 via-white to-amber-50 dark:from-brand-950/40 dark:via-white/[0.06] dark:to-amber-950/25">
+                  <div className="absolute inset-6 rounded-lg border border-white/70 bg-[var(--app-panel-muted-bg)] shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06]" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
                         <Award className="h-8 w-8" />
                       </div>
-                      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+                      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
                         CQUPT-SRC
                       </p>
                       <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">PDF Certificate</p>
@@ -329,14 +329,14 @@ export function UserCertificates() {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                    <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                       <p className="text-sm font-medium">证书操作</p>
                       <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                         预览会打开完整 PDF；下载会保存后端生成的电子证书文件。
                       </p>
                       <div className="mt-4 grid gap-2">
                         <button
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/15 disabled:cursor-not-allowed disabled:opacity-55 dark:text-green-300"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/15 disabled:cursor-not-allowed disabled:opacity-55 dark:text-brand-300"
                           disabled={item.status !== '已签发' || isPreviewLoading}
                           onClick={() => void previewCertificate(item)}
                           type="button"

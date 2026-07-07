@@ -294,7 +294,7 @@ function SettingsCard({
   return (
     <SurfacePanel className="overflow-visible p-0">
       <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
           {icon}
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
         </div>
@@ -363,14 +363,14 @@ function ThemeOption({
     <button
       className={`relative flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-sm font-medium transition ${
         active
-          ? 'border-brand-600/60 bg-brand-50 text-brand-700 ring-1 ring-brand-600/30 dark:border-green-300/40 dark:bg-green-300/5 dark:text-green-300'
-          : 'border-black/10 text-slate-600 hover:border-brand-600/25 hover:bg-black/[0.025] dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5'
+          ? 'border-brand-600/60 bg-brand-50 text-brand-700 ring-1 ring-brand-600/30 dark:border-brand-300/40 dark:bg-brand-300/5 dark:text-brand-300'
+          : 'border-black/10 text-slate-600 hover:border-brand-600/25 hover:bg-[var(--app-panel-muted-bg)] dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5'
       }`}
       onClick={onClick}
       type="button"
     >
       {active && (
-        <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 dark:bg-green-400">
+        <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 dark:bg-brand-400">
           <Check className="h-2.5 w-2.5 text-white dark:text-slate-900" />
         </span>
       )}
@@ -398,8 +398,8 @@ function LanguageOption({
     <button
       className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
         active
-          ? 'border-brand-600/60 bg-brand-50 ring-1 ring-brand-600/30 dark:border-green-300/40 dark:bg-green-300/5'
-          : 'border-black/10 hover:border-brand-600/25 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/5'
+          ? 'border-brand-600/60 bg-brand-50 ring-1 ring-brand-600/30 dark:border-brand-300/40 dark:bg-brand-300/5'
+          : 'border-black/10 hover:border-brand-600/25 hover:bg-[var(--app-panel-muted-bg)] dark:border-white/10 dark:hover:bg-white/5'
       }`}
       onClick={onClick}
       type="button"
@@ -408,10 +408,10 @@ function LanguageOption({
         {flag}
       </span>
       <div className="flex-1">
-        <p className={`text-sm font-medium ${active ? 'text-brand-700 dark:text-green-300' : ''}`}>{label}</p>
+        <p className={`text-sm font-medium ${active ? 'text-brand-700 dark:text-brand-300' : ''}`}>{label}</p>
         <p className="text-xs text-slate-400 dark:text-slate-500">{sublabel}</p>
       </div>
-      {active && <Check className="h-4 w-4 text-brand-600 dark:text-green-300" />}
+      {active && <Check className="h-4 w-4 text-brand-600 dark:text-brand-300" />}
     </button>
   )
 }

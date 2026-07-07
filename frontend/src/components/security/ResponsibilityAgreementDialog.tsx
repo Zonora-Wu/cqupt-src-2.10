@@ -81,11 +81,11 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10">
         <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
           <div>
             <div className="flex items-center gap-2">
-              <FileSignature className="h-5 w-5 text-brand-700 dark:text-green-300" />
+              <FileSignature className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
                 {agreement?.title ?? 'CQUPT-SRC 授权测试责任书'}
               </h2>
@@ -119,9 +119,9 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
               正在加载责任书...
             </div>
           ) : agreement ? (
-            <article className="rounded-lg border border-black/10 bg-slate-50/80 p-5 text-sm leading-8 text-slate-700 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-200">
+            <article className="rounded-lg border border-black/10 bg-slate-50/80 p-5 text-sm leading-8 text-slate-700 dark:border-white/10 dark:bg-[#18211b]/60 dark:text-slate-200">
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="rounded-full bg-brand-600/10 px-2.5 py-1 font-medium text-brand-700 dark:text-green-300">
+                <span className="rounded-full bg-brand-600/10 px-2.5 py-1 font-medium text-brand-700 dark:text-brand-300">
                   {agreement.version}
                 </span>
                 {agreement.publishedAt && <span>发布时间：{new Date(agreement.publishedAt).toLocaleString()}</span>}

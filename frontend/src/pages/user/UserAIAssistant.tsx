@@ -507,7 +507,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         onDismiss={setDismissedQuotaWarning}
       />
       <motion.div
-        className="w-full rounded-lg border border-black/10 bg-[#f7f9f7]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/90 dark:shadow-black/25"
+        className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 /90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
@@ -610,7 +610,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
             key="ai-empty"
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
               <Sparkles className="h-3.5 w-3.5" />
               YouBao AI
             </p>
@@ -691,7 +691,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                 transition={{ duration: 0.25, ease: 'easeOut' }}
               >
                 <AssistantAvatar avatarUrl={aiAvatarUrl} thinking />
-                <div className="rounded-lg border border-black/10 bg-white/70 px-4 py-3 text-sm leading-7 text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+                <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-4 py-3 text-sm leading-7 text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10  dark:text-slate-300">
                   <TypingIndicator />
                 </div>
               </motion.div>
@@ -719,7 +719,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                 >
                   <button
                     aria-label="滚动到底部"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/75 text-slate-500 shadow-lg backdrop-blur-md transition hover:bg-white hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-panel-bg)] text-slate-500 shadow-lg backdrop-blur-md transition hover:bg-white hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white"
                     onClick={() => {
                       scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
                     }}
@@ -812,7 +812,7 @@ function AiHistoryPanel({
     return (
       <button
         aria-label="展开历史对话"
-        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[#f7f9f7]/95 text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:bg-[#0f1511]/95 dark:text-slate-300 dark:hover:bg-[#18211b] dark:hover:text-white lg:inline-flex"
+        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10  dark:text-slate-300 dark:hover:bg-[#18211b] dark:hover:text-white lg:inline-flex"
         onClick={() => onCollapsedChange(false)}
         title="展开历史对话"
         type="button"
@@ -824,12 +824,12 @@ function AiHistoryPanel({
 
   return (
     <aside
-      className="fixed bottom-4 left-4 top-20 z-30 hidden flex-col rounded-lg border border-black/10 bg-[#f7f9f7]/95 px-3 pb-3 pt-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95 lg:flex"
+      className="fixed bottom-4 left-4 top-20 z-30 hidden flex-col rounded-lg border border-black/10 bg-[var(--app-menu-bg)] px-3 pb-3 pt-3 shadow-xl backdrop-blur-xl dark:border-white/10  lg:flex"
       style={{ width }}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-          <History className="h-4 w-4 text-brand-700 dark:text-green-300" />
+          <History className="h-4 w-4 text-brand-700 dark:text-brand-300" />
           历史对话
         </div>
         <div className="flex items-center gap-1">
@@ -875,7 +875,7 @@ function AiHistoryPanel({
       </div>
       <div
         aria-label="调整历史对话宽度"
-        className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize touch-none items-center justify-center text-slate-400 transition hover:bg-black/[0.04] hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+        className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize touch-none items-center justify-center text-slate-400 transition hover:bg-[var(--app-panel-muted-bg)] hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
         onPointerDown={startResizing}
         role="separator"
         title="拖动调整宽度"
@@ -903,7 +903,7 @@ function MobileHistoryBar({
     <div className="mb-4 lg:hidden">
       <div className="flex items-center gap-2">
         <button
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-white/75 px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
           onClick={onNew}
           type="button"
         >
@@ -911,10 +911,10 @@ function MobileHistoryBar({
           新对话
         </button>
         <div className="ai-chat-input-scroll flex min-w-0 flex-1 gap-2 overflow-x-auto">
-          {loading ? <span className="shrink-0 rounded-lg bg-black/[0.04] px-3 py-2 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">加载中</span> : null}
+          {loading ? <span className="shrink-0 rounded-lg bg-[var(--app-panel-muted-bg)] px-3 py-2 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">加载中</span> : null}
           {sessions.slice(0, 12).map((session) => (
             <button
-              className={`max-w-48 shrink-0 truncate rounded-lg px-3 py-2 text-xs ${activeId === session.id ? 'bg-brand-600 text-white' : 'bg-black/[0.04] text-slate-600 dark:bg-white/[0.06] dark:text-slate-300'}`}
+              className={`max-w-48 shrink-0 truncate rounded-lg px-3 py-2 text-xs ${activeId === session.id ? 'bg-brand-600 text-white' : 'bg-[var(--app-panel-muted-bg)] text-slate-600 dark:bg-white/[0.06] dark:text-slate-300'}`}
               key={session.id}
               onClick={() => onOpen(session.id)}
               type="button"
@@ -961,7 +961,7 @@ function ProblemSessionResolutionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-lg border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
             <Bot className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -1034,7 +1034,7 @@ function MessageCopyButton({ align, content }: { align: 'left' | 'right'; conten
     <div className={`mt-1.5 flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
       <button
         aria-label={copied ? '已复制本条消息' : '复制本条消息'}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-black/[0.04] hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-[var(--app-panel-muted-bg)] hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
         disabled={disabled}
         onClick={handleCopy}
         type="button"
@@ -1170,8 +1170,8 @@ function IconActionButton({
       aria-label={ariaLabel}
       className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
         active
-          ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-green-300'
-          : 'text-slate-400 hover:bg-black/[0.04] hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200'
+          ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
+          : 'text-slate-400 hover:bg-[var(--app-panel-muted-bg)] hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200'
       }`}
       disabled={disabled}
       onClick={onClick}
@@ -1282,7 +1282,7 @@ function AssistantMessageBubble({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-black/10 bg-white/85 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#131a15]/90">
+    <div className="overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10">
       {content && (
         <div className="px-4 py-3">
           <RichAssistantContent content={content} />
@@ -1293,7 +1293,7 @@ function AssistantMessageBubble({
 
       {hasCards && (
         <div className="px-4 pb-4">
-          <div className="rounded-lg border border-black/10 bg-white/60 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Interactive Cards</p>
               <p className="text-[11px] text-slate-400">可直接操作</p>
@@ -1483,7 +1483,7 @@ function renderInlineCode(text: string) {
   return segments.map((segment, index) => {
     if (segment.startsWith('`') && segment.endsWith('`')) {
       return (
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.92em] text-brand-700 dark:bg-white/10 dark:text-green-300" key={index}>
+        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.92em] text-brand-700 dark:bg-white/10 dark:text-brand-300" key={index}>
           {segment.slice(1, -1)}
         </code>
       )
@@ -1598,7 +1598,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
 
   return (
     <div className="px-4 pb-4">
-      <div className="rounded-lg border border-black/10 bg-white/60 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Report Draft Cards</p>
@@ -1614,12 +1614,12 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
             const disabled = state.status === 'submitting' || state.status === 'submitted'
             const attachmentFile = getAttachmentFile?.(draft.id)
             return (
-              <div className="rounded-lg border border-black/10 bg-white/85 p-4 shadow-sm dark:border-white/10 dark:bg-[#101611]" key={draft.id}>
+              <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 shadow-sm dark:border-white/10" key={draft.id}>
                 <div className="mb-3 flex flex-col gap-2 border-b border-black/10 pb-3 dark:border-white/10 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-brand-700 dark:text-green-300">漏洞 {index + 1}</p>
+                    <p className="text-xs font-medium text-brand-700 dark:text-brand-300">漏洞 {index + 1}</p>
                     <input
-                      className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+                      className="mt-1 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
                       onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
                       placeholder="漏洞标题"
                       value={draft.title}
@@ -1704,7 +1704,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
             >
               <motion.div
                 animate={{ scale: 1, y: 0 }}
-                className="w-full max-w-lg rounded-lg border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#131a15]"
+                className="w-full max-w-lg rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-5 shadow-2xl dark:border-white/10"
                 exit={{ scale: 0.98, y: 8 }}
                 initial={{ scale: 0.98, y: 8 }}
                 onClick={(event) => event.stopPropagation()}
@@ -1713,7 +1713,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                   提交后将进入平台漏洞审核流程。请确认该漏洞在授权范围内，复现步骤和影响描述真实准确，且未包含越权测试内容。
                 </p>
-                <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm dark:bg-white/[0.04]">
+                <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm ">
                   <p className="font-medium text-slate-900 dark:text-white">{confirming.draft.title || '未填写标题'}</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{confirming.draft.assetName || '未填写影响资产'}</p>
                 </div>
@@ -1748,7 +1748,7 @@ function DraftTextInput({ label, onChange, value }: { label: string; onChange: (
     <label className="block">
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
       <input
-        className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+        className="mt-1 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
@@ -1761,7 +1761,7 @@ function DraftTextArea({ label, onChange, value }: { label: string; onChange: (v
     <label className="block">
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
       <textarea
-        className="mt-1 min-h-24 w-full resize-y rounded-lg border border-black/10 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
+        className="mt-1 min-h-24 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
@@ -1910,7 +1910,7 @@ function LearningResourceCard({ action, card }: { card: AiCard & { type: 'LEARNI
   }
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+    <div className="flex h-full flex-col rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 ">
       <div className="flex flex-1 items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
           <GraduationCap className="h-4 w-4" />
@@ -1985,9 +1985,9 @@ function MallProductCard({
         ? 'border-brand-300/50 bg-brand-50/70 dark:border-brand-700/30 dark:bg-brand-950/20'
         : redeemState === 'error'
         ? 'border-red-300/50 bg-red-50/80 dark:border-red-700/40 dark:bg-red-950/20'
-        : 'border-black/10 bg-white/90 dark:border-white/10 dark:bg-white/[0.04]'
+        : 'border-black/10 bg-[var(--app-panel-bg)] dark:border-white/10'
     }`}>
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 dark:bg-white/[0.04]">
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 ">
         {card.imageUrl ? (
           <img
             alt={card.name}
@@ -2006,8 +2006,8 @@ function MallProductCard({
           alreadyRedeemed
             ? 'bg-green-600 text-white'
             : canRedeemNow
-            ? 'bg-white/90 text-brand-700 dark:bg-[#131a15]/90 dark:text-brand-300'
-            : 'bg-white/90 text-slate-500 dark:bg-[#131a15]/90 dark:text-slate-300'
+            ? 'bg-[var(--app-menu-bg)] text-brand-700 dark:text-brand-300'
+            : 'bg-[var(--app-menu-bg)] text-slate-500 dark:text-slate-300'
         }`}>
           {alreadyRedeemed ? '已兑换' : canRedeemNow ? '可兑换' : displayedStock <= 0 ? '已售罄' : '积分不足'}
         </span>
@@ -2024,15 +2024,15 @@ function MallProductCard({
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">库存</span>
             <strong className="block truncate">{displayedStock} 件</strong>
           </div>
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">积分</span>
             <strong className="block truncate">{displayedBalance.toLocaleString('zh-CN')}</strong>
           </div>
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:bg-white/[0.04] dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">限购</span>
             <strong className="block truncate">{card.perUserLimit ? `${card.perUserLimit} 件` : '不限'}</strong>
           </div>
@@ -2051,7 +2051,7 @@ function MallProductCard({
         )}
 
         {redeemState === 'confirm' && (
-          <div className="rounded-lg border border-brand-200 bg-white p-3 text-xs shadow-sm dark:border-brand-800/40 dark:bg-[#131a15]">
+          <div className="rounded-lg border border-brand-200 bg-[var(--app-panel-bg)] p-3 text-xs shadow-sm dark:border-brand-800/40">
             <p className="font-medium text-slate-800 dark:text-slate-100">确认兑换「{card.name}」？</p>
             <p className="mt-1 text-slate-500 dark:text-slate-400">将扣除 {card.pointsCost.toLocaleString('zh-CN')} 积分，兑换后不可自动撤销。</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -2111,7 +2111,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
     <div className={`flex h-full flex-col rounded-lg border p-4 shadow-sm transition ${
       card.needsSupplement
         ? 'border-amber-300/50 bg-amber-50/80 dark:border-amber-700/40 dark:bg-amber-950/20'
-        : 'border-black/10 bg-white/90 dark:border-white/10 dark:bg-white/[0.04]'
+        : 'border-black/10 bg-[var(--app-panel-bg)] dark:border-white/10'
     }`}>
       <div className="flex flex-1 items-start gap-3">
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
@@ -2131,7 +2131,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
             }`}>
               {card.needsSupplement ? '⚠ 待补充' : card.status}
             </span>
-            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-black/5 dark:bg-white/[0.04] dark:text-slate-400 dark:ring-white/10">
+            <span className="rounded-full bg-[var(--app-panel-bg)] px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-black/5  dark:text-slate-400 dark:ring-white/10">
               {card.severity}
             </span>
           </div>
@@ -2146,7 +2146,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             card.needsSupplement
               ? 'bg-amber-600 text-white hover:bg-amber-700'
-              : 'border border-black/10 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]'
+              : 'border border-black/10 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10  dark:text-slate-300 dark:hover:bg-white/[0.08]'
           }`}
           href={`/vulnerabilities/${card.id}`}
         >

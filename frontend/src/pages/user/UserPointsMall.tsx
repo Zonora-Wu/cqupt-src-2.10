@@ -37,7 +37,7 @@ const sortOptions = ['默认排序', '积分从低到高', '积分从高到低',
 
 const categoryStyles: Record<string, string> = {
   实体奖励: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  学习权益: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  学习权益: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   证书周边: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
 }
 
@@ -170,7 +170,7 @@ export function UserPointsMall() {
           return (
             <SurfacePanel className="p-5" key={item.label}>
               <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 <span className="text-3xl font-semibold">{item.value}</span>
               </div>
               <p className="mt-3 text-sm font-medium">{item.label}</p>
@@ -215,14 +215,14 @@ export function UserPointsMall() {
                 key={item.id}
                 onClick={() => setDetailProduct(item)}
               >
-                <div className="relative h-52 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+                <div className="relative h-52 overflow-hidden bg-gradient-to-br from-brand-100 via-white to-slate-100 dark:from-brand-950/50 dark:via-white/[0.06] dark:to-slate-900">
                   {item.imageUrl ? (
                     <img alt={item.name} className="h-full w-full object-contain" src={item.imageUrl} />
                   ) : (
                     <>
                       <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-white/70 bg-[var(--app-panel-bg)] text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-brand-300">
                           <Icon className="h-9 w-9" />
                         </div>
                       </div>
@@ -242,7 +242,7 @@ export function UserPointsMall() {
 
                   <div className="mt-5 flex items-end justify-between gap-4 border-t border-black/10 pt-4 dark:border-white/10">
                     <div>
-                      <p className="text-2xl font-semibold text-brand-700 dark:text-green-300">{item.pointsCost}</p>
+                      <p className="text-2xl font-semibold text-brand-700 dark:text-brand-300">{item.pointsCost}</p>
                       <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">积分</p>
                     </div>
                     <button
@@ -279,7 +279,7 @@ export function UserPointsMall() {
 
       <SurfacePanel className="mt-6 p-5">
         <div className="flex items-start gap-3">
-          <Award className="mt-0.5 h-5 w-5 shrink-0 text-brand-700 dark:text-green-300" />
+          <Award className="mt-0.5 h-5 w-5 shrink-0 text-brand-700 dark:text-brand-300" />
           <p className="text-sm leading-6 text-slate-600 dark:text-slate-400">
             积分仅用于平台内激励兑换，不具备现金价值。兑换成功后采用蓝山工作室线下领取，不提供邮寄。存在违规测试、虚假提交、重复刷分等行为时，管理员可取消兑换申请并追溯积分流水。
           </p>
@@ -317,10 +317,10 @@ function RecordsModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[82vh] w-full max-w-[860px] overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-brand-700 dark:text-green-300">Redemption Records</p>
+            <p className="text-sm font-medium text-brand-700 dark:text-brand-300">Redemption Records</p>
             <h2 className="mt-2 text-2xl font-semibold">兑换记录</h2>
           </div>
           <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
@@ -329,7 +329,7 @@ function RecordsModal({
         </div>
         <div className="mt-5 space-y-3">
           {redemptions.map((item) => (
-            <div className="rounded-lg border border-black/10 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.04]" key={item.id}>
+            <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.id}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">{item.product.name}</h3>
@@ -337,7 +337,7 @@ function RecordsModal({
                     领取码 {item.pickupCode} · {item.pointsCost} 积分 · {formatDate(item.requestedAt)}
                   </p>
                 </div>
-                <span className="rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-green-300">
+                <span className="rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-brand-300">
                   {item.statusLabel}
                 </span>
               </div>
@@ -364,7 +364,7 @@ function ConfirmRedeemModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <h2 className="text-xl font-semibold">确认兑换</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
           将消耗 {product.pointsCost} 积分兑换「{product.name}」。兑换成功后，请凭领取码前往蓝山工作室线下领取。
@@ -413,7 +413,7 @@ function ProductDetailModal({
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[88vh] w-full max-w-[420px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -427,7 +427,7 @@ function ProductDetailModal({
         </button>
 
         {/* 商品图片 */}
-        <div className="group relative mb-6 -mx-8 -mt-8 h-44 overflow-hidden rounded-t-lg bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+        <div className="group relative mb-6 -mx-8 -mt-8 h-44 overflow-hidden rounded-t-lg bg-gradient-to-br from-brand-100 via-white to-slate-100 dark:from-brand-950/50 dark:via-white/[0.06] dark:to-slate-900">
           {product.imageUrl ? (
             <>
               <img alt={product.name} className="h-full w-full object-contain" src={product.imageUrl} />
@@ -441,7 +441,7 @@ function ProductDetailModal({
             </>
           ) : (
             <div className="flex h-full items-center justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-[var(--app-panel-bg)] text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-brand-300">
                 <Icon className="h-8 w-8" />
               </div>
             </div>
@@ -489,7 +489,7 @@ function ProductDetailModal({
 
         {/* 积分醒目显示 */}
         <div className="mt-5 flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-brand-700 dark:text-green-300">{product.pointsCost}</span>
+          <span className="text-3xl font-bold text-brand-700 dark:text-brand-300">{product.pointsCost}</span>
           <span className="text-sm text-slate-500 dark:text-slate-400">积分</span>
         </div>
 

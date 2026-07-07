@@ -147,7 +147,7 @@ function SecurityOverview({
     <div className="space-y-5">
       <SurfacePanel className="overflow-hidden p-0">
         <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-          <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+          <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
             <ShieldCheck className="h-5 w-5" />
             <h2 className="text-xl font-semibold text-slate-950 dark:text-white">安全状态</h2>
           </div>
@@ -162,14 +162,14 @@ function SecurityOverview({
             value={loading ? '—' : String(loginFailCount)}
           />
           <SecurityMetric
-            icon={<Clock className="h-5 w-5 text-brand-600 dark:text-green-300" />}
+            icon={<Clock className="h-5 w-5 text-brand-600 dark:text-brand-300" />}
             label="上次成功登录"
             loading={loading}
             status="info"
             value={loading ? '—' : (lastLogin ? formatRelativeTime(lastLogin.createdAt) : '无记录')}
           />
           <SecurityMetric
-            icon={<Activity className="h-5 w-5 text-brand-600 dark:text-green-300" />}
+            icon={<Activity className="h-5 w-5 text-brand-600 dark:text-brand-300" />}
             label="最近操作数"
             loading={loading}
             status="info"
@@ -188,7 +188,7 @@ function SecurityOverview({
       <SurfacePanel className="overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-black/10 px-6 py-4 dark:border-white/10">
           <p className="font-semibold text-slate-950 dark:text-white">最近登录</p>
-          <button className="text-xs text-brand-600 hover:underline dark:text-green-300" onClick={onViewLogin} type="button">
+          <button className="text-xs text-brand-600 hover:underline dark:text-brand-300" onClick={onViewLogin} type="button">
             查看全部
           </button>
         </div>
@@ -206,7 +206,7 @@ function SecurityOverview({
       <SurfacePanel className="overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-black/10 px-6 py-4 dark:border-white/10">
           <p className="font-semibold text-slate-950 dark:text-white">最近操作</p>
-          <button className="text-xs text-brand-600 hover:underline dark:text-green-300" onClick={onViewOps} type="button">
+          <button className="text-xs text-brand-600 hover:underline dark:text-brand-300" onClick={onViewOps} type="button">
             查看全部
           </button>
         </div>
@@ -256,7 +256,7 @@ function LoginHistory() {
   return (
     <SurfacePanel className="overflow-hidden p-0">
       <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
           <LogIn className="h-5 w-5" />
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">登录记录</h2>
         </div>
@@ -343,7 +343,7 @@ function OperationLogs() {
   return (
     <SurfacePanel className="overflow-hidden p-0">
       <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
           <Activity className="h-5 w-5" />
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">操作日志</h2>
         </div>

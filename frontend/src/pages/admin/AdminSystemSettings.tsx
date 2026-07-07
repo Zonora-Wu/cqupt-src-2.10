@@ -6,8 +6,10 @@ import {
   DatabaseBackup,
   FileBadge2,
   FileText,
+  Image,
   KeyRound,
   Mail,
+  Palette,
   Paintbrush,
   Save,
   ServerCog,
@@ -39,6 +41,7 @@ import {
   updateCertificateTemplateLayout,
   updatePlatformSettings,
   uploadAiAssistantAvatar,
+  uploadSchoolLogo,
   updateAiQuotaSettings,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
@@ -55,6 +58,14 @@ import {
   type SecurityExamSettings,
   type SecurityQuestionAdmin,
 } from '../../services/securityExam'
+import {
+  applyBrandTheme,
+  formatHexInput,
+  generateBrandPalette,
+  normalizeHexColor,
+  withAlpha,
+  type BrandShade,
+} from '../../utils/brandTheme'
 
 type SettingsSection =
   | '基础设置'
@@ -75,6 +86,12 @@ type ConfirmState = {
 } | null
 
 type AiQuotaPeriod = AiQuotaSettings['quotaPeriod']
+
+function getAppliedThemeColor() {
+  if (typeof document === 'undefined') return '#2A6438'
+  const currentThemeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim()
+  return normalizeHexColor(currentThemeColor) ?? '#2A6438'
+}
 
 type CertificateLayoutKey =
   | 'certificateNo'
@@ -162,6 +179,7 @@ export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
   const sealInputRef = useRef<HTMLInputElement | null>(null)
   const aiAvatarInputRef = useRef<HTMLInputElement | null>(null)
+  const schoolLogoInputRef = useRef<HTMLInputElement | null>(null)
   const questionBankInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
@@ -169,9 +187,14 @@ export function AdminSystemSettings() {
   const [schoolName, setSchoolName] = useState('重庆邮电大学')
   const [orgName, setOrgName] = useState('信息化办公室')
   const [platformDomain, setPlatformDomain] = useState('https://src.cqupt.edu.cn')
-  const [themeColor, setThemeColor] = useState('#2A6438')
+  const [themeColor, setThemeColor] = useState(() => getAppliedThemeColor())
+  const [canApplyThemePreview, setCanApplyThemePreview] = useState(false)
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState<string | null>(null)
   const [isSavingPlatform, setIsSavingPlatform] = useState(false)
+  const [isSavingAppearance, setIsSavingAppearance] = useState(false)
+  const [isUploadingSchoolLogo, setIsUploadingSchoolLogo] = useState(false)
   const [platformMessage, setPlatformMessage] = useState('')
+  const [appearanceMessage, setAppearanceMessage] = useState('')
   const [openRegister, setOpenRegister] = useState(true)
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationItem[]>([])
   const [pendingRegLoading, setPendingRegLoading] = useState(false)
@@ -229,6 +252,9 @@ export function AdminSystemSettings() {
           setOrgName(platform.orgName)
           setPlatformDomain(platform.platformDomain)
           setPublicCertVerify(platform.publicCertVerify)
+          setThemeColor(platform.themeColor)
+          setCanApplyThemePreview(true)
+          setSchoolLogoUrl(platform.logoUrl)
           setAiAvatarUrl(aiAppearance.avatarUrl)
           setDefaultAiDailyTokens(String(aiQuota.defaultDailyTokens))
           setDefaultAiWeeklyTokens(String(aiQuota.defaultWeeklyTokens))
@@ -249,6 +275,13 @@ export function AdminSystemSettings() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!canApplyThemePreview) return
+    const normalizedThemeColor = normalizeHexColor(themeColor)
+    if (!normalizedThemeColor) return
+    applyBrandTheme(normalizedThemeColor)
+  }, [canApplyThemePreview, themeColor])
 
   // Load pending registrations when entering the auth section and registration is closed
   useEffect(() => {
@@ -494,16 +527,78 @@ export function AdminSystemSettings() {
     }
   }
 
+  const handleSchoolLogoUpload = async (file: File | undefined) => {
+    if (!file) return
+
+    const validationMessage = validateBrandImageFile(file, 2 * 1024 * 1024)
+    if (validationMessage) {
+      setAppearanceMessage(validationMessage)
+      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = ''
+      return
+    }
+
+    setAppearanceMessage('')
+    setIsUploadingSchoolLogo(true)
+
+    try {
+      const result = await uploadSchoolLogo(file)
+      setSchoolLogoUrl(result.logoUrl)
+      setCanApplyThemePreview(true)
+      setThemeColor(result.themeColor)
+      setAppearanceMessage('校徽已上传并保存')
+    } catch (error) {
+      setAppearanceMessage(error instanceof Error ? error.message : '校徽上传失败')
+    } finally {
+      setIsUploadingSchoolLogo(false)
+      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = ''
+    }
+  }
+
   const handleSavePlatform = async () => {
     setPlatformMessage('')
     setIsSavingPlatform(true)
     try {
-      await updatePlatformSettings({ platformName, schoolName, orgName, platformDomain })
+      const result = await updatePlatformSettings({
+        orgName,
+        platformDomain,
+        platformName,
+        schoolName,
+      })
+      setPlatformName(result.platformName)
+      setSchoolName(result.schoolName)
+      setOrgName(result.orgName)
+      setPlatformDomain(result.platformDomain)
+      setPublicCertVerify(result.publicCertVerify)
+      setCanApplyThemePreview(true)
+      setThemeColor(result.themeColor)
+      setSchoolLogoUrl(result.logoUrl)
       setPlatformMessage('基础设置已保存')
     } catch (error) {
       setPlatformMessage(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
       setIsSavingPlatform(false)
+    }
+  }
+
+  const handleSaveAppearance = async () => {
+    const normalizedThemeColor = normalizeHexColor(themeColor)
+    if (!normalizedThemeColor) {
+      setAppearanceMessage('主题色必须是 #RRGGBB 格式，例如 #2A6438')
+      return
+    }
+
+    setAppearanceMessage('')
+    setIsSavingAppearance(true)
+    try {
+      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor })
+      setCanApplyThemePreview(true)
+      setThemeColor(result.themeColor)
+      setSchoolLogoUrl(result.logoUrl)
+      setAppearanceMessage('外观设置已保存')
+    } catch (error) {
+      setAppearanceMessage(error instanceof Error ? error.message : '保存失败，请重试')
+    } finally {
+      setIsSavingAppearance(false)
     }
   }
 
@@ -537,6 +632,9 @@ export function AdminSystemSettings() {
       setIsSavingAiQuota(false)
     }
   }
+
+  const effectiveThemeColor = normalizeHexColor(themeColor) ?? '#2A6438'
+  const generatedBrandPalette = generateBrandPalette(effectiveThemeColor)
 
   return (
     <>
@@ -628,15 +726,138 @@ export function AdminSystemSettings() {
                 </SettingsCard>
 
                 <SettingsCard
-                  description="配置系统主题色。"
+                  description="维护登录页、管理端和公开页面使用的品牌资产。校徽建议使用透明背景 PNG 或清晰的 SVG 转 PNG 文件。"
                   icon={<Paintbrush className="h-5 w-5" />}
                   title="外观"
                 >
                   <SettingRow
-                    control={<TextField onChange={setThemeColor} value={themeColor} />}
+                    control={
+                      <div className="flex items-center justify-end gap-3">
+                        <div
+                          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm dark:border-white/10 "
+                          style={{ boxShadow: `0 14px 32px ${withAlpha(effectiveThemeColor, 0.22)}` }}
+                        >
+                          {schoolLogoUrl ? (
+                            <img alt={`${schoolName}校徽`} className="h-full w-full object-contain p-2" src={schoolLogoUrl} />
+                          ) : (
+                            <Image className="h-7 w-7 text-slate-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <ActionButton
+                            disabled={isUploadingSchoolLogo}
+                            icon={<Upload className="h-4 w-4" />}
+                            label={isUploadingSchoolLogo ? '上传中...' : '上传校徽'}
+                            onClick={() => schoolLogoInputRef.current?.click()}
+                          />
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">JPG / PNG / WebP / GIF，最大 2MB</p>
+                          <input
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(event) => void handleSchoolLogoUpload(event.target.files?.[0])}
+                            ref={schoolLogoInputRef}
+                            type="file"
+                          />
+                        </div>
+                      </div>
+                    }
+                    description="用于品牌预览和后续可接入的登录页、导航栏、证书页展示。建议上传正方形图，透明背景效果最好。"
+                    title="学校校徽"
+                  />
+                  <SettingRow
+                    control={
+                      <ThemeColorPicker
+                        onChange={(nextColor) => {
+                          setCanApplyThemePreview(true)
+                          setThemeColor(nextColor)
+                        }}
+                        value={themeColor}
+                      />
+                    }
                     description="系统主色将用于按钮、当前菜单、重点状态和部分图标。修改后应检查深色和浅色模式可读性。"
                     title="主题色"
                   />
+                  <div className="px-6 py-5">
+                    <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
+                      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-950 dark:text-white">生成色卡</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            沿用当前平台 50-950 色阶职责：浅背景、辅助态、主按钮、文字强调和深色态。
+                          </p>
+                        </div>
+                        <span className="rounded-lg border border-black/10 px-3 py-1.5 font-mono text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
+                          brand-600 = {generatedBrandPalette[600]}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-11">
+                        {(Object.keys(generatedBrandPalette).map(Number) as BrandShade[]).map((shade) => (
+                          <div className="overflow-hidden rounded-lg border border-black/10 bg-white text-xs dark:border-white/10 dark:bg-white/[0.03]" key={shade}>
+                            <div className="h-10" style={{ background: generatedBrandPalette[shade] }} />
+                            <div className="px-2 py-2">
+                              <p className="font-semibold text-slate-800 dark:text-slate-200">{shade}</p>
+                              <p className="mt-0.5 font-mono text-[10px] text-slate-500 dark:text-slate-400">{generatedBrandPalette[shade]}</p>
+                              {shade === 600 && <p className="mt-1 text-[10px] font-medium text-brand-700 dark:text-brand-200">主色</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-5">
+                    <div
+                      className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm dark:border-white/10 "
+                      style={{ borderColor: withAlpha(effectiveThemeColor, 0.24) }}
+                    >
+                      <div
+                        className="flex items-center justify-between gap-4 px-5 py-4 text-white"
+                        style={{ background: `linear-gradient(135deg, ${effectiveThemeColor}, ${withAlpha(effectiveThemeColor, 0.78)})` }}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/95">
+                            {schoolLogoUrl ? (
+                              <img alt="校徽预览" className="h-full w-full object-contain p-1.5" src={schoolLogoUrl} />
+                            ) : (
+                              <Building2 className="h-5 w-5" style={{ color: effectiveThemeColor }} />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{platformName}</p>
+                            <p className="mt-1 truncate text-xs text-white/75">{schoolName} · {orgName}</p>
+                          </div>
+                        </div>
+                        <span className="hidden rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium sm:inline-flex">
+                          品牌预览
+                        </span>
+                      </div>
+                      <div className="grid gap-3 px-5 py-4 md:grid-cols-3">
+                        {['主按钮', '当前菜单', '重点状态'].map((label, index) => (
+                          <div className="rounded-lg border border-black/10 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]" key={label}>
+                            <div
+                              className="h-2 rounded-full"
+                              style={{ background: index === 1 ? withAlpha(effectiveThemeColor, 0.72) : index === 2 ? withAlpha(effectiveThemeColor, 0.22) : effectiveThemeColor }}
+                            />
+                            <p className="mt-2 text-xs font-medium text-slate-700 dark:text-slate-300">{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
+                    {appearanceMessage ? (
+                      <p className={`text-sm ${isErrorMessage(appearanceMessage) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {appearanceMessage}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">当前主题色：{normalizeHexColor(themeColor) ?? themeColor}</p>
+                    )}
+                    <ActionButton
+                      disabled={isSavingAppearance}
+                      icon={<Save className="h-4 w-4" />}
+                      label={isSavingAppearance ? '保存中...' : '保存外观设置'}
+                      onClick={() => void handleSaveAppearance()}
+                    />
+                  </div>
                 </SettingsCard>
               </>
             )}
@@ -795,7 +1016,7 @@ export function AdminSystemSettings() {
                     title="助手头像"
                   />
                   {aiAvatarMessage && (
-                    <p className={`px-6 pb-4 pt-2 text-sm ${aiAvatarMessage.includes('失败') ? 'text-red-600 dark:text-red-400' : 'text-brand-700 dark:text-green-300'}`}>
+                    <p className={`px-6 pb-4 pt-2 text-sm ${aiAvatarMessage.includes('失败') ? 'text-red-600 dark:text-red-400' : 'text-brand-700 dark:text-brand-300'}`}>
                       {aiAvatarMessage}
                     </p>
                   )}
@@ -935,7 +1156,7 @@ export function AdminSystemSettings() {
                 />
                 <SettingRow
                   control={
-                    <div className="rounded-lg border border-black/10 bg-white/60 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 text-sm dark:border-white/10 ">
                       {certificateTemplate ? (
                         <div className="space-y-1">
                           <p className="font-semibold">{certificateTemplate.name}</p>
@@ -992,7 +1213,7 @@ export function AdminSystemSettings() {
                   />
                 </div>
                 {certificateTemplateMessage && (
-                  <p className="px-6 pb-4 pt-2 text-sm text-brand-700 dark:text-green-300">{certificateTemplateMessage}</p>
+                  <p className="px-6 pb-4 pt-2 text-sm text-brand-700 dark:text-brand-300">{certificateTemplateMessage}</p>
                 )}
               </SettingsCard>
             )}
@@ -1029,7 +1250,7 @@ export function AdminSystemSettings() {
                   <div className="border-t border-black/10 px-6 py-4 dark:border-white/10">
                     <p className="text-sm font-semibold">直接添加题库 JSON</p>
                     <textarea
-                      className="mt-3 min-h-40 w-full rounded-lg border border-black/10 bg-white/70 p-3 font-mono text-xs outline-none focus:border-brand-600/60 dark:border-white/10 dark:bg-white/[0.04]"
+                      className="mt-3 min-h-40 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 font-mono text-xs outline-none focus:border-brand-600/60 dark:border-white/10 "
                       onChange={(event) => setQuestionBankJson(event.target.value)}
                       placeholder='{"questions":[{"type":"SINGLE_CHOICE","stem":"提交漏洞前应先确认什么？","options":[{"key":"A","text":"是否在授权范围内"},{"key":"B","text":"是否能造成最大影响"}],"answerKeys":["A"],"explanation":"测试必须在授权范围内进行。"}]}'
                       value={questionBankJson}
@@ -1038,7 +1259,7 @@ export function AdminSystemSettings() {
                       <p className="text-xs text-slate-500 dark:text-slate-400">当前启用：单选 {securityExamSettings?.activeCounts.SINGLE_CHOICE ?? 0} / 判断 {securityExamSettings?.activeCounts.TRUE_FALSE ?? 0} / 多选 {securityExamSettings?.activeCounts.MULTIPLE_CHOICE ?? 0}</p>
                       <ActionButton disabled={isQuestionBusy || !questionBankJson.trim()} icon={<Save className="h-4 w-4" />} label="解析 JSON 并入库" onClick={() => void handleCreateQuestionsFromJson()} />
                     </div>
-                    {questionMessage && <p className="mt-3 text-sm text-brand-700 dark:text-green-300">{questionMessage}</p>}
+                    {questionMessage && <p className="mt-3 text-sm text-brand-700 dark:text-brand-300">{questionMessage}</p>}
                   </div>
                   <div className="max-h-80 overflow-y-auto border-t border-black/10 dark:border-white/10">
                     {securityQuestions.slice(0, 80).map((question) => (
@@ -1148,7 +1369,7 @@ function SettingsCard({
   return (
     <SurfacePanel className="overflow-visible p-0">
       <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
           {icon}
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
         </div>
@@ -1179,17 +1400,87 @@ function SettingRow({
   )
 }
 
+const themeColorPresets = [
+  '#2A6438',
+  '#0F766E',
+  '#2563EB',
+  '#7C3AED',
+  '#B45309',
+  '#BE123C',
+  '#111827',
+  '#047857',
+]
+
+function ThemeColorPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const normalizedValue = normalizeHexColor(value)
+  const pickerValue = normalizedValue ?? '#2A6438'
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <label
+          className="relative flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-black/10 shadow-sm transition hover:scale-[1.02] dark:border-white/10"
+          style={{ background: pickerValue }}
+          title="打开调色盘"
+        >
+          <Palette className="h-5 w-5 text-white drop-shadow" />
+          <input
+            aria-label="打开主题色调色盘"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={(event) => onChange(event.target.value.toUpperCase())}
+            type="color"
+            value={pickerValue}
+          />
+        </label>
+        <TextField onChange={(nextValue) => onChange(formatHexInput(nextValue))} value={value} />
+      </div>
+      <div className="grid grid-cols-8 gap-2">
+        {themeColorPresets.map((color) => {
+          const active = pickerValue === color
+          return (
+            <button
+              aria-label={`使用主题色 ${color}`}
+              className={`h-8 rounded-lg border transition hover:scale-105 ${
+                active ? 'border-slate-950 ring-2 ring-slate-950/15 dark:border-white dark:ring-white/20' : 'border-black/10 dark:border-white/10'
+              }`}
+              key={color}
+              onClick={() => onChange(color)}
+              style={{ background: color }}
+              title={color}
+              type="button"
+            />
+          )
+        })}
+      </div>
+      {!normalizedValue && (
+        <p className="text-xs text-red-600 dark:text-red-400">请输入 #RRGGBB 格式，或直接使用左侧调色盘。</p>
+      )}
+    </div>
+  )
+}
+
 function TextField({ value, onChange, type = 'text' }: { value: string; onChange?: (v: string) => void; type?: string }) {
   const controlled = onChange !== undefined
   return (
     <input
-      className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+      className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
       defaultValue={controlled ? undefined : value}
       onChange={controlled ? (e) => onChange(e.target.value) : undefined}
       type={type}
       value={controlled ? value : undefined}
     />
   )
+}
+
+function validateBrandImageFile(file: File, maxBytes: number) {
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!validTypes.includes(file.type)) return '校徽仅支持 JPG、PNG、WebP、GIF 格式'
+  if (file.size > maxBytes) return '校徽文件不能超过 2MB'
+  return ''
+}
+
+function isErrorMessage(message: string) {
+  return ['失败', '错误', '必须', '不能', '仅支持', '无效'].some((keyword) => message.includes(keyword))
 }
 
 function SettingToggle({
@@ -1453,7 +1744,7 @@ function CertificateCoordinateDialog({
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-5 py-8 backdrop-blur-sm">
-      <div className="flex max-h-full w-full max-w-6xl flex-col rounded-lg border border-black/10 bg-[#f7f9f7]/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="flex max-h-full w-full max-w-6xl flex-col rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-5 dark:border-white/10">
           <div>
             <h2 className="text-xl font-semibold">配置证书坐标</h2>
@@ -1510,7 +1801,7 @@ function CertificateCoordinateDialog({
                     <button
                       aria-label={`拖动${field.label}`}
                       className={`absolute cursor-grab select-none p-0 ring-1 ring-brand-600/40 active:cursor-grabbing ${
-                        isSeal ? 'bg-brand-600/10' : 'bg-transparent text-[#111827]'
+                        isSeal ? 'bg-brand-600/10' : 'bg-transparent text-slate-900'
                       }`}
                       key={field.key}
                       onPointerCancel={() => {
@@ -1571,7 +1862,7 @@ function CertificateCoordinateDialog({
           </div>
 
           <div className="space-y-3">
-            <div className="rounded-lg border border-black/10 bg-white/70 p-3 text-xs dark:border-white/10 dark:bg-white/[0.04]">
+            <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 text-xs dark:border-white/10 ">
               <label className="block">
                 <span className="font-medium">全局字体</span>
                 <select
@@ -1592,7 +1883,7 @@ function CertificateCoordinateDialog({
               {certificateLayoutFields.map((field) => {
                 const point = layout[field.key]
                 return (
-                  <div className="rounded-lg border border-black/10 bg-white/70 p-3 text-xs dark:border-white/10 dark:bg-white/[0.04]" key={field.key}>
+                  <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 text-xs dark:border-white/10 " key={field.key}>
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-medium">{field.label}</span>
                       <span className="font-mono text-slate-500">
@@ -1647,7 +1938,7 @@ function SmallNumberInput({ label, onChange, value }: { label: string; onChange:
     <label className="block">
       <span className="text-[10px] text-slate-500">{label}</span>
       <input
-        className="mt-1 w-full rounded border border-black/10 bg-white/70 px-2 py-1 font-mono text-xs outline-none dark:border-white/10 dark:bg-black/20"
+        className="mt-1 w-full rounded border border-black/10 bg-[var(--app-panel-bg)] px-2 py-1 font-mono text-xs outline-none dark:border-white/10 dark:bg-black/20"
         onChange={(event) => onChange(Number(event.target.value) || 0)}
         type="number"
         value={value}
@@ -1669,7 +1960,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div className="flex gap-3">
             <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>

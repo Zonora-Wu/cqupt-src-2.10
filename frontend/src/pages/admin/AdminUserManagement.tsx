@@ -56,7 +56,7 @@ const statusClassMap: Record<string, string> = {
 }
 
 const accessClassMap: Record<string, string> = {
-  已签责任书: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  已签责任书: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   未答题: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   未通过: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   答题通过: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
@@ -359,7 +359,7 @@ export function AdminUserManagement() {
                       ['证书数量', selectedUser.certificates],
                       ['权限覆盖', selectedUser.permissionOverrides.length],
                     ].map(([label, value]) => (
-                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
+                      <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={label}>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
                         <p className="mt-2 text-xl font-semibold">{value}</p>
                       </div>
@@ -375,13 +375,13 @@ export function AdminUserManagement() {
                       ['剩余额度', formatNumber(selectedUser.aiQuota.remaining)],
                       ['状态', selectedUser.aiQuota.enabled ? '已启用' : '已停用'],
                     ].map(([label, value]) => (
-                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
+                      <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={label}>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
                         <p className="mt-2 text-xl font-semibold">{value}</p>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm dark:border-white/10 dark:bg-white/[0.035]">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm dark:border-white/10 ">
                     <p className="text-slate-500 dark:text-slate-400">
                       {selectedUser.aiQuota.overridden ? '该用户使用单独配置额度。' : '该用户使用系统默认额度。'}
                       日/周/月额度：{formatNumber(selectedUser.aiQuota.dailyLimit)} / {formatNumber(selectedUser.aiQuota.weeklyLimit)} / {formatNumber(selectedUser.aiQuota.monthlyLimit)}。
@@ -400,7 +400,7 @@ export function AdminUserManagement() {
                 <DetailPanel title="权限覆盖" icon={<KeyRound className="h-5 w-5" />}>
                   <div className="space-y-3">
                     {selectedUser.permissionOverrides.map((item) => (
-                      <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.code}>
+                      <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.code}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-medium">{item.name}</p>
                           <SimpleBadge className={item.enabled ? statusClassMap.正常 : statusClassMap.已禁用}>
@@ -544,7 +544,7 @@ export function AdminUserManagement() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 ">
                     <div className="grid gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                       <p>邮箱：{item.emailVerified ? '已验证' : '未验证'}</p>
                       <p>责任书：{item.responsibilitySigned ? '已签署' : '未签署'}</p>
@@ -678,7 +678,7 @@ function ActionButton({ danger = false, label, onClick }: { danger?: boolean; la
 function DetailPanel({ children, icon, title }: { children: ReactNode; icon: ReactNode; title: string }) {
   return (
     <SurfacePanel className="p-6">
-      <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+      <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
         {icon}
         <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
       </div>
@@ -691,7 +691,7 @@ function InfoGrid({ rows }: { rows: Array<[string, string]> }) {
   return (
     <div className="grid gap-3 text-sm md:grid-cols-2">
       {rows.map(([label, value]) => (
-        <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={label}>
+        <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={label}>
           <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
           <p className="mt-2 font-medium">{value}</p>
         </div>
@@ -736,10 +736,10 @@ function RoleModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
               <UserCog className="h-5 w-5" />
               <span className="text-sm font-medium">Role Management</span>
             </div>
@@ -763,7 +763,7 @@ function RoleModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">管理员备注</span>
             <textarea
-              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(event) => setReason(event.target.value)}
               placeholder="填写角色调整原因，便于审计追踪"
               value={reason}
@@ -789,7 +789,7 @@ function ConfirmDialog({ onCancel, onConfirm, state }: { onCancel: () => void; o
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
@@ -858,10 +858,10 @@ function ResetPasswordDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
               <KeyRound className="h-5 w-5" />
               <span className="text-sm font-medium">Reset Password</span>
             </div>
@@ -880,7 +880,7 @@ function ResetPasswordDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">新密码</span>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">默认为 tmp + 统一码，可直接点确认或修改后再确认</p>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(e) => { setPassword(e.target.value); setValidationError('') }}
               placeholder={defaultPassword}
               type="text"
@@ -951,10 +951,10 @@ function AiQuotaDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[560px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[560px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
               <Bot className="h-5 w-5" />
               <span className="text-sm font-medium">AI Quota</span>
             </div>
@@ -972,7 +972,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">日 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(e) => { setDailyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={dailyLimit}
@@ -981,7 +981,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">周 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(e) => { setWeeklyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={weeklyLimit}
@@ -990,7 +990,7 @@ function AiQuotaDialog({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月 token 额度</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(e) => { setMonthlyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={monthlyLimit}
@@ -999,7 +999,7 @@ function AiQuotaDialog({
           {validationError && <p className="-mt-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>}
           <button
             aria-pressed={enabled}
-            className="flex items-center justify-between rounded-lg border border-black/10 bg-white/60 px-4 py-3 text-sm transition hover:bg-white/90 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+            className="flex items-center justify-between rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-4 py-3 text-sm transition hover:bg-white/90 dark:border-white/10  dark:hover:bg-white/[0.07]"
             onClick={() => setEnabled((value) => !value)}
             type="button"
           >
@@ -1011,7 +1011,7 @@ function AiQuotaDialog({
               <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </span>
           </button>
-          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm text-slate-500 dark:border-white/10  dark:text-slate-400">
             当前按{aiQuotaPeriodLabels[user.aiQuota.quotaPeriod]}统计，已用 {formatNumber(user.aiQuota.usedThisPeriod)}，剩余 {formatNumber(user.aiQuota.remaining)}，下次重置 {formatDateTime(user.aiQuota.resetAt)}。
           </div>
         </div>

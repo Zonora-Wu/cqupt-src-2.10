@@ -75,11 +75,11 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
   }
 
   const content = (
-    <div className={`flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#131a15] ${embedded ? 'max-h-none' : 'max-h-[92vh]'}`}>
+    <div className={`flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10 ${embedded ? 'max-h-none' : 'max-h-[92vh]'}`}>
         <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
           <div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-brand-700 dark:text-green-300" />
+              <ShieldCheck className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">网络安全知识答题</h2>
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -109,15 +109,15 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
               {paper.questions.map((question, index) => {
                 const selected = answers[question.id] ?? []
                 return (
-                  <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.035]" key={question.id}>
+                  <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-[#18211b]/60" key={question.id}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-950 dark:text-white">{index + 1}. {question.stem}</p>
-                      <span className="rounded-full bg-brand-600/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-green-300">{typeLabels[question.type]}</span>
+                      <span className="rounded-full bg-brand-600/10 px-2.5 py-1 text-xs font-medium text-brand-700 dark:text-brand-300">{typeLabels[question.type]}</span>
                     </div>
                     <div className="mt-3 grid gap-2 md:grid-cols-2">
                       {question.options.map((option) => (
                         <button
-                          className={`rounded-lg border px-3 py-2 text-left text-sm transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 dark:border-green-300/50 dark:text-green-200' : 'border-black/10 bg-white hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/10'}`}
+                          className={`rounded-lg border px-3 py-2 text-left text-sm transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 dark:border-brand-300/50 dark:text-brand-200' : 'border-black/10 bg-white hover:bg-black/5 dark:border-white/10 dark:bg-[#1d251f]/80 dark:text-slate-200 dark:hover:bg-white/10'}`}
                           key={option.key}
                           onClick={() => toggleAnswer(question, option.key)}
                           type="button"

@@ -170,7 +170,7 @@ export function AdminAuditLogManagement() {
           <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <SurfacePanel className="p-6 xl:sticky xl:top-24 xl:self-start">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
                   <Icon className="h-5 w-5" />
                 </span>
                 <div>
@@ -209,7 +209,7 @@ export function AdminAuditLogManagement() {
                   <InfoBox label="目标类型" value={log.targetType || '未记录'} />
                   <InfoBox label="目标 ID" value={log.targetId || '未记录'} />
                 </div>
-                <p className="mt-4 break-all rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+                <p className="mt-4 break-all rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm text-slate-600 dark:border-white/10  dark:text-slate-400">
                   {log.userAgent || '未记录 User-Agent'}
                 </p>
               </SurfacePanel>
@@ -285,7 +285,7 @@ export function AdminAuditLogManagement() {
               const Icon = moduleIcons[item.module] ?? Activity
               return (
                 <div
-                  className="grid gap-4 px-4 py-4 text-sm transition hover:bg-black/[0.025] md:grid-cols-[170px_minmax(0,1fr)_120px_130px_150px_100px] md:items-center dark:hover:bg-white/[0.035]"
+                  className="grid gap-4 px-4 py-4 text-sm transition hover:bg-[var(--app-panel-muted-bg)] md:grid-cols-[170px_minmax(0,1fr)_120px_130px_150px_100px] md:items-center dark:hover:bg-white/[0.035]"
                   key={item.id}
                 >
                   <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -302,7 +302,7 @@ export function AdminAuditLogManagement() {
                     <p className="mt-1 font-mono text-xs text-slate-400">{item.id}</p>
                   </div>
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                    <Icon className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                     {item.moduleLabel}
                   </div>
                   <div>
@@ -387,7 +387,7 @@ function StatCard({ label, value, hint }: { label: string; value: number; hint: 
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+    <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 break-all text-sm font-medium">{value}</p>
     </div>

@@ -280,7 +280,7 @@ const levelStyles: Record<ReviewLevel, string> = {
 
 const reviewStatusStyles: Record<ReviewStatus, string> = {
   待初审: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  审核中: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  审核中: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   待补充: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   已确认: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   已驳回: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
@@ -288,7 +288,7 @@ const reviewStatusStyles: Record<ReviewStatus, string> = {
 
 const retestStatusStyles: Record<RetestStatus, string> = {
   待复测: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  复测中: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  复测中: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   复测通过: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   退回修复: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   修复中: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
@@ -324,7 +324,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
 
   return (
     <AppBackground>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
           <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={openMenu} />
@@ -425,13 +425,13 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
           const Icon = item.icon
           return (
             <button
-              className="rounded-lg border border-black/10 bg-white/75 p-5 text-left shadow-sm backdrop-blur-xl transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-white/[0.035]"
+              className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-5 text-left shadow-sm backdrop-blur-xl transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 "
               key={item.label}
               onClick={() => onNavigate(item.menu)}
               type="button"
             >
               <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 <span className="text-3xl font-semibold">{item.value}</span>
               </div>
               <p className="mt-3 text-sm font-medium">{item.label}</p>
@@ -445,11 +445,11 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
         <SurfacePanel className="p-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">高优先级审核队列</h2>
-            <ShieldAlert className="h-5 w-5 text-brand-700 dark:text-green-300" />
+            <ShieldAlert className="h-5 w-5 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3">
             {reviewReports.slice(0, 3).map((item) => (
-              <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.id}>
+              <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.id}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
                   <LevelBadge level={item.level} />
@@ -467,10 +467,10 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
         <SurfacePanel className="p-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">AI 今日摘要</h2>
-            <Bot className="h-5 w-5 text-brand-700 dark:text-green-300" />
+            <Bot className="h-5 w-5 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+            <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
               <p className="font-medium">建议优先处理统一认证相关报告</p>
               <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">该类漏洞影响面较大，应先确认授权边界、复现材料和实际风险。</p>
             </div>
@@ -615,14 +615,14 @@ export function AuditorReviewQueue() {
               <SurfacePanel className="p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2 font-semibold">
-                    <Sparkles className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                    <Sparkles className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                     AI 初评
                   </div>
-                  <span className="text-2xl font-semibold text-brand-700 dark:text-green-300">{selectedReport.aiScore}</span>
+                  <span className="text-2xl font-semibold text-brand-700 dark:text-brand-300">{selectedReport.aiScore}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedReport.aiTags.map((tag) => (
-                    <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs text-brand-800 dark:text-green-300" key={tag}>
+                    <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs text-brand-800 dark:text-brand-300" key={tag}>
                       {tag}
                     </span>
                   ))}
@@ -635,7 +635,7 @@ export function AuditorReviewQueue() {
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">审核意见</span>
                     <textarea
-                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
                       onChange={(event) => setReviewNote(event.target.value)}
                       placeholder="请填写审核依据、复现结论、补充要求或驳回原因"
                       value={reviewNote}
@@ -646,7 +646,7 @@ export function AuditorReviewQueue() {
                     <label className="block">
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">奖励积分</span>
                       <input
-                        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
                         min={0}
                         max={10000}
                         onChange={(event) => setReviewPoints(event.target.value)}
@@ -703,7 +703,7 @@ export function AuditorReviewQueue() {
                 </section>
                 <section className="mt-5">
                   <h3 className="text-sm font-semibold">复现步骤</h3>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-7 dark:border-white/10 dark:bg-white/[0.035]">
+                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-7 dark:border-white/10 ">
                     {selectedReport.reproduce}
                   </pre>
                 </section>
@@ -717,7 +717,7 @@ export function AuditorReviewQueue() {
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {selectedReport.attachments.map((attachment) => (
                         <div
-                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-black/[0.025] px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.035]"
+                          className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-sm dark:border-white/10 "
                           key={attachment.id}
                         >
                           <div className="min-w-0">
@@ -898,7 +898,7 @@ function AuditorRetestArchive() {
         {toast && <SuccessNotice>{toast}</SuccessNotice>}
 
         {/* 分页 tab */}
-        <div className="mt-6 flex items-center gap-1 rounded-xl border border-black/10 bg-black/[0.025] p-1 w-fit dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="mt-6 flex items-center gap-1 rounded-xl border border-black/10 bg-[var(--app-panel-muted-bg)] p-1 w-fit dark:border-white/10 dark:bg-white/[0.03]">
           <button
             className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
               tab === 'pending'
@@ -910,7 +910,7 @@ function AuditorRetestArchive() {
           >
             待复测
             {stats.pendingRetest > 0 && (
-              <span className="ml-2 rounded-full bg-brand-600/15 px-1.5 py-0.5 text-xs font-semibold text-brand-700 dark:text-green-300">
+              <span className="ml-2 rounded-full bg-brand-600/15 px-1.5 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
                 {stats.pendingRetest}
               </span>
             )}
@@ -939,7 +939,7 @@ function AuditorRetestArchive() {
         ) : loadError ? (
           <SurfacePanel className="mt-4 p-10 text-center">
             <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
-            <button className="mt-4 text-sm text-brand-700 dark:text-green-300 underline" onClick={load} type="button">重试</button>
+            <button className="mt-4 text-sm text-brand-700 dark:text-brand-300 underline" onClick={load} type="button">重试</button>
           </SurfacePanel>
         ) : displayed.length === 0 ? (
           <SurfacePanel className="mt-4 p-10 text-center text-sm text-slate-500 dark:text-slate-400">
@@ -1035,7 +1035,7 @@ function AuditorAIAssistant() {
       <div className={`flex min-h-[64vh] flex-col ${hasMessage ? 'justify-end' : 'justify-center'}`}>
         {!hasMessage && (
           <div className="mx-auto max-w-2xl text-center">
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
               <Bot className="h-3.5 w-3.5" />
               Auditor AI
             </p>
@@ -1052,7 +1052,7 @@ function AuditorAIAssistant() {
               <p className="mt-2">帮我检查 SRC-2026-0008 的材料完整度。</p>
             </SurfacePanel>
             <SurfacePanel className="p-4">
-              <p className="text-sm text-brand-700 dark:text-green-300">AI 审核助手</p>
+              <p className="text-sm text-brand-700 dark:text-brand-300">AI 审核助手</p>
               <p className="mt-2 leading-7 text-slate-600 dark:text-slate-400">
                 建议补充测试边界、授权账号来源、弱口令影响范围和修复前保密承诺。当前材料可进入初审，但不宜直接确认有效。
               </p>
@@ -1062,7 +1062,7 @@ function AuditorAIAssistant() {
         <SurfacePanel className="mx-auto w-full max-w-3xl p-3">
           <div className="flex items-end gap-2">
             <textarea
-              className="min-h-16 flex-1 resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="min-h-16 flex-1 resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               placeholder="询问漏洞价值、复现材料、修复建议或审核结论风险..."
             />
             <button
@@ -1187,12 +1187,12 @@ function AuditorAnnouncementManagement() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
-                    <span className="rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-green-300">
+                    <span className="rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-brand-300">
                       {item.category}
                     </span>
                     <AnnouncementStatusBadge status={item.status} />
                     {item.pinned && (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-green-300">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-brand-300">
                         <Pin className="h-3.5 w-3.5" />
                         置顶
                       </span>
@@ -1287,10 +1287,10 @@ function EditAuditorAnnouncementModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="max-h-[86vh] w-full max-w-[820px] overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
               <PenLine className="h-5 w-5" />
               <span className="text-sm font-medium">Announcement Editor</span>
             </div>
@@ -1311,7 +1311,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</span>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.title}
               placeholder="请输入公告标题"
             />
@@ -1324,7 +1324,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告摘要</span>
             <textarea
-              className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.summary}
               placeholder="用于公告列表展示的简短说明"
             />
@@ -1332,7 +1332,7 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告正文</span>
             <textarea
-              className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.content}
               placeholder="请输入公告正文，支持分段"
             />
@@ -1562,7 +1562,7 @@ function RetestStatusBadge({ status }: { status: RetestStatus }) {
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+    <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
@@ -1607,7 +1607,7 @@ function RetestActionDialog({
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="w-full max-w-[520px] rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
+      <div className="w-full max-w-[520px] rounded-xl border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start gap-3">
           <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />
@@ -1629,7 +1629,7 @@ function RetestActionDialog({
             说明 <span className="text-red-500">*</span>
           </label>
           <textarea
-            className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+            className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 "
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="请填写复测说明（至少 4 个字）"
             rows={3}
@@ -1674,7 +1674,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

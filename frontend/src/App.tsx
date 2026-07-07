@@ -5,6 +5,8 @@ import { PublicOnly, RequireRole } from './routes/guards'
 import { getDefaultPathForRole } from './routes/routeConfig'
 import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
 import { clearSavedSession, getCurrentUser, getSavedSession, type AuthUser } from './services/auth'
+import { getPublicPlatformAppearance } from './services/systemSettings'
+import { applyBrandTheme } from './utils/brandTheme'
 
 const AdminHome = lazy(() =>
   import('./pages/admin/AdminHome').then((module) => ({ default: module.AdminHome })),
@@ -68,6 +70,27 @@ function AppShell() {
   }, [isCheckingSession])
 
   useEffect(() => {
+    let active = true
+
+    async function loadPlatformAppearance() {
+      try {
+        const appearance = await getPublicPlatformAppearance()
+        if (active) {
+          applyBrandTheme(appearance.themeColor)
+        }
+      } catch {
+        applyBrandTheme('#2A6438')
+      }
+    }
+
+    void loadPlatformAppearance()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     let noticeTimer: number | undefined
 
     const routeNotice = (location.state as { notice?: string } | null)?.notice
@@ -99,7 +122,7 @@ function AppShell() {
 
   if (isCheckingSession) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7faf5] text-sm text-slate-500 dark:bg-[#080b08] dark:text-white/55">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-slate-500  dark:text-white/55">
         正在校验登录状态...
       </div>
     )
@@ -200,7 +223,7 @@ function AppShell() {
 
 function AppLoading({ text }: { text: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f7faf5] text-sm text-slate-500 dark:bg-[#080b08] dark:text-white/55">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-slate-500  dark:text-white/55">
       {text}
     </div>
   )

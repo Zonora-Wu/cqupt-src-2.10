@@ -35,7 +35,7 @@ const learningPath = [
 
 const categoryStyles: Record<string, string> = {
   工具资源: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  文档资料: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-green-300',
+  文档资料: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   视频课程: 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300',
   漏洞报告模板: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   Web靶场: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
@@ -123,7 +123,7 @@ export function UserLearningCenter() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <SurfacePanel className="overflow-hidden p-0">
           <div className="relative p-7 md:p-8">
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
               <GraduationCap className="h-3.5 w-3.5" />
               Learning Center
             </p>
@@ -135,8 +135,8 @@ export function UserLearningCenter() {
               {overview.map((item) => {
                 const Icon = item.icon
                 return (
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
-                    <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.label}>
+                    <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                     <p className="mt-4 text-3xl font-semibold">{item.value}</p>
                     <p className="mt-1 text-sm font-medium">{item.label}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
@@ -153,15 +153,15 @@ export function UserLearningCenter() {
               <p className="text-sm text-slate-500 dark:text-slate-400">AI 学习建议</p>
               <h2 className="mt-1 text-xl font-semibold">下一步训练</h2>
             </div>
-            <Sparkles className="h-8 w-8 text-brand-700 dark:text-green-300" />
+            <Sparkles className="h-8 w-8 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3">
             {learningPath.map((item) => {
               const Icon = item.icon
               return (
-                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
+                <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 " key={item.title}>
                   <div className="flex items-start gap-3">
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300" />
                     <div>
                       <p className="text-sm font-medium">{item.title}</p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.status}</p>
@@ -210,9 +210,9 @@ export function UserLearningCenter() {
                     <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
                   </div>
                   {item.kind === 'RANGE' ? (
-                    <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
+                    <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-brand-300" />
                   ) : (
-                    <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-green-300" />
+                    <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-brand-300" />
                   )}
                 </div>
 
@@ -265,14 +265,14 @@ function LearningCover({ item }: { item: LearningResourceItem }) {
   const Icon = item.kind === 'RANGE' ? Target : TerminalSquare
 
   return (
-    <div className="relative h-40 overflow-hidden bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+    <div className="relative h-40 overflow-hidden bg-gradient-to-br from-brand-100 via-white to-slate-100 dark:from-brand-950/50 dark:via-white/[0.06] dark:to-slate-900">
       {item.coverUrl ? (
         <img alt={item.title} className="h-full w-full object-cover" src={item.coverUrl} />
       ) : (
         <>
           <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-white/70 text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-green-300">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-[var(--app-panel-bg)] text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-brand-300">
               <Icon className="h-8 w-8" />
             </div>
           </div>
@@ -311,7 +311,7 @@ function LearningResourceDetailModal({
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[88vh] w-full max-w-[520px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-7 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[88vh] w-full max-w-[520px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-7 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -324,7 +324,7 @@ function LearningResourceDetailModal({
           <X className="h-4 w-4" />
         </button>
 
-        <div className="group relative -mx-7 -mt-7 mb-6 h-52 overflow-hidden rounded-t-lg bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/50 dark:via-white/[0.06] dark:to-slate-900">
+        <div className="group relative -mx-7 -mt-7 mb-6 h-52 overflow-hidden rounded-t-lg bg-gradient-to-br from-brand-100 via-white to-slate-100 dark:from-brand-950/50 dark:via-white/[0.06] dark:to-slate-900">
           {item.coverUrl ? (
             <>
               <img alt={item.title} className="h-full w-full object-cover" src={item.coverUrl} />

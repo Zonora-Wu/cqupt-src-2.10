@@ -14,11 +14,13 @@ export type CertificateTemplateSummary = {
 }
 
 export type PlatformSettings = {
+  logoUrl: string | null
   platformName: string
   schoolName: string
   orgName: string
   platformDomain: string
   publicCertVerify: boolean
+  themeColor: string
 }
 
 export type AiAssistantAppearance = {
@@ -127,8 +129,19 @@ export async function getPlatformSettings() {
   return request<PlatformSettings>('/system-settings/platform', { method: 'GET' })
 }
 
+export async function getPublicPlatformAppearance() {
+  return apiRequest<PlatformSettings>('/public/platform/appearance', { method: 'GET' })
+}
+
 export async function updatePlatformSettings(data: Partial<PlatformSettings>) {
   return request<PlatformSettings>('/system-settings/platform', { method: 'POST', body: data as Record<string, unknown> })
+}
+
+export async function uploadSchoolLogo(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return requestForm<PlatformSettings>('/system-settings/platform/logo', formData)
 }
 
 export async function getAiAssistantAppearance() {

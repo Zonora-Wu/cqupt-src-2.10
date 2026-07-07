@@ -95,12 +95,12 @@ export function UserNotifications() {
 
   return (
     <section className="relative z-10 mx-auto flex max-w-[1180px] gap-0 px-5 pb-8 pt-24 md:px-8">
-      <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+      <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10 ">
 
         {/* 左侧频道列表 */}
         <aside className="flex w-64 shrink-0 flex-col border-r border-black/10 dark:border-white/10">
           <div className="flex h-14 items-center gap-2 border-b border-black/10 px-4 dark:border-white/10">
-            <MessageSquare className="h-4 w-4 text-brand-600 dark:text-green-300" />
+            <MessageSquare className="h-4 w-4 text-brand-600 dark:text-brand-300" />
             <span className="text-sm font-semibold">通知中心</span>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
@@ -117,7 +117,7 @@ export function UserNotifications() {
               return (
                 <button
                   className={`flex w-full items-center gap-3 px-3 py-3 text-left transition ${
-                    isActive ? 'bg-brand-600/10 dark:bg-green-300/10' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                    isActive ? 'bg-brand-600/10 dark:bg-brand-300/10' : 'hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                   key={ch.id}
                   onClick={() => handleSelect(ch.id)}
@@ -133,7 +133,7 @@ export function UserNotifications() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-medium ${isActive ? 'text-brand-700 dark:text-green-300' : ''}`}>
+                      <span className={`text-sm font-medium ${isActive ? 'text-brand-700 dark:text-brand-300' : ''}`}>
                         {ch.title}
                       </span>
                       {last && (
@@ -237,7 +237,7 @@ function MessageBubble({
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{title}</span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">{time}</span>
         </div>
-        <div className="mt-1 max-w-lg rounded-lg rounded-tl-sm bg-black/[0.04] px-3.5 py-2.5 text-sm leading-6 text-slate-700 dark:bg-white/[0.06] dark:text-slate-300">
+        <div className="mt-1 max-w-lg rounded-lg rounded-tl-sm bg-[var(--app-panel-muted-bg)] px-3.5 py-2.5 text-sm leading-6 text-slate-700 dark:bg-white/[0.06] dark:text-slate-300">
           {content}
         </div>
       </div>

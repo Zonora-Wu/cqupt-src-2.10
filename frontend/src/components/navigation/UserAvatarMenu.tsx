@@ -47,7 +47,7 @@ export function UserAvatarMenu({
     >
       <button
         aria-label="打开用户菜单"
-        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-base font-semibold text-white shadow-[0_0_18px_rgba(42,100,56,0.35)] transition hover:bg-brand-700"
+        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-base font-semibold text-white shadow-[0_0_18px_rgba(var(--app-primary-rgb),0.35)] transition hover:bg-brand-700"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
@@ -60,7 +60,7 @@ export function UserAvatarMenu({
 
       {open && (
         <div className="absolute right-0 top-full z-[90] pt-3">
-        <div className="w-44 overflow-hidden rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-1 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+        <div className="w-44 overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-1 shadow-xl backdrop-blur-xl dark:border-white/10 ">
           <MenuItem icon={<CircleUserRound />} label="个人中心" onClick={() => runAndClose(onProfile, setOpen)} />
           <MenuItem icon={<ShieldCheck />} label="账号安全" onClick={() => runAndClose(onAccountSecurity, setOpen)} />
           <MenuItem icon={<Settings2 />} label="系统设置" onClick={() => runAndClose(onSystemSettings, setOpen)} />

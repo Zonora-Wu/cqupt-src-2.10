@@ -119,7 +119,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   return (
     <AppBackground>
-      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
+      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 md:px-8">
           <button className="flex items-center" onClick={() => openPage('home')} type="button">
             <BrandLogo />
@@ -128,9 +128,9 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <div className="hidden items-center gap-8 md:flex">
             {navItems.map((item) => (
               <button
-                className={`text-sm font-medium transition hover:text-brand-700 dark:hover:text-green-300 ${
+                className={`text-sm font-medium transition hover:text-brand-700 dark:hover:text-brand-300 ${
                   activePage === navPageMap[item]
-                    ? 'text-brand-700 dark:text-green-300'
+                    ? 'text-brand-700 dark:text-brand-300'
                     : 'text-slate-600 dark:text-slate-400'
                 }`}
                 key={item}
@@ -163,7 +163,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               登录
             </button>
             <button
-              className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_18px_rgba(42,100,56,0.35)] transition hover:bg-brand-700 sm:inline-flex"
+              className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_18px_rgba(var(--app-primary-rgb),0.35)] transition hover:bg-brand-700 sm:inline-flex"
               onClick={onRegister}
               type="button"
             >
@@ -181,7 +181,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         </div>
 
         {mobileOpen && (
-          <div className="border-t border-black/10 bg-[#f7f9f7]/95 px-5 py-4 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-[#0f1511]/95">
+          <div className="border-t border-black/10 bg-[var(--app-menu-bg)] px-5 py-4 backdrop-blur-xl md:hidden dark:border-white/10 ">
             <div className="flex flex-col gap-3">
               {navItems.map((item) => (
                 <button
@@ -240,8 +240,8 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 text-center md:px-8 md:pt-48">
         <div>
           <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-600 dark:bg-green-300" />
-            <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-green-300">SECURE PLATFORM LIVE</span>
+            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-600 dark:bg-brand-300" />
+            <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">SECURE PLATFORM LIVE</span>
           </div>
           <h1 className="mx-auto max-w-4xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
             CQUPT-SRC 校园漏洞响应与
@@ -253,7 +253,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-8 py-3 font-medium text-white shadow-[0_0_22px_rgba(42,100,56,0.42)] transition hover:bg-brand-700 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-8 py-3 font-medium text-white shadow-[0_0_22px_rgba(var(--app-primary-rgb),0.42)] transition hover:bg-brand-700 sm:w-auto"
               onClick={onLogin}
               type="button"
             >
@@ -261,7 +261,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               <ArrowRight className="h-4 w-4" />
             </button>
             <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-white/70 px-8 py-3 font-medium text-slate-900 transition hover:bg-white sm:w-auto dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-8 py-3 font-medium text-slate-900 transition hover:bg-white sm:w-auto dark:border-white/10  dark:text-white dark:hover:bg-white/10"
               onClick={() => openCertificateSearch()}
               type="button"
             >
@@ -285,7 +285,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           {capabilities.map((item, index) => {
             return (
               <article
-                className={`group relative overflow-hidden rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06] ${
+                className={`group relative overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06] ${
                   index === 0 || index === 3 ? 'md:col-span-2' : ''
                 }`}
                 key={item.title}
@@ -304,7 +304,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <p className="mx-auto mb-8 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
             输入证书编号，即刻验证由 CQUPT-SRC 颁发的漏洞贡献荣誉证书有效性。
           </p>
-          <div className="mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-white p-2 backdrop-blur-xl focus-within:ring-2 focus-within:ring-brand-600/50 dark:border-white/10 dark:bg-white/[0.04]">
+          <div className="mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-white p-2 backdrop-blur-xl focus-within:ring-2 focus-within:ring-brand-600/50 dark:border-white/10 ">
             <Search className="ml-3 mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
             <input
               className="min-w-0 flex-1 border-none bg-transparent py-3 font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
@@ -342,11 +342,11 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             <div className="grid min-w-[1040px] grid-cols-6 gap-4">
               {processItems.map((item, index) => (
                 <article
-                  className="relative flex min-h-[210px] flex-col rounded-lg border border-black/10 bg-white/70 p-4 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]"
+                  className="relative flex min-h-[210px] flex-col rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06]"
                   key={item.title}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-medium text-brand-700 dark:text-green-300">
+                    <span className="font-mono text-sm font-medium text-brand-700 dark:text-brand-300">
                       {String(index + 1).padStart(2, '0')}
                     </span>
                     <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
@@ -360,8 +360,8 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
           <div className="mt-5 grid gap-2.5 md:hidden">
             {processItems.map((item, index) => (
-              <article className="rounded-lg border border-black/10 bg-white/70 p-3.5 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
-                <div className="font-mono text-sm text-brand-700 dark:text-green-300">
+              <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3.5 dark:border-white/10 " key={item.title}>
+                <div className="font-mono text-sm text-brand-700 dark:text-brand-300">
                   {String(index + 1).padStart(2, '0')}
                 </div>
                 <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
@@ -376,10 +376,10 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400 md:flex-row">
           <div className="font-semibold tracking-tight text-slate-950 dark:text-white">CQUPT-SRC</div>
           <div className="flex gap-6">
-            <a className="transition hover:text-green-300" href="#">隐私政策</a>
-            <a className="transition hover:text-green-300" href="#">用户协议</a>
-            <a className="transition hover:text-green-300" href="#">联系我们</a>
-            <a className="transition hover:text-green-300" href="#">加入我们</a>
+            <a className="transition hover:text-brand-300" href="#">隐私政策</a>
+            <a className="transition hover:text-brand-300" href="#">用户协议</a>
+            <a className="transition hover:text-brand-300" href="#">联系我们</a>
+            <a className="transition hover:text-brand-300" href="#">加入我们</a>
           </div>
           <div>© 2026 CQUPT-SRC 校园漏洞响应与安全学习平台.</div>
         </div>

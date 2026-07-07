@@ -57,7 +57,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
       )}
 
       <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-green-300">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300">
           <Award className="h-4 w-4" />
           证书查询
         </div>
@@ -67,7 +67,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
         </p>
       </section>
 
-      <section className="mx-auto mt-14 w-full max-w-3xl rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+      <section className="mx-auto mt-14 w-full max-w-3xl rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10 ">
         <label className="mb-3 block text-sm font-medium text-slate-700 dark:text-slate-300">证书编号</label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -102,11 +102,11 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
 
       {result && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 py-8 backdrop-blur-sm">
-          <article className="w-full max-w-2xl overflow-hidden rounded-lg border border-black/10 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111813]/95">
+          <article className="w-full max-w-2xl overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl backdrop-blur-xl dark:border-white/10">
             <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-green-300">
+                  <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-300">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     证书核验有效
                   </div>
@@ -121,7 +121,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm text-brand-700 dark:text-green-300">
+              <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm text-brand-700 dark:text-brand-300">
                 <ShieldCheck className="h-4 w-4" />
                 {result.status}
               </span>

@@ -45,7 +45,7 @@ export function IntroCopySection() {
       onWheel={interactiveEnabled ? clearPointer : undefined}
     >
       <div className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
           Platform Introduction
         </p>
       </div>
@@ -78,7 +78,7 @@ export function IntroCopySection() {
         aria-pressed={interactiveEnabled}
         className={`absolute bottom-6 right-5 h-2.5 w-2.5 rounded-full transition md:right-8 ${
           interactiveEnabled
-            ? 'bg-brand-600 shadow-[0_0_0_4px_rgba(42,100,56,0.14)] dark:bg-green-300 dark:shadow-[0_0_0_4px_rgba(134,239,172,0.12)]'
+            ? 'bg-brand-600 shadow-[0_0_0_4px_rgba(var(--app-primary-rgb),0.14)] dark:bg-brand-300 dark:shadow-[0_0_0_4px_rgba(var(--app-primary-rgb),0.12)]'
             : 'bg-slate-300 opacity-45 hover:opacity-80 dark:bg-white/25'
         }`}
         onClick={toggleInteractive}

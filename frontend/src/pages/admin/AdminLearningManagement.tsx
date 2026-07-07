@@ -225,7 +225,7 @@ export function AdminLearningManagement() {
               刷新
             </button>
             <button
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm font-medium text-brand-700 transition hover:bg-brand-600/15 dark:text-green-300"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm font-medium text-brand-700 transition hover:bg-brand-600/15 dark:text-brand-300"
               onClick={() => openCreateModal('RANGE')}
               type="button"
             >
@@ -273,7 +273,7 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-white/75 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10 ">
           <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
             <span>内容</span>
             <span>类型</span>
@@ -360,14 +360,14 @@ function LearningResourceRow({
     <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10">
       <div className="min-w-0">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">{item.title}</h2>
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
             <a
-              className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-green-300"
+              className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs text-brand-700 hover:underline dark:text-brand-300"
               href={item.externalUrl}
               rel="noreferrer"
               target="_blank"
@@ -486,12 +486,12 @@ function LearningResourceModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
       <form
-        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95"
+        className="max-h-[88vh] w-full max-w-[760px] overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 "
         onSubmit={submit}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-brand-700 dark:text-green-300">{form.id ? '编辑学习内容' : '新增学习内容'}</p>
+            <p className="text-sm font-medium text-brand-700 dark:text-brand-300">{form.id ? '编辑学习内容' : '新增学习内容'}</p>
             <h2 className="mt-2 text-2xl font-semibold">{form.kind === 'RANGE' ? '靶场资源' : '工具资料'}</h2>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">当前仅维护外部链接，资源内容由第三方页面或学校后续服务承载。</p>
           </div>
@@ -511,7 +511,7 @@ function LearningResourceModal({
               封面图片 <span className="font-normal text-slate-400">（可选）</span>
             </span>
             {form.coverUrl ? (
-              <div className="mt-2 flex items-center gap-4 rounded-lg border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+              <div className="mt-2 flex items-center gap-4 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 ">
                 <img
                   alt="资源封面预览"
                   className="h-20 w-28 shrink-0 rounded-lg object-cover"
@@ -564,7 +564,7 @@ function LearningResourceModal({
               <div className="flex-1 border-t border-black/10 dark:border-white/10" />
             </div>
             <input
-              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(event) => updateField('coverUrl', event.target.value)}
               placeholder="https://example.com/cover.png"
               value={form.coverUrl}
@@ -602,7 +602,7 @@ function LearningResourceModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">说明</span>
             <textarea
-              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(event) => updateField('description', event.target.value)}
               placeholder="说明资源用途、适合对象、使用边界和注意事项"
               value={form.description}
@@ -646,7 +646,7 @@ function Field({
     <label className="block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <input
-        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+        className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -699,7 +699,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[520px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex gap-3">
           <span className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${state.danger ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
             <AlertTriangle className="h-5 w-5" />

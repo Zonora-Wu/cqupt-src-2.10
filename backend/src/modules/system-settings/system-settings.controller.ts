@@ -143,6 +143,17 @@ export class SystemSettingsController {
     return this.settings.getPlatformSettings()
   }
 
+  @Post('platform/logo')
+  @RequirePermissions('system:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  uploadSchoolLogo(
+    @UploadedFile() file: UploadedSettingsFile | undefined,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.settings.uploadSchoolLogo(file, user, getRequestMeta(req))
+  }
+
   @Get('ai-appearance')
   @RequirePermissions('system:manage')
   getAiAssistantAppearance() {
@@ -234,7 +245,7 @@ export class SystemSettingsController {
   @Post('platform')
   @RequirePermissions('system:manage')
   updatePlatformSettings(
-    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown },
+    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown; themeColor?: unknown },
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
@@ -245,6 +256,7 @@ export class SystemSettingsController {
         orgName: typeof body.orgName === 'string' ? body.orgName : undefined,
         platformDomain: typeof body.platformDomain === 'string' ? body.platformDomain : undefined,
         publicCertVerify: body.publicCertVerify !== undefined ? body.publicCertVerify === true || body.publicCertVerify === 'true' : undefined,
+        themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
       },
       user,
       getRequestMeta(req),
@@ -291,5 +303,15 @@ export class SystemSettingsController {
     @Req() req: RequestLike,
   ) {
     return this.settings.rejectRegistration(id, user, getRequestMeta(req))
+  }
+}
+
+@Controller('public/platform')
+export class PublicPlatformController {
+  constructor(@Inject(SystemSettingsService) private readonly settings: SystemSettingsService) {}
+
+  @Get('appearance')
+  getPlatformAppearance() {
+    return this.settings.getPlatformSettings()
   }
 }

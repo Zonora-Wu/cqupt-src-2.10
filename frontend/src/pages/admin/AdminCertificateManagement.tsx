@@ -151,7 +151,7 @@ export function AdminCertificateManagement() {
         </button>
 
         {message && (
-          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-green-300">
+          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-brand-300">
             {message}
           </div>
         )}
@@ -221,14 +221,14 @@ export function AdminCertificateManagement() {
 
             <SurfacePanel className="p-6">
               <h2 className="text-xl font-semibold">证书内容</h2>
-              <div className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-5 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="mt-5 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-5 dark:border-white/10 ">
                 <p className="text-sm leading-7 text-slate-600 dark:text-slate-400">{selectedCertificate.contribution}</p>
               </div>
             </SurfacePanel>
 
             <SurfacePanel className="p-6">
               <div className="flex items-center gap-2">
-                <CalendarClock className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <CalendarClock className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 <h2 className="text-xl font-semibold">操作记录</h2>
               </div>
               <div className="mt-5 space-y-4">
@@ -307,7 +307,7 @@ export function AdminCertificateManagement() {
         </SurfacePanel>
 
         {message && (
-          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-green-300">
+          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-brand-300">
             {message}
           </div>
         )}
@@ -345,9 +345,9 @@ export function AdminCertificateManagement() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                     <div className="flex items-center gap-2 text-sm font-medium">
-                      <ShieldCheck className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                      <ShieldCheck className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                       证书内容
                     </div>
                     <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.contribution}</p>
@@ -466,10 +466,10 @@ function IssueCertificateModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[#f7f9f7]/95 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/95">
+      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
               <Award className="h-5 w-5" />
               <span className="text-sm font-medium">Certificate Issue</span>
             </div>
@@ -489,7 +489,7 @@ function IssueCertificateModal({
         </div>
 
         <div className="mt-6 grid gap-4">
-          <div className="rounded-lg border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
             <p className="text-sm font-semibold">{certificate.type}</p>
             <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{certificate.vulnTitle}</p>
             <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 dark:text-slate-400">
@@ -502,12 +502,12 @@ function IssueCertificateModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">贡献说明</span>
             <textarea
-              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white/70 px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               onChange={(event) => setContribution(event.target.value)}
               value={contribution}
             />
           </label>
-          <label className="flex items-center gap-3 rounded-lg border border-black/10 bg-white/55 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+          <label className="flex items-center gap-3 rounded-lg border border-black/10 bg-white/55 px-4 py-3 text-sm dark:border-white/10 ">
             <input
               checked={publicVerify}
               className="h-4 w-4 accent-brand-600"

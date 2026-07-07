@@ -40,9 +40,9 @@ export function ScrollableNav({
                   ? `shrink-0 rounded-md px-3 py-1.5 text-sm ${
                       activeItem === item ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-300'
                     }`
-                  : `shrink-0 text-sm font-medium transition hover:text-brand-700 dark:hover:text-green-300 ${
+                  : `shrink-0 text-sm font-medium transition hover:text-brand-700 dark:hover:text-brand-300 ${
                       activeItem === item
-                        ? 'text-brand-700 dark:text-green-300'
+                        ? 'text-brand-700 dark:text-brand-300'
                         : 'text-slate-600 dark:text-slate-400'
                     }`
               }

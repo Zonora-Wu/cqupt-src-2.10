@@ -217,7 +217,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:bg-[#111411]/95 dark:text-white [&::-webkit-scrollbar]:hidden"
+        className="relative max-h-[calc(100vh-4rem)] w-full max-w-[500px] transform-gpu overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-8 text-slate-950 shadow-2xl backdrop-blur-xl [scrollbar-width:none] dark:border-white/10 dark:text-white [&::-webkit-scrollbar]:hidden"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -246,7 +246,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
         {pendingApproval ? (
           <div className="flex flex-col items-center gap-5 py-4 text-center">
-            <ShieldCheck className="h-12 w-12 text-brand-600 dark:text-green-400" />
+            <ShieldCheck className="h-12 w-12 text-brand-600 dark:text-brand-400" />
             <div>
               <p className="text-base font-semibold">注册申请已提交</p>
               <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-white/50">
@@ -305,7 +305,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               <div className="flex gap-3">
                 <Input className="flex-1" icon={<Mail />} onChange={(value) => updateField('code', value)} placeholder="邮箱验证码" required type="text" value={form.code} />
                 <button
-                  className="rounded-lg border border-black/10 bg-white/70 px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                  className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10  dark:text-white dark:hover:bg-white/10"
                   disabled={countdown > 0 || sendingCode}
                   onClick={() => void handleSendCode()}
                   type="button"
@@ -318,7 +318,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 <div className="group relative">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
                   <input
-                    className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                    className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
                     onChange={(event) => updateField('password', event.target.value)}
                     placeholder="密码"
                     required
@@ -426,7 +426,7 @@ function Input({
         {icon}
       </span>
       <input
-        className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+        className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
         inputMode={inputMode}
         maxLength={maxLength}
         onChange={(event) => onChange?.(event.target.value)}
@@ -443,7 +443,7 @@ function Input({
 function CheckboxText({ required, text }: { required?: boolean; text: string }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600 transition hover:text-slate-900 dark:text-white/60 dark:hover:text-white/80">
-      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-white/70 text-brand-600 dark:border-white/10 dark:bg-white/5" required={required} type="checkbox" />
+      <input className="mt-1 h-4 w-4 rounded border-black/10 bg-[var(--app-panel-bg)] text-brand-600 dark:border-white/10 " required={required} type="checkbox" />
       <span>{text}</span>
     </label>
   )

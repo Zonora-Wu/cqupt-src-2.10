@@ -137,7 +137,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
 
   return (
     <AppBackground>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
 
@@ -199,7 +199,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+              <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 Admin Console
               </p>
@@ -217,19 +217,19 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
                   <p className="text-sm text-slate-500 dark:text-slate-400">今日待办</p>
                   <h2 className="mt-1 text-xl font-semibold">需要处理的事项</h2>
                 </div>
-                <ShieldAlert className="h-8 w-8 text-brand-700 dark:text-green-300" />
+                <ShieldAlert className="h-8 w-8 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-4">
                 {overviewStats.map((item) => {
                   const Icon = item.icon
                   return (
                     <button
-                      className="rounded-lg border border-black/5 bg-black/[0.025] p-4 text-left transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 dark:bg-white/[0.035]"
+                      className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 text-left transition hover:border-brand-600/25 hover:bg-brand-600/5 dark:border-white/10 "
                       key={item.label}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                        <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                         <span className="text-3xl font-semibold">{item.value}</span>
                       </div>
                       <p className="mt-3 text-sm font-medium">{item.label}</p>
@@ -246,11 +246,11 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
                   <p className="text-sm text-slate-500 dark:text-slate-400">系统状态</p>
                   <h2 className="mt-1 text-xl font-semibold">服务健康</h2>
                 </div>
-                <Gauge className="h-8 w-8 text-brand-700 dark:text-green-300" />
+                <Gauge className="h-8 w-8 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 space-y-2">
                 {systemHealth.map((item) => (
-                  <div className="flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]" key={item.label}>
+                  <div className="flex items-center justify-between rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 " key={item.label}>
                     <div className="flex items-center gap-3">
                       <span className={`h-2.5 w-2.5 rounded-full ${item.tone}`} />
                       <span className="text-sm">{item.label}</span>
@@ -266,11 +266,11 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">待审核漏洞队列</h2>
-                <ShieldCheck className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <ShieldCheck className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 space-y-3">
                 {riskQueue.map((item) => (
-                  <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]" key={item.title}>
+                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.title}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-md bg-orange-500 px-2 py-1 text-xs font-medium text-white">{item.level}</span>
@@ -291,7 +291,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">快捷管理</h2>
-                <ServerCog className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <ServerCog className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 grid gap-3">
                 {operationItems.map((item) => {
@@ -303,7 +303,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
                       type="button"
                     >
                       <span className="flex items-center gap-3">
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                        <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                         <span>
                           <span className="block font-medium">{item.title}</span>
                           <span className="mt-1 block text-sm text-slate-500 dark:text-slate-400">{item.value}</span>
@@ -321,11 +321,11 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">最近审计日志</h2>
-                <Activity className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <Activity className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 space-y-3">
                 {auditLogs.map((item) => (
-                  <div className="grid gap-3 rounded-lg border border-black/5 bg-black/[0.025] p-4 text-sm md:grid-cols-[160px_minmax(0,1fr)_80px] dark:border-white/10 dark:bg-white/[0.035]" key={`${item.action}-${item.time}`}>
+                  <div className="grid gap-3 rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 text-sm md:grid-cols-[160px_minmax(0,1fr)_80px] dark:border-white/10 " key={`${item.action}-${item.time}`}>
                     <span className="font-medium">{item.action}</span>
                     <span className="text-slate-500 dark:text-slate-400">
                       {item.actor} · {item.target}
@@ -339,10 +339,10 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">AI 审核摘要</h2>
-                <ServerCog className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <ServerCog className="h-5 w-5 text-brand-700 dark:text-brand-300" />
               </div>
               <div className="mt-5 space-y-3 text-sm">
-                <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+                <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                   <p className="font-medium">已完成初评 23 份报告</p>
                   <p className="mt-2 text-slate-500 dark:text-slate-400">标记高价值 4 份，材料不完整 6 份，疑似重复 2 份。</p>
                 </div>

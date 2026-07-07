@@ -216,7 +216,7 @@ export function UserMyVulnerabilities() {
           return (
             <SurfacePanel className="p-5" key={item.label}>
               <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 <span className="text-3xl font-semibold">{item.value}</span>
               </div>
               <p className="mt-3 text-sm font-medium">{item.label}</p>
@@ -282,28 +282,28 @@ export function UserMyVulnerabilities() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-black/5 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2 text-sm font-medium">
-                    <Sparkles className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                    <Sparkles className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                     AI 建议
                   </div>
-                  <span className="text-sm font-semibold text-brand-700 dark:text-green-300">+{item.points}</span>
+                  <span className="text-sm font-semibold text-brand-700 dark:text-brand-300">+{item.points}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{getReportHint(item)}</p>
               </div>
             </div>
 
             {item.attachments.length > 0 && (
-              <div className="mt-5 rounded-lg border border-black/10 bg-white/45 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+              <div className="mt-5 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                  <Paperclip className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                  <Paperclip className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                   PDF 附件
                 </div>
                 <div className="grid gap-2 md:grid-cols-2">
                   {item.attachments.map((attachment) => (
                     <div
-                      className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white/60 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.045]"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-sm dark:border-white/10 "
                       key={attachment.id}
                     >
                       <div className="min-w-0">
@@ -444,10 +444,10 @@ function VulnerabilityDetailDrawer({
       className="fixed inset-0 z-[80] flex items-start justify-end bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#f7f9f7] shadow-2xl dark:bg-[#0f1511]">
+      <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[var(--app-bg)] shadow-2xl ">
         {/* 头部 */}
         <div className="flex shrink-0 items-center gap-3 border-b border-black/10 px-6 py-4 dark:border-white/10">
-          <ShieldAlert className="h-5 w-5 text-brand-600 dark:text-green-400" />
+          <ShieldAlert className="h-5 w-5 text-brand-600 dark:text-brand-400" />
           <div className="min-w-0 flex-1">
             {detail ? (
               <>
@@ -487,7 +487,7 @@ function VulnerabilityDetailDrawer({
                   <span className="text-xs text-slate-400">（自评：{detail.selfSeverity}）</span>
                 )}
                 {detail.points > 0 && (
-                  <span className="ml-auto text-sm font-semibold text-brand-700 dark:text-green-300">+{detail.points} 积分</span>
+                  <span className="ml-auto text-sm font-semibold text-brand-700 dark:text-brand-300">+{detail.points} 积分</span>
                 )}
               </div>
 
@@ -528,7 +528,7 @@ function VulnerabilityDetailDrawer({
               {detail.requestPacket && (
                 <section>
                   <SectionTitle icon={<FileText className="h-4 w-4" />} title="请求包" />
-                  <pre className="mt-3 overflow-x-auto rounded-lg bg-black/[0.04] p-4 text-xs leading-6 text-slate-700 dark:bg-white/[0.04] dark:text-slate-300">
+                  <pre className="mt-3 overflow-x-auto rounded-lg bg-[var(--app-panel-muted-bg)] p-4 text-xs leading-6 text-slate-700  dark:text-slate-300">
                     {detail.requestPacket}
                   </pre>
                 </section>
@@ -549,7 +549,7 @@ function VulnerabilityDetailDrawer({
                   <div className="mt-3 grid gap-2">
                     {detail.attachments.map((att) => (
                       <div
-                        className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/[0.045]"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-sm dark:border-white/10 "
                         key={att.id}
                       >
                         <div className="min-w-0">
@@ -580,7 +580,7 @@ function VulnerabilityDetailDrawer({
                   <div className="mt-3 space-y-3">
                     {[...detail.events].reverse().map((ev) => (
                       <div className="flex gap-3" key={ev.id}>
-                        <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-600 dark:bg-green-400" />
+                        <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-600 dark:bg-brand-400" />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <span className="font-medium text-slate-700 dark:text-slate-300">{formatEventAction(ev.action)}</span>
@@ -591,7 +591,7 @@ function VulnerabilityDetailDrawer({
                             <span className="ml-auto">{formatDateTime(ev.createdAt)}</span>
                           </div>
                           {ev.note && (
-                            <p className="mt-1 rounded-md bg-black/[0.03] px-3 py-2 text-xs leading-5 text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">
+                            <p className="mt-1 rounded-md bg-[var(--app-panel-muted-bg)] px-3 py-2 text-xs leading-5 text-slate-600  dark:text-slate-400">
                               {ev.note}
                             </p>
                           )}
@@ -641,7 +641,7 @@ function SupplementMaterialsModal({
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[#f7f9f7]/97 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#0f1511]/97">
+      <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         {/* 头部 */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -676,7 +676,7 @@ function SupplementMaterialsModal({
               补充说明 <span className="text-red-500">*</span>
             </span>
             <textarea
-              className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-white/60 px-3.5 py-2.5 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:placeholder:text-slate-600"
+              className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3.5 py-2.5 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30 dark:border-white/10  dark:text-slate-200 dark:placeholder:text-slate-600"
               onChange={(e) => onNoteChange(e.target.value)}
               placeholder="请描述你补充的内容，以及针对审核员反馈做出的修改或说明…"
               rows={5}
@@ -691,7 +691,7 @@ function SupplementMaterialsModal({
             附加 PDF（可选）
           </p>
           <div
-            className="mt-1.5 flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 border-dashed border-black/10 px-4 py-4 text-sm text-slate-500 transition hover:border-brand-600/40 dark:border-white/10 dark:hover:border-green-400/40"
+            className="mt-1.5 flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 border-dashed border-black/10 px-4 py-4 text-sm text-slate-500 transition hover:border-brand-600/40 dark:border-white/10 dark:hover:border-brand-400/40"
             onClick={() => fileInputRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -747,7 +747,7 @@ function SupplementMaterialsModal({
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-      <span className="text-brand-600 dark:text-green-400">{icon}</span>
+      <span className="text-brand-600 dark:text-brand-400">{icon}</span>
       {title}
     </div>
   )
@@ -764,7 +764,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function MarkdownBlock({ content }: { content: string }) {
   return (
-    <div className="mt-3 rounded-lg bg-black/[0.03] p-4 text-sm leading-7 text-slate-700 dark:bg-white/[0.04] dark:text-slate-300 whitespace-pre-wrap">
+    <div className="mt-3 rounded-lg bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-7 text-slate-700  dark:text-slate-300 whitespace-pre-wrap">
       {content || '（无内容）'}
     </div>
   )

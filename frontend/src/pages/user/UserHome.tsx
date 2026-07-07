@@ -293,7 +293,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
   return (
     <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[#f7f9f7]/80 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#0f1511]/75">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <div className="flex min-w-0 items-center gap-4">
             <BrandLogo />
@@ -393,12 +393,12 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
               }}
             >
               <div className="relative flex min-h-[500px] h-full flex-col p-7 md:p-10">
-                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-brand-600/25 to-transparent dark:via-green-300/25" />
-                <div className="pointer-events-none absolute right-12 top-12 hidden h-40 w-40 rounded-full bg-brand-600/10 blur-3xl md:block dark:bg-green-300/10" />
+                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-brand-600/25 to-transparent dark:via-brand-300/25" />
+                <div className="pointer-events-none absolute right-12 top-12 hidden h-40 w-40 rounded-full bg-brand-600/10 blur-3xl md:block dark:bg-brand-300/10" />
 
                 <div className="flex h-full flex-col">
                   <div>
-                    <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-green-300">
+                    <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
                       <Sparkles className="h-3.5 w-3.5" />
                       YouBao AI
                     </p>
@@ -406,7 +406,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <div className="mt-12 max-w-3xl">
                       <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
                         欢迎回来，{user.name}
-                        <span className="mt-3 block text-brand-700 dark:text-green-300">把漏洞报告交给邮宝先整理一遍。</span>
+                        <span className="mt-3 block text-brand-700 dark:text-brand-300">把漏洞报告交给邮宝先整理一遍。</span>
                       </h1>
                       <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-400">
                         邮宝可以辅助提取报告关键信息、检查复现材料完整度，并根据你的学习进度推荐下一步训练内容。
@@ -418,13 +418,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <div
                       className={`group flex w-full items-center justify-between gap-4 rounded-lg border px-5 py-4 text-left shadow-sm transition-all duration-500 ease-out ${
                         aiFocused
-                          ? 'translate-y-1 border-brand-600/35 bg-white/90 shadow-lg shadow-brand-600/10 ring-4 ring-brand-600/10 dark:border-green-300/25 dark:bg-white/[0.08] dark:ring-green-300/10'
-                          : 'border-black/10 bg-white/60 hover:border-brand-600/25 hover:bg-white/85 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]'
+                          ? 'translate-y-1 border-brand-600/35 bg-white/90 shadow-lg shadow-brand-600/10 ring-4 ring-brand-600/10 dark:border-brand-300/25 dark:bg-white/[0.08] dark:ring-brand-300/10'
+                          : 'border-black/10 bg-[var(--app-panel-muted-bg)] hover:border-brand-600/25 hover:bg-white/85 dark:border-white/10  dark:hover:bg-white/[0.07]'
                       }`}
                       onClick={() => setAiFocused(true)}
                     >
                       <span className="flex-1 min-w-0 flex items-center gap-3">
-                        <Bot className="h-5 w-5 shrink-0 text-brand-700 dark:text-green-300" />
+                        <Bot className="h-5 w-5 shrink-0 text-brand-700 dark:text-brand-300" />
                         <input
                           className="w-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-400"
                           onChange={(event) => setAiPrompt(event.target.value)}
@@ -441,7 +441,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                         />
                       </span>
                       <button
-                        className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-green-300 dark:hover:bg-green-300/10"
+                        className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-brand-300 dark:hover:bg-brand-300/10"
                         onClick={(event) => {
                           event.stopPropagation()
                           submitHomeAiPrompt()
@@ -464,12 +464,12 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                         const Icon = item.icon
                         return (
                           <button
-                            className="group flex h-full flex-col rounded-lg px-1 py-1 text-left transition hover:bg-black/[0.025] dark:hover:bg-white/[0.035]"
+                            className="group flex h-full flex-col rounded-lg px-1 py-1 text-left transition hover:bg-[var(--app-panel-muted-bg)] dark:hover:bg-white/[0.035]"
                             key={item.title}
                             type="button"
                           >
                             <div className="flex min-h-6 items-center gap-2">
-                              <Icon className="h-4 w-4 shrink-0 text-brand-700/80 dark:text-green-300/80" />
+                              <Icon className="h-4 w-4 shrink-0 text-brand-700/80 dark:text-brand-300/80" />
                               <p className="text-sm font-medium">{item.title}</p>
                             </div>
                             <p className="mt-2 flex-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
@@ -489,18 +489,18 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">个人数据汇总</p>
                     <h2 className="mt-1 text-xl font-semibold">安全实践概览</h2>
                   </div>
-                  <ShieldCheck className="h-9 w-9 text-brand-700 dark:text-green-300" />
+                  <ShieldCheck className="h-9 w-9 text-brand-700 dark:text-brand-300" />
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   {stats.map((item) => {
                     const Icon = item.icon
                     return (
                       <div
-                        className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
+                        className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 "
                         key={item.label}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-green-300" />
+                          <Icon className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                           <span className="text-2xl font-semibold">{item.value}</span>
                         </div>
                         <p className="mt-2 text-sm font-medium">{item.label}</p>
@@ -517,20 +517,20 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">AI Skill 库</p>
                     <h2 className="mt-1 text-xl font-semibold">平台公共能力沉淀</h2>
                   </div>
-                  <Gauge className="h-9 w-9 text-brand-700 dark:text-green-300" />
+                  <Gauge className="h-9 w-9 text-brand-700 dark:text-brand-300" />
                 </div>
                 <div className="mt-4 grid flex-1 content-start gap-3">
                   {aiSkills.slice(0, 4).map((item) => (
                     <div
-                      className="rounded-lg border border-black/5 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]"
+                      className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 "
                       key={item.id}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <Brain className="h-4 w-4 shrink-0 text-brand-700 dark:text-green-300" />
+                          <Brain className="h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300" />
                           <span className="truncate text-sm font-medium">{item.title}</span>
                         </div>
-                        <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-green-300/10 dark:text-green-300">
+                        <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-brand-300/10 dark:text-brand-300">
                           {item.aiSpace === 'STUDENT' ? '学生' : item.aiSpace === 'AUDITOR' ? '审核' : '管理'}
                         </span>
                       </div>
@@ -559,7 +559,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-green-300" />
+                        <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                         <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
                       </div>
                       <p className="mt-4 font-semibold">{item.title}</p>
@@ -639,7 +639,7 @@ function AccessTodoDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-xl overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl dark:border-white/10 dark:bg-[#131a15]">
+      <div className="w-full max-w-xl overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10">
         <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
           <div>
             <div className="flex items-center gap-2">
@@ -704,10 +704,10 @@ function AccessTaskCard({
   title: string
 }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.035]">
+    <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 ">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-green-300">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
             {icon}
           </div>
           <div className="min-w-0">
@@ -738,7 +738,7 @@ function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: 
     <section className="relative z-10 mx-auto max-w-6xl px-5 pb-10 pt-24 md:px-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-green-300">SECURITY ACCESS</p>
+          <p className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">SECURITY ACCESS</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
           <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
             完成答题并达到平台要求分数后，即可更新准入状态。

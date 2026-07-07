@@ -17,6 +17,8 @@ import { AiAssistantAppearance, AiKnowledgeUsagePolicySettings, AiQuotaSettings,
 const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_SCHOOL_LOGO_SIZE_BYTES = 2 * 1024 * 1024
+const DEFAULT_THEME_COLOR = '#2A6438'
 const DEFAULT_AI_DAILY_TOKENS = 20_000
 const DEFAULT_AI_WEEKLY_TOKENS = 60_000
 const DEFAULT_AI_MONTHLY_TOKENS = 100_000
@@ -503,16 +505,59 @@ export class SystemSettingsService {
   }
 
   async getPlatformSettings(): Promise<PlatformSettings> {
-    const keys = ['platform_name', 'school_name', 'org_name', 'platform_domain', 'public_cert_verify']
+    const keys = ['platform_name', 'school_name', 'org_name', 'platform_domain', 'public_cert_verify', 'school_logo_url', 'theme_color']
     const rows = await this.prisma.systemSetting.findMany({ where: { key: { in: keys } } })
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
     return {
+      logoUrl: typeof map['school_logo_url'] === 'string' ? map['school_logo_url'] : null,
       platformName: typeof map['platform_name'] === 'string' ? map['platform_name'] : 'CQUPT-SRC 校园漏洞响应平台',
       schoolName: typeof map['school_name'] === 'string' ? map['school_name'] : '重庆邮电大学',
       orgName: typeof map['org_name'] === 'string' ? map['org_name'] : '信息化办公室',
       platformDomain: typeof map['platform_domain'] === 'string' ? map['platform_domain'] : 'https://src.cqupt.edu.cn',
       publicCertVerify: typeof map['public_cert_verify'] === 'boolean' ? map['public_cert_verify'] : true,
+      themeColor: typeof map['theme_color'] === 'string' && isHexColor(map['theme_color']) ? map['theme_color'].toUpperCase() : DEFAULT_THEME_COLOR,
     }
+  }
+
+  async uploadSchoolLogo(
+    file: UploadedSettingsFile | undefined,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<PlatformSettings> {
+    const validatedFile = validateImageFile(file, MAX_SCHOOL_LOGO_SIZE_BYTES, '校徽')
+    const logoUrl = `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        where: { key: 'school_logo_url' },
+        update: { value: logoUrl, updatedById: user.id },
+        create: {
+          key: 'school_logo_url',
+          value: logoUrl,
+          description: '学校校徽',
+          updatedById: user.id,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            key: 'school_logo_url',
+            mimeType: validatedFile.mimeType,
+            size: validatedFile.buffer.length,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return this.getPlatformSettings()
   }
 
   async getAiAssistantAppearance(): Promise<AiAssistantAppearance> {
@@ -527,7 +572,7 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<AiAssistantAppearance> {
-    const validatedFile = validateImageFile(file, MAX_AI_AVATAR_SIZE_BYTES)
+    const validatedFile = validateImageFile(file, MAX_AI_AVATAR_SIZE_BYTES, '头像')
     const avatarUrl = `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`
 
     await this.prisma.$transaction(async (tx) => {
@@ -712,7 +757,7 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<PlatformSettings> {
-    const { platformName, schoolName, orgName, platformDomain, publicCertVerify } = body
+    const { platformName, schoolName, orgName, platformDomain, publicCertVerify, themeColor } = body
 
     if (platformName !== undefined && (typeof platformName !== 'string' || platformName.trim().length === 0 || platformName.length > 100)) {
       throw new BadRequestException('平台名称不能为空且不超过 100 个字符')
@@ -731,6 +776,9 @@ export class SystemSettingsService {
         throw new BadRequestException('平台访问域名必须是有效的 URL（以 http:// 或 https:// 开头）')
       }
     }
+    if (themeColor !== undefined && (typeof themeColor !== 'string' || !isHexColor(themeColor))) {
+      throw new BadRequestException('主题色必须是 #RRGGBB 格式的十六进制颜色')
+    }
 
     type UpsertEntry = { key: string; value: import('@prisma/client').Prisma.InputJsonValue; description: string }
     const updates: UpsertEntry[] = []
@@ -739,6 +787,7 @@ export class SystemSettingsService {
     if (orgName !== undefined) updates.push({ key: 'org_name', value: orgName.trim(), description: '主管单位' })
     if (platformDomain !== undefined) updates.push({ key: 'platform_domain', value: (platformDomain as string).trim(), description: '平台访问域名' })
     if (publicCertVerify !== undefined) updates.push({ key: 'public_cert_verify', value: Boolean(publicCertVerify), description: '公开证书查询' })
+    if (themeColor !== undefined) updates.push({ key: 'theme_color', value: themeColor.trim().toUpperCase(), description: '平台主题色' })
 
     if (updates.length > 0) {
       await this.prisma.$transaction(async (tx) => {
@@ -845,17 +894,21 @@ function validateSealFile(file: UploadedSettingsFile | undefined) {
   return validated
 }
 
-function validateImageFile(file: UploadedSettingsFile | undefined, maxBytes: number) {
+function validateImageFile(file: UploadedSettingsFile | undefined, maxBytes: number, displayName: string) {
   const validated = validateUploadedFile(file, maxBytes)
   const extension = extname(validated.originalname).toLowerCase()
   const validMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(validated.mimeType)
   const validExtension = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension)
 
   if (!validMime || !validExtension) {
-    throw new BadRequestException('头像仅支持 JPG、PNG、WebP、GIF 格式')
+    throw new BadRequestException(`${displayName}仅支持 JPG、PNG、WebP、GIF 格式`)
   }
 
   return validated
+}
+
+function isHexColor(value: string) {
+  return /^#[0-9A-Fa-f]{6}$/.test(value.trim())
 }
 
 function validateUploadedFile(file: UploadedSettingsFile | undefined, maxBytes: number) {

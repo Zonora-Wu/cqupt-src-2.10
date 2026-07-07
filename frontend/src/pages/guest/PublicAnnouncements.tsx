@@ -40,13 +40,13 @@ export function PublicAnnouncements() {
         </button>
 
         <article className="mt-6 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
-          <aside className="rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <aside className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10 ">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-green-300">
+              <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-brand-300">
                 {selectedAnnouncement.category}
               </span>
               {selectedAnnouncement.pinned && (
-                <span className="inline-flex items-center gap-1 rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-green-300">
+                <span className="inline-flex items-center gap-1 rounded-md border border-brand-600/20 bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-800 dark:text-brand-300">
                   <Pin className="h-3.5 w-3.5" />
                   置顶
                 </span>
@@ -58,12 +58,12 @@ export function PublicAnnouncements() {
               <p>发布时间：{formatDate(selectedAnnouncement.publishedAt)}</p>
               <p>发布范围：{selectedAnnouncement.range}</p>
             </div>
-            <p className="mt-5 rounded-lg border border-black/10 bg-black/[0.025] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400">
+            <p className="mt-5 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-6 text-slate-600 dark:border-white/10  dark:text-slate-400">
               {selectedAnnouncement.summary}
             </p>
           </aside>
 
-          <section className="rounded-lg border border-black/10 bg-white/70 p-7 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <section className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">公告原文</p>
             <div className="mt-5 whitespace-pre-line text-base leading-8 text-slate-700 dark:text-slate-300">
               {selectedAnnouncement.content}
@@ -77,7 +77,7 @@ export function PublicAnnouncements() {
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
       <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-green-300">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300">
           <Megaphone className="h-4 w-4" />
           公开公告
         </div>
@@ -89,7 +89,7 @@ export function PublicAnnouncements() {
 
       <section className="mt-16 grid gap-5">
         {loading && (
-          <div className="rounded-lg border border-black/10 bg-white/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 ">
             正在加载公开公告...
           </div>
         )}
@@ -101,17 +101,17 @@ export function PublicAnnouncements() {
         {!loading &&
           announcements.map((item) => (
             <article
-              className="group rounded-lg border border-black/10 bg-white/70 p-6 backdrop-blur-xl transition hover:bg-white dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/[0.06]"
+              className="group rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06]"
               key={item.id}
             >
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div className="flex gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-green-300">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-600/20 bg-brand-600/10 text-brand-700 dark:text-brand-300">
                     {item.pinned ? <Pin className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
                   </div>
                   <div>
                     <div className="mb-2 flex flex-wrap items-center gap-3">
-                      <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-green-300">
+                      <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-brand-300">
                         {item.category}
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">
@@ -136,7 +136,7 @@ export function PublicAnnouncements() {
           ))}
 
         {!loading && announcements.length === 0 && !error && (
-          <div className="rounded-lg border border-black/10 bg-white/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 ">
             暂无公开公告。
           </div>
         )}

@@ -9,7 +9,7 @@ interface SectionTitleProps {
 export function SectionTitle({ icon, title, subtitle }: SectionTitleProps) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-brand-700 dark:text-green-300">{icon}</span>
+      <span className="text-brand-700 dark:text-brand-300">{icon}</span>
       <div>
         <h2 className="text-lg font-semibold">{title}</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>

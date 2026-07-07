@@ -188,7 +188,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Bot className="h-4 w-4 text-brand-600 dark:text-green-300" />
+                <Bot className="h-4 w-4 text-brand-600 dark:text-brand-300" />
                 AI token 额度
               </div>
             </div>
@@ -205,7 +205,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                 <div
-                  className="h-full rounded-full bg-brand-600 transition-all dark:bg-green-300"
+                  className="h-full rounded-full bg-brand-600 transition-all dark:bg-brand-300"
                   style={{ width: `${Math.min(100, Math.max(0, aiQuota?.usedPercent ?? 0))}%` }}
                 />
               </div>
@@ -218,7 +218,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Star className="h-4 w-4 text-brand-600 dark:text-green-300" />
+                <Star className="h-4 w-4 text-brand-600 dark:text-brand-300" />
                 个人积分统计
               </div>
             </div>
@@ -233,7 +233,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-                <Shield className="h-4 w-4 text-brand-600 dark:text-green-300" />
+                <Shield className="h-4 w-4 text-brand-600 dark:text-brand-300" />
                 安全准入状态
               </div>
             </div>
@@ -256,7 +256,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
         <div className="space-y-5">
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
                 <Mail className="h-5 w-5" />
                 <h2 className="text-xl font-semibold text-slate-950 dark:text-white">邮箱绑定</h2>
               </div>
@@ -290,7 +290,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
 
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
                 <KeyRound className="h-5 w-5" />
                 <h2 className="text-xl font-semibold text-slate-950 dark:text-white">登录密码</h2>
               </div>
@@ -318,7 +318,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
 
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-              <div className="flex items-center gap-2 text-brand-700 dark:text-green-300">
+              <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
                 <SlidersHorizontal className="h-5 w-5" />
                 <h2 className="text-xl font-semibold text-slate-950 dark:text-white">账号详情</h2>
               </div>
@@ -343,7 +343,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           </SurfacePanel>
 
           <div className="flex items-start gap-3 rounded-lg border border-black/10 px-4 py-3.5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
-            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600/70 dark:text-green-300/70" />
+            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-600/70 dark:text-brand-300/70" />
             {isLoadingProfile ? '正在同步账号信息...' : '邮箱变更、密码修改等操作会记录操作时间、来源 IP、用户代理和操作结果，便于安全审计。'}
           </div>
         </div>
@@ -431,7 +431,7 @@ function ChangeEmailModal({
   return (
     <Modal onClose={onClose} title="修改邮箱">
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-white/5">
+        <div className="rounded-lg bg-slate-50 px-4 py-3 ">
           <p className="text-xs text-slate-400 dark:text-slate-500">当前邮箱</p>
           <p className="mt-0.5 font-mono text-sm font-medium text-slate-950 dark:text-white">{currentEmail || '未绑定'}</p>
         </div>
@@ -461,7 +461,7 @@ function ChangeEmailModal({
               <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码（发至当前邮箱）</span>
               <input
                 autoFocus
-                className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5"
+                className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 "
                 maxLength={6}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="请输入 6 位验证码"
@@ -473,7 +473,7 @@ function ChangeEmailModal({
               <div className="group relative">
                 <AtSign className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
                 <input
-                  className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                  className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
                   onChange={(e) => setNewEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && confirmChange()}
                   placeholder="name@example.com"
@@ -631,7 +631,7 @@ function ChangePasswordModal({
             <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
             <input
               autoFocus
-              className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
               onChange={(e) => setOldPassword(e.target.value)}
               placeholder="输入当前密码"
               type={showOldPassword ? 'text' : 'password'}
@@ -648,7 +648,7 @@ function ChangePasswordModal({
           </div>
         ) : (
           <>
-            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-white/5">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 ">
               <p className="text-xs text-slate-400 dark:text-slate-500">验证邮箱</p>
               <p className="mt-0.5 font-mono text-sm font-medium text-slate-950 dark:text-white">{currentEmail || '未绑定'}</p>
             </div>
@@ -657,7 +657,7 @@ function ChangePasswordModal({
               <div className="flex gap-2">
                 <input
                   autoFocus
-                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  disabled:opacity-50"
                   disabled={!codeSent}
                   maxLength={6}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -680,7 +680,7 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="新密码（至少 8 位，字母+数字）"
             type={showNewPassword ? 'text' : 'password'}
@@ -699,7 +699,7 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
-            className="w-full rounded-lg border border-black/10 bg-white/70 py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
             onChange={(e) => setConfirmPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="确认新密码"
@@ -742,7 +742,7 @@ function Modal({ children, onClose, title }: { children: ReactNode; onClose: () 
       />
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-white/95 p-8 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#111411]/95 dark:text-white"
+        className="relative w-full max-w-[420px] transform-gpu rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-8 text-slate-950 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:text-white"
         initial={{ opacity: 0, y: 12 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
@@ -768,7 +768,7 @@ function NoticeBar({ notice }: { notice: Notice }) {
 function StatCell({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col items-center justify-center px-4 py-4 text-center">
-      <p className="text-2xl font-bold text-brand-700 dark:text-green-300">{value}</p>
+      <p className="text-2xl font-bold text-brand-700 dark:text-brand-300">{value}</p>
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</p>
     </div>
   )

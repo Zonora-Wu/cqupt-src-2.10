@@ -39,7 +39,7 @@ export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLE
 
   const overlay = document.createElement('div')
   overlay.className = 'theme-transition-overlay'
-  overlay.style.background = root.classList.contains('dark') ? '#0f1511' : '#f7f9f7'
+  overlay.style.background = getComputedStyle(root).getPropertyValue('--app-bg').trim() || '#f7f9f7'
   document.body.appendChild(overlay)
 
   root.classList.add(FALLBACK_TRANSITION_CLASS)
