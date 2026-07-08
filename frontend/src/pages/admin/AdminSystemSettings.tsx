@@ -804,45 +804,6 @@ export function AdminSystemSettings() {
                       </div>
                     </div>
                   </div>
-                  <div className="px-6 py-5">
-                    <div
-                      className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm dark:border-white/10 "
-                      style={{ borderColor: withAlpha(effectiveThemeColor, 0.24) }}
-                    >
-                      <div
-                        className="flex items-center justify-between gap-4 px-5 py-4 text-white"
-                        style={{ background: `linear-gradient(135deg, ${effectiveThemeColor}, ${withAlpha(effectiveThemeColor, 0.78)})` }}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/95">
-                            {schoolLogoUrl ? (
-                              <img alt="校徽预览" className="h-full w-full object-contain p-1.5" src={schoolLogoUrl} />
-                            ) : (
-                              <Building2 className="h-5 w-5" style={{ color: effectiveThemeColor }} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{platformName}</p>
-                            <p className="mt-1 truncate text-xs text-white/75">{schoolName} · {orgName}</p>
-                          </div>
-                        </div>
-                        <span className="hidden rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium sm:inline-flex">
-                          品牌预览
-                        </span>
-                      </div>
-                      <div className="grid gap-3 px-5 py-4 md:grid-cols-3">
-                        {['主按钮', '当前菜单', '重点状态'].map((label, index) => (
-                          <div className="rounded-lg border border-black/10 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]" key={label}>
-                            <div
-                              className="h-2 rounded-full"
-                              style={{ background: index === 1 ? withAlpha(effectiveThemeColor, 0.72) : index === 2 ? withAlpha(effectiveThemeColor, 0.22) : effectiveThemeColor }}
-                            />
-                            <p className="mt-2 text-xs font-medium text-slate-700 dark:text-slate-300">{label}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                   <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
                     {appearanceMessage ? (
                       <p className={`text-sm ${isErrorMessage(appearanceMessage) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -851,12 +812,15 @@ export function AdminSystemSettings() {
                     ) : (
                       <p className="text-sm text-slate-500 dark:text-slate-400">当前主题色：{normalizeHexColor(themeColor) ?? themeColor}</p>
                     )}
-                    <ActionButton
+                    <button
+                      className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={isSavingAppearance}
-                      icon={<Save className="h-4 w-4" />}
-                      label={isSavingAppearance ? '保存中...' : '保存外观设置'}
                       onClick={() => void handleSaveAppearance()}
-                    />
+                      type="button"
+                    >
+                      <Save className="h-4 w-4" />
+                      {isSavingAppearance ? '保存中...' : '保存外观设置'}
+                    </button>
                   </div>
                 </SettingsCard>
               </>
