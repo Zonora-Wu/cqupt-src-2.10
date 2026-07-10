@@ -7,6 +7,7 @@ import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
 import { clearSavedSession, getCurrentUser, getSavedSession, type AuthUser } from './services/auth'
 import { getPublicPlatformAppearance } from './services/systemSettings'
 import { applyBrandTheme } from './utils/brandTheme'
+import { applyPlatformBranding } from './utils/platformBranding'
 
 const AdminHome = lazy(() =>
   import('./pages/admin/AdminHome').then((module) => ({ default: module.AdminHome })),
@@ -76,10 +77,12 @@ function AppShell() {
       try {
         const appearance = await getPublicPlatformAppearance()
         if (active) {
-          applyBrandTheme(appearance.themeColor)
+          applyBrandTheme(appearance.themeColor, appearance.themePalette)
+          applyPlatformBranding(appearance)
         }
       } catch {
         applyBrandTheme('#2A6438')
+        applyPlatformBranding()
       }
     }
 

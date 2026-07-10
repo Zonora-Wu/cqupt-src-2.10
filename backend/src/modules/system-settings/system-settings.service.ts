@@ -19,6 +19,19 @@ const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
 const MAX_SCHOOL_LOGO_SIZE_BYTES = 2 * 1024 * 1024
 const DEFAULT_THEME_COLOR = '#2A6438'
+const BRAND_PALETTE_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'] as const
+const platformLogoSlots = ['navigation', 'auth', 'favicon'] as const
+type PlatformLogoSlot = typeof platformLogoSlots[number]
+const platformLogoSettingKeys: Record<PlatformLogoSlot, string> = {
+  auth: 'auth_logo_url',
+  favicon: 'favicon_url',
+  navigation: 'navigation_logo_url',
+}
+const platformLogoSettingDescriptions: Record<PlatformLogoSlot, string> = {
+  auth: '登录注册弹窗校徽',
+  favicon: '浏览器标签页校徽',
+  navigation: '菜单栏校徽',
+}
 const DEFAULT_AI_DAILY_TOKENS = 20_000
 const DEFAULT_AI_WEEKLY_TOKENS = 60_000
 const DEFAULT_AI_MONTHLY_TOKENS = 100_000
@@ -505,17 +518,36 @@ export class SystemSettingsService {
   }
 
   async getPlatformSettings(): Promise<PlatformSettings> {
-    const keys = ['platform_name', 'school_name', 'org_name', 'platform_domain', 'public_cert_verify', 'school_logo_url', 'theme_color']
+    const keys = [
+      'platform_name',
+      'school_name',
+      'org_name',
+      'platform_domain',
+      'public_cert_verify',
+      'school_logo_url',
+      'navigation_logo_url',
+      'auth_logo_url',
+      'favicon_url',
+      'theme_color',
+      'theme_palette',
+    ]
     const rows = await this.prisma.systemSetting.findMany({ where: { key: { in: keys } } })
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+    const themePalette = normalizeThemePalette(map['theme_palette'])
+    const themeColor = typeof map['theme_color'] === 'string' && isHexColor(map['theme_color']) ? map['theme_color'].toUpperCase() : DEFAULT_THEME_COLOR
+    const legacyLogoUrl = typeof map['school_logo_url'] === 'string' ? map['school_logo_url'] : null
     return {
-      logoUrl: typeof map['school_logo_url'] === 'string' ? map['school_logo_url'] : null,
+      authLogoUrl: typeof map['auth_logo_url'] === 'string' ? map['auth_logo_url'] : legacyLogoUrl,
+      faviconUrl: typeof map['favicon_url'] === 'string' ? map['favicon_url'] : legacyLogoUrl,
+      logoUrl: legacyLogoUrl,
+      navigationLogoUrl: typeof map['navigation_logo_url'] === 'string' ? map['navigation_logo_url'] : legacyLogoUrl,
       platformName: typeof map['platform_name'] === 'string' ? map['platform_name'] : 'CQUPT-SRC 校园漏洞响应平台',
       schoolName: typeof map['school_name'] === 'string' ? map['school_name'] : '重庆邮电大学',
       orgName: typeof map['org_name'] === 'string' ? map['org_name'] : '信息化办公室',
       platformDomain: typeof map['platform_domain'] === 'string' ? map['platform_domain'] : 'https://src.cqupt.edu.cn',
       publicCertVerify: typeof map['public_cert_verify'] === 'boolean' ? map['public_cert_verify'] : true,
-      themeColor: typeof map['theme_color'] === 'string' && isHexColor(map['theme_color']) ? map['theme_color'].toUpperCase() : DEFAULT_THEME_COLOR,
+      themeColor: typeof themePalette['600'] === 'string' ? themePalette['600'] : themeColor,
+      themePalette,
     }
   }
 
@@ -524,20 +556,43 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<PlatformSettings> {
+    return this.uploadPlatformLogo('navigation', file, user, meta)
+  }
+
+  async uploadPlatformLogo(
+    slot: PlatformLogoSlot,
+    file: UploadedSettingsFile | undefined,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<PlatformSettings> {
     const validatedFile = validateImageFile(file, MAX_SCHOOL_LOGO_SIZE_BYTES, '校徽')
     const logoUrl = `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`
+    const settingKey = platformLogoSettingKeys[slot]
 
     await this.prisma.$transaction(async (tx) => {
       await tx.systemSetting.upsert({
-        where: { key: 'school_logo_url' },
+        where: { key: settingKey },
         update: { value: logoUrl, updatedById: user.id },
         create: {
-          key: 'school_logo_url',
+          key: settingKey,
           value: logoUrl,
-          description: '学校校徽',
+          description: platformLogoSettingDescriptions[slot],
           updatedById: user.id,
         },
       })
+
+      if (slot === 'navigation') {
+        await tx.systemSetting.upsert({
+          where: { key: 'school_logo_url' },
+          update: { value: logoUrl, updatedById: user.id },
+          create: {
+            key: 'school_logo_url',
+            value: logoUrl,
+            description: '学校校徽',
+            updatedById: user.id,
+          },
+        })
+      }
 
       await tx.auditLog.create({
         data: {
@@ -545,9 +600,42 @@ export class SystemSettingsService {
           actorId: user.id,
           ipAddress: meta.ipAddress,
           metadata: {
-            key: 'school_logo_url',
+            key: settingKey,
             mimeType: validatedFile.mimeType,
+            slot,
             size: validatedFile.buffer.length,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetType: 'SystemSetting',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+
+    return this.getPlatformSettings()
+  }
+
+  async resetPlatformLogo(
+    slot: PlatformLogoSlot,
+    user: AuthenticatedRequestUser,
+    meta: ClientRequestMeta,
+  ): Promise<PlatformSettings> {
+    const settingKey = platformLogoSettingKeys[slot]
+    const keys = slot === 'navigation' ? [settingKey, 'school_logo_url'] : [settingKey]
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.deleteMany({ where: { key: { in: keys } } })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            key: settingKey,
+            slot,
+            resetToDefault: true,
           },
           requestPath: meta.requestPath,
           result: 'success',
@@ -757,7 +845,7 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<PlatformSettings> {
-    const { platformName, schoolName, orgName, platformDomain, publicCertVerify, themeColor } = body
+    const { platformName, schoolName, orgName, platformDomain, publicCertVerify, themeColor, themePalette } = body
 
     if (platformName !== undefined && (typeof platformName !== 'string' || platformName.trim().length === 0 || platformName.length > 100)) {
       throw new BadRequestException('平台名称不能为空且不超过 100 个字符')
@@ -779,6 +867,7 @@ export class SystemSettingsService {
     if (themeColor !== undefined && (typeof themeColor !== 'string' || !isHexColor(themeColor))) {
       throw new BadRequestException('主题色必须是 #RRGGBB 格式的十六进制颜色')
     }
+    const normalizedThemePalette = themePalette !== undefined ? normalizeThemePaletteForSave(themePalette) : undefined
 
     type UpsertEntry = { key: string; value: import('@prisma/client').Prisma.InputJsonValue; description: string }
     const updates: UpsertEntry[] = []
@@ -788,6 +877,12 @@ export class SystemSettingsService {
     if (platformDomain !== undefined) updates.push({ key: 'platform_domain', value: (platformDomain as string).trim(), description: '平台访问域名' })
     if (publicCertVerify !== undefined) updates.push({ key: 'public_cert_verify', value: Boolean(publicCertVerify), description: '公开证书查询' })
     if (themeColor !== undefined) updates.push({ key: 'theme_color', value: themeColor.trim().toUpperCase(), description: '平台主题色' })
+    if (normalizedThemePalette !== undefined) {
+      updates.push({ key: 'theme_palette', value: normalizedThemePalette, description: '平台主题色卡' })
+      if (normalizedThemePalette['600'] && themeColor === undefined) {
+        updates.push({ key: 'theme_color', value: normalizedThemePalette['600'], description: '平台主题色' })
+      }
+    }
 
     if (updates.length > 0) {
       await this.prisma.$transaction(async (tx) => {
@@ -909,6 +1004,36 @@ function validateImageFile(file: UploadedSettingsFile | undefined, maxBytes: num
 
 function isHexColor(value: string) {
   return /^#[0-9A-Fa-f]{6}$/.test(value.trim())
+}
+
+function normalizeThemePalette(value: unknown) {
+  if (!isRecord(value)) return {}
+
+  return BRAND_PALETTE_SHADES.reduce<Record<string, string>>((palette, shade) => {
+    const color = value[shade]
+    if (typeof color === 'string' && isHexColor(color)) {
+      palette[shade] = color.trim().toUpperCase()
+    }
+    return palette
+  }, {})
+}
+
+function normalizeThemePaletteForSave(value: unknown) {
+  if (!isRecord(value)) {
+    throw new BadRequestException('主题色卡必须是色阶到颜色值的对象')
+  }
+
+  return BRAND_PALETTE_SHADES.reduce<Record<string, string>>((palette, shade) => {
+    const color = value[shade]
+    if (color === undefined || color === null || color === '') {
+      throw new BadRequestException(`主题色卡缺少 brand-${shade}`)
+    }
+    if (typeof color !== 'string' || !isHexColor(color)) {
+      throw new BadRequestException(`brand-${shade} 必须是 #RRGGBB 格式的十六进制颜色`)
+    }
+    palette[shade] = color.trim().toUpperCase()
+    return palette
+  }, {})
 }
 
 function validateUploadedFile(file: UploadedSettingsFile | undefined, maxBytes: number) {

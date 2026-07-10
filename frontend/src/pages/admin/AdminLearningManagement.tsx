@@ -210,7 +210,6 @@ export function AdminLearningManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <PageHeader
-            eyebrow="Learning Ops"
             eyebrowIcon={<GraduationCap className="h-3.5 w-3.5" />}
             title="学习管理"
             description="统一维护学习资料、工具入口和靶场外部链接。学生登录后才可查看与访问，访问行为会计入资源使用次数。"

@@ -1,6 +1,7 @@
-import { Archive, Bot, CheckCircle2, DatabaseZap, FileText, Hammer, History, Library, PackageCheck, RefreshCw, ShieldCheck, Sparkles, Wrench, XCircle } from 'lucide-react'
+import { Archive, CheckCircle2, DatabaseZap, FileText, Hammer, History, Library, PackageCheck, RefreshCw, ShieldCheck, Sparkles, Wrench, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -204,15 +205,10 @@ export function AdminAiKnowledgeManagement() {
   return (
     <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-            <Bot className="h-3.5 w-3.5" /> AI Knowledge Ops
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">AI 知识沉淀审核</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
-            审核从 AI 对话中沉淀出的通用知识，确认脱敏、泛化和安全边界后再进入生产知识库；稳定方法论可二次审批晋升为 Hermes Skill。
-          </p>
-        </div>
+        <PageHeader
+          title="AI 知识沉淀审核"
+          description="审核从 AI 对话中沉淀出的通用知识，确认脱敏、泛化和安全边界后再进入生产知识库；稳定方法论可二次审批晋升为 Hermes Skill。"
+        />
         <div className="flex flex-wrap gap-2">
           <button className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">
             <RefreshCw className="mr-2 inline h-4 w-4" />刷新

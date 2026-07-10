@@ -235,7 +235,7 @@ export function AdminUserManagement() {
               <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
                 <SurfacePanel className="p-6 text-center">
                   <ManagedUserAvatar user={selectedUser} size="lg" />
-                  <h1 className="mt-4 text-2xl font-semibold">{selectedUser.name}</h1>
+                  <h1 className="mt-0 text-2xl font-semibold">{selectedUser.name}</h1>
                   <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">{selectedUser.unifiedCode}</p>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
                     <RoleBadge user={selectedUser} />
@@ -471,7 +471,6 @@ export function AdminUserManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrow="User Ops"
             eyebrowIcon={<UsersRound className="h-3.5 w-3.5" />}
             title="用户管理"
             description="管理学生、审核员和管理员账号，处理准入状态、责任书、角色权限与账号安全。"

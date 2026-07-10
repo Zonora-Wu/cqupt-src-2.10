@@ -238,7 +238,6 @@ export function AdminPointsMallManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrow="Mall Ops"
             eyebrowIcon={<ShoppingBag className="h-3.5 w-3.5" />}
             title="积分商城"
             description="管理积分商品、库存和线下领取记录。所有兑换默认在蓝山工作室领取，不提供邮寄。"

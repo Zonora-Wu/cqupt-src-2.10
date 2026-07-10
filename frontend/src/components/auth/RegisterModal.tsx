@@ -25,6 +25,7 @@ import {
   type AuthUser,
   type RegisterResult,
 } from '../../services/auth'
+import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
 type RegisterModalProps = {
   onClose: () => void
@@ -66,6 +67,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [countdown, setCountdown] = useState(0)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
+  const [logos, setLogos] = useState(() => getPlatformLogos())
   const [form, setForm] = useState({
     code: '',
     college: '',
@@ -99,6 +101,8 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
     document.documentElement.classList.add('auth-modal-open')
     return () => document.documentElement.classList.remove('auth-modal-open')
   }, [])
+
+  useEffect(() => subscribePlatformBranding(setLogos), [])
 
   useEffect(() => {
     if (countdown <= 0) return
@@ -234,12 +238,12 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
           <img
             alt="CQUPT-SRC Logo"
             className="mb-3 h-32 w-auto object-contain opacity-95 dark:hidden"
-            src="/assets/logos/CQUPT_02_logo.png"
+            src={logos.authLogoUrl}
           />
           <img
             alt="CQUPT-SRC Logo"
             className="mb-3 hidden h-24 w-auto object-contain opacity-95 dark:block"
-            src="/assets/logos/CQUPT_02_logo_dark.png"
+            src={logos.authLogoUrlDark}
           />
           <p className="mt-1 text-sm text-slate-500 dark:text-white/50">CQUPT-SRC 校园漏洞响应平台</p>
         </header>

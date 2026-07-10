@@ -175,7 +175,7 @@ export function AdminAnnouncementManagement() {
                 <StatusBadge status={selectedAnnouncement.status} />
                 {selectedAnnouncement.pinned && <PinnedBadge />}
               </div>
-              <h1 className="mt-5 text-2xl font-semibold tracking-tight">{selectedAnnouncement.title}</h1>
+              <h1 className="mt-0 text-2xl font-semibold tracking-tight">{selectedAnnouncement.title}</h1>
               <div className="mt-5 space-y-3 border-t border-black/10 pt-5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
                 <p className="font-mono text-xs">{selectedAnnouncement.id}</p>
                 <p>发布范围：{selectedAnnouncement.range}</p>
@@ -272,7 +272,6 @@ export function AdminAnnouncementManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrow="Announcement Ops"
             eyebrowIcon={<Megaphone className="h-3.5 w-3.5" />}
             title="公告管理"
             description="管理平台通知、规则更新、安全提醒和活动公告，支持草稿、发布、置顶、下线和公告详情。"

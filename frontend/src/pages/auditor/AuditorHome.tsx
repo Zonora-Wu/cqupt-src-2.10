@@ -1035,11 +1035,7 @@ function AuditorAIAssistant() {
       <div className={`flex min-h-[64vh] flex-col ${hasMessage ? 'justify-end' : 'justify-center'}`}>
         {!hasMessage && (
           <div className="mx-auto max-w-2xl text-center">
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-              <Bot className="h-3.5 w-3.5" />
-              Auditor AI
-            </p>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">审核辅助智能体</h1>
+            <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">审核辅助智能体</h1>
             <p className="mt-4 leading-7 text-slate-600 dark:text-slate-400">
               可用于漏洞价值预判、复现材料检查、修复建议润色和测试边界核对。AI 仅提供辅助建议，最终结论由审核员确认。
             </p>

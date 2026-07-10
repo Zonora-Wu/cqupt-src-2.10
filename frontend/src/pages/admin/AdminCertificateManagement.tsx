@@ -164,7 +164,7 @@ export function AdminCertificateManagement() {
                 <LevelBadge level={selectedCertificate.level} />
                 <CertificateStatusBadge status={selectedCertificate.status} />
               </div>
-              <h1 className="mt-4 text-2xl font-semibold leading-snug">{selectedCertificate.type}</h1>
+              <h1 className="mt-0 text-2xl font-semibold leading-snug">{selectedCertificate.type}</h1>
               <div className="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-400">
                 <p>获得者：{selectedCertificate.recipient}</p>
                 <p>统一认证码：{selectedCertificate.unifiedCode}</p>
@@ -266,7 +266,6 @@ export function AdminCertificateManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrow="Certificate Ops"
             eyebrowIcon={<Medal className="h-3.5 w-3.5" />}
             title="证书管理"
             description="管理漏洞贡献证书的签发、PDF 预览、撤销与公开核验。证书模板在系统设置中统一维护。"

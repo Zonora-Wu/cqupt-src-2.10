@@ -296,9 +296,6 @@ export function UserCertificates() {
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
                         <Award className="h-8 w-8" />
                       </div>
-                      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-                        CQUPT-SRC
-                      </p>
                       <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">PDF Certificate</p>
                     </div>
                   </div>

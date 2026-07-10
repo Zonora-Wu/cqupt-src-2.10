@@ -1,6 +1,15 @@
 export type BrandShade = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950
 
 export type BrandPalette = Record<BrandShade, string>
+export type BrandPaletteOverrides = Partial<Record<BrandShade, string>>
+
+export const brandShades: BrandShade[] = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+
+export function recreatePaletteFromShade(shade: BrandShade, color: string, originalPalette: BrandPalette): BrandPalette {
+  const normalized = normalizeHexColor(color)
+  if (!normalized) return originalPalette
+  return { ...originalPalette, [shade]: normalized }
+}
 
 export const defaultBrandPalette: BrandPalette = {
   50: '#EEF7F0',
@@ -22,21 +31,9 @@ type HslColor = {
   saturation: number
 }
 
-const defaultRoleColors = {
-  appBgDark: '#0F1511',
-  appBgLight: '#F7F9F7',
-  appSurfaceDark: '#151B17',
-  appSurfaceMutedDark: '#1D251F',
-  appSurfaceMutedLight: '#EEF3EF',
-}
-
 const defaultBrandHsl = Object.fromEntries(
   Object.entries(defaultBrandPalette).map(([shade, color]) => [shade, hexToHsl(color)]),
 ) as Record<BrandShade, HslColor>
-
-const defaultRoleHsl = Object.fromEntries(
-  Object.entries(defaultRoleColors).map(([role, color]) => [role, hexToHsl(color)]),
-) as Record<keyof typeof defaultRoleColors, HslColor>
 
 const brandShadeRoles: Record<Exclude<BrandShade, 600>, {
   lightness: (base: HslColor) => number
@@ -69,12 +66,12 @@ export function formatHexInput(value: string) {
     : `#${withoutExtraHashes.slice(0, 6)}`.toUpperCase()
 }
 
-export function generateBrandPalette(hexColor: string): BrandPalette {
+export function generateBrandPalette(hexColor: string, overrides: BrandPaletteOverrides = {}): BrandPalette {
   const normalized = normalizeHexColor(hexColor) ?? defaultBrandPalette[600]
   const base = hexToHsl(normalized)
   const hue = base.saturation < 4 ? 0 : base.hue
 
-  return (Object.keys(defaultBrandPalette).map(Number) as BrandShade[]).reduce((palette, shade) => {
+  const generated = brandShades.reduce((palette, shade) => {
     if (shade === 600) {
       palette[shade] = normalized
       return palette
@@ -88,22 +85,19 @@ export function generateBrandPalette(hexColor: string): BrandPalette {
     })
     return palette
   }, {} as BrandPalette)
+
+  return mergeBrandPalette(generated, overrides)
 }
 
-export function applyBrandTheme(hexColor: string) {
-  const palette = generateBrandPalette(hexColor)
+export function applyBrandTheme(hexColor: string, overrides: BrandPaletteOverrides = {}) {
+  const palette = generateBrandPalette(hexColor, overrides)
   const root = document.documentElement
-  const base = hexToHsl(palette[600])
-  const hue = base.saturation < 4 ? 0 : base.hue
-  const lightBg = roleColor(hue, lowChroma(base, defaultRoleHsl.appBgLight.saturation), defaultRoleHsl.appBgLight.lightness)
-  const lightSurfaceMuted = roleColor(hue, lowChroma(base, defaultRoleHsl.appSurfaceMutedLight.saturation), defaultRoleHsl.appSurfaceMutedLight.lightness)
-  const darkBg = roleColor(hue, lowChroma(base, defaultRoleHsl.appBgDark.saturation), defaultRoleHsl.appBgDark.lightness)
-  const darkSurface = roleColor(hue, lowChroma(base, defaultRoleHsl.appSurfaceDark.saturation), defaultRoleHsl.appSurfaceDark.lightness)
-  const darkSurfaceMuted = roleColor(hue, lowChroma(base, defaultRoleHsl.appSurfaceMutedDark.saturation), defaultRoleHsl.appSurfaceMutedDark.lightness)
-  const lightPanel = withAlpha('#FFFFFF', 0.75)
-  const lightPanelMuted = withAlpha(lightSurfaceMuted, 0.78)
-  const darkPanel = withAlpha(darkSurface, 0.84)
-  const darkPanelMuted = withAlpha(darkSurfaceMuted, 0.68)
+
+  const lightBg = palette[50]
+  const lightSurfaceMuted = palette[100]
+  const darkBg = palette[950]
+  const darkSurface = palette[900]
+  const darkSurfaceMuted = palette[800]
 
   Object.entries(palette).forEach(([shade, color]) => {
     root.style.setProperty(`--color-brand-${shade}`, color)
@@ -117,15 +111,34 @@ export function applyBrandTheme(hexColor: string) {
   root.style.setProperty('--app-surface-muted-dark', darkSurfaceMuted)
   root.style.setProperty('--app-header-bg-light', withAlpha(lightBg, 0.86))
   root.style.setProperty('--app-header-bg-dark', withAlpha(darkBg, 0.82))
-  root.style.setProperty('--app-panel-bg-light', lightPanel)
-  root.style.setProperty('--app-panel-bg-dark', darkPanel)
-  root.style.setProperty('--app-panel-muted-bg-light', lightPanelMuted)
-  root.style.setProperty('--app-panel-muted-bg-dark', darkPanelMuted)
+  root.style.setProperty('--app-panel-bg-light', withAlpha(lightBg, 0.72))
+  root.style.setProperty('--app-panel-bg-dark', withAlpha(darkSurface, 0.84))
+  root.style.setProperty('--app-panel-muted-bg-light', withAlpha(lightSurfaceMuted, 0.78))
+  root.style.setProperty('--app-panel-muted-bg-dark', withAlpha(darkSurfaceMuted, 0.68))
   root.style.setProperty('--app-menu-bg-light', withAlpha(lightBg, 0.96))
   root.style.setProperty('--app-menu-bg-dark', withAlpha(darkBg, 0.96))
   root.style.setProperty('--app-primary-scrollbar', withAlpha(palette[600], 0.55))
   root.style.setProperty('--app-primary-scrollbar-thumb', withAlpha(palette[600], 0.45))
   root.style.setProperty('--app-primary-scrollbar-thumb-hover', withAlpha(palette[600], 0.7))
+}
+
+export function normalizeBrandPaletteOverrides(value: unknown): BrandPaletteOverrides {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  return brandShades.reduce((overrides, shade) => {
+    const raw = (value as Record<string, unknown>)[String(shade)]
+    if (typeof raw !== 'string') return overrides
+    const normalized = normalizeHexColor(raw)
+    if (normalized) overrides[shade] = normalized
+    return overrides
+  }, {} as BrandPaletteOverrides)
+}
+
+export function mergeBrandPalette(base: BrandPalette, overrides: BrandPaletteOverrides): BrandPalette {
+  return brandShades.reduce((palette, shade) => {
+    palette[shade] = normalizeHexColor(overrides[shade] ?? '') ?? base[shade]
+    return palette
+  }, {} as BrandPalette)
 }
 
 export function withAlpha(hexColor: string, alpha: number) {
@@ -135,19 +148,10 @@ export function withAlpha(hexColor: string, alpha: number) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }
 
-function roleColor(hue: number, saturation: number, lightness: number) {
-  return hslToHex({ hue, lightness, saturation })
-}
-
 function roleSaturation(base: HslColor, defaultSaturation: number, accentWeight: number) {
   if (base.saturation < 4) return 0
   const candidate = defaultSaturation * (1 - accentWeight) + base.saturation * accentWeight
   return clamp(candidate, Math.max(18, defaultSaturation * 0.68), 88)
-}
-
-function lowChroma(base: HslColor, defaultSaturation: number) {
-  if (base.saturation < 4) return 0
-  return clamp(defaultSaturation * 0.72 + base.saturation * 0.12, 8, 24)
 }
 
 function hexToHsl(hexColor: string): HslColor {

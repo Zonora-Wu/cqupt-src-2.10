@@ -14,13 +14,17 @@ export type CertificateTemplateSummary = {
 }
 
 export type PlatformSettings = {
+  authLogoUrl: string | null
+  faviconUrl: string | null
   logoUrl: string | null
+  navigationLogoUrl: string | null
   platformName: string
   schoolName: string
   orgName: string
   platformDomain: string
   publicCertVerify: boolean
   themeColor: string
+  themePalette: Record<string, string>
 }
 
 export type AiAssistantAppearance = {
@@ -144,6 +148,19 @@ export async function uploadSchoolLogo(file: File) {
   return requestForm<PlatformSettings>('/system-settings/platform/logo', formData)
 }
 
+export type PlatformLogoSlot = 'auth' | 'favicon' | 'navigation'
+
+export async function uploadPlatformLogo(slot: PlatformLogoSlot, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return requestForm<PlatformSettings>(`/system-settings/platform/logo/${slot}`, formData)
+}
+
+export async function resetPlatformLogo(slot: PlatformLogoSlot) {
+  return request<PlatformSettings>(`/system-settings/platform/logo/${slot}`, { method: 'DELETE' })
+}
+
 export async function getAiAssistantAppearance() {
   return request<AiAssistantAppearance>('/system-settings/ai-appearance', { method: 'GET' })
 }
@@ -191,7 +208,7 @@ export async function rejectRegistration(id: string) {
   return request<{ success: true }>(`/system-settings/pending-registrations/${id}/reject`, { method: 'POST' })
 }
 
-async function request<T>(path: string, options: { method: 'GET' | 'POST' | 'PUT'; body?: Record<string, unknown> }) {
+async function request<T>(path: string, options: { method: 'DELETE' | 'GET' | 'POST' | 'PUT'; body?: Record<string, unknown> }) {
   return apiRequest<T>(path, {
     ...options,
     auth: true,

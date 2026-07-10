@@ -398,12 +398,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
                 <div className="flex h-full flex-col">
                   <div>
-                    <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      YouBao AI
-                    </p>
-
-                    <div className="mt-12 max-w-3xl">
+                    <div className="mt-0 max-w-3xl">
                       <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
                         欢迎回来，{user.name}
                         <span className="mt-3 block text-brand-700 dark:text-brand-300">把漏洞报告交给邮宝先整理一遍。</span>
@@ -738,8 +733,7 @@ function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: 
     <section className="relative z-10 mx-auto max-w-6xl px-5 pb-10 pt-24 md:px-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">SECURITY ACCESS</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
+          <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
           <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
             完成答题并达到平台要求分数后，即可更新准入状态。
           </p>

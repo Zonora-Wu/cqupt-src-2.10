@@ -6,7 +6,6 @@ import {
   ExternalLink,
   Expand,
   FileText,
-  GraduationCap,
   Layers3,
   PlayCircle,
   ShieldCheck,
@@ -123,11 +122,7 @@ export function UserLearningCenter() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <SurfacePanel className="overflow-hidden p-0">
           <div className="relative p-7 md:p-8">
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-              <GraduationCap className="h-3.5 w-3.5" />
-              Learning Center
-            </p>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">学习中心</h1>
+            <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">学习中心</h1>
             <p className="mt-4 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
               下载安全工具、阅读学习资料，并进入授权靶场资源进行练习。所有资源需要登录后访问，点击访问会记录资源使用次数。
             </p>

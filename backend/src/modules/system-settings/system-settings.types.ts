@@ -35,13 +35,17 @@ export type PendingRegistrationItem = {
 }
 
 export type PlatformSettings = {
+  authLogoUrl: string | null
+  faviconUrl: string | null
   logoUrl: string | null
+  navigationLogoUrl: string | null
   platformName: string
   schoolName: string
   orgName: string
   platformDomain: string
   publicCertVerify: boolean
   themeColor: string
+  themePalette: Record<string, string>
 }
 
 export type AiAssistantAppearance = {

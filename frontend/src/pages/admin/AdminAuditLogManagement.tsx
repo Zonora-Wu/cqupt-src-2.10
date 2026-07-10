@@ -175,7 +175,7 @@ export function AdminAuditLogManagement() {
                 </span>
                 <div>
                   <p className="font-mono text-xs text-slate-500 dark:text-slate-400">{log.id}</p>
-                  <h1 className="mt-1 text-2xl font-semibold">{log.actionLabel}</h1>
+                  <h1 className="mt-0 text-2xl font-semibold">{log.actionLabel}</h1>
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
@@ -230,7 +230,6 @@ export function AdminAuditLogManagement() {
   return (
     <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
       <PageHeader
-        eyebrow="Audit Logs"
         eyebrowIcon={<Activity className="h-3.5 w-3.5" />}
         title="审计日志"
         description="追踪登录认证、漏洞审核、敏感附件、证书签发、用户权限和系统设置等关键操作，所有记录默认按时间倒序保留。"

@@ -44,12 +44,6 @@ export function IntroCopySection() {
       onPointerMove={interactiveEnabled ? handlePointerMove : undefined}
       onWheel={interactiveEnabled ? clearPointer : undefined}
     >
-      <div className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-          Platform Introduction
-        </p>
-      </div>
-
       <div className="grid gap-x-20 gap-y-8 lg:grid-cols-2">
         <div className="h-1 w-12 rounded-lg bg-brand-600" />
         <div className="hidden h-1 w-12 rounded-lg bg-slate-700 lg:block" />

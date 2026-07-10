@@ -6,7 +6,6 @@ import {
   DatabaseBackup,
   FileBadge2,
   FileText,
-  Image,
   KeyRound,
   Mail,
   Palette,
@@ -22,6 +21,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -37,16 +37,17 @@ import {
   listPendingRegistrations,
   previewCertificateTemplate,
   rejectRegistration,
+  resetPlatformLogo,
   setRegistrationMode,
   updateCertificateTemplateLayout,
   updatePlatformSettings,
   uploadAiAssistantAvatar,
-  uploadSchoolLogo,
+  uploadPlatformLogo,
   updateAiQuotaSettings,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
-import type { AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem } from '../../services/systemSettings'
+import type { AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem, PlatformLogoSlot } from '../../services/systemSettings'
 import {
   createSecurityQuestions,
   generateSecurityQuestionsWithAi,
@@ -60,12 +61,16 @@ import {
 } from '../../services/securityExam'
 import {
   applyBrandTheme,
+  brandShades,
   formatHexInput,
   generateBrandPalette,
+  normalizeBrandPaletteOverrides,
   normalizeHexColor,
-  withAlpha,
+  type BrandPalette,
+  type BrandPaletteOverrides,
   type BrandShade,
 } from '../../utils/brandTheme'
+import { applyPlatformBranding, defaultPlatformLogos, getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
 type SettingsSection =
   | '基础设置'
@@ -91,6 +96,129 @@ function getAppliedThemeColor() {
   if (typeof document === 'undefined') return '#2A6438'
   const currentThemeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim()
   return normalizeHexColor(currentThemeColor) ?? '#2A6438'
+}
+
+function getAppliedThemePalette(themeColor = getAppliedThemeColor()): BrandPalette {
+  const generatedPalette = createEditableThemePalette(themeColor)
+  if (typeof document === 'undefined') return generatedPalette
+
+  const styles = getComputedStyle(document.documentElement)
+  return brandShades.reduce((palette, shade) => {
+    const color = normalizeHexColor(styles.getPropertyValue(`--color-brand-${shade}`).trim())
+    palette[shade] = color ?? generatedPalette[shade]
+    return palette
+  }, {} as BrandPalette)
+}
+
+function serializeThemePalette(overrides: BrandPaletteOverrides) {
+  return brandShades.reduce<Record<string, string>>((payload, shade) => {
+    const color = normalizeHexColor(overrides[shade] ?? '')
+    if (color) payload[String(shade)] = color
+    return payload
+  }, {})
+}
+
+const appearanceDraftStorageKey = 'cqupt-src-admin-appearance-draft'
+
+const brandShadeUsageLabels: Record<BrandShade, string> = {
+  50: '浅色背景',
+  100: '轻提示底色',
+  200: '柔和边框',
+  300: '浅色强调',
+  400: '次级图标',
+  500: '悬停状态',
+  600: '主按钮/主色',
+  700: '强调文字',
+  800: '深色边框',
+  900: '深色面板',
+  950: '极深背景',
+}
+
+function createEditableThemePalette(themeColor: string, value?: unknown): BrandPalette {
+  return generateBrandPalette(themeColor, normalizeBrandPaletteOverrides(value))
+}
+
+function areThemePalettesEqual(left: BrandPalette, right: BrandPalette) {
+  return brandShades.every((shade) => left[shade] === right[shade])
+}
+
+function readAppearanceDraft() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.sessionStorage.getItem(appearanceDraftStorageKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { themeColor?: unknown; themePalette?: unknown }
+    if (typeof parsed.themeColor !== 'string') return null
+    const themeColor = normalizeHexColor(parsed.themeColor)
+    if (!themeColor) return null
+    const themePalette = createEditableThemePalette(themeColor, parsed.themePalette)
+    return { themeColor, themePalette }
+  } catch {
+    return null
+  }
+}
+
+function writeAppearanceDraft(themeColor: string, themePalette: BrandPalette) {
+  if (typeof window === 'undefined') return
+  const normalizedThemeColor = normalizeHexColor(themeColor)
+  if (!normalizedThemeColor) return
+
+  try {
+    window.sessionStorage.setItem(
+      appearanceDraftStorageKey,
+      JSON.stringify({
+        themeColor: normalizedThemeColor,
+        themePalette: serializeThemePalette(themePalette),
+        updatedAt: Date.now(),
+      }),
+    )
+  } catch {
+    // Preview still works even if the browser blocks sessionStorage.
+  }
+}
+
+function clearAppearanceDraft() {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(appearanceDraftStorageKey)
+  } catch {
+    // Ignore storage failures; backend state remains authoritative after save.
+  }
+}
+
+function getPlatformLogoUrlState(value: {
+  authLogoUrl?: string | null
+  faviconUrl?: string | null
+  logoUrl?: string | null
+  navigationLogoUrl?: string | null
+}): Record<PlatformLogoSlot, string | null> {
+  return {
+    auth: value.authLogoUrl ?? value.logoUrl ?? null,
+    favicon: value.faviconUrl ?? value.logoUrl ?? null,
+    navigation: value.navigationLogoUrl ?? value.logoUrl ?? null,
+  }
+}
+
+function getDisplayedPlatformLogoState(value: {
+  authLogoUrl?: string | null
+  faviconUrl?: string | null
+  logoUrl?: string | null
+  navigationLogoUrl?: string | null
+}): Record<PlatformLogoSlot, string | null> {
+  const persisted = getPlatformLogoUrlState(value)
+  const applied = getPlatformLogos()
+  const appliedState: Record<PlatformLogoSlot, string | null> = {
+    auth: applied.authLogoUrl === defaultPlatformLogos.authLogoUrl ? null : applied.authLogoUrl,
+    favicon: applied.faviconUrl === defaultPlatformLogos.faviconUrl ? null : applied.faviconUrl,
+    navigation: applied.navigationLogoUrl === defaultPlatformLogos.navigationLogoUrl ? null : applied.navigationLogoUrl,
+  }
+
+  return {
+    auth: appliedState.auth ?? persisted.auth,
+    favicon: appliedState.favicon ?? persisted.favicon,
+    navigation: appliedState.navigation ?? persisted.navigation,
+  }
 }
 
 type CertificateLayoutKey =
@@ -175,26 +303,65 @@ const settingSections: Array<{ label: SettingsSection; icon: ReactNode; descript
   { label: '系统维护', icon: <ServerCog className="h-4 w-4" />, description: '部署、备份、配置迁移' },
 ]
 
+const platformLogoSlots: Array<{
+  description: string
+  preview: 'favicon' | 'square' | 'wide'
+  recommended: string
+  slot: PlatformLogoSlot
+  title: string
+}> = [
+  {
+    description: '用于访客页、用户端、审核端和管理端顶部菜单栏的横版品牌标识。',
+    preview: 'wide',
+    recommended: '建议使用横版透明 PNG，默认来自 CQUPT_03_logo。',
+    slot: 'navigation',
+    title: '菜单栏校徽',
+  },
+  {
+    description: '用于登录和注册弹窗顶部的大尺寸校徽，深色和浅色弹窗共用该配置。',
+    preview: 'square',
+    recommended: '建议使用居中构图透明 PNG，默认来自 CQUPT_02_logo。',
+    slot: 'auth',
+    title: '登录注册弹窗校徽',
+  },
+  {
+    description: '用于浏览器标签页、收藏夹和窗口标题栏图标。',
+    preview: 'favicon',
+    recommended: '建议使用正方形 PNG / WebP，默认来自 CQUPT_01_logo。',
+    slot: 'favicon',
+    title: '浏览器标签页校徽',
+  },
+]
+
 export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
   const sealInputRef = useRef<HTMLInputElement | null>(null)
   const aiAvatarInputRef = useRef<HTMLInputElement | null>(null)
-  const schoolLogoInputRef = useRef<HTMLInputElement | null>(null)
+  const platformLogoInputRefs = useRef<Record<PlatformLogoSlot, HTMLInputElement | null>>({
+    auth: null,
+    favicon: null,
+    navigation: null,
+  })
   const questionBankInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
   const [schoolName, setSchoolName] = useState('重庆邮电大学')
   const [orgName, setOrgName] = useState('信息化办公室')
-  const [platformDomain, setPlatformDomain] = useState('https://src.cqupt.edu.cn')
   const [themeColor, setThemeColor] = useState(() => getAppliedThemeColor())
+  const [themePalette, setThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
+  const [savedThemeColor, setSavedThemeColor] = useState(() => getAppliedThemeColor())
+  const [savedThemePalette, setSavedThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
+  const [editingPaletteShade, setEditingPaletteShade] = useState<BrandShade | null>(null)
+  const [paletteDraftColor, setPaletteDraftColor] = useState('')
   const [canApplyThemePreview, setCanApplyThemePreview] = useState(false)
-  const [schoolLogoUrl, setSchoolLogoUrl] = useState<string | null>(null)
+  const [appliedPlatformLogos, setAppliedPlatformLogos] = useState(() => getPlatformLogos())
   const [isSavingPlatform, setIsSavingPlatform] = useState(false)
   const [isSavingAppearance, setIsSavingAppearance] = useState(false)
-  const [isUploadingSchoolLogo, setIsUploadingSchoolLogo] = useState(false)
+  const [uploadingPlatformLogoSlot, setUploadingPlatformLogoSlot] = useState<PlatformLogoSlot | null>(null)
   const [platformMessage, setPlatformMessage] = useState('')
   const [appearanceMessage, setAppearanceMessage] = useState('')
+  const [notice, setNotice] = useState<{ message: string; title?: string; variant: FloatingNoticeVariant } | null>(null)
   const [openRegister, setOpenRegister] = useState(true)
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationItem[]>([])
   const [pendingRegLoading, setPendingRegLoading] = useState(false)
@@ -232,6 +399,15 @@ export function AdminSystemSettings() {
     setConfirmState(nextState)
   }
 
+  const showNotice = (message: string, variant: FloatingNoticeVariant = 'success', title?: string) => {
+    setNotice({ message, title, variant })
+  }
+
+  useEffect(() => {
+    setAppliedPlatformLogos(getPlatformLogos())
+    return subscribePlatformBranding(setAppliedPlatformLogos)
+  }, [])
+
   useEffect(() => {
     let active = true
 
@@ -250,11 +426,55 @@ export function AdminSystemSettings() {
           setPlatformName(platform.platformName)
           setSchoolName(platform.schoolName)
           setOrgName(platform.orgName)
-          setPlatformDomain(platform.platformDomain)
           setPublicCertVerify(platform.publicCertVerify)
-          setThemeColor(platform.themeColor)
+          const savedPalette = createEditableThemePalette(platform.themeColor, platform.themePalette)
+          const draft = readAppearanceDraft()
+          const appliedThemeColor = getAppliedThemeColor()
+          const appliedThemePalette = getAppliedThemePalette(appliedThemeColor)
+          const savedPaletteIsGenerated = areThemePalettesEqual(savedPalette, generateBrandPalette(platform.themeColor))
+          const shouldRestoreDraft = Boolean(
+            draft && (
+              draft.themeColor !== platform.themeColor ||
+              !areThemePalettesEqual(draft.themePalette, savedPalette)
+            ),
+          )
+          const shouldRestoreAppliedPalette = !shouldRestoreDraft && savedPaletteIsGenerated && (
+            appliedThemeColor !== platform.themeColor ||
+            !areThemePalettesEqual(appliedThemePalette, savedPalette)
+          )
+          const nextThemeColor = shouldRestoreDraft && draft
+            ? draft.themeColor
+            : shouldRestoreAppliedPalette
+              ? appliedThemeColor
+              : platform.themeColor
+          const nextThemePalette = shouldRestoreDraft && draft
+            ? draft.themePalette
+            : shouldRestoreAppliedPalette
+              ? appliedThemePalette
+              : savedPalette
+
+          if (!shouldRestoreDraft) clearAppearanceDraft()
+          if (shouldRestoreAppliedPalette) writeAppearanceDraft(nextThemeColor, nextThemePalette)
+
+          setThemeColor(nextThemeColor)
+          setSavedThemeColor(platform.themeColor)
+          setSavedThemePalette(savedPalette)
+          setThemePalette(nextThemePalette)
           setCanApplyThemePreview(true)
-          setSchoolLogoUrl(platform.logoUrl)
+          if (shouldRestoreDraft) {
+            setAppearanceMessage('已恢复未保存的外观草稿，确认无误后点击“保存外观设置”全局保存。')
+            showNotice('已恢复你上次未保存的色卡草稿。', 'info', '外观草稿已恢复')
+          } else if (shouldRestoreAppliedPalette) {
+            setAppearanceMessage('已从当前页面生效主题恢复外观草稿，确认无误后点击“保存外观设置”全局保存。')
+            showNotice('已从当前生效主题恢复色卡显示。', 'info', '外观草稿已恢复')
+          }
+          const displayedLogoState = getDisplayedPlatformLogoState(platform)
+          applyPlatformBranding({
+            ...platform,
+            authLogoUrl: displayedLogoState.auth,
+            faviconUrl: displayedLogoState.favicon,
+            navigationLogoUrl: displayedLogoState.navigation,
+          })
           setAiAvatarUrl(aiAppearance.avatarUrl)
           setDefaultAiDailyTokens(String(aiQuota.defaultDailyTokens))
           setDefaultAiWeeklyTokens(String(aiQuota.defaultWeeklyTokens))
@@ -280,8 +500,8 @@ export function AdminSystemSettings() {
     if (!canApplyThemePreview) return
     const normalizedThemeColor = normalizeHexColor(themeColor)
     if (!normalizedThemeColor) return
-    applyBrandTheme(normalizedThemeColor)
-  }, [canApplyThemePreview, themeColor])
+    applyBrandTheme(normalizedThemeColor, themePalette)
+  }, [canApplyThemePreview, themeColor, themePalette])
 
   // Load pending registrations when entering the auth section and registration is closed
   useEffect(() => {
@@ -527,30 +747,53 @@ export function AdminSystemSettings() {
     }
   }
 
-  const handleSchoolLogoUpload = async (file: File | undefined) => {
+  const handlePlatformLogoUpload = async (slot: PlatformLogoSlot, file: File | undefined) => {
     if (!file) return
 
     const validationMessage = validateBrandImageFile(file, 2 * 1024 * 1024)
     if (validationMessage) {
       setAppearanceMessage(validationMessage)
-      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = ''
+      if (platformLogoInputRefs.current[slot]) platformLogoInputRefs.current[slot]!.value = ''
       return
     }
 
     setAppearanceMessage('')
-    setIsUploadingSchoolLogo(true)
+    setUploadingPlatformLogoSlot(slot)
 
     try {
-      const result = await uploadSchoolLogo(file)
-      setSchoolLogoUrl(result.logoUrl)
-      setCanApplyThemePreview(true)
-      setThemeColor(result.themeColor)
-      setAppearanceMessage('校徽已上传并保存')
+      const result = await uploadPlatformLogo(slot, file)
+      applyPlatformBranding(result)
+      if (appearanceDirty) writeAppearanceDraft(themeColor, themePalette)
+      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '校徽'
+      setAppearanceMessage(`${title}已上传并保存`)
+      showNotice(`${title}已同步到对应展示位置。`, 'success', '外观设置已更新')
     } catch (error) {
-      setAppearanceMessage(error instanceof Error ? error.message : '校徽上传失败')
+      const message = error instanceof Error ? error.message : '校徽上传失败'
+      setAppearanceMessage(message)
+      showNotice(message, 'error', '校徽上传失败')
     } finally {
-      setIsUploadingSchoolLogo(false)
-      if (schoolLogoInputRef.current) schoolLogoInputRef.current.value = ''
+      setUploadingPlatformLogoSlot(null)
+      if (platformLogoInputRefs.current[slot]) platformLogoInputRefs.current[slot]!.value = ''
+    }
+  }
+
+  const handleResetPlatformLogo = async (slot: PlatformLogoSlot) => {
+    setAppearanceMessage('')
+    setUploadingPlatformLogoSlot(slot)
+
+    try {
+      const result = await resetPlatformLogo(slot)
+      applyPlatformBranding(result)
+      if (appearanceDirty) writeAppearanceDraft(themeColor, themePalette)
+      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '校徽'
+      setAppearanceMessage(`${title}已恢复默认`)
+      showNotice(`${title}已恢复为 /CQUPT 默认资产。`, 'success', '外观设置已更新')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '恢复默认失败'
+      setAppearanceMessage(message)
+      showNotice(message, 'error', '恢复默认失败')
+    } finally {
+      setUploadingPlatformLogoSlot(null)
     }
   }
 
@@ -560,18 +803,13 @@ export function AdminSystemSettings() {
     try {
       const result = await updatePlatformSettings({
         orgName,
-        platformDomain,
         platformName,
         schoolName,
       })
       setPlatformName(result.platformName)
       setSchoolName(result.schoolName)
       setOrgName(result.orgName)
-      setPlatformDomain(result.platformDomain)
       setPublicCertVerify(result.publicCertVerify)
-      setCanApplyThemePreview(true)
-      setThemeColor(result.themeColor)
-      setSchoolLogoUrl(result.logoUrl)
       setPlatformMessage('基础设置已保存')
     } catch (error) {
       setPlatformMessage(error instanceof Error ? error.message : '保存失败，请重试')
@@ -590,16 +828,48 @@ export function AdminSystemSettings() {
     setAppearanceMessage('')
     setIsSavingAppearance(true)
     try {
-      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor })
+      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor, themePalette: serializeThemePalette(themePalette) })
+      clearAppearanceDraft()
       setCanApplyThemePreview(true)
       setThemeColor(result.themeColor)
-      setSchoolLogoUrl(result.logoUrl)
+      setSavedThemeColor(result.themeColor)
+      setSavedThemePalette(createEditableThemePalette(result.themeColor, result.themePalette))
+      setThemePalette(createEditableThemePalette(result.themeColor, result.themePalette))
       setAppearanceMessage('外观设置已保存')
+      showNotice('主题色、色卡和品牌资产已保存，已同步到全平台。', 'success', '外观设置已保存')
     } catch (error) {
-      setAppearanceMessage(error instanceof Error ? error.message : '保存失败，请重试')
+      const message = error instanceof Error ? error.message : '保存失败，请重试'
+      setAppearanceMessage(message)
+      showNotice(message, 'error', '外观设置保存失败')
     } finally {
       setIsSavingAppearance(false)
     }
+  }
+
+  const openPaletteShadeEditor = (shade: BrandShade) => {
+    setEditingPaletteShade(shade)
+    setPaletteDraftColor(generatedBrandPalette[shade])
+  }
+
+  const savePaletteShade = () => {
+    if (editingPaletteShade === null) return
+    const normalizedColor = normalizeHexColor(paletteDraftColor)
+    if (!normalizedColor) {
+      showNotice('色卡颜色必须是 #RRGGBB 格式，例如 #2A6438。', 'error', '颜色格式错误')
+      return
+    }
+
+    const nextPalette: BrandPalette = { ...themePalette, [editingPaletteShade]: normalizedColor }
+    const nextThemeColor = editingPaletteShade === 600 ? normalizedColor : normalizeHexColor(themeColor) ?? '#2A6438'
+
+    writeAppearanceDraft(nextThemeColor, nextPalette)
+    setCanApplyThemePreview(true)
+    setThemeColor(nextThemeColor)
+    setThemePalette(nextPalette)
+    setEditingPaletteShade(null)
+    setPaletteDraftColor('')
+    setAppearanceMessage(`brand-${editingPaletteShade} 已暂存为 ${normalizedColor}，请点击下方“保存外观设置”全局保存。`)
+    showNotice(`brand-${editingPaletteShade} 已应用到当前色卡预览，保存外观设置后会全局生效。`, 'info', '色卡修改已暂存')
   }
 
   const handleSaveAiQuota = async () => {
@@ -634,14 +904,24 @@ export function AdminSystemSettings() {
   }
 
   const effectiveThemeColor = normalizeHexColor(themeColor) ?? '#2A6438'
-  const generatedBrandPalette = generateBrandPalette(effectiveThemeColor)
+  const generatedBrandPalette = themePalette
+  const baseGeneratedBrandPalette = generateBrandPalette(effectiveThemeColor)
+  const appearanceDirty = savedThemeColor !== themeColor || brandShades.some((shade) => savedThemePalette[shade] !== themePalette[shade])
+  const effectivePlatformLogos = appliedPlatformLogos
 
   return (
     <>
+      {notice && (
+        <FloatingNotice
+          message={notice.message}
+          onClose={() => setNotice(null)}
+          title={notice.title}
+          variant={notice.variant}
+        />
+      )}
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrow="System Settings"
             eyebrowIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}
             title="系统设置"
             description="集中管理平台交付、认证、AI、证书、安全审计和维护能力。配置项实时生效；涉及注册、认证、AI、PDF、后台访问等关键配置时，会先弹出确认框。"
@@ -703,11 +983,6 @@ export function AdminSystemSettings() {
                     description="平台主管部门名称，会出现在漏洞响应流程、证书签发单位和公告落款中。"
                     title="主管单位"
                   />
-                  <SettingRow
-                    control={<TextField onChange={setPlatformDomain} value={platformDomain} />}
-                    description="用于生成通知链接、证书核验地址和对外访问入口。生产环境应配置为 HTTPS 域名。"
-                    title="平台访问域名"
-                  />
                   <div className="flex items-center justify-between gap-4 border-t border-black/10 px-6 py-4 dark:border-white/10">
                     {platformMessage ? (
                       <p className={`text-sm ${platformMessage.includes('失败') || platformMessage.includes('错误') ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -730,46 +1005,81 @@ export function AdminSystemSettings() {
                   icon={<Paintbrush className="h-5 w-5" />}
                   title="外观"
                 >
-                  <SettingRow
-                    control={
-                      <div className="flex items-center justify-end gap-3">
-                        <div
-                          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm dark:border-white/10 "
-                          style={{ boxShadow: `0 14px 32px ${withAlpha(effectiveThemeColor, 0.22)}` }}
-                        >
-                          {schoolLogoUrl ? (
-                            <img alt={`${schoolName}校徽`} className="h-full w-full object-contain p-2" src={schoolLogoUrl} />
-                          ) : (
-                            <Image className="h-7 w-7 text-slate-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0 text-right">
-                          <ActionButton
-                            disabled={isUploadingSchoolLogo}
-                            icon={<Upload className="h-4 w-4" />}
-                            label={isUploadingSchoolLogo ? '上传中...' : '上传校徽'}
-                            onClick={() => schoolLogoInputRef.current?.click()}
-                          />
-                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">JPG / PNG / WebP / GIF，最大 2MB</p>
-                          <input
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="hidden"
-                            onChange={(event) => void handleSchoolLogoUpload(event.target.files?.[0])}
-                            ref={schoolLogoInputRef}
-                            type="file"
-                          />
-                        </div>
-                      </div>
-                    }
-                    description="用于品牌预览和后续可接入的登录页、导航栏、证书页展示。建议上传正方形图，透明背景效果最好。"
-                    title="学校校徽"
-                  />
+                  <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950 dark:text-white">学校校徽</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        点击预览图上传对应校徽，支持 JPG / PNG / WebP / GIF，单个文件最大 2MB。
+                      </p>
+                    </div>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                      {platformLogoSlots.map((item) => {
+                        const previewUrl = item.slot === 'navigation'
+                          ? effectivePlatformLogos.navigationLogoUrl
+                          : item.slot === 'auth'
+                            ? effectivePlatformLogos.authLogoUrl
+                            : effectivePlatformLogos.faviconUrl
+                        const defaultUrl = item.slot === 'navigation'
+                          ? defaultPlatformLogos.navigationLogoUrl
+                          : item.slot === 'auth'
+                            ? defaultPlatformLogos.authLogoUrl
+                            : defaultPlatformLogos.faviconUrl
+                        const custom = previewUrl !== defaultUrl
+                        const uploading = uploadingPlatformLogoSlot === item.slot
+
+                        return (
+                          <div className="rounded-lg border border-black/10 p-3 dark:border-white/10" key={item.slot}>
+                            <button
+                              aria-label={`上传${item.title}`}
+                              className="group flex h-32 w-full flex-col items-center justify-center rounded-lg border border-black/10 bg-white p-3 text-center transition hover:border-brand-500 hover:bg-brand-50/50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-slate-950/45 dark:hover:border-brand-400 dark:hover:bg-brand-950/50 dark:focus:ring-offset-slate-950"
+                              disabled={uploadingPlatformLogoSlot !== null}
+                              onClick={() => platformLogoInputRefs.current[item.slot]?.click()}
+                              type="button"
+                            >
+                              <img
+                                alt={item.title}
+                                className={`object-contain ${item.preview === 'wide' ? 'max-h-12 max-w-full' : item.preview === 'favicon' ? 'h-12 w-12 rounded-md' : 'max-h-24 max-w-full'}`}
+                                src={previewUrl}
+                              />
+                              <span className="mt-3 text-xs font-medium text-slate-500 transition group-hover:text-brand-700 dark:text-slate-400 dark:group-hover:text-brand-200">
+                                {uploading ? '上传中...' : '点击上传'}
+                              </span>
+                            </button>
+                            <div className="mt-3 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.title}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
+                              </div>
+                              <button
+                                className="shrink-0 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                                disabled={!custom || uploadingPlatformLogoSlot !== null}
+                                onClick={() => void handleResetPlatformLogo(item.slot)}
+                                type="button"
+                              >
+                                恢复默认
+                              </button>
+                              <input
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                className="hidden"
+                                onChange={(event) => void handlePlatformLogoUpload(item.slot, event.target.files?.[0])}
+                                ref={(node) => { platformLogoInputRefs.current[item.slot] = node }}
+                                type="file"
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                   <SettingRow
                     control={
                       <ThemeColorPicker
                         onChange={(nextColor) => {
+                          const nextPalette = generateBrandPalette(nextColor)
+                          writeAppearanceDraft(nextColor, nextPalette)
                           setCanApplyThemePreview(true)
                           setThemeColor(nextColor)
+                          setThemePalette(nextPalette)
                         }}
                         value={themeColor}
                       />
@@ -783,7 +1093,7 @@ export function AdminSystemSettings() {
                         <div>
                           <p className="text-sm font-semibold text-slate-950 dark:text-white">生成色卡</p>
                           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                            沿用当前平台 50-950 色阶职责：浅背景、辅助态、主按钮、文字强调和深色态。
+                            主题色会重新生成完整 50-950 色卡；点击任意色阶可单独微调。所有页面的按钮、菜单、面板、背景和重点状态都会读取这套色卡。
                           </p>
                         </div>
                         <span className="rounded-lg border border-black/10 px-3 py-1.5 font-mono text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
@@ -791,16 +1101,29 @@ export function AdminSystemSettings() {
                         </span>
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-11">
-                        {(Object.keys(generatedBrandPalette).map(Number) as BrandShade[]).map((shade) => (
-                          <div className="overflow-hidden rounded-lg border border-black/10 bg-white text-xs dark:border-white/10 dark:bg-white/[0.03]" key={shade}>
-                            <div className="h-10" style={{ background: generatedBrandPalette[shade] }} />
-                            <div className="px-2 py-2">
-                              <p className="font-semibold text-slate-800 dark:text-slate-200">{shade}</p>
-                              <p className="mt-0.5 font-mono text-[10px] text-slate-500 dark:text-slate-400">{generatedBrandPalette[shade]}</p>
-                              {shade === 600 && <p className="mt-1 text-[10px] font-medium text-brand-700 dark:text-brand-200">主色</p>}
-                            </div>
-                          </div>
-                        ))}
+                        {brandShades.map((shade) => {
+                          const customized = themePalette[shade] !== baseGeneratedBrandPalette[shade]
+                          return (
+                            <button
+                              aria-label={`编辑 brand-${shade} 色卡 ${generatedBrandPalette[shade]}`}
+                              className="group overflow-hidden rounded-lg border border-black/10 bg-white text-left text-xs transition hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-lg hover:shadow-brand-600/10 focus:outline-none focus:ring-2 focus:ring-brand-600/30 dark:border-white/10 dark:bg-white/[0.03]"
+                              key={shade}
+                              onClick={() => openPaletteShadeEditor(shade)}
+                              type="button"
+                            >
+                              <div className="relative h-10" style={{ background: generatedBrandPalette[shade] }}>
+                                {customized && <span className="absolute right-1.5 top-1.5 rounded bg-black/35 px-1.5 py-0.5 text-[10px] font-medium text-white">自定义</span>}
+                              </div>
+                              <div className="px-2 py-2">
+                                <p className="font-semibold text-slate-800 dark:text-slate-200">brand-{shade}</p>
+                                <p className="mt-0.5 font-mono text-[10px] text-slate-500 dark:text-slate-400">{generatedBrandPalette[shade]}</p>
+                                {shade === 600 && <p className="mt-1 text-[10px] font-medium text-brand-700 dark:text-brand-200">主色</p>}
+                                <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">{brandShadeUsageLabels[shade]}</p>
+                                <p className="mt-1 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100 dark:text-slate-500">点击编辑</p>
+                              </div>
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
                   </div>
@@ -810,7 +1133,10 @@ export function AdminSystemSettings() {
                         {appearanceMessage}
                       </p>
                     ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">当前主题色：{normalizeHexColor(themeColor) ?? themeColor}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        当前主题色：{normalizeHexColor(themeColor) ?? themeColor}
+                        {appearanceDirty ? <span className="ml-2 font-medium text-amber-700 dark:text-amber-300">有未保存的外观修改</span> : null}
+                      </p>
                     )}
                     <button
                       className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1288,6 +1614,23 @@ export function AdminSystemSettings() {
         </div>
       </section>
 
+      {editingPaletteShade !== null && (
+        <PaletteShadeDialog
+          baseColor={baseGeneratedBrandPalette[editingPaletteShade]}
+          color={paletteDraftColor}
+          currentColor={generatedBrandPalette[editingPaletteShade]}
+          isSaving={false}
+          onChange={setPaletteDraftColor}
+          onClose={() => {
+            setEditingPaletteShade(null)
+            setPaletteDraftColor('')
+          }}
+          onReset={() => setPaletteDraftColor(baseGeneratedBrandPalette[editingPaletteShade])}
+          onSave={savePaletteShade}
+          shade={editingPaletteShade}
+        />
+      )}
+
       <ConfirmDialog
         state={confirmState}
         onCancel={() => setConfirmState(null)}
@@ -1419,6 +1762,113 @@ function ThemeColorPicker({ value, onChange }: { value: string; onChange: (value
       {!normalizedValue && (
         <p className="text-xs text-red-600 dark:text-red-400">请输入 #RRGGBB 格式，或直接使用左侧调色盘。</p>
       )}
+    </div>
+  )
+}
+
+function PaletteShadeDialog({
+  baseColor,
+  color,
+  currentColor,
+  isSaving,
+  onChange,
+  onClose,
+  onReset,
+  onSave,
+  shade,
+}: {
+  baseColor: string
+  color: string
+  currentColor: string
+  isSaving: boolean
+  onChange: (value: string) => void
+  onClose: () => void
+  onReset: () => void
+  onSave: () => void
+  shade: BrandShade
+}) {
+  const normalizedColor = normalizeHexColor(color)
+  const previewColor = normalizedColor ?? currentColor
+  const changed = normalizedColor !== null && normalizedColor !== currentColor
+  const resetDisabled = baseColor === currentColor && baseColor === previewColor
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5 py-8 backdrop-blur-sm">
+      <button aria-label="关闭色卡编辑弹窗" className="absolute inset-0" disabled={isSaving} onClick={onClose} type="button" />
+      <div className="relative w-full max-w-[520px] overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-950 shadow-2xl dark:border-white/10 dark:text-white">
+        <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-5 dark:border-white/10">
+          <div>
+            <h2 className="mt-0 text-xl font-semibold">编辑 brand-{shade}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {brandShadeUsageLabels[shade]}。单独调整该色阶只会覆盖 brand-{shade}，应用后进入当前色卡预览，最终点击下方“保存外观设置”统一保存到全平台。
+            </p>
+          </div>
+          <button
+            aria-label="关闭"
+            className="rounded-md p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4">
+            <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+              <div className="h-28" style={{ background: previewColor }} />
+              <div className="px-3 py-2">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">实时预览</p>
+                <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{previewColor}</p>
+              </div>
+            </div>
+            <div>
+              <ThemeColorPicker onChange={onChange} value={color} />
+              <div className="mt-3 grid gap-2 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-2">
+                <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 dark:border-white/10">
+                  <span className="block">生成默认值</span>
+                  <span className="mt-1 block font-mono text-slate-700 dark:text-slate-200">{baseColor}</span>
+                </div>
+                <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 dark:border-white/10">
+                  <span className="block">当前生效值</span>
+                  <span className="mt-1 block font-mono text-slate-700 dark:text-slate-200">{currentColor}</span>
+                </div>
+              </div>
+              {!normalizedColor && <p className="mt-3 text-xs text-red-600 dark:text-red-400">请输入有效的 #RRGGBB 十六进制颜色。</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-black/10 px-6 py-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-55 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+            disabled={isSaving || resetDisabled}
+            onClick={onReset}
+            type="button"
+          >
+            恢复生成默认值
+          </button>
+          <div className="flex justify-end gap-2">
+            <button
+              className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-55 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+              disabled={isSaving}
+              onClick={onClose}
+              type="button"
+            >
+              取消
+            </button>
+            <button
+              className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSaving || !changed}
+              onClick={onSave}
+              type="button"
+            >
+              {isSaving ? '应用中...' : '应用到色卡'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

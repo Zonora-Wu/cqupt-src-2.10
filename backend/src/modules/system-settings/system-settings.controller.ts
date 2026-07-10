@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -154,6 +156,34 @@ export class SystemSettingsController {
     return this.settings.uploadSchoolLogo(file, user, getRequestMeta(req))
   }
 
+  @Post('platform/logo/:slot')
+  @RequirePermissions('system:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  uploadPlatformLogo(
+    @Param('slot') slot: string,
+    @UploadedFile() file: UploadedSettingsFile | undefined,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    if (slot !== 'navigation' && slot !== 'auth' && slot !== 'favicon') {
+      throw new BadRequestException('校徽用途必须是 navigation、auth 或 favicon')
+    }
+    return this.settings.uploadPlatformLogo(slot, file, user, getRequestMeta(req))
+  }
+
+  @Delete('platform/logo/:slot')
+  @RequirePermissions('system:manage')
+  resetPlatformLogo(
+    @Param('slot') slot: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    if (slot !== 'navigation' && slot !== 'auth' && slot !== 'favicon') {
+      throw new BadRequestException('校徽用途必须是 navigation、auth 或 favicon')
+    }
+    return this.settings.resetPlatformLogo(slot, user, getRequestMeta(req))
+  }
+
   @Get('ai-appearance')
   @RequirePermissions('system:manage')
   getAiAssistantAppearance() {
@@ -245,7 +275,7 @@ export class SystemSettingsController {
   @Post('platform')
   @RequirePermissions('system:manage')
   updatePlatformSettings(
-    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown; themeColor?: unknown },
+    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown; themeColor?: unknown; themePalette?: unknown },
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
@@ -257,6 +287,9 @@ export class SystemSettingsController {
         platformDomain: typeof body.platformDomain === 'string' ? body.platformDomain : undefined,
         publicCertVerify: body.publicCertVerify !== undefined ? body.publicCertVerify === true || body.publicCertVerify === 'true' : undefined,
         themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
+        themePalette: body.themePalette !== undefined && typeof body.themePalette === 'object' && body.themePalette !== null && !Array.isArray(body.themePalette)
+          ? body.themePalette as Record<string, string>
+          : undefined,
       },
       user,
       getRequestMeta(req),

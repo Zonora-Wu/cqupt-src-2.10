@@ -3,7 +3,6 @@ import {
   FileCheck2,
   FileSearch,
   Gauge,
-  LayoutDashboard,
   Megaphone,
   Moon,
   ServerCog,
@@ -21,6 +20,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
+import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { adminNavItems, adminUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
 import { type AuthUser } from '../../services/auth'
@@ -198,16 +198,10 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
       ) : (
         <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-            <div>
-              <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-                <LayoutDashboard className="h-3.5 w-3.5" />
-                Admin Console
-              </p>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">管理端首页</h1>
-              <p className="mt-3 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
-                关注待办、风险队列、系统状态和审计记录，快速判断平台今日运行情况。
-              </p>
-            </div>
+            <PageHeader
+              title="管理端首页"
+              description="关注待办、风险队列、系统状态和审计记录，快速判断平台今日运行情况。"
+            />
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">

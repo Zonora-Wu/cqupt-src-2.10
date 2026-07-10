@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Shield, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -610,11 +610,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
             key="ai-empty"
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              YouBao AI
-            </p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">邮宝</h1>
+            <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">邮宝</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
               CQUPT-SRC 平台 AI 助手，面向漏洞报告、复现材料、修复建议和学习路径提供智能辅助。
             </p>
@@ -1294,8 +1290,7 @@ function AssistantMessageBubble({
       {hasCards && (
         <div className="px-4 pb-4">
           <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Interactive Cards</p>
+            <div className="mb-3 flex items-center justify-end">
               <p className="text-[11px] text-slate-400">可直接操作</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -1601,8 +1596,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
       <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Report Draft Cards</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">从报告识别到 {editableDrafts.length} 个漏洞草稿</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">从报告识别到 {editableDrafts.length} 个漏洞草稿</p>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">空字段会提示补全，提交前需二次确认</p>
         </div>
