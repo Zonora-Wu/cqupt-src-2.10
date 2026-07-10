@@ -27,9 +27,11 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { CopyableCode } from '../../components/ui/CopyableCode'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -124,6 +126,7 @@ type ConfirmAction = {
 const auditorMenuItems = auditorNavItems.map((item) => item.label)
 const reviewStatusOptions = ['全部状态', '待初审', '审核中', '待补充', '已确认', '已驳回']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
+const reviewPageSizeDefault = 10
 
 const reviewReports: ReviewReport[] = [
   {
@@ -499,6 +502,8 @@ export function AuditorReviewQueue() {
   const [finalSeverity, setFinalSeverity] = useState<ReviewLevel>('中危')
   const [reviewPoints, setReviewPoints] = useState('260')
   const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(reviewPageSizeDefault)
 
   const loadReports = async () => {
     setIsLoading(true)
@@ -532,6 +537,17 @@ export function AuditorReviewQueue() {
       return matchesKeyword && matchesStatus && matchesLevel
     })
   }, [keyword, level, reports, status])
+
+  useEffect(() => {
+    setPage(1)
+  }, [keyword, status, level, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedReports = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return filteredReports.slice(start, start + pageSize)
+  }, [filteredReports, pageSize, safePage])
 
   const complete = (message: string) => {
     setDone(message)
@@ -773,17 +789,52 @@ export function AuditorReviewQueue() {
           <SelectInput label="风险等级" onChange={setLevel} options={levelOptions} value={level} />
           <ResetButton onClick={() => { setKeyword(''); setStatus('全部状态'); setLevel('全部等级') }} />
         </FilterBar>
-        <div className="mt-5 grid gap-3">
+        <SurfacePanel className="mt-5 overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">
+            <div>
+              <h2 className="text-sm font-semibold">审核队列</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {filteredReports.length} 条，按当前筛选条件展示</p>
+            </div>
+            <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">
+              紧凑列表
+            </span>
+          </div>
+          <div className="grid grid-cols-[204px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[204px_minmax(0,1fr)_128px_112px_112px_112px_64px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_64px]">
+            <span>编号 / 等级</span>
+            <span>漏洞名称</span>
+            <span className="hidden xl:block">影响资产</span>
+            <span className="hidden xl:block">提交用户</span>
+            <span className="hidden xl:block">提交时间</span>
+            <span className="hidden xl:block">责任单位</span>
+            <span className="hidden 2xl:block">更新</span>
+            <span className="text-right">操作</span>
+          </div>
           {isLoading && (
-            <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
               正在加载审核队列...
-            </SurfacePanel>
+            </div>
           )}
-          {filteredReports.map((item) => (
+          {paginatedReports.map((item) => (
             <ReviewReportRow item={item} key={item.reportId} onOpen={() => openReport(item)} />
           ))}
-          {!isLoading && filteredReports.length === 0 && <EmptyState label="没有匹配的漏洞报告" />}
-        </div>
+          {!isLoading && filteredReports.length === 0 && (
+            <div className="p-10">
+              <EmptyState label="没有匹配的漏洞报告" />
+            </div>
+          )}
+          {!isLoading && filteredReports.length > 0 && (
+            <PaginationBar
+              onPageChange={setPage}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize)
+                setPage(1)
+              }}
+              page={safePage}
+              pageSize={pageSize}
+              total={filteredReports.length}
+            />
+          )}
+        </SurfacePanel>
       </PageShell>
       <ConfirmDialog state={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={() => { confirmAction?.onConfirm(); setConfirmAction(null) }} />
     </>
@@ -1395,34 +1446,61 @@ function AuditorProfile({ user }: { user: AuthUser }) {
 
 function ReviewReportRow({ item, onOpen }: { item: ReviewReport; onOpen: () => void }) {
   return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
-            <LevelBadge level={item.level} />
-            <ReviewStatusBadge status={item.status} />
-          </div>
-          <h2 className="mt-2 text-lg font-semibold">{item.title}</h2>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-            <span>{item.asset}</span>
-            <span>{item.owner}</span>
-            <span>提交人：{item.submitter}</span>
-            <span>AI：{item.aiScore}</span>
-          </div>
-          <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.aiSummary}</p>
-        </div>
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-          <button
-            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            onClick={onOpen}
-            type="button"
-          >
-            进入审核
-          </button>
+    <div className="grid grid-cols-[204px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_128px_112px_112px_112px_64px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_64px]">
+      <div className="min-w-0">
+        <CopyableCode value={item.id} />
+        <div className="mt-2 flex items-center gap-1.5">
+          <LevelBadge level={item.level} />
+          <ReviewStatusBadge status={item.status} />
         </div>
       </div>
-    </SurfacePanel>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{item.title}</p>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span className="truncate">AI {item.aiScore}：{item.aiSummary}</span>
+          {item.attachments.length > 0 && (
+            <span className="shrink-0 rounded-md border border-black/10 px-1.5 py-0.5 dark:border-white/10">
+              附件 {item.attachments.length}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="hidden min-w-0 xl:block">
+        <QueueCell label="资产" value={item.asset} strong />
+      </div>
+      <div className="hidden min-w-0 xl:block">
+        <QueueCell label="用户" value={item.submitter} />
+      </div>
+      <div className="hidden min-w-0 xl:block">
+        <QueueCell label="提交" value={item.submittedAt} />
+      </div>
+      <div className="hidden min-w-0 xl:block">
+        <QueueCell label="单位" value={item.owner} />
+      </div>
+      <div className="hidden min-w-0 2xl:block">
+        <QueueCell label="更新" value={item.updatedAt} />
+      </div>
+      <div className="flex items-center justify-end">
+        <button
+          className="rounded-md bg-brand-600 px-2.5 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700"
+          onClick={onOpen}
+          type="button"
+        >
+          审核
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function QueueCell({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{label}</p>
+      <p className={`mt-1 truncate text-sm ${strong ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+        {value || '—'}
+      </p>
+    </div>
   )
 }
 
@@ -1503,7 +1581,7 @@ function formatFileSize(sizeBytes: number) {
 }
 
 function PageShell({ children, size = 'lg' }: { children: ReactNode; size?: 'md' | 'lg' }) {
-  const width = size === 'md' ? 'max-w-[1080px]' : 'max-w-[1360px]'
+  const width = size === 'md' ? 'max-w-[1080px]' : 'max-w-[1540px]'
   return <section className={`relative z-10 mx-auto ${width} px-5 pb-8 pt-24 md:px-8`}>{children}</section>
 }
 
