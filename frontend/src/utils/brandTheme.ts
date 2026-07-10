@@ -1,9 +1,34 @@
 export type BrandShade = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950
+export type BrandColorSlot =
+  | 'lightBg'
+  | 'lightSurface'
+  | 'lightMuted'
+  | 'lightBorder'
+  | 'lightText'
+  | 'darkBg'
+  | 'darkSurface'
+  | 'darkMuted'
+  | 'darkBorder'
+  | 'darkText'
+  | 'primary'
 
-export type BrandPalette = Record<BrandShade, string>
-export type BrandPaletteOverrides = Partial<Record<BrandShade, string>>
+export type BrandPalette = Record<BrandShade, string> & Record<BrandColorSlot, string>
+export type BrandPaletteOverrides = Partial<Record<BrandShade | BrandColorSlot, string>>
 
 export const brandShades: BrandShade[] = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+export const brandColorSlots: BrandColorSlot[] = [
+  'lightBg',
+  'lightSurface',
+  'lightMuted',
+  'lightBorder',
+  'lightText',
+  'darkBg',
+  'darkSurface',
+  'darkMuted',
+  'darkBorder',
+  'darkText',
+  'primary',
+]
 
 export function recreatePaletteFromShade(shade: BrandShade, color: string, originalPalette: BrandPalette): BrandPalette {
   const normalized = normalizeHexColor(color)
@@ -23,6 +48,17 @@ export const defaultBrandPalette: BrandPalette = {
   800: '#1F4229',
   900: '#1B3724',
   950: '#0F1F14',
+  lightBg: '#EEF7F0',
+  lightSurface: '#FFFFFF',
+  lightMuted: '#D8ECDD',
+  lightBorder: '#DDE5DE',
+  lightText: '#111827',
+  darkBg: '#0F1F14',
+  darkSurface: '#151B17',
+  darkMuted: '#1F4229',
+  darkBorder: '#2F4235',
+  darkText: '#F4F7F2',
+  primary: '#2A6438',
 }
 
 type HslColor = {
@@ -71,7 +107,7 @@ export function generateBrandPalette(hexColor: string, overrides: BrandPaletteOv
   const base = hexToHsl(normalized)
   const hue = base.saturation < 4 ? 0 : base.hue
 
-  const generated = brandShades.reduce((palette, shade) => {
+  const generatedShades = brandShades.reduce((palette, shade) => {
     if (shade === 600) {
       palette[shade] = normalized
       return palette
@@ -84,31 +120,67 @@ export function generateBrandPalette(hexColor: string, overrides: BrandPaletteOv
       saturation: base.saturation < 4 ? 0 : role.saturation(base),
     })
     return palette
-  }, {} as BrandPalette)
+  }, {} as Record<BrandShade, string>)
 
-  return mergeBrandPalette(generated, overrides)
+  const generatedRoles: Record<BrandColorSlot, string> = {
+    lightBg: generatedShades[50],
+    lightSurface: '#FFFFFF',
+    lightMuted: generatedShades[100],
+    lightBorder: mixHex(generatedShades[100], '#6B7280', 0.18),
+    lightText: '#111827',
+    darkBg: generatedShades[950],
+    darkSurface: mixHex(generatedShades[950], '#111827', 0.42),
+    darkMuted: generatedShades[800],
+    darkBorder: mixHex(generatedShades[800], '#FFFFFF', 0.14),
+    darkText: '#F4F7F2',
+    primary: normalized,
+  }
+
+  return mergeBrandPalette({ ...generatedShades, ...generatedRoles } as BrandPalette, overrides)
 }
 
 export function applyBrandTheme(hexColor: string, overrides: BrandPaletteOverrides = {}) {
   const palette = generateBrandPalette(hexColor, overrides)
   const root = document.documentElement
 
-  const lightBg = palette[50]
-  const lightSurfaceMuted = palette[100]
-  const darkBg = palette[950]
-  const darkSurface = palette[900]
-  const darkSurfaceMuted = palette[800]
+  const lightBg = palette.lightBg
+  const lightSurface = palette.lightSurface
+  const lightSurfaceMuted = palette.lightMuted
+  const lightBorder = palette.lightBorder
+  const lightText = palette.lightText
+  const darkBg = palette.darkBg
+  const darkSurface = palette.darkSurface
+  const darkSurfaceMuted = palette.darkMuted
+  const darkBorder = palette.darkBorder
+  const darkText = palette.darkText
+  const primary = palette.primary
 
   Object.entries(palette).forEach(([shade, color]) => {
-    root.style.setProperty(`--color-brand-${shade}`, color)
+    if (/^\d+$/.test(shade)) root.style.setProperty(`--color-brand-${shade}`, color)
   })
 
-  root.style.setProperty('--app-primary', palette[600])
-  root.style.setProperty('--app-primary-rgb', hexToRgbString(palette[600]))
+  root.style.setProperty('--app-primary', primary)
+  root.style.setProperty('--app-primary-rgb', hexToRgbString(primary))
+  root.style.setProperty('--app-light-bg', lightBg)
+  root.style.setProperty('--app-light-surface', lightSurface)
+  root.style.setProperty('--app-light-muted', lightSurfaceMuted)
+  root.style.setProperty('--app-light-border', lightBorder)
+  root.style.setProperty('--app-light-text', lightText)
+  root.style.setProperty('--app-dark-bg', darkBg)
+  root.style.setProperty('--app-dark-surface', darkSurface)
+  root.style.setProperty('--app-dark-muted', darkSurfaceMuted)
+  root.style.setProperty('--app-dark-border', darkBorder)
+  root.style.setProperty('--app-dark-text', darkText)
   root.style.setProperty('--app-bg-light', lightBg)
   root.style.setProperty('--app-bg-dark', darkBg)
+  root.style.setProperty('--app-surface-light', lightSurface)
+  root.style.setProperty('--app-surface-dark', darkSurface)
   root.style.setProperty('--app-surface-muted-light', lightSurfaceMuted)
   root.style.setProperty('--app-surface-muted-dark', darkSurfaceMuted)
+  root.style.setProperty('--app-border-light', lightBorder)
+  root.style.setProperty('--app-border-dark', darkBorder)
+  root.style.setProperty('--app-text-light', lightText)
+  root.style.setProperty('--app-text-dark', darkText)
   root.style.setProperty('--app-header-bg-light', withAlpha(lightBg, 0.86))
   root.style.setProperty('--app-header-bg-dark', withAlpha(darkBg, 0.82))
   root.style.setProperty('--app-panel-bg-light', withAlpha(lightBg, 0.72))
@@ -117,28 +189,54 @@ export function applyBrandTheme(hexColor: string, overrides: BrandPaletteOverrid
   root.style.setProperty('--app-panel-muted-bg-dark', withAlpha(darkSurfaceMuted, 0.68))
   root.style.setProperty('--app-menu-bg-light', withAlpha(lightBg, 0.96))
   root.style.setProperty('--app-menu-bg-dark', withAlpha(darkBg, 0.96))
-  root.style.setProperty('--app-primary-scrollbar', withAlpha(palette[600], 0.55))
-  root.style.setProperty('--app-primary-scrollbar-thumb', withAlpha(palette[600], 0.45))
-  root.style.setProperty('--app-primary-scrollbar-thumb-hover', withAlpha(palette[600], 0.7))
+  root.style.setProperty('--app-primary-scrollbar', withAlpha(primary, 0.55))
+  root.style.setProperty('--app-primary-scrollbar-thumb', withAlpha(primary, 0.45))
+  root.style.setProperty('--app-primary-scrollbar-thumb-hover', withAlpha(primary, 0.7))
 }
 
 export function normalizeBrandPaletteOverrides(value: unknown): BrandPaletteOverrides {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
 
-  return brandShades.reduce((overrides, shade) => {
-    const raw = (value as Record<string, unknown>)[String(shade)]
+  return [...brandShades, ...brandColorSlots].reduce((overrides, key) => {
+    const raw = (value as Record<string, unknown>)[String(key)]
     if (typeof raw !== 'string') return overrides
     const normalized = normalizeHexColor(raw)
-    if (normalized) overrides[shade] = normalized
+    if (normalized) overrides[key] = normalized
     return overrides
   }, {} as BrandPaletteOverrides)
 }
 
 export function mergeBrandPalette(base: BrandPalette, overrides: BrandPaletteOverrides): BrandPalette {
-  return brandShades.reduce((palette, shade) => {
-    palette[shade] = normalizeHexColor(overrides[shade] ?? '') ?? base[shade]
-    return palette
-  }, {} as BrandPalette)
+  const merged = { ...base }
+  ;([...brandShades, ...brandColorSlots] as Array<BrandShade | BrandColorSlot>).forEach((key) => {
+    merged[key] = normalizeHexColor(overrides[key] ?? '') ?? base[key]
+  })
+
+  merged[600] = merged.primary
+  merged.primary = merged[600]
+  merged[50] = merged.lightBg
+  merged[100] = merged.lightMuted
+  merged[200] = merged.lightBorder
+  merged[500] = merged.primary
+  merged[700] = mixHex(merged.primary, '#000000', 0.16)
+  merged[800] = merged.darkMuted
+  merged[900] = merged.darkSurface
+  merged[950] = merged.darkBg
+  return merged
+}
+
+function mixHex(left: string, right: string, rightWeight: number) {
+  const normalizedLeft = normalizeHexColor(left) ?? defaultBrandPalette.primary
+  const normalizedRight = normalizeHexColor(right) ?? defaultBrandPalette.primary
+  const leftRgb = hexToRgb(normalizedLeft)
+  const rightRgb = hexToRgb(normalizedRight)
+  const weight = clamp(rightWeight, 0, 1)
+
+  return rgbToHex({
+    blue: Math.round(leftRgb.blue * (1 - weight) + rightRgb.blue * weight),
+    green: Math.round(leftRgb.green * (1 - weight) + rightRgb.green * weight),
+    red: Math.round(leftRgb.red * (1 - weight) + rightRgb.red * weight),
+  })
 }
 
 export function withAlpha(hexColor: string, alpha: number) {

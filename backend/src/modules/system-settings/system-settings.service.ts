@@ -20,6 +20,8 @@ const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
 const MAX_SCHOOL_LOGO_SIZE_BYTES = 2 * 1024 * 1024
 const DEFAULT_THEME_COLOR = '#2A6438'
 const BRAND_PALETTE_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'] as const
+const BRAND_PALETTE_SLOTS = ['lightBg', 'lightSurface', 'lightMuted', 'lightBorder', 'lightText', 'darkBg', 'darkSurface', 'darkMuted', 'darkBorder', 'darkText', 'primary'] as const
+const BRAND_PALETTE_KEYS = [...BRAND_PALETTE_SLOTS, ...BRAND_PALETTE_SHADES] as const
 const platformLogoSlots = ['navigation', 'auth', 'favicon'] as const
 type PlatformLogoSlot = typeof platformLogoSlots[number]
 const platformLogoSettingKeys: Record<PlatformLogoSlot, string> = {
@@ -546,7 +548,7 @@ export class SystemSettingsService {
       orgName: typeof map['org_name'] === 'string' ? map['org_name'] : '信息化办公室',
       platformDomain: typeof map['platform_domain'] === 'string' ? map['platform_domain'] : 'https://src.cqupt.edu.cn',
       publicCertVerify: typeof map['public_cert_verify'] === 'boolean' ? map['public_cert_verify'] : true,
-      themeColor: typeof themePalette['600'] === 'string' ? themePalette['600'] : themeColor,
+      themeColor: typeof themePalette.primary === 'string' ? themePalette.primary : typeof themePalette['600'] === 'string' ? themePalette['600'] : themeColor,
       themePalette,
     }
   }
@@ -879,8 +881,8 @@ export class SystemSettingsService {
     if (themeColor !== undefined) updates.push({ key: 'theme_color', value: themeColor.trim().toUpperCase(), description: '平台主题色' })
     if (normalizedThemePalette !== undefined) {
       updates.push({ key: 'theme_palette', value: normalizedThemePalette, description: '平台主题色卡' })
-      if (normalizedThemePalette['600'] && themeColor === undefined) {
-        updates.push({ key: 'theme_color', value: normalizedThemePalette['600'], description: '平台主题色' })
+      if ((normalizedThemePalette.primary || normalizedThemePalette['600']) && themeColor === undefined) {
+        updates.push({ key: 'theme_color', value: normalizedThemePalette.primary ?? normalizedThemePalette['600'], description: '平台主题色' })
       }
     }
 
@@ -1009,10 +1011,10 @@ function isHexColor(value: string) {
 function normalizeThemePalette(value: unknown) {
   if (!isRecord(value)) return {}
 
-  return BRAND_PALETTE_SHADES.reduce<Record<string, string>>((palette, shade) => {
-    const color = value[shade]
+  return BRAND_PALETTE_KEYS.reduce<Record<string, string>>((palette, key) => {
+    const color = value[key]
     if (typeof color === 'string' && isHexColor(color)) {
-      palette[shade] = color.trim().toUpperCase()
+      palette[key] = color.trim().toUpperCase()
     }
     return palette
   }, {})
@@ -1023,17 +1025,17 @@ function normalizeThemePaletteForSave(value: unknown) {
     throw new BadRequestException('主题色卡必须是色阶到颜色值的对象')
   }
 
-  return BRAND_PALETTE_SHADES.reduce<Record<string, string>>((palette, shade) => {
-    const color = value[shade]
+  return BRAND_PALETTE_SLOTS.reduce<Record<string, string>>((palette, slot) => {
+    const color = value[slot] ?? (slot === 'primary' ? value['600'] : undefined)
     if (color === undefined || color === null || color === '') {
-      throw new BadRequestException(`主题色卡缺少 brand-${shade}`)
+      throw new BadRequestException(`主题色卡缺少 ${slot}`)
     }
     if (typeof color !== 'string' || !isHexColor(color)) {
-      throw new BadRequestException(`brand-${shade} 必须是 #RRGGBB 格式的十六进制颜色`)
+      throw new BadRequestException(`${slot} 必须是 #RRGGBB 格式的十六进制颜色`)
     }
-    palette[shade] = color.trim().toUpperCase()
+    palette[slot] = color.trim().toUpperCase()
     return palette
-  }, {})
+  }, normalizeThemePalette(value))
 }
 
 function validateUploadedFile(file: UploadedSettingsFile | undefined, maxBytes: number) {

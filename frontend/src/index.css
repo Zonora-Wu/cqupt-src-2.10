@@ -28,13 +28,29 @@
 }
 
 :root {
+  --app-light-bg: #eef7f0;
+  --app-light-surface: #ffffff;
+  --app-light-muted: #d8ecdd;
+  --app-light-border: #dde5de;
+  --app-light-text: #111827;
+  --app-dark-bg: #0f1f14;
+  --app-dark-surface: #151b17;
+  --app-dark-muted: #1f4229;
+  --app-dark-border: #2f4235;
+  --app-dark-text: #f4f7f2;
   --app-bg-light: #eef7f0;
   --app-bg-dark: #0f1f14;
   --app-bg: var(--app-bg-light);
-  --app-surface: #ffffff;
+  --app-surface-light: #ffffff;
+  --app-surface-dark: #151b17;
+  --app-surface: var(--app-surface-light);
   --app-surface-muted-light: #d8ecdd;
   --app-surface-muted-dark: #1f4229;
   --app-surface-muted: var(--app-surface-muted-light);
+  --app-border-light: #dde5de;
+  --app-border-dark: #2f4235;
+  --app-text-light: #111827;
+  --app-text-dark: #f4f7f2;
   --app-header-bg-light: rgba(238, 247, 240, 0.86);
   --app-header-bg-dark: rgba(15, 31, 20, 0.82);
   --app-header-bg: var(--app-header-bg-light);
@@ -47,15 +63,70 @@
   --app-menu-bg-light: rgba(238, 247, 240, 0.96);
   --app-menu-bg-dark: rgba(15, 31, 20, 0.96);
   --app-menu-bg: var(--app-menu-bg-light);
-  --app-text: #111827;
-  --app-text-muted: #647067;
-  --app-border: #dde5de;
+  --app-text: var(--app-text-light);
+  --app-text-muted: color-mix(in srgb, var(--app-text-light) 58%, var(--app-light-muted));
+  --app-border: var(--app-border-light);
   --app-primary: #2a6438;
   --app-primary-rgb: 42, 100, 56;
   --app-primary-scrollbar: rgba(42, 100, 56, 0.55);
   --app-primary-scrollbar-thumb: rgba(42, 100, 56, 0.45);
   --app-primary-scrollbar-thumb-hover: rgba(42, 100, 56, 0.7);
   --app-radius: 8px;
+  --color-slate-50: color-mix(in srgb, var(--app-light-surface) 92%, var(--app-light-muted));
+  --color-slate-100: var(--app-light-muted);
+  --color-slate-200: color-mix(in srgb, var(--app-light-muted) 72%, var(--app-light-border));
+  --color-slate-300: var(--app-light-border);
+  --color-slate-400: color-mix(in srgb, var(--app-light-text) 38%, var(--app-light-muted));
+  --color-slate-500: color-mix(in srgb, var(--app-light-text) 52%, var(--app-light-muted));
+  --color-slate-600: color-mix(in srgb, var(--app-light-text) 68%, var(--app-light-muted));
+  --color-slate-700: color-mix(in srgb, var(--app-light-text) 82%, var(--app-light-muted));
+  --color-slate-800: color-mix(in srgb, var(--app-light-text) 92%, var(--app-light-muted));
+  --color-slate-900: var(--app-light-text);
+  --color-slate-950: var(--app-light-text);
+  --color-gray-50: var(--color-slate-50);
+  --color-gray-100: var(--color-slate-100);
+  --color-gray-200: var(--color-slate-200);
+  --color-gray-300: var(--color-slate-300);
+  --color-gray-400: var(--color-slate-400);
+  --color-gray-500: var(--color-slate-500);
+  --color-gray-600: var(--color-slate-600);
+  --color-gray-700: var(--color-slate-700);
+  --color-gray-800: var(--color-slate-800);
+  --color-gray-900: var(--color-slate-900);
+  --color-gray-950: var(--color-slate-950);
+  --color-zinc-50: var(--color-slate-50);
+  --color-zinc-100: var(--color-slate-100);
+  --color-zinc-200: var(--color-slate-200);
+  --color-zinc-300: var(--color-slate-300);
+  --color-zinc-400: var(--color-slate-400);
+  --color-zinc-500: var(--color-slate-500);
+  --color-zinc-600: var(--color-slate-600);
+  --color-zinc-700: var(--color-slate-700);
+  --color-zinc-800: var(--color-slate-800);
+  --color-zinc-900: var(--color-slate-900);
+  --color-zinc-950: var(--color-slate-950);
+  --color-neutral-50: var(--color-slate-50);
+  --color-neutral-100: var(--color-slate-100);
+  --color-neutral-200: var(--color-slate-200);
+  --color-neutral-300: var(--color-slate-300);
+  --color-neutral-400: var(--color-slate-400);
+  --color-neutral-500: var(--color-slate-500);
+  --color-neutral-600: var(--color-slate-600);
+  --color-neutral-700: var(--color-slate-700);
+  --color-neutral-800: var(--color-slate-800);
+  --color-neutral-900: var(--color-slate-900);
+  --color-neutral-950: var(--color-slate-950);
+  --color-stone-50: var(--color-slate-50);
+  --color-stone-100: var(--color-slate-100);
+  --color-stone-200: var(--color-slate-200);
+  --color-stone-300: var(--color-slate-300);
+  --color-stone-400: var(--color-slate-400);
+  --color-stone-500: var(--color-slate-500);
+  --color-stone-600: var(--color-slate-600);
+  --color-stone-700: var(--color-slate-700);
+  --color-stone-800: var(--color-slate-800);
+  --color-stone-900: var(--color-slate-900);
+  --color-stone-950: var(--color-slate-950);
 
   color-scheme: light;
   color: var(--app-text);
@@ -68,15 +139,70 @@
 
 .dark {
   --app-bg: var(--app-bg-dark);
-  --app-surface: #151b17;
+  --app-surface: var(--app-surface-dark);
   --app-surface-muted: var(--app-surface-muted-dark);
   --app-header-bg: var(--app-header-bg-dark);
   --app-panel-bg: var(--app-panel-bg-dark);
   --app-panel-muted-bg: var(--app-panel-muted-bg-dark);
   --app-menu-bg: var(--app-menu-bg-dark);
-  --app-text: #f4f7f2;
-  --app-text-muted: #a9b5aa;
-  --app-border: rgba(255, 255, 255, 0.1);
+  --app-text: var(--app-text-dark);
+  --app-text-muted: color-mix(in srgb, var(--app-text-dark) 62%, var(--app-dark-muted));
+  --app-border: var(--app-border-dark);
+  --color-slate-50: var(--app-dark-text);
+  --color-slate-100: color-mix(in srgb, var(--app-dark-text) 92%, var(--app-dark-muted));
+  --color-slate-200: color-mix(in srgb, var(--app-dark-text) 82%, var(--app-dark-muted));
+  --color-slate-300: color-mix(in srgb, var(--app-dark-text) 72%, var(--app-dark-muted));
+  --color-slate-400: color-mix(in srgb, var(--app-dark-text) 58%, var(--app-dark-muted));
+  --color-slate-500: color-mix(in srgb, var(--app-dark-text) 45%, var(--app-dark-muted));
+  --color-slate-600: color-mix(in srgb, var(--app-dark-text) 35%, var(--app-dark-muted));
+  --color-slate-700: color-mix(in srgb, var(--app-dark-text) 26%, var(--app-dark-muted));
+  --color-slate-800: color-mix(in srgb, var(--app-dark-text) 18%, var(--app-dark-muted));
+  --color-slate-900: var(--app-dark-surface);
+  --color-slate-950: var(--app-dark-bg);
+  --color-gray-50: var(--color-slate-50);
+  --color-gray-100: var(--color-slate-100);
+  --color-gray-200: var(--color-slate-200);
+  --color-gray-300: var(--color-slate-300);
+  --color-gray-400: var(--color-slate-400);
+  --color-gray-500: var(--color-slate-500);
+  --color-gray-600: var(--color-slate-600);
+  --color-gray-700: var(--color-slate-700);
+  --color-gray-800: var(--color-slate-800);
+  --color-gray-900: var(--color-slate-900);
+  --color-gray-950: var(--color-slate-950);
+  --color-zinc-50: var(--color-slate-50);
+  --color-zinc-100: var(--color-slate-100);
+  --color-zinc-200: var(--color-slate-200);
+  --color-zinc-300: var(--color-slate-300);
+  --color-zinc-400: var(--color-slate-400);
+  --color-zinc-500: var(--color-slate-500);
+  --color-zinc-600: var(--color-slate-600);
+  --color-zinc-700: var(--color-slate-700);
+  --color-zinc-800: var(--color-slate-800);
+  --color-zinc-900: var(--color-slate-900);
+  --color-zinc-950: var(--color-slate-950);
+  --color-neutral-50: var(--color-slate-50);
+  --color-neutral-100: var(--color-slate-100);
+  --color-neutral-200: var(--color-slate-200);
+  --color-neutral-300: var(--color-slate-300);
+  --color-neutral-400: var(--color-slate-400);
+  --color-neutral-500: var(--color-slate-500);
+  --color-neutral-600: var(--color-slate-600);
+  --color-neutral-700: var(--color-slate-700);
+  --color-neutral-800: var(--color-slate-800);
+  --color-neutral-900: var(--color-slate-900);
+  --color-neutral-950: var(--color-slate-950);
+  --color-stone-50: var(--color-slate-50);
+  --color-stone-100: var(--color-slate-100);
+  --color-stone-200: var(--color-slate-200);
+  --color-stone-300: var(--color-slate-300);
+  --color-stone-400: var(--color-slate-400);
+  --color-stone-500: var(--color-slate-500);
+  --color-stone-600: var(--color-slate-600);
+  --color-stone-700: var(--color-slate-700);
+  --color-stone-800: var(--color-slate-800);
+  --color-stone-900: var(--color-slate-900);
+  --color-stone-950: var(--color-slate-950);
   color-scheme: dark;
 }
 
@@ -168,6 +294,67 @@ html.auth-modal-open body {
 .platform-scrollbar::-webkit-scrollbar-thumb:hover,
 .ai-chat-input-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--app-primary-scrollbar-thumb-hover);
+}
+
+.border-black\/5,
+.border-black\/10,
+.border-black\/15,
+.border-black\/\[0\.08\] {
+  border-color: color-mix(in srgb, var(--app-border) 72%, transparent);
+}
+
+.divide-black\/10 > :not(:last-child) {
+  border-color: color-mix(in srgb, var(--app-border) 72%, transparent);
+}
+
+.hover\:bg-black\/5:hover {
+  background-color: color-mix(in srgb, var(--app-light-muted) 35%, transparent);
+}
+
+.hover\:text-slate-950:hover {
+  color: var(--app-light-text);
+}
+
+.bg-white {
+  background-color: var(--app-light-surface);
+}
+
+.hover\:bg-white:hover,
+.hover\:bg-white\/85:hover {
+  background-color: color-mix(in srgb, var(--app-light-surface) 88%, var(--app-light-muted));
+}
+
+.dark .dark\:border-white\/10,
+.dark .dark\:border-white\/15,
+.dark .dark\:border-white\/\[0\.06\],
+.dark .dark\:border-white\/\[0\.08\] {
+  border-color: color-mix(in srgb, var(--app-border) 72%, transparent);
+}
+
+.dark .dark\:divide-white\/10 > :not(:last-child) {
+  border-color: color-mix(in srgb, var(--app-border) 72%, transparent);
+}
+
+.dark .dark\:hover\:bg-white\/10:hover,
+.dark .dark\:hover\:bg-white\/\[0\.035\]:hover,
+.dark .dark\:hover\:bg-white\/\[0\.05\]:hover,
+.dark .dark\:hover\:bg-white\/\[0\.055\]:hover,
+.dark .dark\:hover\:bg-white\/\[0\.06\]:hover,
+.dark .dark\:hover\:bg-white\/\[0\.07\]:hover {
+  background-color: color-mix(in srgb, var(--app-dark-muted) 48%, transparent);
+}
+
+.dark .dark\:bg-white\/10,
+.dark .dark\:bg-white\/15,
+.dark .dark\:bg-white\/\[0\.03\],
+.dark .dark\:bg-white\/\[0\.04\],
+.dark .dark\:bg-white\/\[0\.06\],
+.dark .dark\:bg-white\/\[0\.08\] {
+  background-color: color-mix(in srgb, var(--app-dark-muted) 55%, transparent);
+}
+
+.dark .dark\:text-white {
+  color: var(--app-dark-text);
 }
 
 .select-dropdown-scrollbar {
