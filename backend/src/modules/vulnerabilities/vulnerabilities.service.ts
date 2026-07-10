@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import {
   AuditAction,
+  CertificateStatus,
   PointDirection,
   ReviewDecision,
   VulnerabilitySeverity,
@@ -22,6 +23,9 @@ import {
   ReviewQueueResponse,
   SupplementVulnerabilityResponse,
 } from './vulnerability.types'
+
+const DEFAULT_CERTIFICATE_CONTRIBUTION_TEMPLATE =
+  '发现并提交 {{vulnerabilityType}} 风险，报告编号 {{reportNo}}，影响资产 {{assetName}}。经平台审核确认，该漏洞等级为 {{finalSeverity}}，为学校网络安全治理和风险修复提供了有效支持。'
 
 @Injectable()
 export class VulnerabilitiesService {
@@ -807,6 +811,17 @@ export class VulnerabilitiesService {
           },
         },
         pointEntries: { select: { direction: true, points: true } },
+        certificate: {
+          select: {
+            certificateNo: true,
+            id: true,
+            issuedAt: true,
+            issuedBy: { select: { name: true } },
+            publicVerify: true,
+            status: true,
+            verifyCode: true,
+          },
+        },
         submitter: { select: { id: true, email: true, name: true, unifiedCode: true } },
         assignment: {
           select: { auditor: { select: { id: true, email: true, name: true } } },
@@ -817,6 +832,8 @@ export class VulnerabilitiesService {
     if (!report) {
       throw new NotFoundException('漏洞报告不存在')
     }
+
+    const certificateContribution = await this.buildCertificateContribution(report)
 
     return {
       id: report.id,
@@ -840,6 +857,18 @@ export class VulnerabilitiesService {
       submittedAt: report.submittedAt,
       confirmedAt: report.confirmedAt,
       updatedAt: report.updatedAt,
+      certificateContribution,
+      certificate: report.certificate
+        ? {
+            certificateNo: report.certificate.certificateNo,
+            id: report.certificate.id,
+            issuedAt: report.certificate.issuedAt,
+            issuerName: report.certificate.issuedBy?.name ?? null,
+            publicVerify: report.certificate.publicVerify,
+            status: formatCertificateStatus(report.certificate.status),
+            verifyCode: report.certificate.verifyCode,
+          }
+        : null,
       attachments: report.attachments,
       events: report.events.map((event) => ({
         id: event.id,
@@ -851,6 +880,37 @@ export class VulnerabilitiesService {
         createdAt: event.createdAt,
       })),
     }
+  }
+
+  private async buildCertificateContribution(report: {
+    assetName: string
+    finalSeverity: VulnerabilitySeverity | null
+    ownerUnit: string | null
+    reportNo: string
+    submitter: { name: string; unifiedCode: string }
+    title: string
+    vulnerabilityType: string
+  }) {
+    const profile = await this.prisma.schoolProfile.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { certificateTemplate: true, schoolName: true, shortName: true },
+    })
+
+    const template = profile?.certificateTemplate?.trim() || DEFAULT_CERTIFICATE_CONTRIBUTION_TEMPLATE
+    const replacements: Record<string, string> = {
+      assetName: report.assetName,
+      finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : '未定级',
+      ownerUnit: report.ownerUnit ?? '未填写',
+      reportNo: report.reportNo,
+      schoolName: profile?.schoolName ?? '学校',
+      schoolShortName: profile?.shortName ?? 'SRC',
+      submitterName: report.submitter.name,
+      submitterUnifiedCode: report.submitter.unifiedCode,
+      title: report.title,
+      vulnerabilityType: report.vulnerabilityType,
+    }
+
+    return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (matched, key: string) => replacements[key] ?? matched)
   }
 
   private async generateReportNo() {
@@ -1006,6 +1066,16 @@ function formatAdminStatus(status: VulnerabilityStatus): string {
     ARCHIVED: '已归档',
     CERTIFIED: '已归档',
     REJECTED: '已驳回',
+  }
+
+  return statusMap[status]
+}
+
+function formatCertificateStatus(status: CertificateStatus): string {
+  const statusMap: Record<CertificateStatus, string> = {
+    ISSUED: '已签发',
+    PENDING: '待签发',
+    REVOKED: '已撤销',
   }
 
   return statusMap[status]

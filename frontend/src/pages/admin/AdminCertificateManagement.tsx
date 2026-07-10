@@ -9,16 +9,15 @@ import {
   Filter,
   Medal,
   RefreshCw,
-  ShieldCheck,
-  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { CopyableCode } from '../../components/ui/CopyableCode'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
-  issueCertificate,
   listManagedCertificates,
   openCertificatePreview,
   revokeCertificate,
@@ -29,6 +28,7 @@ type CertificateStatus = '待签发' | '已签发' | '已撤销'
 
 const statusOptions = ['全部状态', '待签发', '已签发', '已撤销']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
+const defaultPageSize = 10
 
 const levelClassMap: Record<SeverityLabel, string> = {
   严重: 'bg-red-600 text-white',
@@ -56,13 +56,26 @@ function CertificateStatusBadge({ status }: { status: CertificateStatus }) {
   return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${statusClassMap[status]}`}>{status}</span>
 }
 
+function LedgerCell({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{label}</p>
+      <p className={`mt-1 truncate text-sm ${strong ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+        {value || '—'}
+      </p>
+    </div>
+  )
+}
+
 export function AdminCertificateManagement() {
   const [items, setItems] = useState<ManagedCertificateItem[]>([])
+  const [stats, setStats] = useState({ total: 0, pending: 0, issued: 0, revoked: 0 })
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('全部状态')
   const [level, setLevel] = useState('全部等级')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [issueTarget, setIssueTarget] = useState<ManagedCertificateItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -73,6 +86,7 @@ export function AdminCertificateManagement() {
     try {
       const response = await listManagedCertificates()
       setItems(response.items)
+      setStats(response.stats)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '证书列表加载失败')
     } finally {
@@ -101,6 +115,17 @@ export function AdminCertificateManagement() {
       return matchesKeyword && matchesStatus && matchesLevel
     })
   }, [items, keyword, level, status])
+
+  useEffect(() => {
+    setPage(1)
+  }, [keyword, status, level, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filteredCertificates.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedCertificates = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return filteredCertificates.slice(start, start + pageSize)
+  }, [filteredCertificates, pageSize, safePage])
 
   const selectedCertificate = selectedId ? items.find((item) => item.id === selectedId) ?? null : null
 
@@ -140,7 +165,7 @@ export function AdminCertificateManagement() {
 
   if (selectedCertificate) {
     return (
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1540px] px-5 pb-8 pt-24 md:px-8">
         <button
           className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
           onClick={() => setSelectedId(null)}
@@ -177,17 +202,9 @@ export function AdminCertificateManagement() {
 
             <SurfacePanel className="p-4">
               <div className="grid gap-2">
-                {selectedCertificate.status === '待签发' && (
-                  <button
-                    className="rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
-                    onClick={() => setIssueTarget(selectedCertificate)}
-                    type="button"
-                  >
-                    签发证书
-                  </button>
-                )}
                 <button
-                  className="rounded-lg border border-black/10 px-4 py-3 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                  className="rounded-lg border border-black/10 px-4 py-3 text-sm font-medium transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
+                  disabled={!selectedCertificate.certificateId}
                   onClick={() => void previewPdf(selectedCertificate)}
                   type="button"
                 >
@@ -247,16 +264,6 @@ export function AdminCertificateManagement() {
           </div>
         </div>
 
-        <IssueCertificateModal
-          certificate={issueTarget}
-          onClose={() => setIssueTarget(null)}
-          onIssued={async () => {
-            setIssueTarget(null)
-            setSelectedId(null)
-            setMessage('证书已签发，PDF 已生成。')
-            await loadCertificates()
-          }}
-        />
       </section>
     )
   }
@@ -278,6 +285,29 @@ export function AdminCertificateManagement() {
             <RefreshCw className="h-4 w-4" />
             刷新
           </button>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-4">
+          {[
+            { label: '证书总数', value: stats.total, hint: '全部证书队列', icon: Medal },
+            { label: '待签发', value: stats.pending, hint: '可生成正式证书', icon: Award },
+            { label: '已签发', value: stats.issued, hint: '可公开核验', icon: CheckCircle2 },
+            { label: '已撤销', value: stats.revoked, hint: '核验不可用', icon: Ban },
+          ].map((item) => {
+            const Icon = item.icon
+            return (
+              <SurfacePanel className="p-4" key={item.label}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-brand-700 dark:text-brand-300" />
+                    <p className="text-sm font-medium">{item.label}</p>
+                  </div>
+                  <span className="text-2xl font-semibold">{item.value}</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+              </SurfacePanel>
+            )
+          })}
         </div>
 
         <SurfacePanel className="relative z-30 mt-6 p-5">
@@ -317,232 +347,136 @@ export function AdminCertificateManagement() {
           </div>
         )}
 
-        <div className="mt-6 grid gap-5">
+        <SurfacePanel className="mt-6 overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">
+            <div>
+              <h2 className="text-sm font-semibold">证书台账</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {filteredCertificates.length} 条，按当前筛选条件展示</p>
+            </div>
+            <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">
+              紧凑列表
+            </span>
+          </div>
+
+          <div className="grid grid-cols-[204px_minmax(0,1fr)_88px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[204px_minmax(0,1fr)_112px_112px_112px_112px_88px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_112px_88px]">
+            <span>漏洞编号 / 状态</span>
+            <span>证书类型 / 关联漏洞</span>
+            <span className="hidden xl:block">获得者</span>
+            <span className="hidden xl:block">签发时间</span>
+            <span className="hidden xl:block">签发人</span>
+            <span className="hidden xl:block">公开核验</span>
+            <span className="hidden 2xl:block">责任单位</span>
+            <span className="hidden 2xl:block">核验码</span>
+            <span className="text-right">操作</span>
+          </div>
+
           {loading && (
-            <SurfacePanel className="p-10 text-center text-sm text-slate-500 dark:text-slate-400">正在加载证书管理数据...</SurfacePanel>
+            <div className="p-10 text-center text-sm text-slate-500 dark:text-slate-400">正在加载证书管理数据...</div>
           )}
 
           {!loading &&
-            filteredCertificates.map((item) => (
-              <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.vulnId}</span>
+            paginatedCertificates.map((item) => (
+              <div
+                className="grid grid-cols-[204px_minmax(0,1fr)_88px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_112px_112px_112px_112px_88px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_112px_88px]"
+                key={item.id}
+              >
+                <div className="min-w-0">
+                  <CopyableCode value={item.vulnId} />
+                  <div className="mt-2 flex items-center gap-1.5">
                       <LevelBadge level={item.level} />
                       <CertificateStatusBadge status={item.status} />
                     </div>
-                    <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.type}</h2>
-                    <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">{item.vulnTitle}</p>
-                    <div className="mt-4 grid gap-2 text-sm text-slate-500 sm:grid-cols-2 dark:text-slate-400">
-                      <p>获得者：{item.recipient}</p>
-                      <p>统一认证码：{item.unifiedCode}</p>
-                      <p>签发时间：{formatDate(item.issueDate)}</p>
-                      <p>签发人：{item.issuer ?? '未签发'}</p>
-                      <p>公开核验：{item.publicVerify ? '已开启' : '未开启'}</p>
-                      <p>责任单位：{item.owner ?? '未填写'}</p>
-                    </div>
                   </div>
 
-                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <ShieldCheck className="h-4 w-4 text-brand-700 dark:text-brand-300" />
-                      证书内容
-                    </div>
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.contribution}</p>
-                    <p className="mt-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.verifyCode}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{item.type}</p>
+                  <div className="mt-1.5 flex min-w-0 items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="truncate">{item.vulnTitle}</span>
+                    <span className="shrink-0 rounded-md border border-black/10 px-1.5 py-0.5 dark:border-white/10">
+                      {item.publicVerify ? '可核验' : '未公开'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <FileCheck2 className="h-4 w-4" />
-                    签发、撤销、PDF 预览都会经过后端鉴权与审计记录
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="获得者" value={`${item.recipient} ${item.unifiedCode}`} strong />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="签发" value={formatCompactDate(item.issueDate)} />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="签发人" value={item.issuer ?? '未签发'} />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="核验" value={item.publicVerify ? '已开启' : '未开启'} />
+                </div>
+                <div className="hidden min-w-0 2xl:block">
+                  <LedgerCell label="单位" value={item.owner ?? '未填写'} />
+                </div>
+                <div className="hidden min-w-0 2xl:block">
+                  <LedgerCell label="核验码" value={item.verifyCode} />
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5">
                     <button
-                      className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                      aria-label="查看详情"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-black/10 text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
                       onClick={() => setSelectedId(item.id)}
+                      title="查看详情"
                       type="button"
                     >
                       <Eye className="h-4 w-4" />
-                      查看详情
                     </button>
-                    <button
-                      className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                      onClick={() => void previewPdf(item)}
-                      type="button"
-                    >
-                      <Download className="h-4 w-4" />
-                      预览 PDF
-                    </button>
-                    {item.status === '待签发' && (
+                    {item.certificateId && (
                       <button
-                        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-                        onClick={() => setIssueTarget(item)}
+                        aria-label="预览 PDF"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-black/10 text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        onClick={() => void previewPdf(item)}
+                        title="预览 PDF"
                         type="button"
                       >
-                        签发证书
+                        <Download className="h-4 w-4" />
                       </button>
                     )}
                     {item.status === '已签发' && (
                       <button
-                        className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
+                        aria-label="撤销证书"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-500/20 text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
                         onClick={() => void handleRevoke(item)}
+                        title="撤销证书"
                         type="button"
                       >
                         <Ban className="h-4 w-4" />
-                        撤销
                       </button>
                     )}
                   </div>
-                </div>
-              </SurfacePanel>
+              </div>
             ))}
 
           {!loading && filteredCertificates.length === 0 && (
-            <SurfacePanel className="p-10 text-center">
+            <div className="p-10 text-center">
               <Award className="mx-auto h-10 w-10 text-slate-400" />
               <h2 className="mt-4 text-xl font-semibold">没有匹配的证书记录</h2>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">已确认并定级的漏洞会进入证书管理队列。</p>
-            </SurfacePanel>
+            </div>
           )}
-        </div>
+
+          {!loading && filteredCertificates.length > 0 && (
+            <PaginationBar
+              onPageChange={setPage}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize)
+                setPage(1)
+              }}
+              page={safePage}
+              pageSize={pageSize}
+              total={filteredCertificates.length}
+            />
+          )}
+        </SurfacePanel>
       </section>
 
-      <IssueCertificateModal
-        certificate={issueTarget}
-        onClose={() => setIssueTarget(null)}
-        onIssued={async () => {
-          setIssueTarget(null)
-          setMessage('证书已签发，PDF 已生成。')
-          await loadCertificates()
-        }}
-      />
     </>
-  )
-}
-
-function IssueCertificateModal({
-  certificate,
-  onClose,
-  onIssued,
-}: {
-  certificate: ManagedCertificateItem | null
-  onClose: () => void
-  onIssued: () => Promise<void>
-}) {
-  const [contribution, setContribution] = useState('')
-  const [publicVerify, setPublicVerify] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    setContribution(certificate?.contribution ?? '')
-    setPublicVerify(certificate?.publicVerify ?? true)
-    setError('')
-  }, [certificate])
-
-  if (!certificate) return null
-
-  async function confirmIssue() {
-    if (!certificate) return
-    setError('')
-    setSubmitting(true)
-    try {
-      await issueCertificate({
-        contribution,
-        publicVerify,
-        vulnerabilityId: certificate.vulnerabilityId,
-      })
-      await onIssued()
-    } catch (issueError) {
-      setError(issueError instanceof Error ? issueError.message : '证书签发失败')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-[620px] rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
-              <Award className="h-5 w-5" />
-              <span className="text-sm font-medium">Certificate Issue</span>
-            </div>
-            <h2 className="mt-2 text-2xl font-semibold">签发证书</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              确认后将生成正式证书记录和 PDF，并写入审计日志。
-            </p>
-          </div>
-          <button
-            aria-label="关闭签发弹窗"
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
-            onClick={onClose}
-            type="button"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-6 grid gap-4">
-          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-            <p className="text-sm font-semibold">{certificate.type}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{certificate.vulnTitle}</p>
-            <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 dark:text-slate-400">
-              <p>获得者：{certificate.recipient}</p>
-              <p>统一认证码：{certificate.unifiedCode}</p>
-              <p>关联漏洞：{certificate.vulnId}</p>
-              <p>公开核验：{publicVerify ? '开启' : '关闭'}</p>
-            </div>
-          </div>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">贡献说明</span>
-            <textarea
-              className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
-              onChange={(event) => setContribution(event.target.value)}
-              value={contribution}
-            />
-          </label>
-          <label className="flex items-center gap-3 rounded-lg border border-black/10 bg-white/55 px-4 py-3 text-sm dark:border-white/10 ">
-            <input
-              checked={publicVerify}
-              className="h-4 w-4 accent-brand-600"
-              onChange={(event) => setPublicVerify(event.target.checked)}
-              type="checkbox"
-            />
-            开启公开核验，访客可通过证书编号查询脱敏结果
-          </label>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button
-            className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
-            onClick={onClose}
-            type="button"
-          >
-            取消
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={submitting}
-            onClick={() => void confirmIssue()}
-            type="button"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            {submitting ? '签发中...' : '确认签发'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -558,4 +492,12 @@ function formatDate(value: string | null) {
     month: '2-digit',
     year: 'numeric',
   })
+}
+
+function formatCompactDate(value: string | null) {
+  if (!value) return '未签发'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }

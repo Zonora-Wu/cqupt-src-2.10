@@ -297,11 +297,22 @@ export type AdminVulnerabilityDetail = {
   testBoundary: string | null
   submitterName: string
   submitterEmail: string
+  submitterUnifiedCode: string
   reviewerName: string | null
   points: number
   submittedAt: string | null
   confirmedAt: string | null
   updatedAt: string
+  certificateContribution: string
+  certificate: {
+    certificateNo: string
+    id: string
+    issuedAt: string | null
+    issuerName: string | null
+    publicVerify: boolean
+    status: string
+    verifyCode: string
+  } | null
   attachments: Array<{
     id: string
     originalName: string
@@ -350,6 +361,8 @@ export async function getVulnerabilityDetail(reportId: string) {
     submittedAt: string | null
     confirmedAt: string | null
     updatedAt: string
+    certificateContribution: string
+    certificate: AdminVulnerabilityDetail['certificate']
     attachments: Array<{ id: string; originalName: string; sizeBytes: number; uploadedAt: string }>
     events: Array<{
       id: string
@@ -370,6 +383,7 @@ export async function getVulnerabilityDetail(reportId: string) {
     ...raw,
     submitterName: raw.submitter.name,
     submitterEmail: raw.submitter.email,
+    submitterUnifiedCode: raw.submitter.unifiedCode,
     reviewerName: raw.reviewer?.name ?? null,
   }
 
