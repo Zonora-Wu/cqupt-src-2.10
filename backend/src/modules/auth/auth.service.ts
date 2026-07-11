@@ -2,9 +2,10 @@ import { BadRequestException, ConflictException, Inject, Injectable, Unauthorize
 import { AuditAction, AuthorizationLevel, RoleCode, User, UserStatus } from '@prisma/client'
 
 export type PendingRegistrationResponse = { pending: true; message: string }
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes, createHash, randomInt } from 'node:crypto'
 import { getJwtExpiry, signJwt } from '../../common/crypto/jwt'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
+import { EmailService } from '../email/email.service'
 import { HumanVerificationService } from '../human-verification/human-verification.service'
 import { HumanVerificationInput } from '../human-verification/human-verification.types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -28,19 +29,18 @@ export class AuthService {
     private readonly rbac: RbacService,
     @Inject(HumanVerificationService)
     private readonly humanVerification: HumanVerificationService,
+    @Inject(EmailService)
+    private readonly email: EmailService,
   ) {}
 
   async loginWithPassword(unifiedCode: string, password: string, humanInput: HumanVerificationInput | null, meta: ClientRequestMeta): Promise<LoginResponse> {
-    const requiresHumanVerification = this.requiresPasswordLoginVerification(unifiedCode, meta.ipAddress)
-    if (requiresHumanVerification) {
-      if (!humanInput) {
-        throw new UnauthorizedException({
-          message: '登录失败次数较多，请先完成安全校验',
-          requiresHumanVerification: true,
-        })
-      }
-      await this.humanVerification.verify(humanInput, 'LOGIN_PASSWORD', meta)
+    if (!humanInput) {
+      throw new UnauthorizedException({
+        message: '请先完成安全校验',
+        requiresHumanVerification: true,
+      })
     }
+    await this.humanVerification.verify(humanInput, 'LOGIN_PASSWORD', meta)
 
     const user = await this.prisma.user.findUnique({
       where: { unifiedCode },
@@ -82,8 +82,14 @@ export class AuthService {
 
     await this.assertEmailCodeRateLimit(normalizedEmail, 'LOGIN', meta)
 
-    const devCode = '123456'
-    const codeHash = createHash('sha256').update(devCode).digest('hex')
+    const code = generateEmailCode()
+    const codeHash = createHash('sha256').update(code).digest('hex')
+    await this.email.sendVerificationCode({
+      code,
+      expiresInMinutes: EMAIL_CODE_TTL_MS / 60_000,
+      purpose: 'LOGIN',
+      to: normalizedEmail,
+    })
 
     await this.prisma.$transaction(async (tx) => {
       await tx.emailVerificationCode.updateMany({
@@ -110,7 +116,6 @@ export class AuthService {
 
     return {
       message: `验证码已发送至 ${normalizedEmail}`,
-      devCode: process.env.NODE_ENV === 'production' ? undefined : devCode,
     }
   }
 
@@ -126,15 +131,23 @@ export class AuthService {
       throw new ConflictException('该邮箱已注册，请直接登录')
     }
 
-    const devCode = '123456'
-    const codeHash = createHash('sha256').update(devCode).digest('hex')
+    await this.assertEmailCodeRateLimit(normalizedEmail, 'REGISTER', meta)
+
+    const code = generateEmailCode()
+    const codeHash = createHash('sha256').update(code).digest('hex')
+    await this.email.sendVerificationCode({
+      code,
+      expiresInMinutes: EMAIL_CODE_TTL_MS / 60_000,
+      purpose: 'REGISTER',
+      to: normalizedEmail,
+    })
 
     await this.prisma.emailVerificationCode.create({
       data: {
         email: normalizedEmail,
         codeHash,
         purpose: 'REGISTER',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS),
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
       },
@@ -142,7 +155,6 @@ export class AuthService {
 
     return {
       message: `验证码已发送至 ${normalizedEmail}`,
-      devCode: process.env.NODE_ENV === 'production' ? undefined : devCode,
     }
   }
 
@@ -492,4 +504,8 @@ export class AuthService {
     this.passwordLoginFailures.delete(this.getPasswordLoginFailureKey(unifiedCode, ipAddress))
   }
 
+}
+
+function generateEmailCode() {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0')
 }

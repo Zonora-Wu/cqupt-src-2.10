@@ -18,6 +18,8 @@ import { Response } from 'express'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { EmailService } from '../email/email.service'
+import { SmtpSecureMode, UpdateEmailServiceSettingsInput } from '../email/email.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { SystemSettingsService } from './system-settings.service'
@@ -46,7 +48,10 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @Controller('system-settings')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SystemSettingsController {
-  constructor(@Inject(SystemSettingsService) private readonly settings: SystemSettingsService) {}
+  constructor(
+    @Inject(SystemSettingsService) private readonly settings: SystemSettingsService,
+    @Inject(EmailService) private readonly email: EmailService,
+  ) {}
 
   @Get('certificate-template/active')
   @RequirePermissions('system:manage')
@@ -270,6 +275,58 @@ export class SystemSettingsController {
       user,
       getRequestMeta(req),
     )
+  }
+
+  @Get('email-service')
+  @RequirePermissions('system:manage')
+  getEmailServiceSettings() {
+    return this.email.getSettings()
+  }
+
+  @Post('email-service')
+  @RequirePermissions('system:manage')
+  updateEmailServiceSettings(
+    @Body() body: {
+      clearPassword?: unknown
+      enabled?: unknown
+      fromEmail?: unknown
+      fromName?: unknown
+      host?: unknown
+      password?: unknown
+      port?: unknown
+      replyTo?: unknown
+      secureMode?: unknown
+      username?: unknown
+    },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const secureMode = body.secureMode === 'NONE' || body.secureMode === 'SSL' || body.secureMode === 'STARTTLS'
+      ? body.secureMode as SmtpSecureMode
+      : undefined
+    const input: UpdateEmailServiceSettingsInput = {
+      clearPassword: body.clearPassword === true,
+      enabled: body.enabled !== undefined ? body.enabled === true : undefined,
+      fromEmail: typeof body.fromEmail === 'string' ? body.fromEmail : undefined,
+      fromName: typeof body.fromName === 'string' ? body.fromName : undefined,
+      host: typeof body.host === 'string' ? body.host : undefined,
+      password: typeof body.password === 'string' && body.password.length > 0 ? body.password : undefined,
+      port: body.port !== undefined ? Number(body.port) : undefined,
+      replyTo: typeof body.replyTo === 'string' ? body.replyTo : undefined,
+      secureMode,
+      username: typeof body.username === 'string' ? body.username : undefined,
+    }
+    return this.email.updateSettings(input, user, getRequestMeta(req))
+  }
+
+  @Post('email-service/test')
+  @RequirePermissions('system:manage')
+  testEmailService(
+    @Body() body: { to?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.email.testSettings(typeof body.to === 'string' ? body.to : '', user, getRequestMeta(req))
   }
 
   @Post('platform')

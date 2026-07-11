@@ -36,13 +36,12 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   const [emailHumanPayload, setEmailHumanPayload] = useState('')
   const [passwordHumanPayload, setPasswordHumanPayload] = useState('')
   const [humanResetKey, setHumanResetKey] = useState(0)
-  const [passwordVerificationRequired, setPasswordVerificationRequired] = useState(false)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [message, setMessage] = useState<NoticeState | null>(null)
   const [logos, setLogos] = useState(() => getPlatformLogos())
   const normalizedEmail = email.trim().toLowerCase()
   const emailCodeIsActive = mode === 'email' && normalizedEmail === emailCodeSentTo && countdown > 0
-  const shouldShowHumanVerification = mode === 'sso' ? passwordVerificationRequired : !emailCodeIsActive
+  const shouldShowHumanVerification = mode === 'sso' || !emailCodeIsActive
 
   useEffect(() => {
     document.documentElement.classList.add('auth-modal-open')
@@ -100,7 +99,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     event.preventDefault()
     setMessage(null)
 
-    if (mode === 'sso' && passwordVerificationRequired && !passwordHumanPayload) {
+    if (mode === 'sso' && !passwordHumanPayload) {
       setMessage({ text: '请先完成安全校验', type: 'warning' })
       return
     }
@@ -131,7 +130,6 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       }, 300)
     } catch (error) {
       if (requiresHumanVerification(error)) {
-        setPasswordVerificationRequired(true)
         setPasswordHumanPayload('')
         setHumanResetKey((value) => value + 1)
       }

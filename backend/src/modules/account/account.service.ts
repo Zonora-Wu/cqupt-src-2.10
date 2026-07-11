@@ -1,8 +1,9 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { AuditAction, VulnerabilityStatus } from '@prisma/client'
-import { createHash } from 'node:crypto'
+import { createHash, randomInt } from 'node:crypto'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { EmailService } from '../email/email.service'
 import { HumanVerificationService } from '../human-verification/human-verification.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
@@ -15,6 +16,7 @@ const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
 const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
+const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
 type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 @Injectable()
@@ -24,6 +26,8 @@ export class AccountService {
     private readonly prisma: PrismaService,
     @Inject(HumanVerificationService)
     private readonly humanVerification: HumanVerificationService,
+    @Inject(EmailService)
+    private readonly email: EmailService,
   ) {}
 
   async getProfile(user: AuthenticatedRequestUser) {
@@ -302,14 +306,20 @@ export class AccountService {
       throw new BadRequestException('当前账号未绑定邮箱')
     }
 
-    const devCode = '123456'
-    const codeHash = createHash('sha256').update(devCode).digest('hex')
+    const code = generateEmailCode()
+    const codeHash = createHash('sha256').update(code).digest('hex')
+    await this.email.sendVerificationCode({
+      code,
+      expiresInMinutes: EMAIL_CODE_TTL_MS / 60_000,
+      purpose: input.purpose,
+      to: user.email,
+    })
 
     await this.prisma.emailVerificationCode.create({
       data: {
         codeHash,
         email: user.email.toLowerCase(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS),
         ipAddress: meta.ipAddress,
         purpose: input.purpose,
         userAgent: meta.userAgent,
@@ -318,7 +328,6 @@ export class AccountService {
     })
 
     return {
-      devCode: process.env.NODE_ENV === 'production' ? undefined : devCode,
       message: `验证码已发送至 ${maskEmail(user.email)}`,
     }
   }
@@ -465,6 +474,10 @@ function maskEmail(email: string) {
   if (!name || !domain) return '***'
   const prefix = name.slice(0, 2)
   return `${prefix}${'*'.repeat(Math.max(3, name.length - 2))}@${domain}`
+}
+
+function generateEmailCode() {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0')
 }
 
 const auditActionLabels: Record<string, string> = {

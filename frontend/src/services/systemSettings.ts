@@ -43,6 +43,25 @@ export type RegistrationMode = {
   open: boolean
 }
 
+export type SmtpSecureMode = 'NONE' | 'SSL' | 'STARTTLS'
+
+export type EmailServiceSettings = {
+  enabled: boolean
+  fromEmail: string
+  fromName: string
+  host: string
+  passwordConfigured: boolean
+  port: number
+  replyTo: string
+  secureMode: SmtpSecureMode
+  username: string
+}
+
+export type UpdateEmailServiceSettingsPayload = Omit<EmailServiceSettings, 'passwordConfigured'> & {
+  clearPassword?: boolean
+  password?: string
+}
+
 export type PendingRegistrationItem = {
   id: string
   name: string
@@ -206,6 +225,18 @@ export async function approveRegistration(id: string) {
 
 export async function rejectRegistration(id: string) {
   return request<{ success: true }>(`/system-settings/pending-registrations/${id}/reject`, { method: 'POST' })
+}
+
+export async function getEmailServiceSettings() {
+  return request<EmailServiceSettings>('/system-settings/email-service', { method: 'GET' })
+}
+
+export async function updateEmailServiceSettings(data: UpdateEmailServiceSettingsPayload) {
+  return request<EmailServiceSettings>('/system-settings/email-service', { method: 'POST', body: data as Record<string, unknown> })
+}
+
+export async function testEmailService(to: string) {
+  return request<{ message: string }>('/system-settings/email-service/test', { method: 'POST', body: { to } })
 }
 
 async function request<T>(path: string, options: { method: 'DELETE' | 'GET' | 'POST' | 'PUT'; body?: Record<string, unknown> }) {

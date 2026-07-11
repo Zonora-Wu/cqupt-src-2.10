@@ -32,6 +32,7 @@ import {
   getActiveCertificateTemplate,
   getAiAssistantAppearance,
   getAiQuotaSettings,
+  getEmailServiceSettings,
   getPlatformSettings,
   getRegistrationMode,
   listPendingRegistrations,
@@ -39,7 +40,9 @@ import {
   rejectRegistration,
   resetPlatformLogo,
   setRegistrationMode,
+  testEmailService,
   updateCertificateTemplateLayout,
+  updateEmailServiceSettings,
   updatePlatformSettings,
   uploadAiAssistantAvatar,
   uploadPlatformLogo,
@@ -47,7 +50,7 @@ import {
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
-import type { AiQuotaSettings, CertificateTemplateSummary, PendingRegistrationItem, PlatformLogoSlot } from '../../services/systemSettings'
+import type { AiQuotaSettings, CertificateTemplateSummary, EmailServiceSettings, PendingRegistrationItem, PlatformLogoSlot, SmtpSecureMode } from '../../services/systemSettings'
 import {
   createSecurityQuestions,
   generateSecurityQuestionsWithAi,
@@ -92,6 +95,12 @@ type ConfirmState = {
 } | null
 
 type AiQuotaPeriod = AiQuotaSettings['quotaPeriod']
+const smtpSecureModeOptions: SmtpSecureMode[] = ['SSL', 'STARTTLS', 'NONE']
+const smtpSecureModeLabels: Record<SmtpSecureMode, string> = {
+  NONE: '无',
+  SSL: 'SSL',
+  STARTTLS: 'STARTTLS',
+}
 
 function getAppliedThemeColor() {
   if (typeof document === 'undefined') return '#2A6438'
@@ -397,6 +406,20 @@ export function AdminSystemSettings() {
   const [aiQuotaResetAt, setAiQuotaResetAt] = useState<string | null>(null)
   const [aiQuotaMessage, setAiQuotaMessage] = useState('')
   const [isSavingAiQuota, setIsSavingAiQuota] = useState(false)
+  const [smtpEnabled, setSmtpEnabled] = useState(false)
+  const [smtpHost, setSmtpHost] = useState('')
+  const [smtpPort, setSmtpPort] = useState('465')
+  const [smtpFromEmail, setSmtpFromEmail] = useState('')
+  const [smtpFromName, setSmtpFromName] = useState('CQUPT-SRC')
+  const [smtpUsername, setSmtpUsername] = useState('')
+  const [smtpPassword, setSmtpPassword] = useState('')
+  const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
+  const [smtpReplyTo, setSmtpReplyTo] = useState('')
+  const [smtpSecureMode, setSmtpSecureMode] = useState<SmtpSecureMode>('SSL')
+  const [smtpTestRecipient, setSmtpTestRecipient] = useState('')
+  const [smtpMessage, setSmtpMessage] = useState('')
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false)
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false)
   const [securityExamSettings, setSecurityExamSettings] = useState<SecurityExamSettings | null>(null)
   const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestionAdmin[]>([])
   const [questionBankJson, setQuestionBankJson] = useState('')
@@ -412,6 +435,20 @@ export function AdminSystemSettings() {
     setNotice({ message, title, variant })
   }
 
+  const applyEmailServiceSettings = (settings: EmailServiceSettings) => {
+    setSmtpEnabled(settings.enabled)
+    setSmtpHost(settings.host)
+    setSmtpPort(String(settings.port))
+    setSmtpFromEmail(settings.fromEmail)
+    setSmtpFromName(settings.fromName)
+    setSmtpUsername(settings.username)
+    setSmtpPassword('')
+    setSmtpPasswordConfigured(settings.passwordConfigured)
+    setSmtpReplyTo(settings.replyTo)
+    setSmtpSecureMode(settings.secureMode)
+    setSmtpTestRecipient((current) => current || settings.fromEmail)
+  }
+
   useEffect(() => {
     setAppliedPlatformLogos(getPlatformLogos())
     return subscribePlatformBranding(setAppliedPlatformLogos)
@@ -422,12 +459,13 @@ export function AdminSystemSettings() {
 
     async function loadInitialData() {
       try {
-        const [mode, template, platform, aiAppearance, aiQuota] = await Promise.all([
+        const [mode, template, platform, aiAppearance, aiQuota, emailService] = await Promise.all([
           getRegistrationMode(),
           getActiveCertificateTemplate(),
           getPlatformSettings(),
           getAiAssistantAppearance(),
           getAiQuotaSettings(),
+          getEmailServiceSettings(),
         ])
         if (active) {
           setOpenRegister(mode.open)
@@ -490,6 +528,7 @@ export function AdminSystemSettings() {
           setDefaultAiMonthlyTokens(String(aiQuota.defaultMonthlyTokens))
           setAiQuotaPeriod(aiQuota.quotaPeriod)
           setAiQuotaResetAt(aiQuota.resetAt)
+          applyEmailServiceSettings(emailService)
         }
       } catch (error) {
         if (active) {
@@ -912,6 +951,60 @@ export function AdminSystemSettings() {
       setAiQuotaMessage(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
       setIsSavingAiQuota(false)
+    }
+  }
+
+  const handleSaveSmtp = async () => {
+    const port = Number(smtpPort)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      setSmtpMessage('SMTP 端口必须是 1-65535 的整数')
+      return
+    }
+    if (smtpEnabled && (!smtpHost.trim() || !smtpFromEmail.trim() || !smtpUsername.trim())) {
+      setSmtpMessage('启用邮件服务前，请填写 SMTP 地址、发件邮箱和 SMTP 用户名')
+      return
+    }
+
+    setSmtpMessage('')
+    setIsSavingSmtp(true)
+    try {
+      const result = await updateEmailServiceSettings({
+        enabled: smtpEnabled,
+        fromEmail: smtpFromEmail,
+        fromName: smtpFromName,
+        host: smtpHost,
+        password: smtpPassword || undefined,
+        port,
+        replyTo: smtpReplyTo,
+        secureMode: smtpSecureMode,
+        username: smtpUsername,
+      })
+      applyEmailServiceSettings(result)
+      setSmtpMessage(result.enabled ? 'SMTP 邮件服务配置已保存，验证码邮件将使用该服务发送。' : 'SMTP 配置已保存，邮件服务当前未启用。')
+      showNotice('邮箱与通知配置已保存。', 'success', 'SMTP 配置已更新')
+    } catch (error) {
+      setSmtpMessage(error instanceof Error ? error.message : 'SMTP 配置保存失败')
+    } finally {
+      setIsSavingSmtp(false)
+    }
+  }
+
+  const handleTestSmtp = async () => {
+    if (!smtpTestRecipient.trim()) {
+      setSmtpMessage('请输入测试收件邮箱')
+      return
+    }
+
+    setSmtpMessage('')
+    setIsTestingSmtp(true)
+    try {
+      const result = await testEmailService(smtpTestRecipient)
+      setSmtpMessage(result.message)
+      showNotice(result.message, 'success', '测试邮件已发送')
+    } catch (error) {
+      setSmtpMessage(error instanceof Error ? error.message : '测试邮件发送失败')
+    } finally {
+      setIsTestingSmtp(false)
     }
   }
 
@@ -1385,15 +1478,52 @@ export function AdminSystemSettings() {
                   icon={<Mail className="h-5 w-5" />}
                   title="SMTP 邮件服务"
                 >
-                  <SettingRow control={<TextField value="smtp.example.edu.cn" />} description="学校或组织提供的 SMTP 服务地址。生产环境建议使用专用发件账号。" title="SMTP 地址" />
-                  <SettingRow control={<TextField value="465" />} description="SSL 常用 465，TLS 常用 587，具体取决于学校邮件服务配置。" title="SMTP 端口" />
-                  <SettingRow control={<TextField value="security@example.edu.cn" />} description="平台验证码和通知邮件的发件邮箱。" title="发件邮箱" />
-                  <SettingRow control={<TextField value="" />} description="SMTP 认证用户名，通常与发件邮箱相同。" title="SMTP 用户名" />
-                  <SettingRow control={<TextField type="password" value="" />} description="SMTP 认证密码或授权码。正式配置时应写入环境变量，不要硬编码。" title="SMTP 密码" />
-                  <SettingRow control={<SelectInput label="" options={['SSL', 'TLS', '无']} value="SSL" />} description="建议使用 SSL 或 TLS，不建议明文发送认证信息。" title="加密方式" />
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <ActionButton disabled icon={<Mail className="h-4 w-4" />} label="发送测试邮件" />
-                    <span className="text-xs text-slate-400 dark:text-slate-500">本地测试阶段暂不启用邮件服务</span>
+                  <SettingRow
+                    control={<SettingToggle enabled={smtpEnabled} onChange={() => setSmtpEnabled((value) => !value)} />}
+                    description="启用后，登录、注册、修改邮箱和修改密码的邮箱验证码会通过当前 SMTP 服务真实发送。"
+                    title="启用邮件服务"
+                  />
+                  <SettingRow control={<TextField onChange={setSmtpHost} value={smtpHost} />} description="学校或组织提供的 SMTP 服务地址。生产环境建议使用专用发件账号。" title="SMTP 地址" />
+                  <SettingRow control={<TextField onChange={setSmtpPort} value={smtpPort} />} description="SSL 常用 465，STARTTLS 常用 587，具体取决于学校邮件服务配置。" title="SMTP 端口" />
+                  <SettingRow control={<TextField onChange={setSmtpFromName} value={smtpFromName} />} description="显示在邮件客户端中的发件人名称，建议使用平台正式名称或学校安全团队名称。" title="发件人名称" />
+                  <SettingRow control={<TextField onChange={setSmtpFromEmail} value={smtpFromEmail} />} description="平台验证码和通知邮件的发件邮箱。" title="发件邮箱" />
+                  <SettingRow control={<TextField onChange={setSmtpUsername} value={smtpUsername} />} description="SMTP 认证用户名，通常与发件邮箱相同，也可能是学校邮件系统分配的独立账号。" title="SMTP 用户名" />
+                  <SettingRow
+                    control={
+                      <div className="space-y-2">
+                        <TextField onChange={setSmtpPassword} type="password" value={smtpPassword} />
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          {smtpPasswordConfigured ? '已保存 SMTP 密码或授权码；留空保存时会继续沿用。' : '尚未保存 SMTP 密码或授权码。'}
+                        </p>
+                      </div>
+                    }
+                    description="SMTP 认证密码或授权码只提交到后端保存，接口不会回显明文。"
+                    title="SMTP 密码"
+                  />
+                  <SettingRow
+                    control={
+                      <SelectInput
+                        label=""
+                        onChange={(value) => setSmtpSecureMode(value as SmtpSecureMode)}
+                        options={smtpSecureModeOptions.map((value) => ({ label: smtpSecureModeLabels[value], value }))}
+                        value={smtpSecureMode}
+                      />
+                    }
+                    description="建议使用 SSL 或 STARTTLS，不建议明文发送认证信息。"
+                    title="加密方式"
+                  />
+                  <SettingRow control={<TextField onChange={setSmtpReplyTo} value={smtpReplyTo} />} description="可选。用户回复邮件时进入该邮箱；留空则使用发件邮箱。" title="回复邮箱" />
+                  <SettingRow control={<TextField onChange={setSmtpTestRecipient} value={smtpTestRecipient} />} description="保存配置后，可发送一封测试邮件确认 SMTP 服务、认证信息和发件人设置均可用。" title="测试收件邮箱" />
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+                    <div className="min-w-0 text-sm">
+                      <p className={smtpMessage && isErrorMessage(smtpMessage) ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}>
+                        {smtpMessage || (smtpEnabled ? '邮件服务已启用，请保存并发送测试邮件确认配置可用。' : '邮件服务当前未启用，验证码邮件不会发送。')}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <ActionButton disabled={isSavingSmtp} icon={<Save className="h-4 w-4" />} label={isSavingSmtp ? '保存中...' : '保存 SMTP 配置'} onClick={() => void handleSaveSmtp()} />
+                      <ActionButton disabled={isTestingSmtp || isSavingSmtp} icon={<Mail className="h-4 w-4" />} label={isTestingSmtp ? '发送中...' : '发送测试邮件'} onClick={() => void handleTestSmtp()} />
+                    </div>
                   </div>
                 </SettingsCard>
 
