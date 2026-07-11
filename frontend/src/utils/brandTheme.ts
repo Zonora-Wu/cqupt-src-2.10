@@ -189,9 +189,9 @@ export function applyBrandTheme(hexColor: string, overrides: BrandPaletteOverrid
   root.style.setProperty('--app-panel-muted-bg-dark', withAlpha(darkSurfaceMuted, 0.68))
   root.style.setProperty('--app-menu-bg-light', withAlpha(lightBg, 0.96))
   root.style.setProperty('--app-menu-bg-dark', withAlpha(darkBg, 0.96))
-  root.style.setProperty('--app-primary-scrollbar', withAlpha(primary, 0.55))
-  root.style.setProperty('--app-primary-scrollbar-thumb', withAlpha(primary, 0.45))
-  root.style.setProperty('--app-primary-scrollbar-thumb-hover', withAlpha(primary, 0.7))
+  root.style.setProperty('--app-primary-scrollbar', 'var(--app-border)')
+  root.style.setProperty('--app-primary-scrollbar-thumb', 'var(--app-border)')
+  root.style.setProperty('--app-primary-scrollbar-thumb-hover', 'var(--app-border)')
 }
 
 export function normalizeBrandPaletteOverrides(value: unknown): BrandPaletteOverrides {

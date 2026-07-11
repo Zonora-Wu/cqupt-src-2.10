@@ -129,7 +129,7 @@ export function AdminCertificateManagement() {
   const [level, setLevel] = useState('全部等级')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [sortKey, setSortKey] = useState<CertificateSortKey>(defaultSort.key)
+  const [sortKey, setSortKey] = useState<CertificateSortKey | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSort.direction)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -179,18 +179,19 @@ export function AdminCertificateManagement() {
   }, [items, keyword, level, status])
 
   const sortedCertificates = useMemo(() => {
-    return [...filteredCertificates].sort((a, b) => compareCertificateItems(a, b, sortKey, sortDirection))
+    return [...filteredCertificates].sort((a, b) => compareCertificateItems(a, b, sortKey ?? defaultSort.key, sortKey ? sortDirection : defaultSort.direction))
   }, [filteredCertificates, sortDirection, sortKey])
 
   const changeSort = (nextKey: CertificateSortKey) => {
-    setSortKey((currentKey) => {
-      if (currentKey !== nextKey) {
-        setSortDirection(getDefaultSortDirection(nextKey))
-        return nextKey
-      }
-      setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
-      return currentKey
-    })
+    if (sortKey !== nextKey) {
+      setSortKey(nextKey)
+      setSortDirection('asc')
+    } else if (sortDirection === 'asc') {
+      setSortDirection('desc')
+    } else {
+      setSortKey(null)
+      setSortDirection(defaultSort.direction)
+    }
     setPage(1)
   }
 
@@ -590,10 +591,6 @@ function formatCompactDate(value: string | null) {
   if (Number.isNaN(date.getTime())) return value
 
   return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function getDefaultSortDirection(key: CertificateSortKey): SortDirection {
-  return key === 'issueDate' || key === 'publicVerify' || key === 'status' ? 'desc' : 'asc'
 }
 
 function compareCertificateItems(

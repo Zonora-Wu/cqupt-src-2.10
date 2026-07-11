@@ -1,7 +1,10 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUpDown,
   Bot,
+  ChevronDown,
+  ChevronUp,
   FileSignature,
   Filter,
   KeyRound,
@@ -9,13 +12,12 @@ import {
   ShieldCheck,
   UserCog,
   UserRound,
-  UsersRound,
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -41,6 +43,46 @@ type ConfirmAction = {
 const roleOptions = ['全部角色', '学生用户', '审核员', '管理员']
 const accountStatusOptions = ['全部状态', '正常', '待准入', '已禁用', '已锁定']
 const accessStatusOptions = ['全部准入', '未答题', '答题通过', '已签责任书', '未通过']
+const defaultPageSize = 10
+type UserSortKey = 'accessStatus' | 'aiRemaining' | 'college' | 'lastLogin' | 'points' | 'role' | 'status' | 'submissions' | 'user'
+type SortDirection = 'asc' | 'desc'
+
+const defaultSort: { direction: SortDirection; key: UserSortKey } = {
+  direction: 'desc',
+  key: 'lastLogin',
+}
+
+const userSortColumns: Array<{ className?: string; key: UserSortKey; label: string }> = [
+  { key: 'user', label: '用户 / 统一码' },
+  { className: 'hidden xl:flex', key: 'role', label: '角色' },
+  { className: 'hidden xl:flex', key: 'status', label: '账号状态' },
+  { className: 'hidden xl:flex', key: 'accessStatus', label: '准入状态' },
+  { className: 'hidden xl:flex', key: 'college', label: '学院 / 单位' },
+  { className: 'hidden 2xl:flex', key: 'submissions', label: '提交 / 有效' },
+  { className: 'hidden 2xl:flex', key: 'points', label: '积分' },
+  { className: 'hidden 2xl:flex', key: 'aiRemaining', label: 'AI 剩余' },
+  { className: 'hidden xl:flex', key: 'lastLogin', label: '最近登录' },
+]
+
+const roleRank: Record<RoleCode, number> = {
+  ADMIN: 3,
+  AUDITOR: 2,
+  STUDENT: 1,
+}
+
+const accountStatusRank: Record<string, number> = {
+  正常: 4,
+  待准入: 3,
+  已锁定: 2,
+  已禁用: 1,
+}
+
+const accessStatusRank: Record<string, number> = {
+  已签责任书: 4,
+  答题通过: 3,
+  未答题: 2,
+  未通过: 1,
+}
 
 const roleClassMap: Record<RoleCode, string> = {
   ADMIN: 'border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300',
@@ -68,6 +110,92 @@ const aiQuotaPeriodLabels: Record<'DAY' | 'WEEK' | 'MONTH', string> = {
   WEEK: '周额度',
 }
 
+function LedgerCell({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{label}</p>
+      <p className={`mt-1 truncate text-sm ${strong ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+        {value || '—'}
+      </p>
+    </div>
+  )
+}
+
+function SortHeaderButton({
+  active,
+  className = '',
+  direction,
+  label,
+  onClick,
+}: {
+  active: boolean
+  className?: string
+  direction: SortDirection
+  label: string
+  onClick: () => void
+}) {
+  const Icon = active ? direction === 'asc' ? ChevronUp : ChevronDown : ArrowUpDown
+  return (
+    <button
+      className={`group -ml-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-left transition hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200 ${className}`}
+      onClick={onClick}
+      title={`按${label}排序`}
+      type="button"
+    >
+      <span className="truncate">{label}</span>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-brand-700 dark:text-brand-300' : 'opacity-45 group-hover:opacity-80'}`} />
+    </button>
+  )
+}
+
+function compareUsers(a: ManagedUserItem, b: ManagedUserItem, key: UserSortKey, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  const result = compareUserValue(a, b, key)
+  if (result !== 0) return result * modifier
+  return compareTimeValue(b.updatedAt, a.updatedAt) || compareTextValue(a.unifiedCode, b.unifiedCode)
+}
+
+function compareUserValue(a: ManagedUserItem, b: ManagedUserItem, key: UserSortKey) {
+  switch (key) {
+    case 'accessStatus':
+      return (accessStatusRank[a.accessStatus] ?? 0) - (accessStatusRank[b.accessStatus] ?? 0)
+    case 'aiRemaining':
+      return a.aiQuota.remaining - b.aiQuota.remaining
+    case 'college':
+      return compareTextValue(a.college, b.college)
+    case 'lastLogin':
+      return compareTimeValue(a.lastLogin, b.lastLogin)
+    case 'points':
+      return a.points - b.points
+    case 'role':
+      return roleRank[a.role] - roleRank[b.role]
+    case 'status':
+      return (accountStatusRank[a.accountStatus] ?? 0) - (accountStatusRank[b.accountStatus] ?? 0)
+    case 'submissions':
+      return a.submissions - b.submissions || a.validReports - b.validReports
+    case 'user':
+      return compareTextValue(`${a.name} ${a.unifiedCode}`, `${b.name} ${b.unifiedCode}`)
+  }
+}
+
+function compareTextValue(a: string, b: string) {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  return a.localeCompare(b, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+}
+
+function compareTimeValue(a: string | null | undefined, b: string | null | undefined) {
+  const left = a ? new Date(a).getTime() : Number.NaN
+  const right = b ? new Date(b).getTime() : Number.NaN
+  const leftValid = Number.isFinite(left)
+  const rightValid = Number.isFinite(right)
+  if (!leftValid && !rightValid) return 0
+  if (!leftValid) return 1
+  if (!rightValid) return -1
+  return left - right
+}
+
 export function AdminUserManagement() {
   const [users, setUsers] = useState<ManagedUserItem[]>([])
   const [options, setOptions] = useState<UserManagementOptions | null>(null)
@@ -76,6 +204,10 @@ export function AdminUserManagement() {
   const [accountStatus, setAccountStatus] = useState('全部状态')
   const [accessStatus, setAccessStatus] = useState('全部准入')
   const [college, setCollege] = useState('全部单位')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
+  const [sortKey, setSortKey] = useState<UserSortKey | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSort.direction)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<ManagedUserDetail | null>(null)
   const [roleUser, setRoleUser] = useState<ManagedUserItem | ManagedUserDetail | null>(null)
@@ -116,7 +248,13 @@ export function AdminUserManagement() {
   }
 
   useEffect(() => {
-    void loadUsers()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadUsers()
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   const collegeOptions = useMemo(() => ['全部单位', ...(options?.colleges ?? [])], [options])
@@ -148,6 +286,40 @@ export function AdminUserManagement() {
       return matchesKeyword && matchesRole && matchesStatus && matchesAccess && matchesCollege
     })
   }, [accountStatus, accessStatus, college, keyword, role, users])
+
+  const sortedUsers = useMemo(() => {
+    return [...filteredUsers].sort((a, b) => compareUsers(a, b, sortKey ?? defaultSort.key, sortKey ? sortDirection : defaultSort.direction))
+  }, [filteredUsers, sortDirection, sortKey])
+
+  const changeSort = (nextKey: UserSortKey) => {
+    if (sortKey !== nextKey) {
+      setSortKey(nextKey)
+      setSortDirection('asc')
+    } else if (sortDirection === 'asc') {
+      setSortDirection('desc')
+    } else {
+      setSortKey(null)
+      setSortDirection(defaultSort.direction)
+    }
+    setPage(1)
+  }
+
+  useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setPage(1)
+    })
+    return () => {
+      active = false
+    }
+  }, [accountStatus, accessStatus, college, keyword, pageSize, role])
+
+  const totalPages = Math.max(1, Math.ceil(sortedUsers.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedUsers = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return sortedUsers.slice(start, start + pageSize)
+  }, [pageSize, safePage, sortedUsers])
 
   function flashMessage(nextMessage: string) {
     setError('')
@@ -471,7 +643,6 @@ export function AdminUserManagement() {
       <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
-            eyebrowIcon={<UsersRound className="h-3.5 w-3.5" />}
             title="用户管理"
             description="管理学生、审核员和管理员账号，处理准入状态、责任书、角色权限与账号安全。"
           />
@@ -514,85 +685,100 @@ export function AdminUserManagement() {
         {loading && <SurfacePanel className="mt-6 p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载用户列表...</SurfacePanel>}
 
         {!loading && (
-          <div className="mt-5 grid gap-3">
-            {filteredUsers.map((item) => (
-              <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
-                  <div className="flex gap-3">
-                    <ManagedUserAvatar user={item} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-semibold tracking-tight">{item.name}</h2>
-                        <RoleBadge user={item} />
-                        <SimpleBadge className={statusClassMap[item.accountStatus]}>{item.accountStatus}</SimpleBadge>
-                        <SimpleBadge className={accessClassMap[item.accessStatus]}>{item.accessStatus}</SimpleBadge>
-                      </div>
-                      <div className="mt-2 grid gap-x-5 gap-y-1 text-sm text-slate-500 sm:grid-cols-2 xl:grid-cols-4 dark:text-slate-400">
-                        <p>统一认证码：{item.unifiedCode}</p>
-                        <p>邮箱：{item.email}</p>
-                        <p>学院 / 单位：{item.college || '未填写'}</p>
-                        <p>学号：{item.studentNo || '未填写'}</p>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                        <span>提交 {item.submissions}</span>
-                        <span>有效 {item.validReports}</span>
-                        <span>积分 {item.points}</span>
-                        <span>AI 剩余 {formatNumber(item.aiQuota.remaining)}</span>
-                        <span>证书 {item.certificates}</span>
-                        <span>最近登录 {formatDateTime(item.lastLogin)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 ">
-                    <div className="grid gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                      <p>邮箱：{item.emailVerified ? '已验证' : '未验证'}</p>
-                      <p>责任书：{item.responsibilitySigned ? '已签署' : '未签署'}</p>
-                      <p>最近 IP：{item.lastIp || '暂无记录'}</p>
-                    </div>
-                  </div>
-                </div>
+          <SurfacePanel className="mt-6 overflow-hidden p-0">
+            <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">
+              <div>
+                <h2 className="text-sm font-semibold">用户台账</h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {filteredUsers.length} 条，按当前筛选条件展示</p>
+              </div>
+              <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">
+                数据视图
+              </span>
+            </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-3 dark:border-white/10">
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <ShieldCheck className="h-4 w-4" />
-                    角色、状态、密码重置操作会写入审计日志
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {item.role !== 'ADMIN' && (
-                      <button
-                        className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                        onClick={() => setRoleUser(item)}
-                        type="button"
-                      >
-                        调整角色
-                      </button>
-                    )}
-                    <button
-                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                      onClick={() => setResetPasswordTarget(item)}
-                      type="button"
-                    >
-                      重置密码
-                    </button>
-                    <button
-                      className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                      onClick={() => setAiQuotaTarget(item)}
-                      type="button"
-                    >
-                      AI 额度
-                    </button>
-                    <button className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700" onClick={() => void loadDetail(item.id)} type="button">
-                      查看详情
-                    </button>
+            <div className="grid grid-cols-[230px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[230px_92px_92px_100px_minmax(0,1fr)_108px_64px] 2xl:grid-cols-[230px_92px_92px_100px_minmax(0,1fr)_98px_80px_96px_112px_64px]">
+              {userSortColumns.map((column) => (
+                <SortHeaderButton
+                  active={sortKey === column.key}
+                  className={column.className}
+                  direction={sortDirection}
+                  key={column.key}
+                  label={column.label}
+                  onClick={() => changeSort(column.key)}
+                />
+              ))}
+              <span className="text-right">操作</span>
+            </div>
+
+            {paginatedUsers.map((item) => (
+              <div
+                className="grid grid-cols-[230px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[230px_92px_92px_100px_minmax(0,1fr)_108px_64px] 2xl:grid-cols-[230px_92px_92px_100px_minmax(0,1fr)_98px_80px_96px_112px_64px]"
+                key={item.id}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <ManagedUserAvatar user={item} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{item.name}</p>
+                    <p className="mt-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400">{item.unifiedCode}</p>
                   </div>
                 </div>
-              </SurfacePanel>
+                <div className="hidden min-w-0 xl:block">
+                  <RoleBadge user={item} />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <SimpleBadge className={statusClassMap[item.accountStatus]}>{item.accountStatus}</SimpleBadge>
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <SimpleBadge className={accessClassMap[item.accessStatus]}>{item.accessStatus}</SimpleBadge>
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="单位" value={item.college || '未填写'} strong />
+                </div>
+                <div className="hidden min-w-0 2xl:block">
+                  <LedgerCell label="漏洞" value={`${item.submissions} / ${item.validReports}`} />
+                </div>
+                <div className="hidden min-w-0 2xl:block">
+                  <LedgerCell label="积分" value={formatNumber(item.points)} />
+                </div>
+                <div className="hidden min-w-0 2xl:block">
+                  <LedgerCell label="AI" value={formatNumber(item.aiQuota.remaining)} />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  <LedgerCell label="登录" value={formatDateTime(item.lastLogin)} />
+                </div>
+                <div className="flex items-center justify-end">
+                  <button
+                    className="rounded-md bg-brand-600 px-2.5 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700"
+                    onClick={() => void loadDetail(item.id)}
+                    type="button"
+                  >
+                    详情
+                  </button>
+                </div>
+              </div>
             ))}
-          </div>
-        )}
 
-        {!loading && filteredUsers.length === 0 && (
-          <EmptyState icon={<AlertTriangle className="h-10 w-10" />} title="没有匹配的用户" description="调整关键词、角色、状态或学院后再试一次。" />
+            {filteredUsers.length === 0 && (
+              <div className="p-10 text-center">
+                <AlertTriangle className="mx-auto h-10 w-10 text-slate-400" />
+                <h2 className="mt-4 text-xl font-semibold">没有匹配的用户</h2>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词、角色、状态或学院后再试一次。</p>
+              </div>
+            )}
+
+            {filteredUsers.length > 0 && (
+              <PaginationBar
+                onPageChange={setPage}
+                onPageSizeChange={(nextPageSize) => {
+                  setPageSize(nextPageSize)
+                  setPage(1)
+                }}
+                page={safePage}
+                pageSize={pageSize}
+                total={filteredUsers.length}
+              />
+            )}
+          </SurfacePanel>
         )}
       </section>
 
@@ -715,7 +901,15 @@ function RoleModal({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (user) setNextRole(user.role)
+    let active = true
+    if (user) {
+      queueMicrotask(() => {
+        if (active) setNextRole(user.role)
+      })
+    }
+    return () => {
+      active = false
+    }
   }, [user])
 
   if (!user) return null
@@ -829,9 +1023,16 @@ function ResetPasswordDialog({
   const [validationError, setValidationError] = useState('')
 
   useEffect(() => {
+    let active = true
     if (user) {
-      setPassword(`tmp${user.unifiedCode}`)
-      setValidationError('')
+      queueMicrotask(() => {
+        if (!active) return
+        setPassword(`tmp${user.unifiedCode}`)
+        setValidationError('')
+      })
+    }
+    return () => {
+      active = false
     }
   }, [user])
 
@@ -919,13 +1120,20 @@ function AiQuotaDialog({
   const [validationError, setValidationError] = useState('')
 
   useEffect(() => {
+    let active = true
     if (user) {
-      const monthly = normalizeQuotaInputValue(user.aiQuota.monthlyLimit)
-      setDailyLimit(normalizeQuotaInputValue(user.aiQuota.dailyLimit, monthly))
-      setWeeklyLimit(normalizeQuotaInputValue(user.aiQuota.weeklyLimit, monthly))
-      setMonthlyLimit(monthly)
-      setEnabled(user.aiQuota.enabled)
-      setValidationError('')
+      queueMicrotask(() => {
+        if (!active) return
+        const monthly = normalizeQuotaInputValue(user.aiQuota.monthlyLimit)
+        setDailyLimit(normalizeQuotaInputValue(user.aiQuota.dailyLimit, monthly))
+        setWeeklyLimit(normalizeQuotaInputValue(user.aiQuota.weeklyLimit, monthly))
+        setMonthlyLimit(monthly)
+        setEnabled(user.aiQuota.enabled)
+        setValidationError('')
+      })
+    }
+    return () => {
+      active = false
     }
   }, [user])
 

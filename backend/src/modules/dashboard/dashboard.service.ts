@@ -1,13 +1,27 @@
 import { Inject, Injectable } from '@nestjs/common'
 import {
+  AiCallPurpose,
+  AiSpace,
+  AnnouncementStatus,
+  AuditAction,
   CertificateStatus,
+  LearningResourceKind,
+  MallProductStatus,
   MallRedemptionStatus,
+  Prisma,
   RoleCode,
   UserStatus,
+  VulnerabilitySeverity,
   VulnerabilityStatus,
 } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
+import { getAuditRiskLevel, mapAuditLogItem } from '../audit-logs/audit-log-mapper'
 import { PrismaService } from '../prisma/prisma.service'
+
+const ADMIN_DASHBOARD_AI_SETTING_KEY = 'admin_dashboard_ai_insight'
+const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
+const DEFAULT_OPENAI_MODEL = 'hermes-agent'
+const DEFAULT_OPENAI_TIMEOUT_MS = 120_000
 
 // ---- 用户仪表盘 ----
 export type UserDashboardStats = {
@@ -19,28 +33,117 @@ export type UserDashboardStats = {
 
 // ---- 审核员仪表盘 ----
 export type AuditorDashboardStats = {
-  pendingArchive: number      // CONFIRMED + FIXING = 可推入复测
-  pendingCerts: number        // 已归档但未签发证书
-  pendingInitReview: number   // SUBMITTED + PENDING_REVIEW
-  pendingRetest: number       // PENDING_RETEST
+  pendingArchive: number
+  pendingCerts: number
+  pendingInitReview: number
+  pendingRetest: number
 }
 
-// ---- 管理员仪表盘 ----
+export type AdminDashboardAiInsight = {
+  actions: Array<{
+    label: string
+    owner: string
+    priority: 'high' | 'medium' | 'low'
+  }>
+  findings: string[]
+  generatedAt: string
+  model: string
+  recommendations: string[]
+  riskLevel: 'high' | 'medium' | 'low'
+  source: 'hermes' | 'heuristic'
+  status: 'fresh' | 'degraded'
+  summary: string
+}
+
 export type AdminDashboardStats = {
-  pendingAccessUsers: number  // PENDING 状态用户数
+  activityTrend: Array<{
+    aiCalls: number
+    date: string
+    learning: number
+    logins: number
+    vulnerabilities: number
+  }>
+  aiInsight: AdminDashboardAiInsight
+  operations: Array<{
+    count: number
+    label: string
+    route: string
+    severity: 'high' | 'medium' | 'low'
+    title: string
+  }>
+  overview: {
+    aiCalls: number
+    auditToday: number
+    completedRedemptions: number
+    highRiskAudit: number
+    highRiskVulnerabilities: number
+    issuedCerts: number
+    newUsers: number
+    pendingAccessUsers: number
+    pendingCerts: number
+    pendingRedemptions: number
+    pendingRetest: number
+    pendingVulnerabilities: number
+    totalActiveUsers: number
+    totalVulnerabilities: number
+  }
+  pendingAccessUsers: number
   pendingCerts: number
-  pendingRedemptions: number  // 待领取兑换单
+  pendingRedemptions: number
   pendingVulnerabilities: number
+  period: {
+    end: string
+    key: '7d'
+    label: string
+    start: string
+  }
+  platform: {
+    activeAnnouncements: number
+    activeLearningResources: number
+    activeMallProducts: number
+    learningRanges: number
+  }
+  recentVulnerabilities: Array<{
+    assetName: string
+    id: string
+    ownerUnit: string | null
+    reportNo: string
+    reviewerName: string | null
+    severity: string
+    status: string
+    submittedAt: string | null
+    submitterName: string
+    title: string
+    updatedAt: string
+  }>
+  recentAuditLogs: ReturnType<typeof mapAuditLogItem>[]
+  severityDistribution: Array<{
+    count: number
+    label: string
+    level: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  }>
   totalActiveUsers: number
   totalVulnerabilities: number
+  vulnerabilityFlow: Array<{
+    count: number
+    label: string
+    status: string
+  }>
 }
+
+export type RequestMeta = {
+  ipAddress?: string
+  userAgent?: string
+}
+
+type DashboardSnapshot = Awaited<ReturnType<DashboardService['buildAdminDashboardSnapshot']>>
 
 @Injectable()
 export class DashboardService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getUserDashboard(user: AuthenticatedRequestUser): Promise<UserDashboardStats> {
-    const [submitCount, confirmedCount, pointSummary, certCount] = await Promise.all([
+    const [submitCount, confirmedCount, certCount] = await Promise.all([
       this.prisma.vulnerabilityReport.count({
         where: {
           deletedAt: null,
@@ -63,10 +166,6 @@ export class DashboardService {
           },
         },
       }),
-      this.prisma.pointLedgerEntry.aggregate({
-        where: { userId: user.id },
-        _max: { balanceAfter: true },
-      }),
       this.prisma.certificate.count({
         where: {
           recipientId: user.id,
@@ -75,7 +174,6 @@ export class DashboardService {
       }),
     ])
 
-    // 当前余额 = 最新条目的 balanceAfter
     const latestEntry = await this.prisma.pointLedgerEntry.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
@@ -114,7 +212,6 @@ export class DashboardService {
           },
         },
       }),
-      // 已归档但尚无已签发证书
       this.prisma.vulnerabilityReport.count({
         where: {
           deletedAt: null,
@@ -135,13 +232,122 @@ export class DashboardService {
   }
 
   async getAdminDashboard(): Promise<AdminDashboardStats> {
+    const snapshot = await this.buildAdminDashboardSnapshot()
+    const aiInsight = await this.getStoredAiInsight(snapshot)
+    return this.toAdminDashboardStats(snapshot, aiInsight)
+  }
+
+  async refreshAdminDashboardAiInsight(
+    user: AuthenticatedRequestUser,
+    meta: RequestMeta = {},
+  ): Promise<AdminDashboardAiInsight> {
+    const snapshot = await this.buildAdminDashboardSnapshot()
+    const model = getOpenAiModel()
+    const startedAt = Date.now()
+    let insight: AdminDashboardAiInsight
+    let result = 'success'
+
+    try {
+      insight = await this.requestHermesDashboardInsight(snapshot)
+    } catch (error) {
+      result = 'degraded'
+      insight = buildFallbackInsight(snapshot, getErrorMessage(error))
+    }
+
+    await Promise.all([
+      this.prisma.systemSetting.upsert({
+        create: {
+          description: '管理员首页 Hermes 平台分析结果',
+          key: ADMIN_DASHBOARD_AI_SETTING_KEY,
+          updatedById: user.id,
+          value: insight as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          updatedById: user.id,
+          value: insight as unknown as Prisma.InputJsonValue,
+        },
+        where: { key: ADMIN_DASHBOARD_AI_SETTING_KEY },
+      }),
+      this.prisma.aiCallLog.create({
+        data: {
+          aiSpace: AiSpace.ADMIN,
+          ipAddress: meta.ipAddress,
+          modelName: model,
+          outputSummary: insight.summary.slice(0, 1000),
+          purpose: AiCallPurpose.AUDIT_ANALYSIS,
+          requiresHumanConfirm: false,
+          sanitizedInputSummary: JSON.stringify({
+            auditToday: snapshot.overview.auditToday,
+            highRiskAudit: snapshot.overview.highRiskAudit,
+            highRiskVulnerabilities: snapshot.overview.highRiskVulnerabilities,
+            pendingVulnerabilities: snapshot.overview.pendingVulnerabilities,
+            period: snapshot.period,
+          }).slice(0, 2000),
+          tokensUsed: null,
+          userAgent: meta.userAgent,
+          userId: user.id,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          action: AuditAction.CALL_AI,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            durationMs: Date.now() - startedAt,
+            model,
+            source: insight.source,
+          },
+          requestPath: '/dashboard/admin/ai-insight/run',
+          result,
+          targetId: ADMIN_DASHBOARD_AI_SETTING_KEY,
+          targetType: 'DASHBOARD_AI_INSIGHT',
+          userAgent: meta.userAgent,
+        },
+      }),
+    ])
+
+    return insight
+  }
+
+  private async buildAdminDashboardSnapshot() {
+    const now = new Date()
+    const periodStart = startOfDay(addDays(now, -6))
+    const todayStart = startOfDay(now)
+    const period = {
+      end: now.toISOString(),
+      key: '7d' as const,
+      label: '近 7 天',
+      start: periodStart.toISOString(),
+    }
+
+    const recentAuditQuery = this.prisma.auditLog.findMany({
+      include: { actor: { include: { role: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+    })
+
     const [
       pendingVulnerabilities,
       pendingCerts,
       pendingAccessUsers,
       totalActiveUsers,
+      newUsers,
       totalVulnerabilities,
+      pendingRetest,
+      issuedCerts,
       pendingRedemptions,
+      completedRedemptions,
+      auditToday,
+      aiCalls,
+      activeAnnouncements,
+      activeLearningResources,
+      learningRanges,
+      activeMallProducts,
+      recentVulnerabilities,
+      recentAuditLogs,
+      auditLogsForRisk,
+      vulnerabilitiesForSeverity,
     ] = await Promise.all([
       this.prisma.vulnerabilityReport.count({
         where: {
@@ -158,23 +364,523 @@ export class DashboardService {
         where: { status: UserStatus.PENDING, role: { code: RoleCode.STUDENT } },
       }),
       this.prisma.user.count({
-        where: { status: UserStatus.ACTIVE },
+        where: { deletedAt: null, status: UserStatus.ACTIVE },
+      }),
+      this.prisma.user.count({
+        where: { createdAt: { gte: periodStart }, deletedAt: null },
       }),
       this.prisma.vulnerabilityReport.count({
         where: { deletedAt: null },
       }),
+      this.prisma.vulnerabilityReport.count({
+        where: { deletedAt: null, status: VulnerabilityStatus.PENDING_RETEST },
+      }),
+      this.prisma.certificate.count({
+        where: { status: CertificateStatus.ISSUED },
+      }),
       this.prisma.mallRedemption.count({
         where: { status: MallRedemptionStatus.PENDING_PICKUP },
       }),
+      this.prisma.mallRedemption.count({
+        where: { completedAt: { gte: periodStart }, status: MallRedemptionStatus.COMPLETED },
+      }),
+      this.prisma.auditLog.count({
+        where: { createdAt: { gte: todayStart } },
+      }),
+      this.prisma.aiCallLog.count({
+        where: { createdAt: { gte: periodStart } },
+      }),
+      this.prisma.announcement.count({
+        where: { deletedAt: null, status: AnnouncementStatus.PUBLISHED },
+      }),
+      this.prisma.learningResource.count({
+        where: { active: true, deletedAt: null, kind: LearningResourceKind.RESOURCE },
+      }),
+      this.prisma.learningResource.count({
+        where: { active: true, deletedAt: null, kind: LearningResourceKind.RANGE },
+      }),
+      this.prisma.mallProduct.count({
+        where: { deletedAt: null, status: MallProductStatus.ACTIVE },
+      }),
+      this.prisma.vulnerabilityReport.findMany({
+        include: {
+          assignment: { select: { auditor: { select: { name: true } } } },
+          submitter: { select: { name: true } },
+        },
+        orderBy: [{ submittedAt: 'desc' }, { updatedAt: 'desc' }],
+        take: 10,
+        where: {
+          deletedAt: null,
+          status: { not: VulnerabilityStatus.DRAFT },
+          submittedAt: { not: null },
+        },
+      }),
+      recentAuditQuery,
+      this.prisma.auditLog.findMany({
+        select: { action: true, result: true },
+        where: { createdAt: { gte: periodStart } },
+      }),
+      this.prisma.vulnerabilityReport.findMany({
+        select: { finalSeverity: true, selfSeverity: true },
+        where: { deletedAt: null },
+      }),
     ])
 
-    return {
+    const [vulnerabilityFlow, activityTrend] = await Promise.all([
+      this.buildVulnerabilityFlow(),
+      this.buildActivityTrend(periodStart, now),
+    ])
+
+    const mappedRecentAuditLogs = recentAuditLogs.map(mapAuditLogItem)
+    const highRiskAudit = auditLogsForRisk.filter((log) => getAuditRiskLevel(log.action, log.result) === 'HIGH').length
+    const severityDistribution = buildSeverityDistribution(vulnerabilitiesForSeverity)
+    const highRiskVulnerabilities = severityDistribution
+      .filter((item) => item.level === 'critical' || item.level === 'high')
+      .reduce((sum, item) => sum + item.count, 0)
+
+    const overview = {
+      aiCalls,
+      auditToday,
+      completedRedemptions,
+      highRiskAudit,
+      highRiskVulnerabilities,
+      issuedCerts,
+      newUsers,
       pendingAccessUsers,
       pendingCerts,
       pendingRedemptions,
+      pendingRetest,
       pendingVulnerabilities,
       totalActiveUsers,
       totalVulnerabilities,
     }
+
+    return {
+      activityTrend,
+      overview,
+      period,
+      platform: {
+        activeAnnouncements,
+        activeLearningResources,
+        activeMallProducts,
+        learningRanges,
+      },
+      recentVulnerabilities: recentVulnerabilities.map((report) => ({
+        assetName: report.assetName,
+        id: report.id,
+        ownerUnit: report.ownerUnit,
+        reportNo: report.reportNo,
+        reviewerName: report.assignment?.auditor.name ?? null,
+        severity: formatSeverityLabel(report.finalSeverity ?? report.selfSeverity),
+        status: formatVulnerabilityStatusLabel(report.status),
+        submittedAt: report.submittedAt?.toISOString() ?? null,
+        submitterName: report.submitter.name,
+        title: report.title,
+        updatedAt: report.updatedAt.toISOString(),
+      })),
+      recentAuditLogs: mappedRecentAuditLogs,
+      severityDistribution,
+      vulnerabilityFlow,
+    }
   }
+
+  private async buildVulnerabilityFlow() {
+    const statuses: Array<{ label: string; status: VulnerabilityStatus }> = [
+      { label: '已提交', status: VulnerabilityStatus.SUBMITTED },
+      { label: '审核中', status: VulnerabilityStatus.PENDING_REVIEW },
+      { label: '需补充', status: VulnerabilityStatus.NEEDS_SUPPLEMENT },
+      { label: '已确认', status: VulnerabilityStatus.CONFIRMED },
+      { label: '修复中', status: VulnerabilityStatus.FIXING },
+      { label: '待复测', status: VulnerabilityStatus.PENDING_RETEST },
+      { label: '已归档', status: VulnerabilityStatus.ARCHIVED },
+      { label: '已发证', status: VulnerabilityStatus.CERTIFIED },
+      { label: '已驳回', status: VulnerabilityStatus.REJECTED },
+    ]
+
+    const counts = await Promise.all(
+      statuses.map((item) =>
+        this.prisma.vulnerabilityReport.count({
+          where: { deletedAt: null, status: item.status },
+        }),
+      ),
+    )
+
+    return statuses.map((item, index) => ({
+      count: counts[index] ?? 0,
+      label: item.label,
+      status: item.status,
+    }))
+  }
+
+  private async buildActivityTrend(periodStart: Date, now: Date) {
+    const days = Array.from({ length: 7 }, (_, index) => startOfDay(addDays(periodStart, index)))
+
+    return Promise.all(
+      days.map(async (dayStart) => {
+        const dayEnd = addDays(dayStart, 1)
+        const [logins, vulnerabilities, learning, aiCalls] = await Promise.all([
+          this.prisma.auditLog.count({
+            where: { action: AuditAction.LOGIN, createdAt: { gte: dayStart, lt: dayEnd } },
+          }),
+          this.prisma.vulnerabilityReport.count({
+            where: {
+              deletedAt: null,
+              submittedAt: { gte: dayStart, lt: dayEnd },
+            },
+          }),
+          this.prisma.auditLog.count({
+            where: {
+              action: AuditAction.MANAGE_LEARNING_RESOURCE,
+              createdAt: { gte: dayStart, lt: dayEnd },
+            },
+          }),
+          this.prisma.aiCallLog.count({
+            where: { createdAt: { gte: dayStart, lt: dayEnd } },
+          }),
+        ])
+
+        return {
+          aiCalls,
+          date: formatDate(dayStart),
+          learning,
+          logins,
+          vulnerabilities,
+        }
+      }),
+    )
+  }
+
+  private async getStoredAiInsight(snapshot: DashboardSnapshot) {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: ADMIN_DASHBOARD_AI_SETTING_KEY },
+    })
+
+    return normalizeInsight(setting?.value, snapshot) ?? buildFallbackInsight(snapshot)
+  }
+
+  private toAdminDashboardStats(
+    snapshot: DashboardSnapshot,
+    aiInsight: AdminDashboardAiInsight,
+  ): AdminDashboardStats {
+    const operations = [
+      {
+        count: snapshot.overview.pendingVulnerabilities,
+        label: '待初审 / 待审核',
+        route: '/admin/vulnerabilities',
+        severity: snapshot.overview.pendingVulnerabilities > 0 ? ('high' as const) : ('low' as const),
+        title: '漏洞审核积压',
+      },
+      {
+        count: snapshot.overview.pendingRetest,
+        label: '等待复测确认',
+        route: '/admin/vulnerabilities',
+        severity: snapshot.overview.pendingRetest > 0 ? ('medium' as const) : ('low' as const),
+        title: '修复复测队列',
+      },
+      {
+        count: snapshot.overview.pendingCerts,
+        label: '证书待签发',
+        route: '/admin/certificates',
+        severity: snapshot.overview.pendingCerts > 0 ? ('medium' as const) : ('low' as const),
+        title: '证书签发',
+      },
+      {
+        count: snapshot.overview.pendingAccessUsers,
+        label: '用户待准入',
+        route: '/admin/users',
+        severity: snapshot.overview.pendingAccessUsers > 0 ? ('medium' as const) : ('low' as const),
+        title: '用户准入',
+      },
+      {
+        count: snapshot.overview.pendingRedemptions,
+        label: '积分兑换待领取',
+        route: '/admin/mall',
+        severity: snapshot.overview.pendingRedemptions > 0 ? ('medium' as const) : ('low' as const),
+        title: '积分商城履约',
+      },
+      {
+        count: snapshot.overview.highRiskAudit,
+        label: '最近高风险操作',
+        route: '/admin/audit-logs',
+        severity: snapshot.overview.highRiskAudit > 0 ? ('high' as const) : ('low' as const),
+        title: '审计风险',
+      },
+    ]
+
+    return {
+      ...snapshot,
+      aiInsight,
+      operations,
+      pendingAccessUsers: snapshot.overview.pendingAccessUsers,
+      pendingCerts: snapshot.overview.pendingCerts,
+      pendingRedemptions: snapshot.overview.pendingRedemptions,
+      pendingVulnerabilities: snapshot.overview.pendingVulnerabilities,
+      totalActiveUsers: snapshot.overview.totalActiveUsers,
+      totalVulnerabilities: snapshot.overview.totalVulnerabilities,
+    }
+  }
+
+  private async requestHermesDashboardInsight(snapshot: DashboardSnapshot) {
+    const apiKey = getOpenAiApiKey()
+    if (!apiKey) {
+      throw new Error('Hermes API key not configured')
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), getRequestTimeoutMs())
+    const response = await fetch(new URL('chat/completions', getOpenAiBaseUrl()), {
+      body: JSON.stringify({
+        messages: [
+          {
+            content:
+              '你是高校 SRC 平台的后台运营分析助手。只返回严格 JSON，不要 Markdown。字段：summary,riskLevel,findings,recommendations,actions。riskLevel 为 high/medium/low。actions 数组元素含 label,owner,priority。',
+            role: 'system',
+          },
+          {
+            content: JSON.stringify(toAiSnapshot(snapshot)),
+            role: 'user',
+          },
+        ],
+        model: getOpenAiModel(),
+        temperature: 0.2,
+      }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+
+    if (!response.ok) {
+      throw new Error(`Hermes request failed: ${response.status}`)
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>
+      model?: string
+    }
+    const content = payload.choices?.[0]?.message?.content ?? ''
+    return normalizeInsight(parseJsonObject(content), snapshot, payload.model ?? getOpenAiModel(), 'hermes')
+      ?? buildFallbackInsight(snapshot, 'Hermes 返回内容无法解析')
+  }
+}
+
+function buildSeverityDistribution(
+  reports: Array<{ finalSeverity: VulnerabilitySeverity | null; selfSeverity: VulnerabilitySeverity }>,
+) {
+  const counts: Record<VulnerabilitySeverity, number> = {
+    CRITICAL: 0,
+    HIGH: 0,
+    INFO: 0,
+    LOW: 0,
+    MEDIUM: 0,
+  }
+
+  reports.forEach((report) => {
+    counts[report.finalSeverity ?? report.selfSeverity] += 1
+  })
+
+  return [
+    { count: counts.CRITICAL, label: '严重', level: 'critical' as const },
+    { count: counts.HIGH, label: '高危', level: 'high' as const },
+    { count: counts.MEDIUM, label: '中危', level: 'medium' as const },
+    { count: counts.LOW, label: '低危', level: 'low' as const },
+    { count: counts.INFO, label: '提示', level: 'info' as const },
+  ]
+}
+
+function buildFallbackInsight(snapshot: DashboardSnapshot, degradedReason?: string): AdminDashboardAiInsight {
+  const { overview } = snapshot
+  const findings = [
+    `当前待审核漏洞 ${overview.pendingVulnerabilities} 个，待复测 ${overview.pendingRetest} 个。`,
+    `严重/高危漏洞 ${overview.highRiskVulnerabilities} 个，今日审计事件 ${overview.auditToday} 条。`,
+    `证书待签发 ${overview.pendingCerts} 张，积分兑换待处理 ${overview.pendingRedemptions} 单。`,
+  ]
+
+  const riskLevel =
+    overview.highRiskVulnerabilities > 0 || overview.highRiskAudit > 0
+      ? 'high'
+      : overview.pendingVulnerabilities + overview.pendingRetest + overview.pendingCerts > 0
+        ? 'medium'
+        : 'low'
+
+  return {
+    actions: [
+      { label: '先处理严重/高危漏洞与待复测队列', owner: '漏洞审核组', priority: riskLevel === 'high' ? 'high' : 'medium' },
+      { label: '清理待签发证书和待领取兑换单', owner: '平台管理员', priority: 'medium' },
+      { label: '复核最近高风险审计操作', owner: '安全运营', priority: overview.highRiskAudit > 0 ? 'high' : 'low' },
+    ],
+    findings,
+    generatedAt: new Date().toISOString(),
+    model: getOpenAiModel(),
+    recommendations: [
+      '按高危漏洞、待复测、待签发证书的顺序安排当日处理。',
+      '对登录失败和敏感权限调整保持审计抽查。',
+      '定期把学习资源、公告和商城履约数据纳入运营复盘。',
+    ],
+    riskLevel,
+    source: 'heuristic',
+    status: degradedReason ? 'degraded' : 'fresh',
+    summary: degradedReason
+      ? `Hermes 暂不可用，已使用平台规则生成建议：${degradedReason}`
+      : '基于当前平台数据生成运营建议。',
+  }
+}
+
+function normalizeInsight(
+  value: unknown,
+  snapshot: DashboardSnapshot,
+  model = getOpenAiModel(),
+  source: AdminDashboardAiInsight['source'] = 'heuristic',
+) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+
+  return {
+    actions: normalizeActions(record.actions),
+    findings: normalizeStringList(record.findings, buildFallbackInsight(snapshot).findings),
+    generatedAt: typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString(),
+    model: typeof record.model === 'string' ? record.model : model,
+    recommendations: normalizeStringList(record.recommendations, buildFallbackInsight(snapshot).recommendations),
+    riskLevel: normalizeRiskLevel(record.riskLevel),
+    source: record.source === 'hermes' || record.source === 'heuristic' ? record.source : source,
+    status: record.status === 'degraded' ? 'degraded' : 'fresh',
+    summary: typeof record.summary === 'string' && record.summary.trim() ? record.summary.trim().slice(0, 500) : '暂无摘要。',
+  } satisfies AdminDashboardAiInsight
+}
+
+function normalizeActions(value: unknown): AdminDashboardAiInsight['actions'] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const record = item as Record<string, unknown>
+      const label = typeof record.label === 'string' ? record.label.trim() : ''
+      if (!label) return null
+      return {
+        label: label.slice(0, 120),
+        owner: typeof record.owner === 'string' && record.owner.trim() ? record.owner.trim().slice(0, 40) : '平台管理员',
+        priority: normalizePriority(record.priority),
+      }
+    })
+    .filter((item): item is AdminDashboardAiInsight['actions'][number] => Boolean(item))
+    .slice(0, 4)
+}
+
+function normalizeStringList(value: unknown, fallback: string[]) {
+  if (!Array.isArray(value)) return fallback
+  const items = value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim().slice(0, 160))
+    .slice(0, 4)
+
+  return items.length > 0 ? items : fallback
+}
+
+function normalizePriority(value: unknown): 'high' | 'medium' | 'low' {
+  if (value === 'high' || value === 'medium' || value === 'low') return value
+  return 'medium'
+}
+
+function normalizeRiskLevel(value: unknown): 'high' | 'medium' | 'low' {
+  if (value === 'high' || value === 'medium' || value === 'low') return value
+  return 'medium'
+}
+
+function parseJsonObject(content: string) {
+  const normalized = content.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim()
+  const start = normalized.indexOf('{')
+  const end = normalized.lastIndexOf('}')
+  if (start < 0 || end < start) return null
+
+  try {
+    return JSON.parse(normalized.slice(start, end + 1)) as unknown
+  } catch {
+    return null
+  }
+}
+
+function toAiSnapshot(snapshot: DashboardSnapshot) {
+  return {
+    activityTrend: snapshot.activityTrend,
+    overview: snapshot.overview,
+    period: snapshot.period,
+    platform: snapshot.platform,
+    recentAuditLogs: snapshot.recentAuditLogs.map((log) => ({
+      action: log.actionLabel,
+      module: log.moduleLabel,
+      result: log.resultLabel,
+      risk: log.riskLabel,
+      summary: log.summary,
+    })),
+    severityDistribution: snapshot.severityDistribution,
+    vulnerabilityFlow: snapshot.vulnerabilityFlow,
+  }
+}
+
+function startOfDay(date: Date) {
+  const next = new Date(date)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(5, 10)
+}
+
+function getOpenAiBaseUrl() {
+  const baseUrl = process.env.OPENAI_BASE_URL || process.env.HERMES_AGENT_BASE_URL || DEFAULT_OPENAI_BASE_URL
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+}
+
+function getOpenAiApiKey() {
+  return process.env.OPENAI_API_KEY || process.env.HERMES_AGENT_API_KEY || ''
+}
+
+function getOpenAiModel() {
+  return process.env.OPENAI_MODEL || process.env.HERMES_AGENT_MODEL || DEFAULT_OPENAI_MODEL
+}
+
+function getRequestTimeoutMs() {
+  const raw = process.env.OPENAI_REQUEST_TIMEOUT_MS || process.env.HERMES_AGENT_TIMEOUT_MS
+  const parsed = raw ? Number(raw) : Number.NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_OPENAI_TIMEOUT_MS
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '未知错误'
+}
+
+function formatSeverityLabel(severity: VulnerabilitySeverity) {
+  const map: Record<VulnerabilitySeverity, string> = {
+    CRITICAL: '严重',
+    HIGH: '高危',
+    INFO: '信息',
+    LOW: '低危',
+    MEDIUM: '中危',
+  }
+  return map[severity] ?? severity
+}
+
+function formatVulnerabilityStatusLabel(status: VulnerabilityStatus) {
+  const map: Record<VulnerabilityStatus, string> = {
+    ARCHIVED: '已归档',
+    CERTIFIED: '已发证',
+    CONFIRMED: '已确认',
+    DRAFT: '草稿',
+    FIXING: '修复中',
+    NEEDS_SUPPLEMENT: '待补充',
+    PENDING_RETEST: '待复测',
+    PENDING_REVIEW: '审核中',
+    REJECTED: '已驳回',
+    SUBMITTED: '待审核',
+  }
+  return map[status] ?? status
 }

@@ -1,5 +1,8 @@
 import {
   AlertTriangle,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp,
   Edit3,
   ExternalLink,
   Filter,
@@ -15,9 +18,9 @@ import {
   X,
 } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -56,9 +59,100 @@ const emptyForm: FormState = {
 
 const kindOptions = ['全部类型', '工具资料', '靶场资源']
 const statusOptions = ['全部状态', '已上架', '已下架']
+const defaultPageSize = 10
+type SortDirection = 'asc' | 'desc'
+type LearningSortKey = 'category' | 'downloadCount' | 'kind' | 'status' | 'title' | 'updatedAt'
+
+const defaultSort: { direction: SortDirection; key: LearningSortKey } = {
+  direction: 'desc',
+  key: 'updatedAt',
+}
+
+const learningSortColumns: Array<{ className?: string; key: LearningSortKey; label: string }> = [
+  { key: 'title', label: '内容 / 链接' },
+  { className: 'hidden xl:flex', key: 'kind', label: '类型' },
+  { className: 'hidden xl:flex', key: 'category', label: '分类' },
+  { className: 'hidden xl:flex', key: 'status', label: '状态' },
+  { className: 'hidden xl:flex', key: 'downloadCount', label: '使用次数' },
+  { className: 'hidden 2xl:flex', key: 'updatedAt', label: '更新时间' },
+]
+
+const learningStatusRank: Record<string, number> = {
+  已下架: 0,
+  已上架: 1,
+}
 const categoryPresets: Record<LearningKind, string[]> = {
   RESOURCE: ['工具资源', '文档资料', '报告规范', '学习资料', '环境配置'],
   RANGE: ['Web靶场', '权限控制靶场', '代码审计靶场', '内网渗透靶场', '综合演练靶场'],
+}
+
+function SortHeaderButton({
+  active,
+  className = '',
+  direction,
+  label,
+  onClick,
+}: {
+  active: boolean
+  className?: string
+  direction: SortDirection
+  label: string
+  onClick: () => void
+}) {
+  const Icon = active ? direction === 'asc' ? ChevronUp : ChevronDown : ArrowUpDown
+  return (
+    <button
+      className={`group -ml-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-left transition hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200 ${className}`}
+      onClick={onClick}
+      title={`按${label}排序`}
+      type="button"
+    >
+      <span className="truncate">{label}</span>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-brand-700 dark:text-brand-300' : 'opacity-45 group-hover:opacity-80'}`} />
+    </button>
+  )
+}
+
+function compareLearningResources(a: LearningResourceItem, b: LearningResourceItem, key: LearningSortKey, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  const result = compareLearningValue(a, b, key)
+  if (result !== 0) return result * modifier
+  return compareTimeValue(b.updatedAt, a.updatedAt) || compareTextValue(a.id, b.id)
+}
+
+function compareLearningValue(a: LearningResourceItem, b: LearningResourceItem, key: LearningSortKey) {
+  switch (key) {
+    case 'category':
+      return compareTextValue(a.category, b.category)
+    case 'downloadCount':
+      return a.downloadCount - b.downloadCount
+    case 'kind':
+      return compareTextValue(a.kindLabel, b.kindLabel)
+    case 'status':
+      return (learningStatusRank[a.status] ?? 0) - (learningStatusRank[b.status] ?? 0)
+    case 'title':
+      return compareTextValue(a.title, b.title)
+    case 'updatedAt':
+      return compareTimeValue(a.updatedAt, b.updatedAt)
+  }
+}
+
+function compareTextValue(a: string, b: string) {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  return a.localeCompare(b, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+}
+
+function compareTimeValue(a: string | null | undefined, b: string | null | undefined) {
+  const left = a ? new Date(a).getTime() : Number.NaN
+  const right = b ? new Date(b).getTime() : Number.NaN
+  const leftValid = Number.isFinite(left)
+  const rightValid = Number.isFinite(right)
+  if (!leftValid && !rightValid) return 0
+  if (!leftValid) return 1
+  if (!rightValid) return -1
+  return left - right
 }
 
 export function AdminLearningManagement() {
@@ -66,6 +160,10 @@ export function AdminLearningManagement() {
   const [keyword, setKeyword] = useState('')
   const [kind, setKind] = useState('全部类型')
   const [status, setStatus] = useState('全部状态')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
+  const [sortKey, setSortKey] = useState<LearningSortKey | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSort.direction)
   const [editing, setEditing] = useState<FormState | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [loading, setLoading] = useState(true)
@@ -87,7 +185,13 @@ export function AdminLearningManagement() {
   }
 
   useEffect(() => {
-    void loadResources()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadResources()
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   const summary = useMemo(() => {
@@ -118,6 +222,40 @@ export function AdminLearningManagement() {
       return matchesKeyword && matchesKind && matchesStatus
     })
   }, [kind, keyword, resources, status])
+
+  const sortedResources = useMemo(() => {
+    return [...filteredResources].sort((a, b) => compareLearningResources(a, b, sortKey ?? defaultSort.key, sortKey ? sortDirection : defaultSort.direction))
+  }, [filteredResources, sortDirection, sortKey])
+
+  const changeSort = (nextKey: LearningSortKey) => {
+    if (sortKey !== nextKey) {
+      setSortKey(nextKey)
+      setSortDirection('asc')
+    } else if (sortDirection === 'asc') {
+      setSortDirection('desc')
+    } else {
+      setSortKey(null)
+      setSortDirection(defaultSort.direction)
+    }
+    setPage(1)
+  }
+
+  useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setPage(1)
+    })
+    return () => {
+      active = false
+    }
+  }, [kind, keyword, pageSize, status])
+
+  const totalPages = Math.max(1, Math.ceil(sortedResources.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedResources = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return sortedResources.slice(start, start + pageSize)
+  }, [pageSize, safePage, sortedResources])
 
   function flashMessage(nextMessage: string) {
     setError('')
@@ -272,20 +410,33 @@ export function AdminLearningManagement() {
           </div>
         </SurfacePanel>
 
-        <div className="mt-6 overflow-x-auto rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10 ">
-          <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
-            <span>内容</span>
-            <span>类型</span>
-            <span>分类</span>
-            <span>状态</span>
-            <span>使用次数</span>
+        <SurfacePanel className="mt-6 overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">
+            <div>
+              <h2 className="text-sm font-semibold">学习资源台账</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {filteredResources.length} 条，按当前筛选条件展示</p>
+            </div>
+            <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">数据视图</span>
+          </div>
+
+          <div className="grid grid-cols-[minmax(260px,1fr)_84px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
+            {learningSortColumns.map((column) => (
+              <SortHeaderButton
+                active={sortKey === column.key}
+                className={column.className}
+                direction={sortDirection}
+                key={column.key}
+                label={column.label}
+                onClick={() => changeSort(column.key)}
+              />
+            ))}
             <span className="text-right">操作</span>
           </div>
 
           {loading && <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载学习资源...</div>}
 
           {!loading &&
-            filteredResources.map((item) => (
+            paginatedResources.map((item) => (
               <LearningResourceRow
                 item={item}
                 key={item.id}
@@ -316,11 +467,23 @@ export function AdminLearningManagement() {
                 }
               />
             ))}
-        </div>
 
-        {!loading && filteredResources.length === 0 && (
-          <EmptyState icon={<Layers3 className="h-10 w-10" />} title="没有匹配的学习资源" description="调整关键词、类型或状态后再试一次。" />
-        )}
+          {!loading && filteredResources.length === 0 && (
+            <div className="p-10 text-center">
+              <Layers3 className="mx-auto h-10 w-10 text-slate-400" />
+              <h2 className="mt-4 text-xl font-semibold">没有匹配的学习资源</h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词、类型或状态后再试一次。</p>
+            </div>
+          )}
+
+          <PaginationBar
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            page={safePage}
+            pageSize={pageSize}
+            total={filteredResources.length}
+          />
+        </SurfacePanel>
       </section>
 
       <LearningResourceModal
@@ -356,7 +519,7 @@ function LearningResourceRow({
   const Icon = item.kind === 'RANGE' ? Target : Layers3
 
   return (
-    <div className="grid grid-cols-[minmax(360px,1fr)_110px_120px_110px_140px_220px] gap-4 border-b border-black/10 px-5 py-4 last:border-b-0 dark:border-white/10">
+    <div className="grid grid-cols-[minmax(260px,1fr)_84px] gap-4 border-b border-black/10 px-3 py-3 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
       <div className="min-w-0">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
@@ -377,20 +540,25 @@ function LearningResourceRow({
           </div>
         </div>
       </div>
-      <TableCell>{item.kindLabel}</TableCell>
-      <TableCell>{item.category}</TableCell>
-      <TableCell>
-        <span
-          className={`rounded-md border px-2 py-1 text-xs font-medium ${
-            item.active
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          {item.status}
-        </span>
-      </TableCell>
-      <TableCell>{item.downloadCount} 次</TableCell>
+      <div className="hidden min-w-0 xl:flex"><TableCell>{item.kindLabel}</TableCell></div>
+      <div className="hidden min-w-0 xl:flex"><TableCell>{item.category}</TableCell></div>
+      <div className="hidden min-w-0 xl:flex">
+        <TableCell>
+          <span
+            className={`rounded-md border px-2 py-1 text-xs font-medium ${
+              item.active
+                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {item.status}
+          </span>
+        </TableCell>
+      </div>
+      <div className="hidden min-w-0 xl:flex"><TableCell>{item.downloadCount} 次</TableCell></div>
+      <div className="hidden min-w-0 2xl:flex">
+        <TableCell>{formatDate(item.updatedAt)}</TableCell>
+      </div>
       <div className="flex items-center justify-end gap-2">
         <IconButton label="编辑" onClick={onEdit}>
           <Edit3 className="h-4 w-4" />
@@ -423,12 +591,19 @@ function LearningResourceModal({
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    let active = true
     if (initialValue) {
-      const categoryOptions = categoryPresets[initialValue.kind]
-      setForm({
-        ...initialValue,
-        category: categoryOptions.includes(initialValue.category) ? initialValue.category : categoryOptions[0],
+      queueMicrotask(() => {
+        if (!active) return
+        const categoryOptions = categoryPresets[initialValue.kind]
+        setForm({
+          ...initialValue,
+          category: categoryOptions.includes(initialValue.category) ? initialValue.category : categoryOptions[0],
+        })
       })
+    }
+    return () => {
+      active = false
     }
   }, [initialValue])
 
@@ -683,6 +858,12 @@ function IconButton({
 
 function TableCell({ children }: { children: ReactNode }) {
   return <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">{children}</div>
+}
+
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 function ConfirmDialog({

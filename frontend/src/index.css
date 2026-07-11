@@ -68,9 +68,9 @@
   --app-border: var(--app-border-light);
   --app-primary: #2a6438;
   --app-primary-rgb: 42, 100, 56;
-  --app-primary-scrollbar: rgba(42, 100, 56, 0.55);
-  --app-primary-scrollbar-thumb: rgba(42, 100, 56, 0.45);
-  --app-primary-scrollbar-thumb-hover: rgba(42, 100, 56, 0.7);
+  --app-primary-scrollbar: var(--app-border);
+  --app-primary-scrollbar-thumb: var(--app-border);
+  --app-primary-scrollbar-thumb-hover: var(--app-border);
   --app-radius: 8px;
   --color-slate-50: color-mix(in srgb, var(--app-light-surface) 92%, var(--app-light-muted));
   --color-slate-100: var(--app-light-muted);
@@ -145,6 +145,9 @@
   --app-panel-bg: var(--app-panel-bg-dark);
   --app-panel-muted-bg: var(--app-panel-muted-bg-dark);
   --app-menu-bg: var(--app-menu-bg-dark);
+  --app-primary-scrollbar: var(--app-border);
+  --app-primary-scrollbar-thumb: var(--app-border);
+  --app-primary-scrollbar-thumb-hover: var(--app-border);
   --app-text: var(--app-text-dark);
   --app-text-muted: color-mix(in srgb, var(--app-text-dark) 62%, var(--app-dark-muted));
   --app-border: var(--app-border-dark);
@@ -269,30 +272,41 @@ html.auth-modal-open body {
   overflow-x: clip;
 }
 
+*,
 .platform-scrollbar,
-.ai-chat-input-scroll {
-  scrollbar-color: var(--app-primary-scrollbar) transparent;
+.ai-chat-input-scroll,
+.select-dropdown-scrollbar {
+  scrollbar-color: var(--app-primary-scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 
 .platform-scrollbar::-webkit-scrollbar,
-.ai-chat-input-scroll::-webkit-scrollbar {
+.ai-chat-input-scroll::-webkit-scrollbar,
+.select-dropdown-scrollbar::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  height: 6px;
   width: 6px;
 }
 
 .platform-scrollbar::-webkit-scrollbar-track,
-.ai-chat-input-scroll::-webkit-scrollbar-track {
+.ai-chat-input-scroll::-webkit-scrollbar-track,
+.select-dropdown-scrollbar::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .platform-scrollbar::-webkit-scrollbar-thumb,
-.ai-chat-input-scroll::-webkit-scrollbar-thumb {
+.ai-chat-input-scroll::-webkit-scrollbar-thumb,
+.select-dropdown-scrollbar::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
   background: var(--app-primary-scrollbar-thumb);
   border-radius: 999px;
 }
 
 .platform-scrollbar::-webkit-scrollbar-thumb:hover,
-.ai-chat-input-scroll::-webkit-scrollbar-thumb:hover {
+.ai-chat-input-scroll::-webkit-scrollbar-thumb:hover,
+.select-dropdown-scrollbar::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
   background: var(--app-primary-scrollbar-thumb-hover);
 }
 
@@ -355,28 +369,6 @@ html.auth-modal-open body {
 
 .dark .dark\:text-white {
   color: var(--app-dark-text);
-}
-
-.select-dropdown-scrollbar {
-  scrollbar-color: rgba(100, 116, 139, 0.55) transparent;
-  scrollbar-width: thin;
-}
-
-.select-dropdown-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.select-dropdown-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.select-dropdown-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.45);
-  border-radius: 999px;
-}
-
-.select-dropdown-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.68);
 }
 
 .user-compact-mode section {

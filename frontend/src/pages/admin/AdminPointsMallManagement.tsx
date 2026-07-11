@@ -1,5 +1,8 @@
 import {
   AlertTriangle,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp,
   Edit3,
   Filter,
   Gift,
@@ -8,16 +11,15 @@ import {
   Plus,
   Power,
   ShoppingBag,
-  TicketCheck,
   Trash2,
   Upload,
   X,
 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { EmptyState } from '../../components/ui/EmptyState'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -65,6 +67,13 @@ const emptyForm: FormState = {
 const categoryOptions = ['全部类型', '实体奖励', '学习权益', '证书周边']
 const productStatusOptions = ['全部状态', '草稿', '已上架', '已下架']
 const redemptionStatusOptions = ['全部状态', '待领取', '已领取', '已取消', '已过期']
+const defaultPageSize = 10
+type SortDirection = 'asc' | 'desc'
+type ProductSortKey = 'category' | 'name' | 'pickupLocation' | 'pointsCost' | 'status' | 'stock' | 'perUserLimit'
+type RedemptionSortKey = 'pointsCost' | 'productName' | 'requestedAt' | 'status' | 'userName' | 'pickupLocation'
+
+const defaultProductSort: { direction: SortDirection; key: ProductSortKey } = { direction: 'asc', key: 'name' }
+const defaultRedemptionSort: { direction: SortDirection; key: RedemptionSortKey } = { direction: 'desc', key: 'requestedAt' }
 
 export function AdminPointsMallManagement() {
   const [activeTab, setActiveTab] = useState<MallTab>('商品管理')
@@ -73,6 +82,12 @@ export function AdminPointsMallManagement() {
   const [keyword, setKeyword] = useState('')
   const [category, setCategory] = useState('全部类型')
   const [status, setStatus] = useState('全部状态')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
+  const [productSortKey, setProductSortKey] = useState<ProductSortKey | null>(null)
+  const [productSortDirection, setProductSortDirection] = useState<SortDirection>(defaultProductSort.direction)
+  const [redemptionSortKey, setRedemptionSortKey] = useState<RedemptionSortKey | null>(null)
+  const [redemptionSortDirection, setRedemptionSortDirection] = useState<SortDirection>(defaultRedemptionSort.direction)
   const [editing, setEditing] = useState<FormState | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [loading, setLoading] = useState(true)
@@ -98,7 +113,13 @@ export function AdminPointsMallManagement() {
   }
 
   useEffect(() => {
-    void loadMall()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadMall()
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   const summary = useMemo(
@@ -140,10 +161,80 @@ export function AdminPointsMallManagement() {
     })
   }, [category, keyword, redemptions, status])
 
+  const sortedProducts = useMemo(
+    () => [...filteredProducts].sort((a, b) => compareProducts(a, b, productSortKey ?? defaultProductSort.key, productSortKey ? productSortDirection : defaultProductSort.direction)),
+    [filteredProducts, productSortDirection, productSortKey],
+  )
+  const sortedRedemptions = useMemo(
+    () => [...filteredRedemptions].sort((a, b) => compareRedemptions(a, b, redemptionSortKey ?? defaultRedemptionSort.key, redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction)),
+    [filteredRedemptions, redemptionSortDirection, redemptionSortKey],
+  )
+
+  const activeItemsTotal = activeTab === '商品管理' ? filteredProducts.length : filteredRedemptions.length
+  const totalPages = Math.max(1, Math.ceil(activeItemsTotal / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedProducts = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return sortedProducts.slice(start, start + pageSize)
+  }, [pageSize, safePage, sortedProducts])
+  const paginatedRedemptions = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return sortedRedemptions.slice(start, start + pageSize)
+  }, [pageSize, safePage, sortedRedemptions])
+
+  useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setPage(1)
+    })
+    return () => {
+      active = false
+    }
+  }, [activeTab, category, keyword, pageSize, status])
+
   function flashMessage(nextMessage: string) {
     setError('')
     setMessage(nextMessage)
   }
+
+  function resetLedgerFilters() {
+    setKeyword('')
+    setCategory('全部类型')
+    setStatus('全部状态')
+    setPage(1)
+  }
+
+  function changeProductSort(nextKey: ProductSortKey) {
+    if (productSortKey !== nextKey) {
+      setProductSortKey(nextKey)
+      setProductSortDirection('asc')
+    } else if (productSortDirection === 'asc') {
+      setProductSortDirection('desc')
+    } else {
+      setProductSortKey(null)
+      setProductSortDirection(defaultProductSort.direction)
+    }
+    setPage(1)
+  }
+
+  function changeRedemptionSort(nextKey: RedemptionSortKey) {
+    if (redemptionSortKey !== nextKey) {
+      setRedemptionSortKey(nextKey)
+      setRedemptionSortDirection('asc')
+    } else if (redemptionSortDirection === 'asc') {
+      setRedemptionSortDirection('desc')
+    } else {
+      setRedemptionSortKey(null)
+      setRedemptionSortDirection(defaultRedemptionSort.direction)
+    }
+    setPage(1)
+  }
+
+  const currentFilterLabels = [
+    keyword.trim() ? `关键词：${keyword.trim()}` : '',
+    category !== '全部类型' ? `类型：${category}` : '',
+    status !== '全部状态' ? `${activeTab === '商品管理' ? '商品状态' : '领取状态'}：${status}` : '',
+  ].filter(Boolean)
 
   useEffect(() => {
     if (!message && !error) return undefined
@@ -277,6 +368,7 @@ export function AdminPointsMallManagement() {
                   setKeyword('')
                   setCategory('全部类型')
                   setStatus('全部状态')
+                  setPage(1)
                 }}
                 type="button"
               >
@@ -309,25 +401,66 @@ export function AdminPointsMallManagement() {
             />
             <button
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-              onClick={() => {
-                setKeyword('')
-                setCategory('全部类型')
-                setStatus('全部状态')
-              }}
+              onClick={resetLedgerFilters}
               type="button"
             >
               <Filter className="h-4 w-4" />
               重置
             </button>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-black/10 pt-4 text-xs dark:border-white/10">
+            <span className="rounded-md border border-brand-600/20 bg-brand-600/10 px-2.5 py-1 font-medium text-brand-800 dark:text-brand-200">
+              当前结果 {activeItemsTotal}
+            </span>
+            {currentFilterLabels.length > 0 ? (
+              currentFilterLabels.map((item) => (
+                <span className="rounded-md border border-black/10 bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-slate-600 dark:border-white/10 dark:text-slate-300" key={item}>
+                  {item}
+                </span>
+              ))
+            ) : (
+              <span className="text-slate-500 dark:text-slate-400">当前展示全部{activeTab === '商品管理' ? '商品' : '兑换记录'}</span>
+            )}
+          </div>
         </SurfacePanel>
 
-        <div className="mt-5 grid gap-3">
+        <SurfacePanel className="mt-5 overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">
+            <div>
+              <h2 className="text-sm font-semibold">{activeTab === '商品管理' ? '商品台账' : '兑换台账'}</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {activeItemsTotal} 条，按当前筛选条件展示</p>
+            </div>
+            <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">数据视图</span>
+          </div>
+
+          {activeTab === '商品管理' ? (
+            <div className="grid grid-cols-[minmax(260px,1fr)_96px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[minmax(320px,1fr)_96px_88px_82px_82px_100px_108px] 2xl:grid-cols-[minmax(420px,1fr)_110px_90px_82px_82px_100px_100px_120px]">
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'name'} direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="商品 / 编号" onClick={() => changeProductSort('name')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'category'} className="hidden xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="类型" onClick={() => changeProductSort('category')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'status'} className="hidden xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="状态" onClick={() => changeProductSort('status')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'pointsCost'} className="hidden xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="积分" onClick={() => changeProductSort('pointsCost')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'stock'} className="hidden xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="库存" onClick={() => changeProductSort('stock')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'perUserLimit'} className="hidden xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="限兑" onClick={() => changeProductSort('perUserLimit')} />
+              <SortHeaderButton active={(productSortKey ?? defaultProductSort.key) === 'pickupLocation'} className="hidden 2xl:inline-flex" direction={productSortKey ? productSortDirection : defaultProductSort.direction} label="领取地点" onClick={() => changeProductSort('pickupLocation')} />
+              <span className="text-right">操作</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[minmax(260px,1fr)_96px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[minmax(320px,1fr)_96px_120px_86px_132px_108px_132px] 2xl:grid-cols-[minmax(420px,1fr)_104px_130px_90px_136px_120px_150px]">
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'productName'} direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="商品 / 领取码" onClick={() => changeRedemptionSort('productName')} />
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'status'} className="hidden xl:inline-flex" direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="状态" onClick={() => changeRedemptionSort('status')} />
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'userName'} className="hidden xl:inline-flex" direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="申请人" onClick={() => changeRedemptionSort('userName')} />
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'pointsCost'} className="hidden xl:inline-flex" direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="积分" onClick={() => changeRedemptionSort('pointsCost')} />
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'requestedAt'} className="hidden xl:inline-flex" direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="申请时间" onClick={() => changeRedemptionSort('requestedAt')} />
+              <SortHeaderButton active={(redemptionSortKey ?? defaultRedemptionSort.key) === 'pickupLocation'} className="hidden xl:inline-flex" direction={redemptionSortKey ? redemptionSortDirection : defaultRedemptionSort.direction} label="领取地点" onClick={() => changeRedemptionSort('pickupLocation')} />
+              <span className="text-right">操作</span>
+            </div>
+          )}
+
           {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载积分商城...</SurfacePanel>}
 
           {!loading &&
             activeTab === '商品管理' &&
-            filteredProducts.map((item) => (
+            paginatedProducts.map((item) => (
               <ProductRow
                 item={item}
                 key={item.id}
@@ -362,7 +495,7 @@ export function AdminPointsMallManagement() {
 
           {!loading &&
             activeTab === '兑换处理' &&
-            filteredRedemptions.map((item) => (
+            paginatedRedemptions.map((item) => (
               <RedemptionRow
                 item={item}
                 key={item.id}
@@ -385,14 +518,23 @@ export function AdminPointsMallManagement() {
                 }
               />
             ))}
-        </div>
 
-        {!loading && activeTab === '商品管理' && filteredProducts.length === 0 && (
-          <EmptyState icon={<Gift className="h-10 w-10" />} title="没有匹配的商品" description="调整关键词、类型或状态后再试一次。" />
-        )}
-        {!loading && activeTab === '兑换处理' && filteredRedemptions.length === 0 && (
-          <EmptyState icon={<History className="h-10 w-10" />} title="没有匹配的兑换记录" description="调整关键词、类型或状态后再试一次。" />
-        )}
+          {!loading && activeItemsTotal === 0 && (
+            <div className="p-10 text-center">
+              {activeTab === '商品管理' ? <Gift className="mx-auto h-10 w-10 text-slate-400" /> : <History className="mx-auto h-10 w-10 text-slate-400" />}
+              <h2 className="mt-4 text-xl font-semibold">{activeTab === '商品管理' ? '没有匹配的商品' : '没有匹配的兑换记录'}</h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">调整关键词、类型或状态后再试一次。</p>
+            </div>
+          )}
+
+          <PaginationBar
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            page={safePage}
+            pageSize={pageSize}
+            total={activeItemsTotal}
+          />
+        </SurfacePanel>
       </section>
 
       <ProductModal initialValue={editing} onClose={() => setEditing(null)} onSave={(payload) => void handleSave(payload)} saving={saving} />
@@ -421,25 +563,26 @@ function ProductRow({
   onToggle: () => void
 }) {
   return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px] xl:items-start">
+    <div className="grid grid-cols-[minmax(260px,1fr)_96px] gap-4 border-b border-black/10 px-3 py-3 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[minmax(320px,1fr)_96px_88px_82px_82px_100px_108px] 2xl:grid-cols-[minmax(420px,1fr)_110px_90px_82px_82px_100px_100px_120px]">
+      <div className="flex min-w-0 items-center gap-3">
+        {item.imageUrl ? (
+          <img alt={`${item.name} 图片`} className="h-11 w-11 shrink-0 rounded-lg object-cover" src={item.imageUrl} />
+        ) : (
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-xs font-semibold text-brand-700 dark:text-brand-300">商品</span>
+        )}
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id.slice(0, 14)}</span>
-            <Badge>{item.category}</Badge>
-            <Badge tone={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.statusLabel}</Badge>
-          </div>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight">{item.name}</h2>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-            <span>积分：{item.pointsCost}</span>
-            <span>库存：{item.stock}</span>
-            <span>限兑：{item.perUserLimit === 0 ? '无限制' : item.perUserLimit}</span>
-            <span>领取：{item.pickupLocation}</span>
-            <span>排序：{item.sortOrder}</span>
-          </div>
+          <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{item.name}</p>
+          <p className="mt-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400">{item.id.slice(0, 14)}</p>
+          <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400 xl:hidden">{item.description}</p>
         </div>
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+      </div>
+      <div className="hidden min-w-0 xl:block"><Badge>{item.category}</Badge></div>
+      <div className="hidden min-w-0 xl:block"><Badge tone={item.status === 'ACTIVE' ? 'green' : 'gray'}>{item.statusLabel}</Badge></div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={`${item.pointsCost}`} /></div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={`${item.stock}`} /></div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={item.perUserLimit === 0 ? '无限制' : `${item.perUserLimit}`} /></div>
+      <div className="hidden min-w-0 2xl:block"><LedgerText value={item.pickupLocation} /></div>
+      <div className="flex items-center justify-end gap-2">
           <IconButton label="编辑" onClick={onEdit}>
             <Edit3 className="h-4 w-4" />
           </IconButton>
@@ -449,9 +592,8 @@ function ProductRow({
           <IconButton danger label="删除" onClick={onDelete}>
             <Trash2 className="h-4 w-4" />
           </IconButton>
-        </div>
       </div>
-    </SurfacePanel>
+    </div>
   )
 }
 
@@ -467,48 +609,138 @@ function RedemptionRow({
   const pending = item.status === 'PENDING_PICKUP'
 
   return (
-    <SurfacePanel className="p-4 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px] xl:items-start">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.pickupCode}</span>
-            <Badge>{item.product.category}</Badge>
-            <Badge tone={pending ? 'yellow' : item.status === 'COMPLETED' ? 'green' : 'gray'}>{item.statusLabel}</Badge>
-          </div>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight">{item.product.name}</h2>
-          <div className="mt-3 grid gap-x-5 gap-y-1 text-sm text-slate-500 sm:grid-cols-2 xl:grid-cols-4 dark:text-slate-400">
-            <p>申请人：{item.user.name}</p>
-            <p>统一认证码：{item.user.unifiedCode}</p>
-            <p>消耗积分：{item.pointsCost}</p>
-            <p>申请时间：{formatDate(item.requestedAt)}</p>
-            <p>领取地点：{item.product.pickupLocation}</p>
-            <p>邮箱：{item.user.email}</p>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.note}</p>
+    <div className="grid grid-cols-[minmax(260px,1fr)_96px] gap-4 border-b border-black/10 px-3 py-3 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[minmax(320px,1fr)_96px_120px_86px_132px_108px_132px] 2xl:grid-cols-[minmax(420px,1fr)_104px_130px_90px_136px_120px_150px]">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{item.product.name}</p>
+          <Badge>{item.product.category}</Badge>
         </div>
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+        <p className="mt-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400">{item.pickupCode}</p>
+        <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400 xl:hidden">{item.user.name} / {item.user.unifiedCode}</p>
+      </div>
+      <div className="hidden min-w-0 xl:block"><Badge tone={pending ? 'yellow' : item.status === 'COMPLETED' ? 'green' : 'gray'}>{item.statusLabel}</Badge></div>
+      <div className="hidden min-w-0 xl:block">
+        <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">{item.user.name}</p>
+        <p className="mt-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400">{item.user.unifiedCode}</p>
+      </div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={`${item.pointsCost}`} /></div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={formatDate(item.requestedAt)} /></div>
+      <div className="hidden min-w-0 xl:block"><LedgerText value={item.product.pickupLocation} /></div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
           <button
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!pending}
             onClick={onComplete}
             type="button"
           >
-            <TicketCheck className="h-4 w-4" />
-            确认领取
+            领取
           </button>
           <button
-            className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300"
+            className="rounded-md border border-red-500/20 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300"
             disabled={!pending}
             onClick={onCancel}
             type="button"
           >
-            <X className="h-4 w-4" />
             取消
           </button>
-        </div>
       </div>
-    </SurfacePanel>
+    </div>
   )
+}
+
+function SortHeaderButton({
+  active,
+  className = '',
+  direction,
+  label,
+  onClick,
+}: {
+  active: boolean
+  className?: string
+  direction: SortDirection
+  label: string
+  onClick: () => void
+}) {
+  const Icon = active ? direction === 'asc' ? ChevronUp : ChevronDown : ArrowUpDown
+  return (
+    <button
+      className={`group -ml-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-left transition hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200 ${className}`}
+      onClick={onClick}
+      title={`按${label}排序`}
+      type="button"
+    >
+      <span className="truncate">{label}</span>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-brand-700 dark:text-brand-300' : 'opacity-45 group-hover:opacity-80'}`} />
+    </button>
+  )
+}
+
+function compareProducts(a: MallProductItem, b: MallProductItem, key: ProductSortKey, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  const result = compareProductValue(a, b, key)
+  if (result !== 0) return result * modifier
+  return compareTimeValue(b.updatedAt, a.updatedAt) || compareTextValue(a.id, b.id)
+}
+
+function compareProductValue(a: MallProductItem, b: MallProductItem, key: ProductSortKey) {
+  switch (key) {
+    case 'category':
+      return compareTextValue(a.category, b.category)
+    case 'name':
+      return compareTextValue(a.name, b.name)
+    case 'pickupLocation':
+      return compareTextValue(a.pickupLocation, b.pickupLocation)
+    case 'pointsCost':
+      return a.pointsCost - b.pointsCost
+    case 'status':
+      return compareTextValue(a.statusLabel, b.statusLabel)
+    case 'stock':
+      return a.stock - b.stock
+    case 'perUserLimit':
+      return a.perUserLimit - b.perUserLimit
+  }
+}
+
+function compareRedemptions(a: ManagedMallRedemptionItem, b: ManagedMallRedemptionItem, key: RedemptionSortKey, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  const result = compareRedemptionValue(a, b, key)
+  if (result !== 0) return result * modifier
+  return compareTimeValue(b.requestedAt, a.requestedAt) || compareTextValue(a.id, b.id)
+}
+
+function compareRedemptionValue(a: ManagedMallRedemptionItem, b: ManagedMallRedemptionItem, key: RedemptionSortKey) {
+  switch (key) {
+    case 'pickupLocation':
+      return compareTextValue(a.product.pickupLocation, b.product.pickupLocation)
+    case 'pointsCost':
+      return a.pointsCost - b.pointsCost
+    case 'productName':
+      return compareTextValue(a.product.name, b.product.name)
+    case 'requestedAt':
+      return compareTimeValue(a.requestedAt, b.requestedAt)
+    case 'status':
+      return compareTextValue(a.statusLabel, b.statusLabel)
+    case 'userName':
+      return compareTextValue(a.user.name, b.user.name) || compareTextValue(a.user.unifiedCode, b.user.unifiedCode)
+  }
+}
+
+function compareTextValue(a: string, b: string) {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  return a.localeCompare(b, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+}
+
+function compareTimeValue(a: string | null | undefined, b: string | null | undefined) {
+  const left = a ? new Date(a).getTime() : Number.NaN
+  const right = b ? new Date(b).getTime() : Number.NaN
+  const leftValid = Number.isFinite(left)
+  const rightValid = Number.isFinite(right)
+  if (!leftValid && !rightValid) return 0
+  if (!leftValid) return 1
+  if (!rightValid) return -1
+  return left - right
 }
 
 function ProductModal({
@@ -529,7 +761,15 @@ function ProductModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (initialValue) setForm(initialValue)
+    let active = true
+    if (initialValue) {
+      queueMicrotask(() => {
+        if (active) setForm(initialValue)
+      })
+    }
+    return () => {
+      active = false
+    }
   }, [initialValue])
 
   useEffect(() => {
@@ -843,6 +1083,10 @@ function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?: 'gray'
     yellow: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   }
   return <span className={`rounded-md border px-2 py-1 text-xs font-medium ${classes[tone]}`}>{children}</span>
+}
+
+function LedgerText({ value }: { value: string }) {
+  return <p className="truncate text-sm text-slate-600 dark:text-slate-300">{value || '—'}</p>
 }
 
 function IconButton({ children, danger, label, onClick }: { children: ReactNode; danger?: boolean; label: string; onClick: () => void }) {
