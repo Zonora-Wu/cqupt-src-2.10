@@ -1,8 +1,11 @@
 import {
+  ArrowUpDown,
   Award,
   Ban,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Download,
   Eye,
   FileCheck2,
@@ -31,6 +34,28 @@ type NoticeState = { text: string; variant: 'error' | 'info' | 'success' | 'warn
 const statusOptions = ['全部状态', '待签发', '已签发', '已撤销']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
 const defaultPageSize = 10
+type CertificateSortKey = 'issueDate' | 'issuer' | 'publicVerify' | 'recipient' | 'status' | 'type'
+type SortDirection = 'asc' | 'desc'
+
+const defaultSort: { direction: SortDirection; key: CertificateSortKey } = {
+  direction: 'desc',
+  key: 'issueDate',
+}
+
+const certificateSortColumns: Array<{ className?: string; key: CertificateSortKey; label: string }> = [
+  { key: 'status', label: '漏洞状态' },
+  { key: 'type', label: '证书类型 / 关联漏洞' },
+  { className: 'hidden xl:flex', key: 'recipient', label: '获得者' },
+  { className: 'hidden xl:flex', key: 'issueDate', label: '签发时间' },
+  { className: 'hidden xl:flex', key: 'issuer', label: '签发人' },
+  { className: 'hidden xl:flex', key: 'publicVerify', label: '公开核验' },
+]
+
+const certificateStatusRank: Record<CertificateStatus, number> = {
+  待签发: 1,
+  已签发: 2,
+  已撤销: 0,
+}
 
 const levelClassMap: Record<SeverityLabel, string> = {
   严重: 'bg-red-600 text-white',
@@ -69,6 +94,33 @@ function LedgerCell({ label, value, strong = false }: { label: string; value: st
   )
 }
 
+function SortHeaderButton({
+  active,
+  className = '',
+  direction,
+  label,
+  onClick,
+}: {
+  active: boolean
+  className?: string
+  direction: SortDirection
+  label: string
+  onClick: () => void
+}) {
+  const Icon = active ? direction === 'asc' ? ChevronUp : ChevronDown : ArrowUpDown
+  return (
+    <button
+      className={`group -ml-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-left transition hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200 ${className}`}
+      onClick={onClick}
+      title={`按${label}排序`}
+      type="button"
+    >
+      <span className="truncate">{label}</span>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-brand-700 dark:text-brand-300' : 'opacity-45 group-hover:opacity-80'}`} />
+    </button>
+  )
+}
+
 export function AdminCertificateManagement() {
   const [items, setItems] = useState<ManagedCertificateItem[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, issued: 0, revoked: 0 })
@@ -77,6 +129,8 @@ export function AdminCertificateManagement() {
   const [level, setLevel] = useState('全部等级')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
+  const [sortKey, setSortKey] = useState<CertificateSortKey>(defaultSort.key)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSort.direction)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -97,7 +151,13 @@ export function AdminCertificateManagement() {
   }
 
   useEffect(() => {
-    void loadCertificates()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadCertificates()
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
   const filteredCertificates = useMemo(() => {
@@ -118,16 +178,38 @@ export function AdminCertificateManagement() {
     })
   }, [items, keyword, level, status])
 
-  useEffect(() => {
+  const sortedCertificates = useMemo(() => {
+    return [...filteredCertificates].sort((a, b) => compareCertificateItems(a, b, sortKey, sortDirection))
+  }, [filteredCertificates, sortDirection, sortKey])
+
+  const changeSort = (nextKey: CertificateSortKey) => {
+    setSortKey((currentKey) => {
+      if (currentKey !== nextKey) {
+        setSortDirection(getDefaultSortDirection(nextKey))
+        return nextKey
+      }
+      setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
+      return currentKey
+    })
     setPage(1)
+  }
+
+  useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setPage(1)
+    })
+    return () => {
+      active = false
+    }
   }, [keyword, status, level, pageSize])
 
-  const totalPages = Math.max(1, Math.ceil(filteredCertificates.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(sortedCertificates.length / pageSize))
   const safePage = Math.min(page, totalPages)
   const paginatedCertificates = useMemo(() => {
     const start = (safePage - 1) * pageSize
-    return filteredCertificates.slice(start, start + pageSize)
-  }, [filteredCertificates, pageSize, safePage])
+    return sortedCertificates.slice(start, start + pageSize)
+  }, [pageSize, safePage, sortedCertificates])
 
   const selectedCertificate = selectedId ? items.find((item) => item.id === selectedId) ?? null : null
 
@@ -363,12 +445,16 @@ export function AdminCertificateManagement() {
           </div>
 
           <div className="grid grid-cols-[204px_minmax(0,1fr)_88px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[204px_minmax(0,1fr)_112px_112px_112px_112px_88px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_112px_88px]">
-            <span>漏洞编号 / 状态</span>
-            <span>证书类型 / 关联漏洞</span>
-            <span className="hidden xl:block">获得者</span>
-            <span className="hidden xl:block">签发时间</span>
-            <span className="hidden xl:block">签发人</span>
-            <span className="hidden xl:block">公开核验</span>
+            {certificateSortColumns.map((column) => (
+              <SortHeaderButton
+                active={sortKey === column.key}
+                className={column.className}
+                direction={sortDirection}
+                key={column.key}
+                label={column.label}
+                onClick={() => changeSort(column.key)}
+              />
+            ))}
             <span className="hidden 2xl:block">责任单位</span>
             <span className="hidden 2xl:block">核验码</span>
             <span className="text-right">操作</span>
@@ -504,4 +590,55 @@ function formatCompactDate(value: string | null) {
   if (Number.isNaN(date.getTime())) return value
 
   return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function getDefaultSortDirection(key: CertificateSortKey): SortDirection {
+  return key === 'issueDate' || key === 'publicVerify' || key === 'status' ? 'desc' : 'asc'
+}
+
+function compareCertificateItems(
+  a: ManagedCertificateItem,
+  b: ManagedCertificateItem,
+  key: CertificateSortKey,
+  direction: SortDirection,
+) {
+  const modifier = direction === 'asc' ? 1 : -1
+  const result = compareCertificateValue(a, b, key)
+  if (result !== 0) return result * modifier
+  return compareTimeValue(b.issueDate, a.issueDate) || compareTextValue(a.vulnId, b.vulnId)
+}
+
+function compareCertificateValue(a: ManagedCertificateItem, b: ManagedCertificateItem, key: CertificateSortKey) {
+  switch (key) {
+    case 'issueDate':
+      return compareTimeValue(a.issueDate, b.issueDate)
+    case 'issuer':
+      return compareTextValue(a.issuer ?? '', b.issuer ?? '')
+    case 'publicVerify':
+      return Number(a.publicVerify) - Number(b.publicVerify)
+    case 'recipient':
+      return compareTextValue(`${a.recipient} ${a.unifiedCode}`, `${b.recipient} ${b.unifiedCode}`)
+    case 'status':
+      return certificateStatusRank[a.status] - certificateStatusRank[b.status]
+    case 'type':
+      return compareTextValue(`${a.type} ${a.vulnTitle}`, `${b.type} ${b.vulnTitle}`)
+  }
+}
+
+function compareTextValue(a: string, b: string) {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  return a.localeCompare(b, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+}
+
+function compareTimeValue(a: string | null | undefined, b: string | null | undefined) {
+  const left = a ? new Date(a).getTime() : Number.NaN
+  const right = b ? new Date(b).getTime() : Number.NaN
+  const leftValid = Number.isFinite(left)
+  const rightValid = Number.isFinite(right)
+  if (!leftValid && !rightValid) return 0
+  if (!leftValid) return 1
+  if (!rightValid) return -1
+  return left - right
 }

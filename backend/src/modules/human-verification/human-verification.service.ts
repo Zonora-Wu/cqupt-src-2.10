@@ -6,7 +6,16 @@ import { HumanVerificationInput, HumanVerificationPurpose } from './human-verifi
 
 const CHALLENGE_TTL_SECONDS = 2 * 60
 const CONSUMED_NONCE_TTL_MS = 10 * 60 * 1000
-const DEFAULT_COST = 48_000
+const DEFAULT_COST = 24_000
+const DEFAULT_PURPOSE_COSTS: Record<HumanVerificationPurpose, number> = {
+  CHANGE_EMAIL_CODE: 32_000,
+  CHANGE_EMAIL_SUBMIT: 32_000,
+  CHANGE_PASSWORD: 32_000,
+  LOGIN_EMAIL_CODE: 28_000,
+  LOGIN_PASSWORD: 10_000,
+  REGISTER_EMAIL_CODE: 32_000,
+  REGISTER_SUBMIT: 32_000,
+}
 
 type AltchaPayload = {
   challenge?: Challenge
@@ -22,7 +31,7 @@ export class HumanVerificationService {
     const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS
     const challenge = await createChallenge({
       algorithm: 'SHA-256',
-      cost: normalizeCost(process.env.ALTCHA_CHALLENGE_COST),
+      cost: resolveChallengeCost(purpose),
       data: {
         host: normalizeHost(process.env.PUBLIC_SITE_URL ?? process.env.FRONTEND_ORIGIN ?? 'https://test.cquptsrc.asia'),
         ipHash: hashMetaValue(meta.ipAddress),
@@ -134,9 +143,14 @@ function hashMetaValue(value: string | undefined) {
   return createHash('sha256').update(value || 'unknown').digest('hex').slice(0, 24)
 }
 
+function resolveChallengeCost(purpose: HumanVerificationPurpose) {
+  const override = normalizeCost(process.env.ALTCHA_CHALLENGE_COST)
+  return override ?? DEFAULT_PURPOSE_COSTS[purpose] ?? DEFAULT_COST
+}
+
 function normalizeCost(value: string | undefined) {
   const cost = Number(value)
-  return Number.isInteger(cost) && cost >= 10_000 && cost <= 500_000 ? cost : DEFAULT_COST
+  return Number.isInteger(cost) && cost >= 10_000 && cost <= 500_000 ? cost : null
 }
 
 function normalizeKeyPrefixLength(value: string | undefined) {

@@ -45,20 +45,35 @@ export function FloatingNotice({
   }, [onClose])
 
   useEffect(() => {
+    let active = true
+
     if (!message) {
-      setVisible(false)
-      return undefined
+      queueMicrotask(() => {
+        if (active) setVisible(false)
+      })
+      return () => {
+        active = false
+      }
     }
 
-    setVisible(true)
-    if (autoCloseMs <= 0) return undefined
+    queueMicrotask(() => {
+      if (active) setVisible(true)
+    })
+    if (autoCloseMs <= 0) {
+      return () => {
+        active = false
+      }
+    }
 
     const timer = window.setTimeout(() => {
       setVisible(false)
       onCloseRef.current?.()
     }, autoCloseMs)
 
-    return () => window.clearTimeout(timer)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
   }, [autoCloseMs, message])
 
   if (!message || !visible || typeof document === 'undefined') return null
@@ -69,7 +84,7 @@ export function FloatingNotice({
   }
 
   return createPortal(
-    <div className="pointer-events-none fixed left-1/2 top-[4.75rem] z-[120] w-[min(520px,calc(100vw-40px))] -translate-x-1/2">
+    <div className="pointer-events-none fixed left-1/2 top-[4.75rem] z-[2147483647] w-[min(520px,calc(100vw-40px))] -translate-x-1/2">
       <div
         className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${variantStyles[variant]} ${className}`}
         role={variant === 'error' || variant === 'warning' ? 'alert' : 'status'}

@@ -109,10 +109,10 @@ export function HumanVerification({
     status === 'verified'
       ? '校验已完成，本次操作可继续。'
       : status === 'verifying'
-        ? '正在验证当前操作环境。'
+        ? '正在自动验证，请稍候。'
         : status === 'error'
           ? '校验失败，请重新验证。'
-          : '请先完成安全校验。'
+          : '点击后自动完成安全校验。'
 
   const statusLabel =
     status === 'verified'
@@ -124,6 +124,7 @@ export function HumanVerification({
           : '待校验'
 
   const StatusIcon = status === 'verified' ? CheckCircle2 : status === 'verifying' ? Loader2 : ShieldCheck
+  const title = '安全校验'
 
   const openVerification = () => {
     if (disabled) return
@@ -154,7 +155,7 @@ export function HumanVerification({
             <StatusIcon className={`h-4 w-4 ${status === 'verifying' ? 'animate-spin' : ''}`} />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-slate-900 dark:text-white">安全校验</span>
+            <span className="block text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
             {!compact && <span className="block truncate text-xs text-slate-500 dark:text-white/45">{helper}</span>}
           </span>
         </span>
@@ -178,9 +179,9 @@ export function HumanVerification({
                   src={logos.faviconUrl}
                 />
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold">平台安全校验</h2>
+                  <h2 className="text-base font-semibold">平台{title}</h2>
                   <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    请完成校验以确认本次操作由真实用户发起。
+                    系统会自动完成校验，用于确认本次操作由真实用户发起。
                   </p>
                 </div>
               </div>
@@ -196,7 +197,7 @@ export function HumanVerification({
 
             <div className="mt-5 rounded-lg border border-black/10 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
               {createElement('altcha-widget', {
-                auto: 'off',
+                auto: 'onload',
                 challenge: challengeUrl,
                 configuration,
                 key: `${purpose}-${challengeKey}`,
