@@ -1,16 +1,17 @@
 import { ApiError, apiRequest } from './apiClient'
+import { type HumanVerificationPayload } from './humanVerification'
 
 export type EmailLoginPayload = {
   code: string
   email: string
 }
 
-export type UnifiedLoginPayload = {
+export type UnifiedLoginPayload = Partial<HumanVerificationPayload> & {
   code: string
   password: string
 }
 
-export type RegisterPayload = {
+export type RegisterPayload = HumanVerificationPayload & {
   code: string
   college: string
   email: string
@@ -83,6 +84,7 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
 
   const result = await apiRequest<BackendLoginResponse>('/auth/login/password', {
     body: {
+      ...(payload.humanVerification ? { humanVerification: payload.humanVerification } : {}),
       password: payload.password,
       unifiedCode,
     },
@@ -92,37 +94,37 @@ export async function loginWithUnifiedCode(payload: UnifiedLoginPayload) {
   return saveSession(normalizeLoginResponse(result))
 }
 
-export async function sendEmailLoginCode(email: string, captchaToken: string) {
+export async function sendEmailLoginCode(email: string, humanVerification: HumanVerificationPayload['humanVerification']) {
   if (!isValidEmail(email)) {
     throw new Error('请输入正确的邮箱地址')
   }
 
-  if (!captchaToken) {
-    throw new Error('请先完成滑块验证')
+  if (!humanVerification.payload) {
+    throw new Error('请先完成安全校验')
   }
 
   return apiRequest<BackendEmailCodeResponse>('/auth/email-code', {
     body: {
-      captchaToken,
       email: email.trim(),
+      humanVerification,
     },
     method: 'POST',
   })
 }
 
-export async function sendRegisterEmailCode(email: string, captchaToken: string) {
+export async function sendRegisterEmailCode(email: string, humanVerification: HumanVerificationPayload['humanVerification']) {
   if (!isValidEmail(email)) {
     throw new Error('请输入正确的邮箱地址')
   }
 
-  if (!captchaToken) {
-    throw new Error('请先完成滑块验证')
+  if (!humanVerification.payload) {
+    throw new Error('请先完成安全校验')
   }
 
   return apiRequest<BackendEmailCodeResponse>('/auth/register/email-code', {
     body: {
-      captchaToken,
       email: email.trim(),
+      humanVerification,
     },
     method: 'POST',
   })
@@ -140,6 +142,7 @@ export async function registerAccount(payload: RegisterPayload): Promise<Registe
       college: payload.college.trim(),
       email: payload.email.trim(),
       grade: payload.grade.trim(),
+      humanVerification: payload.humanVerification,
       identityText: payload.identityText.trim(),
       name: payload.name.trim(),
       password: payload.password,

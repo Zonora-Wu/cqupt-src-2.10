@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, CalendarDays, ChevronRight, Megaphone, Pin } from 'lucide-react'
+import { ArrowLeft, Bell, CalendarDays, ChevronRight, Pin } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { listPublicAnnouncements } from '../../services/announcements'
@@ -77,10 +77,6 @@ export function PublicAnnouncements() {
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
       <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300">
-          <Megaphone className="h-4 w-4" />
-          公开公告
-        </div>
         <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">平台动态与规则更新</h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
           查看 CQUPT-SRC 的公开通知、规则调整、学习活动与证书体系说明。涉及漏洞细节、敏感资产和审核信息的内容不会公开展示。

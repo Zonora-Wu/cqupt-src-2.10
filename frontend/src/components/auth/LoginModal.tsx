@@ -2,7 +2,8 @@ import { ArrowRight, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
-import { SlideVerify } from '../ui/SlideVerify'
+import { HumanVerification } from '../ui/HumanVerification'
+import { ApiError } from '../../services/apiClient'
 import {
   type AuthUser,
   isValidEmail,
@@ -11,6 +12,7 @@ import {
   loginWithUnifiedCode,
   sendEmailLoginCode,
 } from '../../services/auth'
+import { createHumanVerificationPayload } from '../../services/humanVerification'
 import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
 type LoginModalProps = {
@@ -31,15 +33,16 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   const [countdown, setCountdown] = useState(0)
   const [isSendingCode, setIsSendingCode] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [sliderVerified, setSliderVerified] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState('')
-  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [emailHumanPayload, setEmailHumanPayload] = useState('')
+  const [passwordHumanPayload, setPasswordHumanPayload] = useState('')
+  const [humanResetKey, setHumanResetKey] = useState(0)
+  const [passwordVerificationRequired, setPasswordVerificationRequired] = useState(false)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [message, setMessage] = useState<NoticeState | null>(null)
   const [logos, setLogos] = useState(() => getPlatformLogos())
   const normalizedEmail = email.trim().toLowerCase()
   const emailCodeIsActive = mode === 'email' && normalizedEmail === emailCodeSentTo && countdown > 0
-  const shouldShowSlider = mode === 'sso' || !emailCodeIsActive
+  const shouldShowHumanVerification = mode === 'sso' ? passwordVerificationRequired : !emailCodeIsActive
 
   useEffect(() => {
     document.documentElement.classList.add('auth-modal-open')
@@ -68,28 +71,26 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       return
     }
 
-    if (!captchaToken) {
-      setMessage({ text: '请先完成滑块验证，再获取邮箱验证码', type: 'warning' })
+    if (!emailHumanPayload) {
+      setMessage({ text: '请先完成安全校验，再获取邮箱验证码', type: 'warning' })
       return
     }
 
     try {
       setIsSendingCode(true)
-      const result = await sendEmailLoginCode(email, captchaToken)
+      const result = await sendEmailLoginCode(email, createHumanVerificationPayload(emailHumanPayload).humanVerification)
       setCountdown(60)
       setEmailCodeSentTo(email.trim().toLowerCase())
-      setCaptchaToken('')
-      setSliderVerified(false)
-      setCaptchaResetKey((value) => value + 1)
+      setEmailHumanPayload('')
+      setHumanResetKey((value) => value + 1)
       setMessage({
         text: result.devCode ? `${result.message}，开发验证码为 ${result.devCode}` : result.message,
         type: 'success',
       })
     } catch (error) {
       setMessage({ text: getErrorMessage(error), type: 'error' })
-      setCaptchaToken('')
-      setSliderVerified(false)
-      setCaptchaResetKey((value) => value + 1)
+      setEmailHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setIsSendingCode(false)
     }
@@ -99,8 +100,8 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     event.preventDefault()
     setMessage(null)
 
-    if (mode === 'sso' && !sliderVerified) {
-      setMessage({ text: '请先完成滑块验证', type: 'warning' })
+    if (mode === 'sso' && passwordVerificationRequired && !passwordHumanPayload) {
+      setMessage({ text: '请先完成安全校验', type: 'warning' })
       return
     }
 
@@ -118,13 +119,22 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       setIsSubmitting(true)
       const result =
         mode === 'sso'
-          ? await loginWithUnifiedCode({ code: unifiedCode, password })
+          ? await loginWithUnifiedCode({
+              code: unifiedCode,
+              password,
+              ...(passwordHumanPayload ? createHumanVerificationPayload(passwordHumanPayload) : {}),
+            })
           : await loginWithEmailCode({ code: emailCode, email })
       setMessage({ text: '登录成功，正在进入用户首页', type: 'success' })
       window.setTimeout(() => {
         onLoginSuccess(result.user)
       }, 300)
     } catch (error) {
+      if (requiresHumanVerification(error)) {
+        setPasswordVerificationRequired(true)
+        setPasswordHumanPayload('')
+        setHumanResetKey((value) => value + 1)
+      }
       setMessage({ text: getErrorMessage(error), type: 'error' })
     } finally {
       setIsSubmitting(false)
@@ -178,9 +188,9 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             onClick={() => {
               setMode('sso')
               setMessage(null)
-              setSliderVerified(false)
-              setCaptchaToken('')
-              setCaptchaResetKey((value) => value + 1)
+              setEmailHumanPayload('')
+              setPasswordHumanPayload('')
+              setHumanResetKey((value) => value + 1)
             }}
             type="button"
           >
@@ -195,9 +205,9 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             onClick={() => {
               setMode('email')
               setMessage(null)
-              setSliderVerified(false)
-              setCaptchaToken('')
-              setCaptchaResetKey((value) => value + 1)
+              setEmailHumanPayload('')
+              setPasswordHumanPayload('')
+              setHumanResetKey((value) => value + 1)
             }}
             type="button"
           >
@@ -230,17 +240,17 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             />
           )}
 
-          {shouldShowSlider ? (
-            <SlideVerify
-              mode={mode === 'email' ? 'server' : 'local'}
-              onChange={setSliderVerified}
-              onTokenChange={setCaptchaToken}
-              purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'REGISTER_EMAIL_CODE'}
-              resetKey={`${mode}-${captchaResetKey}`}
+          {shouldShowHumanVerification ? (
+            <HumanVerification
+              compact={mode === 'sso'}
+              onChange={mode === 'email' ? setEmailHumanPayload : setPasswordHumanPayload}
+              onError={(text) => setMessage({ text, type: 'error' })}
+              purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'LOGIN_PASSWORD'}
+              resetKey={`${mode}-${humanResetKey}`}
             />
           ) : (
             <AlertMessage
-              message={`验证码已发送。${countdown} 秒后可重新获取，重新获取前需要再次完成滑块验证。`}
+              message={`验证码已发送。${countdown} 秒后可重新获取，重新获取前需要再次完成安全校验。`}
               variant="info"
             />
           )}
@@ -398,4 +408,14 @@ function EmailLoginFields({
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
   return '操作失败，请稍后重试'
+}
+
+function requiresHumanVerification(error: unknown) {
+  if (!(error instanceof ApiError) || !error.data || typeof error.data !== 'object') return false
+  const data = error.data as { requiresHumanVerification?: unknown; message?: unknown }
+  if (data.requiresHumanVerification === true) return true
+  const response = 'response' in data && data.response && typeof data.response === 'object'
+    ? data.response as { requiresHumanVerification?: unknown }
+    : null
+  return response?.requiresHumanVerification === true
 }

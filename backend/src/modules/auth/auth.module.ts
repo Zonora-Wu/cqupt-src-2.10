@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common'
-import { CaptchaModule } from '../captcha/captcha.module'
+import { HumanVerificationModule } from '../human-verification/human-verification.module'
 import { RbacModule } from '../rbac/rbac.module'
 import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
@@ -7,7 +7,7 @@ import { JwtAuthGuard } from './jwt-auth.guard'
 import { PermissionsGuard } from './permissions.guard'
 
 @Module({
-  imports: [RbacModule, CaptchaModule],
+  imports: [RbacModule, HumanVerificationModule],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, PermissionsGuard],
   exports: [AuthService, JwtAuthGuard, PermissionsGuard],

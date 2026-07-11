@@ -14,6 +14,7 @@ import { CaptchaModule } from './modules/captcha/captcha.module'
 import { CertificatesModule } from './modules/certificates/certificates.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { HealthModule } from './modules/health/health.module'
+import { HumanVerificationModule } from './modules/human-verification/human-verification.module'
 import { LearningModule } from './modules/learning/learning.module'
 import { NotificationsModule } from './modules/notifications/notifications.module'
 import { PointsMallModule } from './modules/points-mall/points-mall.module'
@@ -34,6 +35,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     PrismaModule,
     ObjectStorageModule,
     HealthModule,
+    HumanVerificationModule,
     SchoolPolicyModule,
     AuthModule,
     AccountModule,

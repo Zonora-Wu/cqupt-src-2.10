@@ -1,18 +1,19 @@
 import { BadRequestException } from '@nestjs/common'
+import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput } from './account.types'
 
 export function normalizeChangePasswordBody(body: Record<string, unknown>): ChangePasswordInput {
   const code = normalizeEmailCode(body.code)
   const newPassword = validatePassword(requireText(body.newPassword, '新密码', 8, 128))
 
-  return { code, newPassword }
+  return { code, humanVerification: normalizeHumanVerificationInput(body), newPassword }
 }
 
 export function normalizeChangePasswordWithOldBody(body: Record<string, unknown>): ChangePasswordWithOldInput {
   const oldPassword = requireText(body.oldPassword, '旧密码', 8, 128)
   const newPassword = validatePassword(requireText(body.newPassword, '新密码', 8, 128))
 
-  return { oldPassword, newPassword }
+  return { humanVerification: normalizeHumanVerificationInput(body), oldPassword, newPassword }
 }
 
 export function normalizeSendCurrentEmailCodeBody(body: Record<string, unknown>): SendCurrentEmailCodeInput {
@@ -20,7 +21,7 @@ export function normalizeSendCurrentEmailCodeBody(body: Record<string, unknown>)
   if (purpose !== 'CHANGE_EMAIL' && purpose !== 'CHANGE_PASSWORD') {
     throw new BadRequestException('purpose 参数无效')
   }
-  return { purpose }
+  return { humanVerification: normalizeHumanVerificationInput(body), purpose }
 }
 
 export function normalizeSendChangeEmailCodeBody(body: Record<string, unknown>): SendChangeEmailCodeInput {
@@ -32,6 +33,7 @@ export function normalizeSendChangeEmailCodeBody(body: Record<string, unknown>):
 export function normalizeChangeEmailBody(body: Record<string, unknown>): ChangeEmailInput {
   return {
     code: normalizeEmailCode(body.code),
+    humanVerification: normalizeHumanVerificationInput(body),
     newEmail: normalizeEmail(body.newEmail),
   }
 }

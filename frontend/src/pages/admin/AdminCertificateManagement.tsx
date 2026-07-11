@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { CopyableCode } from '../../components/ui/CopyableCode'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -25,6 +26,7 @@ import {
 import type { ManagedCertificateItem, SeverityLabel } from '../../services/certificates'
 
 type CertificateStatus = '待签发' | '已签发' | '已撤销'
+type NoticeState = { text: string; variant: 'error' | 'info' | 'success' | 'warning' }
 
 const statusOptions = ['全部状态', '待签发', '已签发', '已撤销']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
@@ -78,7 +80,7 @@ export function AdminCertificateManagement() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const [notice, setNotice] = useState<NoticeState | null>(null)
 
   async function loadCertificates() {
     setError('')
@@ -131,21 +133,21 @@ export function AdminCertificateManagement() {
 
   async function previewPdf(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId) {
-      setMessage('请先签发证书，再预览 PDF。')
+      setNotice({ text: '请先签发证书，再预览 PDF。', variant: 'warning' })
       return
     }
 
-    setMessage('')
+    setNotice(null)
     try {
       await openCertificatePreview(certificate.certificateId)
     } catch (previewError) {
-      setMessage(previewError instanceof Error ? previewError.message : '证书 PDF 预览失败')
+      setNotice({ text: previewError instanceof Error ? previewError.message : '证书 PDF 预览失败', variant: 'error' })
     }
   }
 
   async function handleRevoke(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId || certificate.status !== '已签发') {
-      setMessage('只有已签发证书可以撤销。')
+      setNotice({ text: '只有已签发证书可以撤销。', variant: 'warning' })
       return
     }
 
@@ -153,13 +155,13 @@ export function AdminCertificateManagement() {
     if (!reason?.trim()) return
     if (!window.confirm('确认撤销该证书？撤销后公开核验将不可用。')) return
 
-    setMessage('')
+    setNotice(null)
     try {
       await revokeCertificate(certificate.certificateId, reason.trim())
-      setMessage('证书已撤销。')
+      setNotice({ text: '证书已撤销。', variant: 'success' })
       await loadCertificates()
     } catch (revokeError) {
-      setMessage(revokeError instanceof Error ? revokeError.message : '证书撤销失败')
+      setNotice({ text: revokeError instanceof Error ? revokeError.message : '证书撤销失败', variant: 'error' })
     }
   }
 
@@ -175,10 +177,12 @@ export function AdminCertificateManagement() {
           返回证书列表
         </button>
 
-        {message && (
-          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-brand-300">
-            {message}
-          </div>
+        {notice && (
+          <AlertMessage
+            message={notice.text}
+            onClose={() => setNotice(null)}
+            variant={notice.variant}
+          />
         )}
 
         <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -335,16 +339,16 @@ export function AdminCertificateManagement() {
           </div>
         </SurfacePanel>
 
-        {message && (
-          <div className="mt-4 rounded-lg border border-brand-600/20 bg-brand-600/10 px-4 py-3 text-sm text-brand-700 dark:text-brand-300">
-            {message}
-          </div>
+        {notice && (
+          <AlertMessage
+            message={notice.text}
+            onClose={() => setNotice(null)}
+            variant={notice.variant}
+          />
         )}
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-            {error}
-          </div>
+          <AlertMessage message={error} onClose={() => setError('')} variant="error" />
         )}
 
         <SurfacePanel className="mt-6 overflow-hidden p-0">

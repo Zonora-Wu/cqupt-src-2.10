@@ -5,7 +5,8 @@ export type PendingRegistrationResponse = { pending: true; message: string }
 import { randomBytes, createHash } from 'node:crypto'
 import { getJwtExpiry, signJwt } from '../../common/crypto/jwt'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
-import { CaptchaService } from '../captcha/captcha.service'
+import { HumanVerificationService } from '../human-verification/human-verification.service'
+import { HumanVerificationInput } from '../human-verification/human-verification.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { RbacService } from '../rbac/rbac.service'
 import { ClientRequestMeta, LoginResponse } from './auth.types'
@@ -15,6 +16,8 @@ const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
 const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000
 const EMAIL_CODE_MAX_PER_WINDOW = 5
 const EMAIL_CODE_WINDOW_MS = 10 * 60 * 1000
+const PASSWORD_LOGIN_HUMAN_VERIFICATION_THRESHOLD = 3
+const PASSWORD_LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000
 
 @Injectable()
 export class AuthService {
@@ -23,27 +26,43 @@ export class AuthService {
     private readonly prisma: PrismaService,
     @Inject(RbacService)
     private readonly rbac: RbacService,
-    @Inject(CaptchaService)
-    private readonly captcha: CaptchaService,
+    @Inject(HumanVerificationService)
+    private readonly humanVerification: HumanVerificationService,
   ) {}
 
-  async loginWithPassword(unifiedCode: string, password: string, meta: ClientRequestMeta): Promise<LoginResponse> {
+  async loginWithPassword(unifiedCode: string, password: string, humanInput: HumanVerificationInput | null, meta: ClientRequestMeta): Promise<LoginResponse> {
+    const requiresHumanVerification = this.requiresPasswordLoginVerification(unifiedCode, meta.ipAddress)
+    if (requiresHumanVerification) {
+      if (!humanInput) {
+        throw new UnauthorizedException({
+          message: '登录失败次数较多，请先完成安全校验',
+          requiresHumanVerification: true,
+        })
+      }
+      await this.humanVerification.verify(humanInput, 'LOGIN_PASSWORD', meta)
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { unifiedCode },
       include: { role: true },
     })
 
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+      this.recordPasswordLoginFailure(unifiedCode, meta.ipAddress)
       await this.writeLoginAudit(null, 'failed', meta)
-      throw new UnauthorizedException('统一认证码或密码错误')
+      throw new UnauthorizedException({
+        message: '统一认证码或密码错误',
+        requiresHumanVerification: this.requiresPasswordLoginVerification(unifiedCode, meta.ipAddress),
+      })
     }
 
+    this.clearPasswordLoginFailures(unifiedCode, meta.ipAddress)
     return this.completeLogin(user, meta)
   }
 
-  async sendEmailLoginCode(email: string, captchaToken: string, meta: ClientRequestMeta) {
+  async sendEmailLoginCode(email: string, humanInput: HumanVerificationInput, meta: ClientRequestMeta) {
     const normalizedEmail = email.trim().toLowerCase()
-    await this.captcha.consumeCaptchaToken(captchaToken, 'LOGIN_EMAIL_CODE', meta)
+    await this.humanVerification.verify(humanInput, 'LOGIN_EMAIL_CODE', meta)
 
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -95,9 +114,9 @@ export class AuthService {
     }
   }
 
-  async sendRegisterEmailCode(email: string, captchaToken: string, meta: ClientRequestMeta) {
+  async sendRegisterEmailCode(email: string, humanInput: HumanVerificationInput, meta: ClientRequestMeta) {
     const normalizedEmail = email.trim().toLowerCase()
-    await this.captcha.consumeCaptchaToken(captchaToken, 'REGISTER_EMAIL_CODE', meta)
+    await this.humanVerification.verify(humanInput, 'REGISTER_EMAIL_CODE', meta)
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -128,6 +147,7 @@ export class AuthService {
   }
 
   async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse | PendingRegistrationResponse> {
+    await this.humanVerification.verify(input.humanVerification, 'REGISTER_SUBMIT', meta)
     await this.assertRegisterCode(input.email, input.code)
 
     const [existingCode, existingEmail, existingStudentNo, studentRole, registrationSetting] = await Promise.all([
@@ -439,6 +459,37 @@ export class AuthService {
     if (!verificationCode) {
       throw new UnauthorizedException('邮箱验证码错误或已过期')
     }
+  }
+
+  private readonly passwordLoginFailures = new Map<string, { count: number; updatedAt: number }>()
+
+  private getPasswordLoginFailureKey(unifiedCode: string, ipAddress?: string) {
+    return `${unifiedCode}:${ipAddress || 'unknown'}`
+  }
+
+  private requiresPasswordLoginVerification(unifiedCode: string, ipAddress?: string) {
+    const key = this.getPasswordLoginFailureKey(unifiedCode, ipAddress)
+    const failure = this.passwordLoginFailures.get(key)
+    if (!failure) return false
+    if (Date.now() - failure.updatedAt > PASSWORD_LOGIN_FAILURE_WINDOW_MS) {
+      this.passwordLoginFailures.delete(key)
+      return false
+    }
+    return failure.count >= PASSWORD_LOGIN_HUMAN_VERIFICATION_THRESHOLD
+  }
+
+  private recordPasswordLoginFailure(unifiedCode: string, ipAddress?: string) {
+    const key = this.getPasswordLoginFailureKey(unifiedCode, ipAddress)
+    const current = this.passwordLoginFailures.get(key)
+    if (!current || Date.now() - current.updatedAt > PASSWORD_LOGIN_FAILURE_WINDOW_MS) {
+      this.passwordLoginFailures.set(key, { count: 1, updatedAt: Date.now() })
+      return
+    }
+    this.passwordLoginFailures.set(key, { count: current.count + 1, updatedAt: Date.now() })
+  }
+
+  private clearPasswordLoginFailures(unifiedCode: string, ipAddress?: string) {
+    this.passwordLoginFailures.delete(this.getPasswordLoginFailureKey(unifiedCode, ipAddress))
   }
 
 }

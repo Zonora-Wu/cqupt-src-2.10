@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { FloatingNotice } from './components/ui/FloatingNotice'
 import { GuestHome } from './pages/guest/GuestHome'
 import { PublicOnly, RequireRole } from './routes/guards'
 import { getDefaultPathForRole } from './routes/routeConfig'
@@ -209,9 +210,11 @@ function AppShell() {
         )}
       </Suspense>
       {sessionNotice && (
-        <div className="fixed left-1/2 top-4 z-[120] -translate-x-1/2 rounded-lg border border-amber-500/20 bg-amber-50/95 px-4 py-3 text-sm font-medium text-amber-900 shadow-lg shadow-black/10 backdrop-blur dark:border-amber-300/20 dark:bg-amber-950/90 dark:text-amber-100">
-          {sessionNotice}
-        </div>
+        <FloatingNotice
+          message={sessionNotice}
+          onClose={() => setSessionNotice('')}
+          variant="warning"
+        />
       )}
     </>
   )

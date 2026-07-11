@@ -1,4 +1,5 @@
 import { apiFormRequest, apiRequest } from './apiClient'
+import { type HumanVerificationPayload } from './humanVerification'
 
 export type AccountProfile = {
   account: {
@@ -65,28 +66,28 @@ export function getAccountProfile() {
   return request<AccountProfile>('/account/profile', { method: 'GET' })
 }
 
-export function changePassword(payload: { code: string; newPassword: string }) {
+export function changePassword(payload: HumanVerificationPayload & { code: string; newPassword: string }) {
   return request<{ message: string }>('/account/password/change', {
     body: payload,
     method: 'POST',
   })
 }
 
-export function changePasswordWithOld(payload: { oldPassword: string; newPassword: string }) {
+export function changePasswordWithOld(payload: HumanVerificationPayload & { oldPassword: string; newPassword: string }) {
   return request<{ message: string }>('/account/password/change-with-old', {
     body: payload,
     method: 'POST',
   })
 }
 
-export function sendCurrentEmailCode(purpose: 'CHANGE_EMAIL' | 'CHANGE_PASSWORD') {
+export function sendCurrentEmailCode(purpose: 'CHANGE_EMAIL' | 'CHANGE_PASSWORD', humanVerification: HumanVerificationPayload['humanVerification']) {
   return request<ChangeEmailCodeResponse>('/account/email/identity-code', {
-    body: { purpose },
+    body: { humanVerification, purpose },
     method: 'POST',
   })
 }
 
-export function changeEmail(payload: { code: string; newEmail: string }) {
+export function changeEmail(payload: HumanVerificationPayload & { code: string; newEmail: string }) {
   return request<ChangeEmailResponse>('/account/email/change', {
     body: payload,
     method: 'POST',

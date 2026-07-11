@@ -1,5 +1,6 @@
 import { Award, CheckCircle2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { AlertMessage } from '../ui/AlertMessage'
 import { issueCertificate } from '../../services/certificates'
 
 export type IssueCertificateTarget = {
@@ -107,9 +108,7 @@ export function IssueCertificateModal({ certificate, onClose, onIssued }: IssueC
         </div>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-            {error}
-          </div>
+          <AlertMessage message={error} onClose={() => setError('')} variant="error" />
         )}
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">

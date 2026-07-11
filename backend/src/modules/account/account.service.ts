@@ -3,6 +3,7 @@ import { AuditAction, VulnerabilityStatus } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
+import { HumanVerificationService } from '../human-verification/human-verification.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
 
@@ -21,6 +22,8 @@ export class AccountService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(HumanVerificationService)
+    private readonly humanVerification: HumanVerificationService,
   ) {}
 
   async getProfile(user: AuthenticatedRequestUser) {
@@ -162,6 +165,8 @@ export class AccountService {
   }
 
   async changePassword(user: AuthenticatedRequestUser, input: ChangePasswordInput, meta: ClientRequestMeta) {
+    await this.humanVerification.verify(input.humanVerification, 'CHANGE_PASSWORD', meta)
+
     const codeHash = createHash('sha256').update(input.code).digest('hex')
     const verificationCode = await this.prisma.emailVerificationCode.findFirst({
       where: {
@@ -226,6 +231,8 @@ export class AccountService {
   }
 
   async changePasswordWithOld(user: AuthenticatedRequestUser, input: ChangePasswordWithOldInput, meta: ClientRequestMeta) {
+    await this.humanVerification.verify(input.humanVerification, 'CHANGE_PASSWORD', meta)
+
     const currentUser = await this.prisma.user.findFirst({
       where: { deletedAt: null, id: user.id },
       select: { passwordHash: true },
@@ -285,6 +292,12 @@ export class AccountService {
   }
 
   async sendCurrentEmailCode(user: AuthenticatedRequestUser, input: SendCurrentEmailCodeInput, meta: ClientRequestMeta) {
+    await this.humanVerification.verify(
+      input.humanVerification,
+      input.purpose === 'CHANGE_EMAIL' ? 'CHANGE_EMAIL_CODE' : 'CHANGE_PASSWORD',
+      meta,
+    )
+
     if (!user.email) {
       throw new BadRequestException('当前账号未绑定邮箱')
     }
@@ -311,6 +324,8 @@ export class AccountService {
   }
 
   async changeEmail(user: AuthenticatedRequestUser, input: ChangeEmailInput, meta: ClientRequestMeta) {
+    await this.humanVerification.verify(input.humanVerification, 'CHANGE_EMAIL_SUBMIT', meta)
+
     if (input.newEmail === user.email.toLowerCase()) {
       throw new BadRequestException('新邮箱不能与当前邮箱相同')
     }

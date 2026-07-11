@@ -1,4 +1,4 @@
-import { Building2, GraduationCap, Network, ShieldCheck, Target, Users } from 'lucide-react'
+import { Building2, GraduationCap, Network, ShieldCheck, Users } from 'lucide-react'
 
 const values = [
   {
@@ -29,10 +29,6 @@ export function AboutPlatform() {
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-36 md:px-8 md:pt-40">
       <section className="grid items-end gap-10 lg:grid-cols-[1.08fr_0.92fr]">
         <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300">
-            <Target className="h-4 w-4" />
-            关于平台
-          </div>
           <h1 className="max-w-4xl text-4xl font-semibold tracking-tight md:text-6xl">不只是漏洞库，而是安全教育与治理系统</h1>
           <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
             CQUPT-SRC 希望以较低建设成本，形成一个连接漏洞响应、安全学习、证书激励和校园安全治理的长期平台，推动高校网络安全产教融合实践。

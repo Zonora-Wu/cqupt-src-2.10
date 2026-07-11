@@ -22,6 +22,7 @@ import {
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
+import { HumanVerification } from '../../components/ui/HumanVerification'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -34,6 +35,7 @@ import {
   type AccountProfile,
 } from '../../services/account'
 import { type AuthUser } from '../../services/auth'
+import { createHumanVerificationPayload } from '../../services/humanVerification'
 
 type UserProfileProps = {
   onAvatarChange?: (url: string) => void
@@ -389,19 +391,31 @@ function ChangeEmailModal({
   const [notice, setNotice] = useState<Notice | null>(null)
   const [sending, setSending] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sendHumanPayload, setSendHumanPayload] = useState('')
+  const [submitHumanPayload, setSubmitHumanPayload] = useState('')
+  const [humanResetKey, setHumanResetKey] = useState(0)
 
   const sendCode = async () => {
+    if (!sendHumanPayload) {
+      setNotice({ text: '请先完成安全校验', type: 'warning' })
+      return
+    }
     setSending(true)
     setNotice(null)
     try {
-      const result = await sendCurrentEmailCode('CHANGE_EMAIL')
+      const result = await sendCurrentEmailCode('CHANGE_EMAIL', createHumanVerificationPayload(sendHumanPayload).humanVerification)
       setNotice({
         text: result.devCode ? `验证码已发送。开发预览码：${result.devCode}` : result.message,
         type: 'success',
       })
       setStep('verify')
+      setSendHumanPayload('')
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } catch (error) {
       setNotice({ text: getErrorMessage(error), type: 'error' })
+      setSendHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSending(false)
     }
@@ -416,13 +430,23 @@ function ChangeEmailModal({
       setNotice({ text: '请输入正确的邮箱格式', type: 'warning' })
       return
     }
+    if (!submitHumanPayload) {
+      setNotice({ text: '请完成修改邮箱前的安全校验', type: 'warning' })
+      return
+    }
     setSaving(true)
     setNotice(null)
     try {
-      const result = await changeEmail({ code, newEmail })
+      const result = await changeEmail({
+        code,
+        newEmail,
+        ...createHumanVerificationPayload(submitHumanPayload),
+      })
       onSuccess(result.email)
     } catch (error) {
       setNotice({ text: getErrorMessage(error), type: 'error' })
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSaving(false)
     }
@@ -441,6 +465,13 @@ function ChangeEmailModal({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               点击下方按钮，将向当前邮箱发送一条验证码，用于确认身份后修改新邮箱。
             </p>
+            <HumanVerification
+              compact
+              onChange={setSendHumanPayload}
+              onError={(text) => setNotice({ text, type: 'error' })}
+              purpose="CHANGE_EMAIL_CODE"
+              resetKey={`email-code-${humanResetKey}`}
+            />
             {notice && <NoticeBar notice={notice} />}
             <div className="flex justify-end gap-3 pt-1">
               <button className="rounded-lg px-4 py-2.5 text-sm text-slate-600 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10" onClick={onClose} type="button">取消</button>
@@ -482,6 +513,13 @@ function ChangeEmailModal({
                 />
               </div>
             </label>
+            <HumanVerification
+              compact
+              onChange={setSubmitHumanPayload}
+              onError={(text) => setNotice({ text, type: 'error' })}
+              purpose="CHANGE_EMAIL_SUBMIT"
+              resetKey={`email-submit-${humanResetKey}`}
+            />
             {notice && <NoticeBar notice={notice} />}
             <div className="flex justify-end gap-3 pt-1">
               <button
@@ -528,19 +566,31 @@ function ChangePasswordModal({
   const [notice, setNotice] = useState<Notice | null>(null)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [sendHumanPayload, setSendHumanPayload] = useState('')
+  const [submitHumanPayload, setSubmitHumanPayload] = useState('')
+  const [humanResetKey, setHumanResetKey] = useState(0)
 
   const sendCode = async () => {
+    if (!sendHumanPayload) {
+      setNotice({ text: '请先完成安全校验', type: 'warning' })
+      return
+    }
     setSending(true)
     setNotice(null)
     try {
-      const result = await sendCurrentEmailCode('CHANGE_PASSWORD')
+      const result = await sendCurrentEmailCode('CHANGE_PASSWORD', createHumanVerificationPayload(sendHumanPayload).humanVerification)
       setNotice({
         text: result.devCode ? `验证码已发送。开发预览码：${result.devCode}` : result.message,
         type: 'success',
       })
       setCodeSent(true)
+      setSendHumanPayload('')
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } catch (error) {
       setNotice({ text: getErrorMessage(error), type: 'error' })
+      setSendHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSending(false)
     }
@@ -570,16 +620,30 @@ function ChangePasswordModal({
       setNotice({ text: '新密码不能与旧密码相同', type: 'warning' })
       return
     }
+    if (!submitHumanPayload) {
+      setNotice({ text: '请完成修改密码前的安全校验', type: 'warning' })
+      return
+    }
     setSaving(true)
     setNotice(null)
     try {
       const result = method === 'old-password'
-        ? await changePasswordWithOld({ oldPassword, newPassword })
-        : await changePassword({ code, newPassword })
+        ? await changePasswordWithOld({
+            oldPassword,
+            newPassword,
+            ...createHumanVerificationPayload(submitHumanPayload),
+          })
+        : await changePassword({
+            code,
+            newPassword,
+            ...createHumanVerificationPayload(submitHumanPayload),
+          })
       setNotice({ text: result.message, type: 'success' })
       setSuccess(true)
     } catch (error) {
       setNotice({ text: getErrorMessage(error), type: 'error' })
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSaving(false)
     }
@@ -608,7 +672,13 @@ function ChangePasswordModal({
                 ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
                 : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
             }`}
-            onClick={() => { setMethod('old-password'); setNotice(null) }}
+            onClick={() => {
+              setMethod('old-password')
+              setNotice(null)
+              setSendHumanPayload('')
+              setSubmitHumanPayload('')
+              setHumanResetKey((value) => value + 1)
+            }}
             type="button"
           >
             旧密码验证
@@ -619,7 +689,13 @@ function ChangePasswordModal({
                 ? 'border-brand-600 text-brand-700 dark:border-brand-200 dark:text-brand-100'
                 : 'border-transparent text-slate-400 hover:text-slate-800 dark:text-white/40 dark:hover:text-white/75'
             }`}
-            onClick={() => { setMethod('email-code'); setNotice(null) }}
+            onClick={() => {
+              setMethod('email-code')
+              setNotice(null)
+              setSendHumanPayload('')
+              setSubmitHumanPayload('')
+              setHumanResetKey((value) => value + 1)
+            }}
             type="button"
           >
             邮箱验证
@@ -627,25 +703,34 @@ function ChangePasswordModal({
         </div>
 
         {method === 'old-password' ? (
-          <div className="group relative">
-            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
-            <input
-              autoFocus
-              className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
-              onChange={(e) => setOldPassword(e.target.value)}
-              placeholder="输入当前密码"
-              type={showOldPassword ? 'text' : 'password'}
-              value={oldPassword}
+          <>
+            <div className="group relative">
+              <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
+              <input
+                autoFocus
+                className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="输入当前密码"
+                type={showOldPassword ? 'text' : 'password'}
+                value={oldPassword}
+              />
+              <button
+                aria-label={showOldPassword ? '隐藏密码' : '显示密码'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/30 dark:hover:text-white/60"
+                onClick={() => setShowOldPassword((v) => !v)}
+                type="button"
+              >
+                {showOldPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            <HumanVerification
+              compact
+              onChange={setSubmitHumanPayload}
+              onError={(text) => setNotice({ text, type: 'error' })}
+              purpose="CHANGE_PASSWORD"
+              resetKey={`old-password-${humanResetKey}`}
             />
-            <button
-              aria-label={showOldPassword ? '隐藏密码' : '显示密码'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-white/30 dark:hover:text-white/60"
-              onClick={() => setShowOldPassword((v) => !v)}
-              type="button"
-            >
-              {showOldPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
+          </>
         ) : (
           <>
             <div className="rounded-lg bg-slate-50 px-4 py-3 ">
@@ -674,6 +759,13 @@ function ChangePasswordModal({
                 </button>
               </div>
             </div>
+            <HumanVerification
+              compact
+              onChange={codeSent ? setSubmitHumanPayload : setSendHumanPayload}
+              onError={(text) => setNotice({ text, type: 'error' })}
+              purpose="CHANGE_PASSWORD"
+              resetKey={`password-email-${codeSent ? 'submit' : 'send'}-${humanResetKey}`}
+            />
           </>
         )}
 

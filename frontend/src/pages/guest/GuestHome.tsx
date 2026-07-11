@@ -239,10 +239,6 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <PageTransition key="home">
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 text-center md:px-8 md:pt-48">
         <div>
-          <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-600 dark:bg-brand-300" />
-            <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">SECURE PLATFORM LIVE</span>
-          </div>
           <h1 className="mx-auto max-w-4xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
             CQUPT-SRC 校园漏洞响应与
             <br className="hidden md:block" />

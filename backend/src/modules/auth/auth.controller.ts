@@ -3,7 +3,7 @@ import { CurrentUser } from './auth.decorators'
 import { JwtAuthGuard } from './jwt-auth.guard'
 import { AuthService } from './auth.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from './auth.types'
-import { normalizeCaptchaToken } from '../captcha/captcha.validation'
+import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
 import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody, normalizeUnifiedCode } from './auth.validation'
 
 type RequestLike = {
@@ -16,6 +16,9 @@ type RequestLike = {
 }
 
 type PasswordLoginBody = {
+  humanVerification?: unknown
+  humanVerificationPayload?: unknown
+  humanVerificationProvider?: unknown
   unifiedCode?: unknown
   password?: unknown
 }
@@ -26,8 +29,10 @@ type EmailCodeLoginBody = {
 }
 
 type SendEmailCodeBody = {
-  captchaToken?: unknown
   email?: unknown
+  humanVerification?: unknown
+  humanVerificationPayload?: unknown
+  humanVerificationProvider?: unknown
 }
 
 type RegisterBody = Record<string, unknown>
@@ -53,7 +58,12 @@ export class AuthController {
 
   @Post('login/password')
   loginWithPassword(@Body() body: PasswordLoginBody, @Req() req: RequestLike) {
-    return this.auth.loginWithPassword(normalizeUnifiedCode(body.unifiedCode), getString(body.password), getRequestMeta(req))
+    return this.auth.loginWithPassword(
+      normalizeUnifiedCode(body.unifiedCode),
+      getString(body.password),
+      body.humanVerification || body.humanVerificationPayload ? normalizeHumanVerificationInput(body as Record<string, unknown>) : null,
+      getRequestMeta(req),
+    )
   }
 
   @Post('login/email-code')
@@ -65,7 +75,7 @@ export class AuthController {
   sendEmailLoginCode(@Body() body: SendEmailCodeBody, @Req() req: RequestLike) {
     return this.auth.sendEmailLoginCode(
       normalizeEmail(body.email),
-      normalizeCaptchaToken(body.captchaToken),
+      normalizeHumanVerificationInput(body as Record<string, unknown>),
       getRequestMeta(req),
     )
   }
@@ -74,7 +84,7 @@ export class AuthController {
   sendRegisterEmailCode(@Body() body: SendEmailCodeBody, @Req() req: RequestLike) {
     return this.auth.sendRegisterEmailCode(
       normalizeEmail(body.email),
-      normalizeCaptchaToken(body.captchaToken),
+      normalizeHumanVerificationInput(body as Record<string, unknown>),
       getRequestMeta(req),
     )
   }

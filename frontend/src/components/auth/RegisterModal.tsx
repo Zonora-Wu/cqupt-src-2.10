@@ -14,8 +14,8 @@ import {
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
+import { HumanVerification } from '../ui/HumanVerification'
 import { SelectInput } from '../ui/SelectInput'
-import { SlideVerify } from '../ui/SlideVerify'
 import {
   isValidEmail,
   isValidUnifiedCode,
@@ -25,6 +25,7 @@ import {
   type AuthUser,
   type RegisterResult,
 } from '../../services/auth'
+import { createHumanVerificationPayload } from '../../services/humanVerification'
 import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
 type RegisterModalProps = {
@@ -63,8 +64,9 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const [showPassword, setShowPassword] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState('')
-  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [emailHumanPayload, setEmailHumanPayload] = useState('')
+  const [submitHumanPayload, setSubmitHumanPayload] = useState('')
+  const [humanResetKey, setHumanResetKey] = useState(0)
   const [countdown, setCountdown] = useState(0)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [logos, setLogos] = useState(() => getPlatformLogos())
@@ -82,7 +84,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   })
   const normalizedEmail = form.email.trim().toLowerCase()
   const emailCodeIsActive = normalizedEmail === emailCodeSentTo && countdown > 0
-  const shouldShowSlider = !emailCodeIsActive
+  const activeHumanPurpose = emailCodeIsActive ? 'REGISTER_SUBMIT' : 'REGISTER_EMAIL_CODE'
   const shouldCollectStudentInfo = !teacherIdentityTypes.has(form.identityText)
 
   const updateField = (key: keyof typeof form, value: string) => {
@@ -125,23 +127,24 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       return
     }
 
-    if (!captchaToken) {
-      setError('请先完成滑块验证，再获取邮箱验证码')
+    if (!emailHumanPayload) {
+      setError('请先完成安全校验，再获取邮箱验证码')
       return
     }
 
     setSendingCode(true)
     try {
-      const result = await sendRegisterEmailCode(form.email, captchaToken)
+      const result = await sendRegisterEmailCode(form.email, createHumanVerificationPayload(emailHumanPayload).humanVerification)
       setCountdown(60)
       setEmailCodeSentTo(normalizedEmail)
-      setCaptchaToken('')
-      setCaptchaResetKey((value) => value + 1)
+      setEmailHumanPayload('')
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
       setMessage(result.devCode ? `${result.message}，开发验证码：${result.devCode}` : result.message)
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : '验证码发送失败')
-      setCaptchaToken('')
-      setCaptchaResetKey((value) => value + 1)
+      setEmailHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSendingCode(false)
     }
@@ -192,9 +195,17 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       return
     }
 
+    if (!submitHumanPayload) {
+      setError('请完成提交注册前的安全校验')
+      return
+    }
+
     setSubmitting(true)
     try {
-      const result: RegisterResult = await registerAccount(form)
+      const result: RegisterResult = await registerAccount({
+        ...form,
+        ...createHumanVerificationPayload(submitHumanPayload),
+      })
       if (result.pending === true) {
         setPendingApproval(true)
         setMessage(result.message)
@@ -206,6 +217,8 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       }
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : '注册失败，请稍后重试')
+      setSubmitHumanPayload('')
+      setHumanResetKey((value) => value + 1)
     } finally {
       setSubmitting(false)
     }
@@ -345,17 +358,16 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
               <Input icon={<LockKeyhole />} onChange={(value) => updateField('passwordConfirm', value)} placeholder="确认密码" required type="password" value={form.passwordConfirm} />
 
-              {shouldShowSlider ? (
-                <SlideVerify
-                  mode="server"
-                  onError={setError}
-                  onTokenChange={setCaptchaToken}
-                  purpose="REGISTER_EMAIL_CODE"
-                  resetKey={captchaResetKey}
-                />
-              ) : (
+              <HumanVerification
+                onChange={emailCodeIsActive ? setSubmitHumanPayload : setEmailHumanPayload}
+                onError={setError}
+                purpose={activeHumanPurpose}
+                resetKey={`${activeHumanPurpose}-${humanResetKey}`}
+              />
+
+              {emailCodeIsActive && (
                 <AlertMessage
-                  message={`验证码已发送。${countdown} 秒后可重新获取，重新获取前需要再次完成滑块验证。`}
+                  message={`验证码已发送。${countdown} 秒后可重新获取；提交注册需完成下方安全校验。`}
                   variant="info"
                 />
               )}

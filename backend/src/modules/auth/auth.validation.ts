@@ -1,4 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
+import { HumanVerificationInput } from '../human-verification/human-verification.types'
+import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
 
 export type NormalizedRegisterInput = {
   code: string
@@ -10,6 +12,7 @@ export type NormalizedRegisterInput = {
   password: string
   studentNo: string
   unifiedCode: string
+  humanVerification: HumanVerificationInput
 }
 
 const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
@@ -24,6 +27,7 @@ export function normalizeRegisterBody(body: Record<string, unknown>): Normalized
     college: requireText(body.college, '学院', 2, 80),
     email: normalizeEmail(body.email),
     grade: optionalText(body.grade, 20),
+    humanVerification: normalizeHumanVerificationInput(body),
     identityText,
     name: requireText(body.name, '姓名', 2, 40),
     password: validatePassword(password),

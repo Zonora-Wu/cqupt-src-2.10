@@ -1,4 +1,4 @@
-import { Award, CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
+import { CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
@@ -57,10 +57,6 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
       )}
 
       <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300">
-          <Award className="h-4 w-4" />
-          证书查询
-        </div>
         <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">验证漏洞贡献证书</h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
           输入证书编号，查询 CQUPT-SRC 颁发的漏洞贡献证书真实性。公开查询仅展示证书状态和脱敏信息，不公开任何漏洞细节。

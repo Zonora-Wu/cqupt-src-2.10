@@ -65,10 +65,6 @@ export function PlatformRules() {
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
       <section className="mx-auto max-w-4xl text-center">
-        <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-1">
-          <span className="h-2 w-2 rounded-full bg-brand-600 dark:bg-brand-300" />
-          <span className="font-mono text-xs font-medium tracking-wider text-brand-700 dark:text-brand-300">PLATFORM RULES</span>
-        </div>
         <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
           规范参与，安全共建
         </h1>
