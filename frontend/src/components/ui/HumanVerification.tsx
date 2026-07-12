@@ -1,11 +1,10 @@
 import 'altcha'
 import 'altcha/i18n/zh-cn'
 import 'altcha/altcha.css'
-import { CheckCircle2, Loader2, ShieldCheck, X } from 'lucide-react'
+import { Loader2, ShieldCheck, X } from 'lucide-react'
 import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getHumanVerificationChallengeUrl, type HumanVerificationPurpose } from '../../services/humanVerification'
-import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
 export type HumanVerificationProps = {
   compact?: boolean
@@ -30,8 +29,10 @@ type AltchaEvent = Event & {
   }
 }
 
+const altchaLogoUrl = '/assets/logos/ALTCHA_logo.png'
+
 export function HumanVerification({
-  compact = false,
+  compact: _compact = false,
   disabled = false,
   helperText,
   onChange,
@@ -45,7 +46,6 @@ export function HumanVerification({
   const [status, setStatus] = useState<'ready' | 'verified' | 'verifying' | 'error'>('ready')
   const [challengeKey, setChallengeKey] = useState(0)
   const [open, setOpen] = useState(false)
-  const [logos, setLogos] = useState(() => getPlatformLogos())
   const challengeUrl = useMemo(() => getHumanVerificationChallengeUrl(purpose), [purpose])
   const configuration = useMemo(
     () =>
@@ -65,8 +65,6 @@ export function HumanVerification({
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
-
-  useEffect(() => subscribePlatformBranding(setLogos), [])
 
   useEffect(() => {
     if (!open) return
@@ -132,7 +130,7 @@ export function HumanVerification({
           ? '需重试'
           : '待校验'
 
-  const StatusIcon = status === 'verified' ? CheckCircle2 : status === 'verifying' ? Loader2 : ShieldCheck
+  const StatusIcon = status === 'verifying' ? Loader2 : status === 'error' ? ShieldCheck : null
   const openVerification = () => {
     if (disabled) return
     if (status === 'error') {
@@ -152,18 +150,17 @@ export function HumanVerification({
         type="button"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
-            status === 'verified'
-              ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-300'
-              : status === 'error'
-                ? 'bg-red-500/10 text-red-600 dark:text-red-300'
-                : 'bg-brand-600/10 text-brand-700 dark:text-brand-300'
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${
+            status === 'error' ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-brand-300'
           }`}>
-            <StatusIcon className={`h-4 w-4 ${status === 'verifying' ? 'animate-spin' : ''}`} />
+            {StatusIcon ? (
+              <StatusIcon className={`h-4 w-4 ${status === 'verifying' ? 'animate-spin' : ''}`} />
+            ) : (
+              <img alt="" className="h-7 w-7 object-contain" src={altchaLogoUrl} />
+            )}
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
-            {!compact && <span className="block truncate text-xs text-slate-500 dark:text-white/45">{helper}</span>}
           </span>
         </span>
         <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium ${
@@ -181,12 +178,12 @@ export function HumanVerification({
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
                 <img
-                  alt="平台校徽"
-                  className="h-10 w-10 shrink-0 rounded-lg border border-black/10 bg-white object-contain p-1 shadow-sm dark:border-white/10 dark:bg-white"
-                  src={logos.faviconUrl}
+                  alt="ALTCHA 安全认证"
+                  className="h-11 w-11 shrink-0 object-contain"
+                  src={altchaLogoUrl}
                 />
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold">平台{title}</h2>
+                  <h2 className="text-base font-semibold">ALTCHA {title}</h2>
                   <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
                     系统会自动完成校验，用于确认本次操作由真实用户发起。
                   </p>
