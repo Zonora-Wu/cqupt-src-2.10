@@ -71,7 +71,6 @@ import {
   normalizeBrandPaletteOverrides,
   normalizeHexColor,
   type BrandPalette,
-  type BrandPaletteOverrides,
   type BrandColorSlot,
 } from '../../utils/brandTheme'
 import { applyPlatformBranding, defaultPlatformLogos, getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
@@ -128,9 +127,11 @@ function getAppliedThemePalette(themeColor = getAppliedThemeColor()): BrandPalet
   return generateBrandPalette(palette.primary, palette)
 }
 
-function serializeThemePalette(overrides: BrandPaletteOverrides) {
+function serializeThemePalette(themeColor: string, palette: BrandPalette) {
+  const normalizedThemeColor = normalizeHexColor(themeColor) ?? palette.primary
+  const completePalette = generateBrandPalette(normalizedThemeColor, palette)
   return [...brandColorSlots, ...brandShades].reduce<Record<string, string>>((payload, key) => {
-    const color = normalizeHexColor(overrides[key] ?? '')
+    const color = normalizeHexColor(completePalette[key] ?? '')
     if (color) payload[String(key)] = color
     return payload
   }, {})
@@ -152,12 +153,15 @@ const brandColorSlotMeta: Record<BrandColorSlot, { group: '白天模式' | '黑�
   primary: { group: '主颜色', label: '主按钮/强调', usage: '主按钮、选中态、链接、重点图标和进度条' },
 }
 
+const visibleLightPaletteSlots: BrandColorSlot[] = ['lightBg', 'lightSurface', 'lightMuted', 'lightBorder', 'lightText']
+const visibleDarkPaletteSlots: BrandColorSlot[] = ['darkBg', 'darkSurface', 'darkMuted', 'darkBorder', 'darkText']
+
 function createEditableThemePalette(themeColor: string, value?: unknown): BrandPalette {
   return generateBrandPalette(themeColor, normalizeBrandPaletteOverrides(value))
 }
 
 function areThemePalettesEqual(left: BrandPalette, right: BrandPalette) {
-  return brandColorSlots.every((slot) => left[slot] === right[slot])
+  return [...brandColorSlots, ...brandShades].every((key) => left[key] === right[key])
 }
 
 function readAppearanceDraft() {
@@ -187,7 +191,7 @@ function writeAppearanceDraft(themeColor: string, themePalette: BrandPalette) {
       appearanceDraftStorageKey,
       JSON.stringify({
         themeColor: normalizedThemeColor,
-        themePalette: serializeThemePalette(themePalette),
+        themePalette: serializeThemePalette(normalizedThemeColor, themePalette),
         updatedAt: Date.now(),
       }),
     )
@@ -370,7 +374,7 @@ export function AdminSystemSettings() {
   const [themePalette, setThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
   const [savedThemeColor, setSavedThemeColor] = useState(() => getAppliedThemeColor())
   const [savedThemePalette, setSavedThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
-  const [editingPaletteShade, setEditingPaletteShade] = useState<BrandColorSlot | null>(null)
+  const [editingPaletteKey, setEditingPaletteKey] = useState<BrandColorSlot | null>(null)
   const [paletteDraftColor, setPaletteDraftColor] = useState('')
   const [canApplyThemePreview, setCanApplyThemePreview] = useState(false)
   const [appliedPlatformLogos, setAppliedPlatformLogos] = useState(() => getPlatformLogos())
@@ -876,7 +880,7 @@ export function AdminSystemSettings() {
     setAppearanceMessage('')
     setIsSavingAppearance(true)
     try {
-      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor, themePalette: serializeThemePalette(themePalette) })
+      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor, themePalette: serializeThemePalette(normalizedThemeColor, themePalette) })
       clearAppearanceDraft()
       setCanApplyThemePreview(true)
       setThemeColor(result.themeColor)
@@ -894,33 +898,34 @@ export function AdminSystemSettings() {
     }
   }
 
-  const openPaletteShadeEditor = (slot: BrandColorSlot) => {
-    setEditingPaletteShade(slot)
-    setPaletteDraftColor(generatedBrandPalette[slot])
+  const openPaletteEditor = (key: BrandColorSlot) => {
+    setEditingPaletteKey(key)
+    setPaletteDraftColor(generatedBrandPalette[key])
   }
 
   const savePaletteShade = () => {
-    if (editingPaletteShade === null) return
+    if (editingPaletteKey === null) return
     const normalizedColor = normalizeHexColor(paletteDraftColor)
     if (!normalizedColor) {
       showNotice('色卡颜色必须是 #RRGGBB 格式，例如 #2A6438。', 'error', '颜色格式错误')
       return
     }
 
-    const nextPalette = generateBrandPalette(editingPaletteShade === 'primary' ? normalizedColor : themePalette.primary, {
+    const nextPalette = generateBrandPalette(themePalette.primary, {
       ...themePalette,
-      [editingPaletteShade]: normalizedColor,
+      [editingPaletteKey]: normalizedColor,
     })
     const nextThemeColor = nextPalette.primary
+    const meta = brandColorSlotMeta[editingPaletteKey]
 
     writeAppearanceDraft(nextThemeColor, nextPalette)
     setCanApplyThemePreview(true)
     setThemeColor(nextThemeColor)
     setThemePalette(nextPalette)
-    setEditingPaletteShade(null)
+    setEditingPaletteKey(null)
     setPaletteDraftColor('')
-    setAppearanceMessage(`${brandColorSlotMeta[editingPaletteShade].label}已暂存为 ${normalizedColor}，请点击下方“保存外观设置”全局保存。`)
-    showNotice(`${brandColorSlotMeta[editingPaletteShade].label}已应用到当前色卡预览，保存外观设置后会全局生效。`, 'info', '色卡修改已暂存')
+    setAppearanceMessage(`${meta.label}已暂存为 ${normalizedColor}，请点击下方“保存外观设置”全局保存。`)
+    showNotice(`${meta.label}已应用到当前色卡预览，保存外观设置后会全局生效。`, 'info', '色卡修改已暂存')
   }
 
   const handleSaveAiQuota = async () => {
@@ -1198,38 +1203,30 @@ export function AdminSystemSettings() {
                         <div>
                           <p className="text-sm font-semibold text-slate-950 dark:text-white">生成色卡</p>
                           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                            主题色会生成白天 5 个、黑夜 5 个和主颜色 1 个角色色；点击任意角色可单独微调。告警、成功、危险等语义色保持独立。
+                            主题色自动生成完整色卡；此处只展示白天模式和黑夜模式角色色。点击任意色块可单独微调。品牌色阶内部生成，不在这里展示。
                           </p>
                         </div>
                         <span className="rounded-lg border border-black/10 px-3 py-1.5 font-mono text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
                           primary = {generatedBrandPalette.primary}
                         </span>
                       </div>
-                      <div className="mt-4 grid gap-3 lg:grid-cols-[repeat(11,minmax(0,1fr))]">
-                        {brandColorSlots.map((slot) => {
-                          const meta = brandColorSlotMeta[slot]
-                          const customized = themePalette[slot] !== baseGeneratedBrandPalette[slot]
-                          return (
-                            <button
-                              aria-label={`编辑${meta.group}${meta.label} ${generatedBrandPalette[slot]}`}
-                              className="group overflow-hidden rounded-lg border border-black/10 bg-white text-left text-xs transition hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-lg hover:shadow-brand-600/10 focus:outline-none focus:ring-2 focus:ring-brand-600/30 dark:border-white/10 dark:bg-white/[0.03]"
-                              key={slot}
-                              onClick={() => openPaletteShadeEditor(slot)}
-                              type="button"
-                            >
-                              <div className="relative h-10" style={{ background: generatedBrandPalette[slot] }}>
-                                {customized && <span className="absolute right-1.5 top-1.5 rounded bg-black/35 px-1.5 py-0.5 text-[10px] font-medium text-white">自定义</span>}
-                              </div>
-                              <div className="px-2 py-2">
-                                <p className="font-semibold text-slate-800 dark:text-slate-200">{meta.label}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">{meta.group}</p>
-                                <p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{generatedBrandPalette[slot]}</p>
-                                <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400 dark:text-slate-500">{meta.usage}</p>
-                                <p className="mt-1 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100 dark:text-slate-500">点击编辑</p>
-                              </div>
-                            </button>
-                          )
-                        })}
+                      <div className="mt-4 space-y-4">
+                        <PaletteSlotRow
+                          basePalette={baseGeneratedBrandPalette}
+                          onEdit={openPaletteEditor}
+                          palette={generatedBrandPalette}
+                          slots={visibleLightPaletteSlots}
+                          themePalette={themePalette}
+                          title="白天模式"
+                        />
+                        <PaletteSlotRow
+                          basePalette={baseGeneratedBrandPalette}
+                          onEdit={openPaletteEditor}
+                          palette={generatedBrandPalette}
+                          slots={visibleDarkPaletteSlots}
+                          themePalette={themePalette}
+                          title="黑夜模式"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1757,20 +1754,20 @@ export function AdminSystemSettings() {
         </div>
       </section>
 
-      {editingPaletteShade !== null && (
+      {editingPaletteKey !== null && (
         <PaletteShadeDialog
-          baseColor={baseGeneratedBrandPalette[editingPaletteShade]}
+          baseColor={baseGeneratedBrandPalette[editingPaletteKey]}
           color={paletteDraftColor}
-          currentColor={generatedBrandPalette[editingPaletteShade]}
-          isSaving={false}
-          onChange={setPaletteDraftColor}
+          currentColor={generatedBrandPalette[editingPaletteKey]}
+          isSaving={isSavingAppearance}
+          onChange={(value) => setPaletteDraftColor(formatHexInput(value))}
           onClose={() => {
-            setEditingPaletteShade(null)
+            setEditingPaletteKey(null)
             setPaletteDraftColor('')
           }}
-          onReset={() => setPaletteDraftColor(baseGeneratedBrandPalette[editingPaletteShade])}
+          onReset={() => setPaletteDraftColor(baseGeneratedBrandPalette[editingPaletteKey])}
           onSave={savePaletteShade}
-          slot={editingPaletteShade}
+          paletteKey={editingPaletteKey}
         />
       )}
 
@@ -1852,13 +1849,13 @@ function SettingRow({
 
 const themeColorPresets = [
   '#2A6438',
-  '#0F766E',
-  '#2563EB',
-  '#7C3AED',
-  '#B45309',
-  '#BE123C',
-  '#111827',
-  '#047857',
+  '#25615B',
+  '#315F86',
+  '#5B547D',
+  '#7A5C32',
+  '#8A3E4F',
+  '#374151',
+  '#426A62',
 ]
 
 function ThemeColorPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -1909,6 +1906,55 @@ function ThemeColorPicker({ value, onChange }: { value: string; onChange: (value
   )
 }
 
+function PaletteSlotRow({
+  basePalette,
+  onEdit,
+  palette,
+  slots,
+  themePalette,
+  title,
+}: {
+  basePalette: BrandPalette
+  onEdit: (slot: BrandColorSlot) => void
+  palette: BrandPalette
+  slots: BrandColorSlot[]
+  themePalette: BrandPalette
+  title: string
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{title}</p>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">点击色块微调</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-5">
+        {slots.map((slot) => {
+          const meta = brandColorSlotMeta[slot]
+          const customized = themePalette[slot] !== basePalette[slot]
+          return (
+            <button
+              aria-label={`编辑${meta.group}${meta.label} ${palette[slot]}`}
+              className="group overflow-hidden rounded-lg border border-black/10 bg-white text-left text-xs transition hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-lg hover:shadow-brand-600/10 focus:outline-none focus:ring-2 focus:ring-brand-600/30 dark:border-white/10 dark:bg-white/[0.03]"
+              key={slot}
+              onClick={() => onEdit(slot)}
+              type="button"
+            >
+              <div className="relative h-11" style={{ background: palette[slot] }}>
+                {customized && <span className="absolute right-1.5 top-1.5 rounded bg-black/35 px-1.5 py-0.5 text-[10px] font-medium text-white">自定义</span>}
+              </div>
+              <div className="px-2 py-2">
+                <p className="font-semibold text-slate-800 dark:text-slate-200">{meta.label}</p>
+                <p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{palette[slot]}</p>
+                <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400 dark:text-slate-500">{meta.usage}</p>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function PaletteShadeDialog({
   baseColor,
   color,
@@ -1918,7 +1964,7 @@ function PaletteShadeDialog({
   onClose,
   onReset,
   onSave,
-  slot,
+  paletteKey,
 }: {
   baseColor: string
   color: string
@@ -1928,13 +1974,13 @@ function PaletteShadeDialog({
   onClose: () => void
   onReset: () => void
   onSave: () => void
-  slot: BrandColorSlot
+  paletteKey: BrandColorSlot
 }) {
   const normalizedColor = normalizeHexColor(color)
   const previewColor = normalizedColor ?? currentColor
   const changed = normalizedColor !== null && normalizedColor !== currentColor
   const resetDisabled = baseColor === currentColor && baseColor === previewColor
-  const meta = brandColorSlotMeta[slot]
+  const meta = brandColorSlotMeta[paletteKey]
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5 py-8 backdrop-blur-sm">

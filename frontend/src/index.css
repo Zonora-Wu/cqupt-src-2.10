@@ -266,35 +266,35 @@
   --app-light-muted: #d8ecdd;
   --app-light-border: #dde5de;
   --app-light-text: #111827;
-  --app-dark-bg: #0f1f14;
-  --app-dark-surface: #151b17;
-  --app-dark-muted: #1f4229;
-  --app-dark-border: #2f4235;
-  --app-dark-text: #f4f7f2;
+  --app-dark-bg: #111816;
+  --app-dark-surface: #171f1c;
+  --app-dark-muted: #202c27;
+  --app-dark-border: #33413b;
+  --app-dark-text: #eaf0ec;
   --app-bg-light: #eef7f0;
-  --app-bg-dark: #0f1f14;
+  --app-bg-dark: #111816;
   --app-bg: var(--app-bg-light);
   --app-surface-light: #ffffff;
-  --app-surface-dark: #151b17;
+  --app-surface-dark: #171f1c;
   --app-surface: var(--app-surface-light);
   --app-surface-muted-light: #d8ecdd;
-  --app-surface-muted-dark: #1f4229;
+  --app-surface-muted-dark: #202c27;
   --app-surface-muted: var(--app-surface-muted-light);
   --app-border-light: #dde5de;
-  --app-border-dark: #2f4235;
+  --app-border-dark: #33413b;
   --app-text-light: #111827;
-  --app-text-dark: #f4f7f2;
+  --app-text-dark: #eaf0ec;
   --app-header-bg-light: rgba(238, 247, 240, 0.86);
-  --app-header-bg-dark: rgba(15, 31, 20, 0.82);
+  --app-header-bg-dark: rgba(17, 24, 22, 0.84);
   --app-header-bg: var(--app-header-bg-light);
   --app-panel-bg-light: rgba(238, 247, 240, 0.72);
-  --app-panel-bg-dark: rgba(27, 55, 36, 0.84);
+  --app-panel-bg-dark: rgba(23, 31, 28, 0.9);
   --app-panel-bg: var(--app-panel-bg-light);
   --app-panel-muted-bg-light: rgba(216, 236, 221, 0.78);
-  --app-panel-muted-bg-dark: rgba(31, 66, 41, 0.68);
+  --app-panel-muted-bg-dark: rgba(32, 44, 39, 0.66);
   --app-panel-muted-bg: var(--app-panel-muted-bg-light);
   --app-menu-bg-light: rgba(238, 247, 240, 0.96);
-  --app-menu-bg-dark: rgba(15, 31, 20, 0.96);
+  --app-menu-bg-dark: rgba(17, 24, 22, 0.97);
   --app-menu-bg: var(--app-menu-bg-light);
   --app-text: var(--app-text-light);
   --app-text-muted: color-mix(in srgb, var(--app-text-light) 58%, var(--app-light-muted));
@@ -510,6 +510,58 @@ html.theme-color-transition *::after {
 
 * {
   box-sizing: border-box;
+}
+
+:where(html, body, #root) {
+  cursor: default;
+}
+
+:where(
+  a[href],
+  button,
+  summary,
+  select,
+  input[type="button"],
+  input[type="checkbox"],
+  input[type="color"],
+  input[type="file"],
+  input[type="radio"],
+  input[type="range"],
+  input[type="reset"],
+  input[type="submit"],
+  label[for],
+  label:has(input[type="checkbox"]:not(:disabled)),
+  label:has(input[type="radio"]:not(:disabled)),
+  [role="button"],
+  [role="checkbox"],
+  [role="menuitem"],
+  [role="option"],
+  [role="radio"],
+  [role="switch"],
+  [role="tab"],
+  [tabindex]:not([tabindex="-1"]),
+  .cursor-pointer
+):not(:disabled):not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+:where(input:not([type]), input[type="email"], input[type="number"], input[type="password"], input[type="search"], input[type="tel"], input[type="text"], input[type="url"], textarea, [contenteditable="true"]):not(:disabled):not([readonly]) {
+  cursor: text;
+}
+
+:where(
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"],
+  .cursor-not-allowed
+):not([class*="cursor-wait"]) {
+  cursor: not-allowed;
+}
+
+:where([aria-busy="true"], .cursor-wait) {
+  cursor: wait;
 }
 
 html[data-motion="reduced"] *,
