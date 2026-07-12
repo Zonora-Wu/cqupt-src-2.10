@@ -331,11 +331,6 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 已有账号？立即登录
               </button>
             </footer>
-
-            <div className="mt-4 flex items-start gap-2 rounded-lg border border-brand-600/15 bg-brand-600/10 p-3 text-xs leading-5 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              注册后可使用 AI 助手。提交漏洞前需在个人中心或提交弹窗补全资料并完成准入事项。
-            </div>
           </>
         )}
       </motion.section>

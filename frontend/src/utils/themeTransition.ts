@@ -4,7 +4,14 @@ export type ColorTheme = 'dark' | 'light'
 
 const THEME_STORAGE_KEY = 'cqupt-theme'
 const FALLBACK_TRANSITION_CLASS = 'theme-color-transition'
-const TRANSITION_DURATION = 760
+const TRANSITION_DURATION = 1350
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => {
+    ready: Promise<void>
+    finished: Promise<void>
+  }
+}
 
 export function getSavedColorTheme(defaultTheme: ColorTheme = 'dark'): ColorTheme {
   try {
@@ -34,8 +41,25 @@ export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLE
 
   const x = event?.clientX ?? window.innerWidth - 40
   const y = event?.clientY ?? 40
+  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
   root.style.setProperty('--theme-transition-x', `${x}px`)
   root.style.setProperty('--theme-transition-y', `${y}px`)
+  root.style.setProperty('--theme-transition-radius', `${Math.ceil(radius)}px`)
+
+  const viewTransition = (document as ViewTransitionDocument).startViewTransition?.(() => {
+    applyColorTheme(theme)
+  })
+
+  if (viewTransition) {
+    root.classList.add(FALLBACK_TRANSITION_CLASS)
+    viewTransition.finished.finally(() => {
+      root.classList.remove(FALLBACK_TRANSITION_CLASS)
+      root.style.removeProperty('--theme-transition-x')
+      root.style.removeProperty('--theme-transition-y')
+      root.style.removeProperty('--theme-transition-radius')
+    })
+    return
+  }
 
   const overlay = document.createElement('div')
   overlay.className = 'theme-transition-overlay'
@@ -53,5 +77,6 @@ export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLE
     root.classList.remove(FALLBACK_TRANSITION_CLASS)
     root.style.removeProperty('--theme-transition-x')
     root.style.removeProperty('--theme-transition-y')
+    root.style.removeProperty('--theme-transition-radius')
   }, TRANSITION_DURATION + 80)
 }

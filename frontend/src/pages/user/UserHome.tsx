@@ -325,7 +325,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             </button>
             <button
               aria-label="切换主题"
-              className="rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+              className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
               onClick={(event) => changeThemeMode(theme === 'dark' ? 'light' : 'dark', event)}
               type="button"
             >

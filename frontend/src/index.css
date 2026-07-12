@@ -480,13 +480,29 @@ html {
   scrollbar-gutter: stable;
 }
 
-html.theme-color-transition,
-html.theme-color-transition *,
-html.theme-color-transition *::before,
-html.theme-color-transition *::after {
-  transition-duration: 640ms !important;
-  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
-  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 1350ms;
+  animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  animation-name: theme-view-new;
+}
+
+@keyframes theme-view-new {
+  from {
+    clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+  }
+  to {
+    clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+  }
 }
 
 .theme-transition-overlay {
@@ -496,12 +512,39 @@ html.theme-color-transition *::after {
   opacity: 1;
   pointer-events: none;
   transform: translateZ(0);
-  transition: opacity 760ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity;
+  transition:
+    opacity 1350ms cubic-bezier(0.19, 1, 0.22, 1),
+    clip-path 1350ms cubic-bezier(0.19, 1, 0.22, 1);
+  clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+  will-change: opacity, clip-path;
 }
 
 .theme-transition-overlay-exit {
   opacity: 0;
+  clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+}
+
+.theme-toggle-button > svg {
+  transform-origin: center;
+  transition:
+    transform 720ms cubic-bezier(0.19, 1, 0.22, 1),
+    opacity 420ms ease;
+}
+
+.theme-toggle-button:active > svg {
+  transform: rotate(35deg) scale(0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  .theme-transition-overlay,
+  .theme-toggle-button > svg {
+    transition: none;
+  }
 }
 
 #root {

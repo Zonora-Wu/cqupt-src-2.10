@@ -145,7 +145,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <div className="flex items-center gap-3">
             <button
               aria-label="切换主题"
-              className="hidden rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 md:inline-flex dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+              className="theme-toggle-button hidden rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 md:inline-flex dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
               onClick={(event) => {
                 const nextTheme = theme === 'dark' ? 'light' : 'dark'
                 transitionColorTheme(nextTheme, event)
@@ -368,16 +368,34 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-black/[0.08] bg-[var(--app-menu-bg)] px-5 py-10 md:px-8 dark:border-white/[0.06]">
-        <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400 md:flex-row">
-          <div className="font-semibold tracking-tight text-slate-950 dark:text-white">CQUPT-SRC</div>
-          <div className="flex gap-6">
-            <a className="transition hover:text-brand-300" href="#">隐私政策</a>
-            <a className="transition hover:text-brand-300" href="#">用户协议</a>
-            <a className="transition hover:text-brand-300" href="#">联系我们</a>
-            <a className="transition hover:text-brand-300" href="#">加入我们</a>
+      <footer className="relative z-10 border-t border-black/[0.08] bg-[var(--app-menu-bg)] px-5 py-9 md:px-8 dark:border-white/[0.06]">
+        <div className="mx-auto max-w-[1440px]">
+          <div className="flex flex-col gap-7 md:flex-row md:items-start md:justify-between">
+            <div className="text-center md:text-left">
+              <div className="text-sm font-semibold tracking-tight text-slate-950 dark:text-white">CQUPT-SRC</div>
+            </div>
+
+            <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 dark:text-slate-400 md:justify-end">
+              <a className="transition hover:text-brand-700 dark:hover:text-brand-300" href="#">隐私政策</a>
+              <a className="transition hover:text-brand-700 dark:hover:text-brand-300" href="#">用户协议</a>
+              <a className="transition hover:text-brand-700 dark:hover:text-brand-300" href="#">联系我们</a>
+              <a className="transition hover:text-brand-700 dark:hover:text-brand-300" href="#">加入我们</a>
+            </nav>
           </div>
-          <div>© 2026 CQUPT-SRC 校园漏洞响应与安全学习平台.</div>
+
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 md:flex-row">
+            <div className="text-center md:text-left">© 2026 CQUPT-SRC 校园漏洞响应与安全学习平台</div>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 md:justify-end">
+              <a
+                className="transition hover:text-brand-700 dark:hover:text-brand-300"
+                href="https://beian.miit.gov.cn/"
+                rel="noreferrer"
+                target="_blank"
+              >
+                渝ICP备2026008425号-1
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
           </PageTransition>

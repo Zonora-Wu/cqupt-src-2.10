@@ -310,10 +310,6 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
           </button>
         </footer>
 
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-brand-600/15 bg-brand-600/10 p-3 text-xs leading-5 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80">
-          <Mail className="mt-0.5 h-4 w-4 shrink-0" />
-          登录后请先完成安全答题与责任书签署，再进行漏洞提交。
-        </div>
       </motion.section>
     </div>
   )
