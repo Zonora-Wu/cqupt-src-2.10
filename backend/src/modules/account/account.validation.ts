@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common'
 import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
-import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput } from './account.types'
+import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendChangeEmailCodeInput, SendCurrentEmailCodeInput, UpdateProfileBasicsInput } from './account.types'
+
+const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
 
 export function normalizeChangePasswordBody(body: Record<string, unknown>): ChangePasswordInput {
   const code = normalizeEmailCode(body.code)
@@ -35,6 +37,18 @@ export function normalizeChangeEmailBody(body: Record<string, unknown>): ChangeE
     code: normalizeEmailCode(body.code),
     humanVerification: normalizeHumanVerificationInput(body),
     newEmail: normalizeEmail(body.newEmail),
+  }
+}
+
+export function normalizeUpdateProfileBasicsBody(body: Record<string, unknown>): UpdateProfileBasicsInput {
+  const identityText = requireText(body.identityText, '身份', 2, 40)
+  const studentNo = optionalText(body.studentNo, 40)
+
+  return {
+    college: requireText(body.college, '学院', 2, 80),
+    grade: optionalText(body.grade, 20),
+    identityText,
+    studentNo: teacherIdentityTypes.has(identityText) ? '' : requireStudentNo(studentNo),
   }
 }
 
@@ -82,6 +96,28 @@ function requireText(value: unknown, label: string, minLength: number, maxLength
 
   if (text.length > maxLength) {
     throw new BadRequestException(`${label}不能超过 ${maxLength} 个字符`)
+  }
+
+  return text
+}
+
+function requireStudentNo(value: string) {
+  if (!value) {
+    throw new BadRequestException('请填写学号')
+  }
+
+  return value
+}
+
+function optionalText(value: unknown, maxLength: number) {
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value !== 'string') {
+    throw new BadRequestException('文本格式不正确')
+  }
+
+  const text = value.trim()
+  if (text.length > maxLength) {
+    throw new BadRequestException(`文本不能超过 ${maxLength} 个字符`)
   }
 
   return text

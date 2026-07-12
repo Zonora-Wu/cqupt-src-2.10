@@ -1253,7 +1253,7 @@ function AuditorAnnouncementManagement() {
                     <span>阅读：{item.readCount}</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
                   <button
                     className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
                     onClick={() => setEditingAnnouncement(item)}

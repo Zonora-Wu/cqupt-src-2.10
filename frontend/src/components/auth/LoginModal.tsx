@@ -1,8 +1,8 @@
 import { ArrowRight, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
-import { HumanVerification } from '../ui/HumanVerification'
+import { PlatformHumanVerification } from '../security/PlatformHumanVerification'
 import { ApiError } from '../../services/apiClient'
 import {
   type AuthUser,
@@ -34,14 +34,17 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   const [isSendingCode, setIsSendingCode] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [emailHumanPayload, setEmailHumanPayload] = useState('')
+  const [emailHumanVerifiedFor, setEmailHumanVerifiedFor] = useState('')
   const [passwordHumanPayload, setPasswordHumanPayload] = useState('')
   const [humanResetKey, setHumanResetKey] = useState(0)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [message, setMessage] = useState<NoticeState | null>(null)
   const [logos, setLogos] = useState(() => getPlatformLogos())
   const normalizedEmail = email.trim().toLowerCase()
-  const emailCodeIsActive = mode === 'email' && normalizedEmail === emailCodeSentTo && countdown > 0
-  const shouldShowHumanVerification = mode === 'sso' || !emailCodeIsActive
+  const handleEmailHumanPayloadChange = useCallback((payload: string) => {
+    setEmailHumanPayload(payload)
+    setEmailHumanVerifiedFor(payload ? normalizedEmail : '')
+  }, [normalizedEmail])
 
   useEffect(() => {
     document.documentElement.classList.add('auth-modal-open')
@@ -60,6 +63,13 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     return () => window.clearTimeout(timer)
   }, [countdown])
 
+  useEffect(() => {
+    if (mode !== 'email' || countdown !== 0 || !emailCodeSentTo) return
+    setEmailHumanPayload('')
+    setEmailHumanVerifiedFor('')
+    setHumanResetKey((value) => value + 1)
+  }, [countdown, emailCodeSentTo, mode])
+
   const handleSendEmailCode = async () => {
     if (countdown > 0 || isSendingCode) return
 
@@ -75,13 +85,18 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
       return
     }
 
+    if (emailHumanVerifiedFor !== normalizedEmail) {
+      setMessage({ text: '邮箱已变化，请重新完成安全校验', type: 'warning' })
+      setEmailHumanPayload('')
+      setHumanResetKey((value) => value + 1)
+      return
+    }
+
     try {
       setIsSendingCode(true)
       const result = await sendEmailLoginCode(email, createHumanVerificationPayload(emailHumanPayload).humanVerification)
       setCountdown(60)
       setEmailCodeSentTo(email.trim().toLowerCase())
-      setEmailHumanPayload('')
-      setHumanResetKey((value) => value + 1)
       setMessage({
         text: result.devCode ? `${result.message}，开发验证码为 ${result.devCode}` : result.message,
         type: 'success',
@@ -89,6 +104,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     } catch (error) {
       setMessage({ text: getErrorMessage(error), type: 'error' })
       setEmailHumanPayload('')
+      setEmailHumanVerifiedFor('')
       setHumanResetKey((value) => value + 1)
     } finally {
       setIsSendingCode(false)
@@ -187,6 +203,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
               setMode('sso')
               setMessage(null)
               setEmailHumanPayload('')
+              setEmailHumanVerifiedFor('')
               setPasswordHumanPayload('')
               setHumanResetKey((value) => value + 1)
             }}
@@ -204,6 +221,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
               setMode('email')
               setMessage(null)
               setEmailHumanPayload('')
+              setEmailHumanVerifiedFor('')
               setPasswordHumanPayload('')
               setHumanResetKey((value) => value + 1)
             }}
@@ -233,20 +251,27 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
                 if (value.trim().toLowerCase() !== emailCodeSentTo) {
                   setEmailCodeSentTo('')
                 }
+                if ((emailHumanPayload || emailHumanVerifiedFor) && value.trim().toLowerCase() !== emailHumanVerifiedFor) {
+                  setEmailHumanPayload('')
+                  setEmailHumanVerifiedFor('')
+                  setHumanResetKey((current) => current + 1)
+                }
               }}
               onSendCode={handleSendEmailCode}
             />
           )}
 
-          {shouldShowHumanVerification ? (
-            <HumanVerification
-              compact={mode === 'sso'}
-              onChange={mode === 'email' ? setEmailHumanPayload : setPasswordHumanPayload}
-              onError={(text) => setMessage({ text, type: 'error' })}
-              purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'LOGIN_PASSWORD'}
-              resetKey={`${mode}-${humanResetKey}`}
-            />
-          ) : (
+          <PlatformHumanVerification
+            compact={mode === 'sso'}
+            disabled={mode === 'email' && countdown > 0}
+            helperText={mode === 'email' ? '完成后可获取邮箱验证码。' : undefined}
+            onChange={mode === 'email' ? handleEmailHumanPayloadChange : setPasswordHumanPayload}
+            onError={(text) => setMessage({ text, type: 'error' })}
+            purpose={mode === 'email' ? 'LOGIN_EMAIL_CODE' : 'LOGIN_PASSWORD'}
+            resetKey={`${mode}-${humanResetKey}`}
+          />
+
+          {mode === 'email' && countdown > 0 && (
             <AlertMessage
               message={`验证码已发送。${countdown} 秒后可重新获取，重新获取前需要再次完成安全校验。`}
               variant="info"

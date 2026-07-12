@@ -11,15 +11,11 @@ export type UnifiedLoginPayload = Partial<HumanVerificationPayload> & {
   password: string
 }
 
-export type RegisterPayload = HumanVerificationPayload & {
+export type RegisterPayload = {
   code: string
-  college: string
   email: string
-  grade: string
-  identityText: string
   name: string
   password: string
-  studentNo: string
   unifiedCode: string
 }
 
@@ -139,14 +135,9 @@ export async function registerAccount(payload: RegisterPayload): Promise<Registe
   const result = await apiRequest<BackendLoginResponse | BackendPendingRegistrationResponse>('/auth/register', {
     body: {
       code: payload.code,
-      college: payload.college.trim(),
       email: payload.email.trim(),
-      grade: payload.grade.trim(),
-      humanVerification: payload.humanVerification,
-      identityText: payload.identityText.trim(),
       name: payload.name.trim(),
       password: payload.password,
-      studentNo: payload.studentNo.trim(),
       unifiedCode,
     },
     method: 'POST',

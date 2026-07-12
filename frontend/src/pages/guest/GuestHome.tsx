@@ -294,13 +294,13 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         </div>
       </section>
 
-      <section className="relative z-10 border-y border-black/[0.08] bg-white/55 px-5 py-20 md:px-8 dark:border-white/[0.06] dark:bg-white/[0.025]" id="certificate">
+      <section className="relative z-10 border-y border-black/[0.08] bg-[var(--app-panel-muted-bg)] px-5 py-20 md:px-8 dark:border-white/[0.06]" id="certificate">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="mb-4 text-3xl font-semibold">证书真伪验证</h2>
           <p className="mx-auto mb-8 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
             输入证书编号，即刻验证由 CQUPT-SRC 颁发的漏洞贡献荣誉证书有效性。
           </p>
-          <div className="mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-white p-2 backdrop-blur-xl focus-within:ring-2 focus-within:ring-brand-600/50 dark:border-white/10 ">
+          <div className="mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-2 backdrop-blur-xl focus-within:ring-2 focus-within:ring-brand-600/50 dark:border-white/10">
             <Search className="ml-3 mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
             <input
               className="min-w-0 flex-1 border-none bg-transparent py-3 font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
@@ -321,7 +321,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               查询
             </button>
           </div>
-          <p className="mt-4 text-xs text-slate-500">点击查询后会进入证书查询页并自动核验。仅展示证书真实性与脱敏信息，不公开漏洞细节。</p>
+          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">点击查询后会进入证书查询页并自动核验。仅展示证书真实性与脱敏信息，不公开漏洞细节。</p>
         </div>
       </section>
 
@@ -368,7 +368,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-black/[0.08] bg-white px-5 py-10 md:px-8 dark:border-white/[0.06] dark:bg-slate-950">
+      <footer className="relative z-10 border-t border-black/[0.08] bg-[var(--app-menu-bg)] px-5 py-10 md:px-8 dark:border-white/[0.06]">
         <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400 md:flex-row">
           <div className="font-semibold tracking-tight text-slate-950 dark:text-white">CQUPT-SRC</div>
           <div className="flex gap-6">

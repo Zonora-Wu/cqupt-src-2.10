@@ -7,13 +7,15 @@ import { createPortal } from 'react-dom'
 import { getHumanVerificationChallengeUrl, type HumanVerificationPurpose } from '../../services/humanVerification'
 import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 
-type HumanVerificationProps = {
+export type HumanVerificationProps = {
   compact?: boolean
   disabled?: boolean
+  helperText?: string
   onChange: (payload: string) => void
   onError?: (message: string) => void
   purpose: HumanVerificationPurpose
   resetKey?: string | number
+  title?: string
 }
 
 type AltchaWidgetElement = HTMLElement & {
@@ -31,12 +33,15 @@ type AltchaEvent = Event & {
 export function HumanVerification({
   compact = false,
   disabled = false,
+  helperText,
   onChange,
   onError,
   purpose,
   resetKey,
+  title = '安全校验',
 }: HumanVerificationProps) {
   const widgetRef = useRef<AltchaWidgetElement | null>(null)
+  const onChangeRef = useRef(onChange)
   const [status, setStatus] = useState<'ready' | 'verified' | 'verifying' | 'error'>('ready')
   const [challengeKey, setChallengeKey] = useState(0)
   const [open, setOpen] = useState(false)
@@ -57,6 +62,10 @@ export function HumanVerification({
     return Math.max(1, Math.min(4, window.navigator.hardwareConcurrency || 2))
   }, [])
 
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
   useEffect(() => subscribePlatformBranding(setLogos), [])
 
   useEffect(() => {
@@ -68,7 +77,7 @@ export function HumanVerification({
       const payload = (event as AltchaEvent).detail?.payload
       if (payload) {
         setStatus('verified')
-        onChange(payload)
+        onChangeRef.current(payload)
         window.setTimeout(() => setOpen(false), 420)
       }
     }
@@ -77,7 +86,7 @@ export function HumanVerification({
       if (state === 'verifying') setStatus('verifying')
       if (state === 'error') {
         setStatus('error')
-        onChange('')
+        onChangeRef.current('')
         onError?.('安全校验未通过，请刷新校验后重试')
       }
     }
@@ -88,14 +97,14 @@ export function HumanVerification({
       widget.removeEventListener('verified', handleVerified)
       widget.removeEventListener('statechange', handleStateChange)
     }
-  }, [onChange, onError, open])
+  }, [onError, open])
 
   useEffect(() => {
     let active = true
     queueMicrotask(() => {
       if (!active) return
       widgetRef.current?.reset?.()
-      onChange('')
+      onChangeRef.current('')
       setStatus('ready')
       setOpen(false)
       setChallengeKey((value) => value + 1)
@@ -103,7 +112,7 @@ export function HumanVerification({
     return () => {
       active = false
     }
-  }, [resetKey, onChange])
+  }, [resetKey])
 
   const helper =
     status === 'verified'
@@ -112,7 +121,7 @@ export function HumanVerification({
         ? '正在自动验证，请稍候。'
         : status === 'error'
           ? '校验失败，请重新验证。'
-          : '点击后自动完成安全校验。'
+        : helperText ?? '点击后自动完成安全校验。'
 
   const statusLabel =
     status === 'verified'
@@ -124,8 +133,6 @@ export function HumanVerification({
           : '待校验'
 
   const StatusIcon = status === 'verified' ? CheckCircle2 : status === 'verifying' ? Loader2 : ShieldCheck
-  const title = '安全校验'
-
   const openVerification = () => {
     if (disabled) return
     if (status === 'error') {

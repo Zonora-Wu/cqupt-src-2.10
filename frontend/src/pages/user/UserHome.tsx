@@ -30,6 +30,7 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { CompleteProfileModal } from '../../components/profile/CompleteProfileModal'
 import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -150,9 +151,10 @@ const menuItems = userNavItems.map((item) => item.label)
 
 function hasPendingAccessTasks(status: AccessStatus | null) {
   if (!status) return false
+  const needsProfile = !status.profileCompleted
   const needsAgreement = status.responsibilityAgreementRequired && !status.responsibilitySigned
   const needsExam = status.securityExamRequired && !status.securityExamPassed
-  return needsAgreement || needsExam
+  return needsProfile || needsAgreement || needsExam
 }
 
 export function UserHome({ onLogout, user }: UserHomeProps) {
@@ -170,6 +172,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
   const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
   const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
+  const [showProfileDialog, setShowProfileDialog] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, userNavItems, userUtilityPaths)
@@ -284,6 +287,11 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const openResponsibilityDialog = () => {
     setShowAccessTodoDialog(false)
     setShowResponsibilityDialog(true)
+  }
+
+  const openProfileDialog = () => {
+    setShowAccessTodoDialog(false)
+    setShowProfileDialog(true)
   }
 
   const openSecurityExamPage = () => {
@@ -589,9 +597,20 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         accessStatus={accessStatus}
         onClose={() => setShowAccessTodoDialog(false)}
         onOpenAgreement={openResponsibilityDialog}
+        onOpenProfile={openProfileDialog}
         onStartExam={openSecurityExamPage}
         open={showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
       />
+      {showProfileDialog && (
+        <CompleteProfileModal
+          onClose={() => setShowProfileDialog(false)}
+          onSaved={async () => {
+            setShowProfileDialog(false)
+            await refreshAccessStatus()
+          }}
+          reason="vulnerability"
+        />
+      )}
       <ResponsibilityAgreementDialog
         accessStatus={accessStatus}
         onClose={() => setShowResponsibilityDialog(false)}
@@ -618,17 +637,20 @@ function AccessTodoDialog({
   accessStatus,
   onClose,
   onOpenAgreement,
+  onOpenProfile,
   onStartExam,
   open,
 }: {
   accessStatus: AccessStatus | null
   onClose: () => void
   onOpenAgreement: () => void
+  onOpenProfile: () => void
   onStartExam: () => void
   open: boolean
 }) {
   if (!open || typeof document === 'undefined') return null
 
+  const needsProfile = Boolean(accessStatus && !accessStatus.profileCompleted)
   const needsAgreement = Boolean(accessStatus?.responsibilityAgreementRequired && !accessStatus.responsibilitySigned)
   const needsExam = Boolean(accessStatus?.securityExamRequired && !accessStatus.securityExamPassed)
 
@@ -642,7 +664,7 @@ function AccessTodoDialog({
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">还有待完成的准入事项</h2>
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              完成责任书签署和安全答题后，即可获得完整的漏洞提交权限。
+              完善基础资料、签署责任书并通过安全答题后，即可获得完整的漏洞提交权限。
             </p>
           </div>
           <button
@@ -656,6 +678,15 @@ function AccessTodoDialog({
         </div>
 
         <div className="grid gap-3 p-5">
+          <AccessTaskCard
+            actionLabel={needsProfile ? '完善资料' : '已完善'}
+            description="补全学院、身份、学号等基础信息，用于报告归属、审核沟通和证书签发。"
+            disabled={!needsProfile}
+            icon={<ClipboardCheck className="h-5 w-5" />}
+            onClick={onOpenProfile}
+            status={needsProfile ? '待完成' : '已完善'}
+            title="基础资料完善"
+          />
           <AccessTaskCard
             actionLabel={needsAgreement ? '签署责任书' : '已完成'}
             description="请阅读平台授权测试责任书，阅读 60 秒后可签署当前版本。"

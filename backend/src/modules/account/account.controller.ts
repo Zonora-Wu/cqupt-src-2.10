@@ -9,6 +9,7 @@ import {
   normalizeChangePasswordBody,
   normalizeChangePasswordWithOldBody,
   normalizeSendCurrentEmailCodeBody,
+  normalizeUpdateProfileBasicsBody,
 } from './account.validation'
 
 type UploadedImageFile = {
@@ -46,6 +47,11 @@ export class AccountController {
   @Get('profile')
   getProfile(@CurrentUser() user: AuthenticatedRequestUser) {
     return this.account.getProfile(user)
+  }
+
+  @Post('profile/basics')
+  updateProfileBasics(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.account.updateProfileBasics(user, normalizeUpdateProfileBasicsBody(body), getRequestMeta(req))
   }
 
   @Post('password/change')

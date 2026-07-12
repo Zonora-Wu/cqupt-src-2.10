@@ -495,7 +495,7 @@ export function AdminAnnouncementManagement() {
                   onClick={() => changeSort(column.key)}
                 />
               ))}
-              <span className="col-start-3 text-right xl:col-start-auto">操作</span>
+              <span className="col-start-3 justify-self-end text-right xl:col-start-auto">操作</span>
             </div>
 
             {paginatedAnnouncements.map((item) => (
@@ -518,7 +518,7 @@ export function AdminAnnouncementManagement() {
                 <div className="hidden min-w-0 2xl:block"><LedgerCell label="阅读" value={`${item.readCount}`} /></div>
                 <div className="hidden min-w-0 xl:block"><LedgerCell label="发布" value={formatDateTime(item.publishedAt)} /></div>
                 <div className="hidden min-w-0 xl:block"><LedgerCell label="更新" value={formatDateTime(item.updatedAt)} strong /></div>
-                <div className="col-start-3 grid grid-cols-2 items-center justify-end gap-1.5 xl:col-start-auto">
+                <div className="col-start-3 flex w-max max-w-full flex-wrap items-center justify-end gap-1.5 justify-self-end xl:col-start-auto">
                   <button className="rounded-md border border-black/10 px-2 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" onClick={() => setSelectedId(item.id)} type="button">
                     详情
                   </button>

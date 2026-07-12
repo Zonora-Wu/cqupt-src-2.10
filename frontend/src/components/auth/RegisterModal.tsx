@@ -3,7 +3,6 @@ import {
   Badge,
   Eye,
   EyeOff,
-  GraduationCap,
   Lock,
   LockKeyhole,
   Mail,
@@ -14,8 +13,7 @@ import {
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
-import { HumanVerification } from '../ui/HumanVerification'
-import { SelectInput } from '../ui/SelectInput'
+import { PlatformHumanVerification } from '../security/PlatformHumanVerification'
 import {
   isValidEmail,
   isValidUnifiedCode,
@@ -34,29 +32,6 @@ type RegisterModalProps = {
   onSwitchToLogin: () => void
 }
 
-const identityTypes = ['本科生', '研究生', '教师', '信息化办老师', '社团/工作室成员']
-const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
-const collegeOptions = [
-  '通信与信息工程学院',
-  '计算机科学与技术学院（示范性软件学院）',
-  '人工智能学院（重邮科大讯飞人工智能学院）',
-  '自动化学院 / 工业互联网学院',
-  '电子科学与工程学院',
-  '集成电路学院（重庆国际半导体学院）',
-  '生命健康信息科学与工程学院',
-  '网络空间安全与信息法学院',
-  '数学与统计学院',
-  '国际学院',
-  '经济管理学院',
-  '现代邮政学院',
-  '传媒艺术学院',
-  '外国语学院',
-  '马克思主义学院',
-  '体育学院',
-  '创新创业教育学院 / 继续教育学院',
-  '远东联邦大学联合学院（国际合作学院）',
-]
-
 export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: RegisterModalProps) {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -65,34 +40,34 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
   const [sendingCode, setSendingCode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [emailHumanPayload, setEmailHumanPayload] = useState('')
-  const [submitHumanPayload, setSubmitHumanPayload] = useState('')
   const [humanResetKey, setHumanResetKey] = useState(0)
   const [countdown, setCountdown] = useState(0)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [logos, setLogos] = useState(() => getPlatformLogos())
   const [form, setForm] = useState({
     code: '',
-    college: '',
     email: '',
-    grade: '',
-    identityText: '',
     name: '',
     password: '',
     passwordConfirm: '',
-    studentNo: '',
     unifiedCode: '',
   })
   const normalizedEmail = form.email.trim().toLowerCase()
-  const emailCodeIsActive = normalizedEmail === emailCodeSentTo && countdown > 0
-  const activeHumanPurpose = emailCodeIsActive ? 'REGISTER_SUBMIT' : 'REGISTER_EMAIL_CODE'
-  const shouldCollectStudentInfo = !teacherIdentityTypes.has(form.identityText)
+  const emailCodeIsCurrent = Boolean(emailCodeSentTo) && normalizedEmail === emailCodeSentTo
+  const registrationReady =
+    Boolean(form.name.trim()) &&
+    isValidUnifiedCode(form.unifiedCode) &&
+    isValidEmail(form.email) &&
+    emailCodeIsCurrent &&
+    /^\d{6}$/.test(form.code) &&
+    form.password.length >= 8 &&
+    form.password === form.passwordConfirm
 
   const updateField = (key: keyof typeof form, value: string) => {
     const nextValue = key === 'unifiedCode' ? normalizeUnifiedCode(value) : value
     setForm((current) => ({
       ...current,
       [key]: nextValue,
-      ...(key === 'identityText' && teacherIdentityTypes.has(nextValue) ? { grade: '', studentNo: '' } : {}),
     }))
     if (key === 'email' && nextValue.trim().toLowerCase() !== emailCodeSentTo) {
       setEmailCodeSentTo('')
@@ -138,7 +113,6 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       setCountdown(60)
       setEmailCodeSentTo(normalizedEmail)
       setEmailHumanPayload('')
-      setSubmitHumanPayload('')
       setHumanResetKey((value) => value + 1)
       setMessage(result.devCode ? `${result.message}，开发验证码：${result.devCode}` : result.message)
     } catch (sendError) {
@@ -155,23 +129,13 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
     setError('')
     setMessage('')
 
-    if (normalizedEmail !== emailCodeSentTo) {
+    if (!emailCodeIsCurrent) {
       setError('请先获取当前邮箱的验证码')
       return
     }
 
     if (!/^\d{6}$/.test(form.code)) {
       setError('请输入 6 位邮箱验证码')
-      return
-    }
-
-    if (!form.college) {
-      setError('请选择学院')
-      return
-    }
-
-    if (!form.identityText) {
-      setError('请选择身份类型')
       return
     }
 
@@ -190,21 +154,10 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       return
     }
 
-    if (shouldCollectStudentInfo && !form.studentNo.trim()) {
-      setError('请填写学号')
-      return
-    }
-
-    if (!submitHumanPayload) {
-      setError('请完成提交注册前的安全校验')
-      return
-    }
-
     setSubmitting(true)
     try {
       const result: RegisterResult = await registerAccount({
         ...form,
-        ...createHumanVerificationPayload(submitHumanPayload),
       })
       if (result.pending === true) {
         setPendingApproval(true)
@@ -217,8 +170,6 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
       }
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : '注册失败，请稍后重试')
-      setSubmitHumanPayload('')
-      setHumanResetKey((value) => value + 1)
     } finally {
       setSubmitting(false)
     }
@@ -282,22 +233,6 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
           <>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Input icon={<User />} onChange={(value) => updateField('name', value)} placeholder="姓名" required type="text" value={form.name} />
-              <SelectInput
-                icon={<GraduationCap />}
-                onChange={(value) => updateField('college', value)}
-                options={collegeOptions}
-                placeholder="学院"
-                value={form.college}
-              />
-
-              <SelectInput
-                icon={<GraduationCap />}
-                onChange={(value) => updateField('identityText', value)}
-                options={identityTypes}
-                placeholder="身份类型"
-                value={form.identityText}
-              />
-
               <Input
                 icon={<Badge />}
                 inputMode="numeric"
@@ -310,24 +245,17 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 value={form.unifiedCode}
               />
 
-              {shouldCollectStudentInfo && (
-                <div className="grid gap-3">
-                  <Input icon={<Badge />} onChange={(value) => updateField('studentNo', value)} placeholder="学号" required type="text" value={form.studentNo} />
-                  <Input icon={<GraduationCap />} onChange={(value) => updateField('grade', value)} placeholder="年级" type="text" value={form.grade} />
-                </div>
-              )}
-
               <Input icon={<Mail />} onChange={(value) => updateField('email', value)} placeholder="邮箱" required type="email" value={form.email} />
 
               <div className="flex gap-3">
                 <Input className="flex-1" icon={<Mail />} onChange={(value) => updateField('code', value)} placeholder="邮箱验证码" required type="text" value={form.code} />
                 <button
                   className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-4 text-sm font-medium text-slate-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10  dark:text-white dark:hover:bg-white/10"
-                  disabled={countdown > 0 || sendingCode}
+                  disabled={emailCodeIsCurrent || countdown > 0 || sendingCode}
                   onClick={() => void handleSendCode()}
                   type="button"
                 >
-                  {sendingCode ? '发送中' : countdown > 0 ? `${countdown}s` : '获取验证码'}
+                  {sendingCode ? '发送中' : emailCodeIsCurrent ? (countdown > 0 ? `${countdown}s` : '已发送') : '获取验证码'}
                 </button>
               </div>
 
@@ -358,16 +286,18 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
               <Input icon={<LockKeyhole />} onChange={(value) => updateField('passwordConfirm', value)} placeholder="确认密码" required type="password" value={form.passwordConfirm} />
 
-              <HumanVerification
-                onChange={emailCodeIsActive ? setSubmitHumanPayload : setEmailHumanPayload}
-                onError={setError}
-                purpose={activeHumanPurpose}
-                resetKey={`${activeHumanPurpose}-${humanResetKey}`}
-              />
+              {!emailCodeIsCurrent && (
+                <PlatformHumanVerification
+                  onChange={setEmailHumanPayload}
+                  onError={setError}
+                  purpose="REGISTER_EMAIL_CODE"
+                  resetKey={`REGISTER_EMAIL_CODE-${humanResetKey}`}
+                />
+              )}
 
-              {emailCodeIsActive && (
+              {emailCodeIsCurrent && (
                 <AlertMessage
-                  message={`验证码已发送。${countdown} 秒后可重新获取；提交注册需完成下方安全校验。`}
+                  message={countdown > 0 ? `安全验证已通过，验证码已发送。${countdown} 秒后可重新获取；信息填写完整后即可注册。` : '安全验证已通过，验证码已发送。信息填写完整后即可注册。'}
                   variant="info"
                 />
               )}
@@ -380,7 +310,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
               <button
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-65"
-                disabled={submitting}
+                disabled={submitting || !registrationReady}
                 type="submit"
               >
                 {submitting ? '注册中...' : '立即注册'}
@@ -404,7 +334,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
 
             <div className="mt-4 flex items-start gap-2 rounded-lg border border-brand-600/15 bg-brand-600/10 p-3 text-xs leading-5 text-brand-800 dark:border-brand-300/15 dark:text-brand-100/80">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-              注册后需完成邮箱验证、安全答题与责任书签署，才可获得漏洞提交权限。
+              注册后可使用 AI 助手。提交漏洞前需在个人中心或提交弹窗补全资料并完成准入事项。
             </div>
           </>
         )}

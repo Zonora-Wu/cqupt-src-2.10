@@ -26,3 +26,10 @@ export type ChangeEmailInput = {
   code: string
   humanVerification: HumanVerificationInput
 }
+
+export type UpdateProfileBasicsInput = {
+  college: string
+  grade: string
+  identityText: string
+  studentNo: string
+}

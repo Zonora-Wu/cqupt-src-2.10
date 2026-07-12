@@ -1,37 +1,21 @@
 import { BadRequestException } from '@nestjs/common'
-import { HumanVerificationInput } from '../human-verification/human-verification.types'
-import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
 
 export type NormalizedRegisterInput = {
   code: string
-  college: string
   email: string
-  grade: string
-  identityText: string
   name: string
   password: string
-  studentNo: string
   unifiedCode: string
-  humanVerification: HumanVerificationInput
 }
-
-const teacherIdentityTypes = new Set(['教师', '信息化办老师'])
 
 export function normalizeRegisterBody(body: Record<string, unknown>): NormalizedRegisterInput {
   const password = requireText(body.password, '密码', 8, 128)
-  const identityText = requireText(body.identityText, '身份', 2, 40)
-  const studentNo = optionalText(body.studentNo, 40)
 
   return {
     code: normalizeEmailCode(body.code),
-    college: requireText(body.college, '学院', 2, 80),
     email: normalizeEmail(body.email),
-    grade: optionalText(body.grade, 20),
-    humanVerification: normalizeHumanVerificationInput(body),
-    identityText,
     name: requireText(body.name, '姓名', 2, 40),
     password: validatePassword(password),
-    studentNo: teacherIdentityTypes.has(identityText) ? '' : requireStudentNo(studentNo),
     unifiedCode: normalizeUnifiedCode(body.unifiedCode),
   }
 }
@@ -63,14 +47,6 @@ export function normalizeUnifiedCode(value: unknown) {
   return code
 }
 
-function requireStudentNo(value: string) {
-  if (!value) {
-    throw new BadRequestException('请填写学号')
-  }
-
-  return value
-}
-
 function validatePassword(password: string) {
   const categories = [
     /[A-Za-z]/.test(password),
@@ -97,20 +73,6 @@ function requireText(value: unknown, label: string, minLength: number, maxLength
 
   if (text.length > maxLength) {
     throw new BadRequestException(`${label}不能超过 ${maxLength} 个字符`)
-  }
-
-  return text
-}
-
-function optionalText(value: unknown, maxLength: number) {
-  if (value === undefined || value === null || value === '') return ''
-  if (typeof value !== 'string') {
-    throw new BadRequestException('文本格式不正确')
-  }
-
-  const text = value.trim()
-  if (text.length > maxLength) {
-    throw new BadRequestException(`文本不能超过 ${maxLength} 个字符`)
   }
 
   return text

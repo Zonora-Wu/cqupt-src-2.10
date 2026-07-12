@@ -159,13 +159,11 @@ export class AuthService {
   }
 
   async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse | PendingRegistrationResponse> {
-    await this.humanVerification.verify(input.humanVerification, 'REGISTER_SUBMIT', meta)
     await this.assertRegisterCode(input.email, input.code)
 
-    const [existingCode, existingEmail, existingStudentNo, studentRole, registrationSetting] = await Promise.all([
+    const [existingCode, existingEmail, studentRole, registrationSetting] = await Promise.all([
       this.prisma.user.findUnique({ where: { unifiedCode: input.unifiedCode } }),
       this.prisma.user.findUnique({ where: { email: input.email } }),
-      input.studentNo ? this.prisma.user.findUnique({ where: { studentNo: input.studentNo } }) : Promise.resolve(null),
       this.prisma.role.findUnique({ where: { code: RoleCode.STUDENT } }),
       this.prisma.systemSetting.findUnique({ where: { key: 'open_registration' } }),
     ])
@@ -176,10 +174,6 @@ export class AuthService {
 
     if (existingEmail) {
       throw new ConflictException('邮箱已注册')
-    }
-
-    if (existingStudentNo) {
-      throw new ConflictException('学号已注册')
     }
 
     if (!studentRole) {
@@ -195,17 +189,13 @@ export class AuthService {
         const created = await tx.user.create({
           data: {
             authorizationLevel: AuthorizationLevel.BASIC,
-            college: input.college,
             email: input.email,
             emailVerifiedAt: new Date(),
-            grade: input.grade || null,
-            identityText: input.identityText,
             name: input.name,
             passwordHash: hashPassword(input.password),
             pendingRegistrationApproval: true,
             roleId: studentRole.id,
             status: UserStatus.PENDING,
-            studentNo: input.studentNo || null,
             unifiedCode: input.unifiedCode,
           },
         })
@@ -222,9 +212,7 @@ export class AuthService {
             ipAddress: meta.ipAddress,
             metadata: {
               action: 'pending_registration',
-              college: input.college,
               email: input.email,
-              identityText: input.identityText,
               name: input.name,
               unifiedCode: input.unifiedCode,
             },
@@ -244,17 +232,13 @@ export class AuthService {
       const created = await tx.user.create({
         data: {
           authorizationLevel: AuthorizationLevel.BASIC,
-          college: input.college,
           email: input.email,
           emailVerifiedAt: new Date(),
-          grade: input.grade || null,
-          identityText: input.identityText,
           name: input.name,
           passwordHash: hashPassword(input.password),
           pendingRegistrationApproval: false,
           roleId: studentRole.id,
           status: UserStatus.ACTIVE,
-          studentNo: input.studentNo || null,
           unifiedCode: input.unifiedCode,
         },
         include: { role: true },
@@ -276,8 +260,6 @@ export class AuthService {
           ipAddress: meta.ipAddress,
           metadata: {
             action: 'self_register',
-            college: input.college,
-            identityText: input.identityText,
             unifiedCode: input.unifiedCode,
           },
           requestPath: meta.requestPath,

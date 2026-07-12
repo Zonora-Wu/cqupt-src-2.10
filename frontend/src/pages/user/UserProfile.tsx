@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Camera,
   CheckCircle2,
+  ClipboardCheck,
   Eye,
   EyeOff,
   KeyRound,
@@ -22,7 +23,8 @@ import {
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
-import { HumanVerification } from '../../components/ui/HumanVerification'
+import { CompleteProfileModal } from '../../components/profile/CompleteProfileModal'
+import { PlatformHumanVerification } from '../../components/security/PlatformHumanVerification'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -52,6 +54,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
   const [avatarNotice, setAvatarNotice] = useState<Notice | null>(null)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [showProfileModal, setShowProfileModal] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -220,6 +223,38 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           <SurfacePanel className="overflow-hidden p-0">
             <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
+                <ClipboardCheck className="h-4 w-4 text-brand-600 dark:text-brand-300" />
+                基础资料
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                    account?.profileCompleted
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {account?.profileCompleted ? '已完善' : '待完善'}
+                  </span>
+                  <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    {account?.profileCompleted ? '资料已满足漏洞提交、积分激励和证书签发需要。' : '提交漏洞前需补全学院、身份和学号信息。AI 助手可直接使用。'}
+                  </p>
+                </div>
+                <button
+                  className="shrink-0 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                  onClick={() => setShowProfileModal(true)}
+                  type="button"
+                >
+                  {account?.profileCompleted ? '修改' : '完善'}
+                </button>
+              </div>
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel className="overflow-hidden p-0">
+            <div className="border-b border-black/10 px-5 py-3.5 dark:border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
                 <Star className="h-4 w-4 text-brand-600 dark:text-brand-300" />
                 个人积分统计
               </div>
@@ -370,6 +405,19 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
           onClose={() => setShowPasswordModal(false)}
         />
       )}
+
+      {showProfileModal && account && (
+        <CompleteProfileModal
+          initialProfile={account}
+          onClose={() => setShowProfileModal(false)}
+          onSaved={(next) => {
+            setProfile((prev) =>
+              prev ? { ...prev, account: { ...prev.account, ...next } } : prev,
+            )
+            setShowProfileModal(false)
+          }}
+        />
+      )}
     </section>
   )
 }
@@ -465,7 +513,7 @@ function ChangeEmailModal({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               点击下方按钮，将向当前邮箱发送一条验证码，用于确认身份后修改新邮箱。
             </p>
-            <HumanVerification
+            <PlatformHumanVerification
               compact
               onChange={setSendHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -513,7 +561,7 @@ function ChangeEmailModal({
                 />
               </div>
             </label>
-            <HumanVerification
+            <PlatformHumanVerification
               compact
               onChange={setSubmitHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -723,7 +771,7 @@ function ChangePasswordModal({
                 {showOldPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            <HumanVerification
+            <PlatformHumanVerification
               compact
               onChange={setSubmitHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -759,7 +807,7 @@ function ChangePasswordModal({
                 </button>
               </div>
             </div>
-            <HumanVerification
+            <PlatformHumanVerification
               compact
               onChange={codeSent ? setSubmitHumanPayload : setSendHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}

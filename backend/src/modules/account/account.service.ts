@@ -6,7 +6,7 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { EmailService } from '../email/email.service'
 import { HumanVerificationService } from '../human-verification/human-verification.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput } from './account.types'
+import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput, UpdateProfileBasicsInput } from './account.types'
 
 type UploadedImageFile = { buffer?: Buffer; mimetype?: string; size?: number }
 const DEFAULT_AI_DAILY_TOKENS = 20_000
@@ -92,6 +92,7 @@ export class AccountService {
         identityText: profile.identityText ?? '',
         lastLoginAt: profile.lastLoginAt,
         name: profile.name,
+        profileCompleted: isProfileComplete(profile),
         role: profile.role.code,
         roleLabel: profile.role.name,
         status: profile.status,
@@ -121,6 +122,66 @@ export class AccountService {
         validReports: profile.submittedReports.filter((report) => validStatuses.includes(report.status)).length,
       },
       aiQuota,
+    }
+  }
+
+  async updateProfileBasics(user: AuthenticatedRequestUser, input: UpdateProfileBasicsInput, meta: ClientRequestMeta) {
+    if (input.studentNo) {
+      const existingStudentNo = await this.prisma.user.findFirst({
+        where: {
+          deletedAt: null,
+          id: { not: user.id },
+          studentNo: input.studentNo,
+        },
+        select: { id: true },
+      })
+
+      if (existingStudentNo) {
+        throw new ConflictException('学号已被其他账号使用')
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          college: input.college,
+          grade: input.grade || null,
+          identityText: input.identityText,
+          studentNo: input.studentNo || null,
+        },
+        include: { role: true },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'update_profile_basics',
+            college: input.college,
+            grade: input.grade || null,
+            identityText: input.identityText,
+            studentNoProvided: Boolean(input.studentNo),
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: user.id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return next
+    })
+
+    return {
+      college: updated.college ?? '',
+      grade: updated.grade ?? '',
+      identityText: updated.identityText ?? '',
+      profileCompleted: isProfileComplete(updated),
+      studentNo: updated.studentNo ?? '',
     }
   }
 
@@ -573,6 +634,15 @@ function normalizeStoredTokenLimit(value: unknown, fallback: number) {
 
 function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
   return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
+}
+
+function isProfileComplete(user: { college: string | null; identityText: string | null; studentNo: string | null }) {
+  const identityText = user.identityText?.trim() ?? ''
+  return Boolean(user.college?.trim() && identityText && (isTeacherIdentity(identityText) || user.studentNo?.trim()))
+}
+
+function isTeacherIdentity(identityText: string) {
+  return identityText === '教师' || identityText === '信息化办老师'
 }
 
 function getActionModule(action: string): string {

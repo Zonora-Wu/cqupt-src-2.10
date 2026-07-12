@@ -13,6 +13,7 @@ export type AccountProfile = {
     identityText: string
     lastLoginAt: string | null
     name: string
+    profileCompleted: boolean
     role: 'STUDENT' | 'AUDITOR' | 'ADMIN'
     roleLabel: string
     status: string
@@ -62,8 +63,26 @@ export type ChangeEmailResponse = {
   message: string
 }
 
+export type UpdateProfileBasicsPayload = {
+  college: string
+  grade: string
+  identityText: string
+  studentNo: string
+}
+
+export type UpdateProfileBasicsResponse = UpdateProfileBasicsPayload & {
+  profileCompleted: boolean
+}
+
 export function getAccountProfile() {
   return request<AccountProfile>('/account/profile', { method: 'GET' })
+}
+
+export function updateProfileBasics(payload: UpdateProfileBasicsPayload) {
+  return request<UpdateProfileBasicsResponse>('/account/profile/basics', {
+    body: payload,
+    method: 'POST',
+  })
 }
 
 export function changePassword(payload: HumanVerificationPayload & { code: string; newPassword: string }) {

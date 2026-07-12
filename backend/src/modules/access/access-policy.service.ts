@@ -141,6 +141,7 @@ export class AccessPolicyService {
     const roleAllowed = user.role.code === RoleCode.STUDENT
     const accountActive = user.status === UserStatus.ACTIVE
     const emailVerified = Boolean(user.emailVerifiedAt)
+    const profileCompleted = isProfileComplete(user)
     const activeAgreementSignature = activeAgreement
       ? user.responsibilitySigns.find((signature) => signature.agreementId === activeAgreement.id)
       : null
@@ -150,6 +151,7 @@ export class AccessPolicyService {
     if (!roleAllowed) missingRequirements.push('仅学生用户可以提交漏洞')
     if (!accountActive) missingRequirements.push('账号当前不可用')
     if (!emailVerified) missingRequirements.push('请先完成邮箱验证')
+    if (!profileCompleted) missingRequirements.push('请先完善学院、身份和学号信息')
     if (!activeAgreement) missingRequirements.push('平台尚未发布当前责任书')
     if (activeAgreement && !activeAgreementSignature) missingRequirements.push('请先签署当前版本责任书')
     if (examRequired && !securityExamPassed) missingRequirements.push('请先通过安全准入考试')
@@ -170,6 +172,7 @@ export class AccessPolicyService {
       emailVerified,
       examThreshold,
       missingRequirements,
+      profileCompleted,
       responsibilityAgreementRequired: true,
       responsibilitySigned: Boolean(activeAgreementSignature),
       role: user.role.code,
@@ -215,4 +218,13 @@ export class AccessPolicyService {
 function clampThreshold(value: number) {
   if (!Number.isFinite(value)) return 80
   return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function isProfileComplete(user: { college: string | null; identityText: string | null; studentNo: string | null }) {
+  const identityText = user.identityText?.trim() ?? ''
+  return Boolean(user.college?.trim() && identityText && (isTeacherIdentity(identityText) || user.studentNo?.trim()))
+}
+
+function isTeacherIdentity(identityText: string) {
+  return identityText === '教师' || identityText === '信息化办老师'
 }

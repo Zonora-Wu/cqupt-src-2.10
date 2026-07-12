@@ -14,6 +14,7 @@ export type AccessStatus = {
   emailVerified: boolean
   examThreshold: number
   missingRequirements: string[]
+  profileCompleted: boolean
   responsibilityAgreementRequired: boolean
   responsibilitySigned: boolean
   role: 'STUDENT' | 'AUDITOR' | 'ADMIN'

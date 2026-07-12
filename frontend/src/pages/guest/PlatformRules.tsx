@@ -117,7 +117,7 @@ export function PlatformRules() {
         </div>
       </section>
 
-      <section className="mx-auto mt-20 max-w-5xl rounded-lg border border-black/10 bg-white/65 p-7 backdrop-blur-xl dark:border-white/10 ">
+      <section className="mx-auto mt-20 max-w-5xl rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight">一份合格报告应包含什么</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
@@ -127,7 +127,7 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {reportFocus.map(([title, text], index) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10 dark:bg-black/20" key={title}>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10" key={title}>
               <div className="font-mono text-xs text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
               <h3 className="mt-3 font-semibold">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{text}</p>
@@ -137,7 +137,7 @@ export function PlatformRules() {
 
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
           {reportSections.map((section) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-5 dark:border-white/10 dark:bg-black/20" key={section.title}>
+            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-5 dark:border-white/10" key={section.title}>
               <h3 className="text-lg font-semibold">{section.title}</h3>
               <ul className="mt-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
                 {section.items.map((item) => (
@@ -151,7 +151,7 @@ export function PlatformRules() {
           ))}
         </div>
 
-        <div className="mt-6 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-400">
+        <div className="mt-6 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:text-slate-400">
           证明材料应按平台支持格式提交。截图、请求示例或附件只保留验证漏洞所需内容，主动遮挡账号、Cookie、Token、验证码、个人信息和业务敏感数据。
         </div>
       </section>
