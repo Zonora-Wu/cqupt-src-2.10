@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import { AuditAction, Prisma } from '@prisma/client'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
-import nodemailer from 'nodemailer'
+import * as nodemailer from 'nodemailer'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { EmailServiceSettings, SendVerificationCodeInput, SmtpSecureMode, UpdateEmailServiceSettingsInput } from './email.types'
