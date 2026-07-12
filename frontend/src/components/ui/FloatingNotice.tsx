@@ -14,11 +14,27 @@ type FloatingNoticeProps = {
   variant?: FloatingNoticeVariant
 }
 
-const variantStyles: Record<FloatingNoticeVariant, string> = {
-  error: 'border-red-500/20 bg-red-50/95 text-red-700 dark:bg-red-950/80 dark:text-red-300',
-  info: 'border-sky-500/20 bg-sky-50/95 text-sky-700 dark:bg-sky-950/80 dark:text-sky-300',
-  success: 'border-emerald-500/20 bg-emerald-50/95 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300',
-  warning: 'border-amber-500/20 bg-amber-50/95 text-amber-700 dark:bg-amber-950/80 dark:text-amber-300',
+const variantStyles: Record<FloatingNoticeVariant, { background: string; border: string; color: string }> = {
+  error: {
+    background: 'color-mix(in srgb, var(--app-danger-soft) 94%, var(--app-menu-bg))',
+    border: 'color-mix(in srgb, var(--app-danger) 32%, transparent)',
+    color: 'var(--app-danger-text)',
+  },
+  info: {
+    background: 'color-mix(in srgb, var(--app-info-soft) 94%, var(--app-menu-bg))',
+    border: 'color-mix(in srgb, var(--app-info) 32%, transparent)',
+    color: 'var(--app-info-text)',
+  },
+  success: {
+    background: 'color-mix(in srgb, var(--app-success-soft) 94%, var(--app-menu-bg))',
+    border: 'color-mix(in srgb, var(--app-success) 32%, transparent)',
+    color: 'var(--app-success-text)',
+  },
+  warning: {
+    background: 'color-mix(in srgb, var(--app-warning-soft) 94%, var(--app-menu-bg))',
+    border: 'color-mix(in srgb, var(--app-warning) 32%, transparent)',
+    color: 'var(--app-warning-text)',
+  },
 }
 
 const iconMap: Record<FloatingNoticeVariant, ReactNode> = {
@@ -86,8 +102,13 @@ export function FloatingNotice({
   return createPortal(
     <div className="pointer-events-none fixed left-1/2 top-[4.75rem] z-[2147483647] w-[min(520px,calc(100vw-40px))] -translate-x-1/2">
       <div
-        className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${variantStyles[variant]} ${className}`}
+        className={`pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-xl ${className}`}
         role={variant === 'error' || variant === 'warning' ? 'alert' : 'status'}
+        style={{
+          backgroundColor: variantStyles[variant].background,
+          borderColor: variantStyles[variant].border,
+          color: variantStyles[variant].color,
+        }}
       >
         <span className="mt-0.5 shrink-0">{iconMap[variant]}</span>
         <div className="min-w-0 flex-1 leading-5">

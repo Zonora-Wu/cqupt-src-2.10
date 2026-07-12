@@ -638,7 +638,7 @@ function AccessTodoDialog({
         <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
           <div>
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+              <AlertCircle className="h-5 w-5 text-[var(--app-warning)]" />
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">还有待完成的准入事项</h2>
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -699,7 +699,7 @@ function AccessTaskCard({
   title: string
 }) {
   return (
-    <div className="rounded-lg border border-black/10 bg-slate-50/80 p-4 dark:border-white/10 ">
+    <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
@@ -708,7 +708,13 @@ function AccessTaskCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-slate-950 dark:text-white">{title}</h3>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${disabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'}`}>
+              <span
+                className="rounded-full px-2.5 py-1 text-xs font-medium"
+                style={{
+                  backgroundColor: disabled ? 'var(--app-success-soft)' : 'var(--app-warning-soft)',
+                  color: disabled ? 'var(--app-success-text)' : 'var(--app-warning-text)',
+                }}
+              >
                 {status}
               </span>
             </div>

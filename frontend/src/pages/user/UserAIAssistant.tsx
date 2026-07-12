@@ -808,7 +808,7 @@ function AiHistoryPanel({
     return (
       <button
         aria-label="展开历史对话"
-        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10  dark:text-slate-300 dark:hover:bg-[#18211b] dark:hover:text-white lg:inline-flex"
+        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10  dark:text-slate-300 dark:hover:bg-[var(--app-panel-muted-bg)] dark:hover:text-white lg:inline-flex"
         onClick={() => onCollapsedChange(false)}
         title="展开历史对话"
         type="button"
@@ -1885,7 +1885,7 @@ function LearningResourceCard({ action, card }: { card: AiCard & { type: 'LEARNI
     if (popup) {
       popup.opener = null
       popup.document.title = card.kind === 'RANGE' ? '正在进入靶场...' : '正在访问资源...'
-      popup.document.body.innerHTML = '<p style="font-family: system-ui, sans-serif; padding: 24px; color: #475569;">正在打开资源，请稍候...</p>'
+      popup.document.body.innerHTML = '<p style="font-family: system-ui, sans-serif; padding: 24px; color: var(--app-text, #475569);">正在打开资源，请稍候...</p>'
     }
 
     try {

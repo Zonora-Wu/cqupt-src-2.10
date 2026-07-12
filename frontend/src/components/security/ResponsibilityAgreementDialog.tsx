@@ -119,7 +119,7 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
               正在加载责任书...
             </div>
           ) : agreement ? (
-            <article className="rounded-lg border border-black/10 bg-slate-50/80 p-5 text-sm leading-8 text-slate-700 dark:border-white/10 dark:bg-[#18211b]/60 dark:text-slate-200">
+            <article className="rounded-lg border border-black/10 bg-slate-50/80 p-5 text-sm leading-8 text-slate-700 dark:border-white/10 dark:bg-[var(--app-panel-muted-bg)] dark:text-slate-200">
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span className="rounded-full bg-brand-600/10 px-2.5 py-1 font-medium text-brand-700 dark:text-brand-300">
                   {agreement.version}
