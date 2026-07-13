@@ -24,15 +24,20 @@ const BRAND_PALETTE_SLOTS = ['lightBg', 'lightSurface', 'lightMuted', 'lightBord
 const BRAND_PALETTE_KEYS = [...BRAND_PALETTE_SLOTS, ...BRAND_PALETTE_SHADES] as const
 const platformLogoSlots = ['navigation', 'auth', 'favicon'] as const
 type PlatformLogoSlot = typeof platformLogoSlots[number]
+type PlatformLogoMode = 'dark' | 'light'
 const platformLogoSettingKeys: Record<PlatformLogoSlot, string> = {
   auth: 'auth_logo_url',
   favicon: 'favicon_url',
   navigation: 'navigation_logo_url',
 }
+const platformLogoDarkSettingKeys: Partial<Record<PlatformLogoSlot, string>> = {
+  auth: 'auth_logo_url_dark',
+  navigation: 'navigation_logo_url_dark',
+}
 const platformLogoSettingDescriptions: Record<PlatformLogoSlot, string> = {
-  auth: '登录注册弹窗校徽',
-  favicon: '浏览器标签页校徽',
-  navigation: '菜单栏校徽',
+  auth: '登录注册弹窗图标',
+  favicon: '浏览器标签页图标',
+  navigation: '菜单栏图标',
 }
 const DEFAULT_AI_DAILY_TOKENS = 20_000
 const DEFAULT_AI_WEEKLY_TOKENS = 60_000
@@ -528,7 +533,9 @@ export class SystemSettingsService {
       'public_cert_verify',
       'school_logo_url',
       'navigation_logo_url',
+      'navigation_logo_url_dark',
       'auth_logo_url',
+      'auth_logo_url_dark',
       'favicon_url',
       'theme_color',
       'theme_palette',
@@ -540,9 +547,11 @@ export class SystemSettingsService {
     const legacyLogoUrl = typeof map['school_logo_url'] === 'string' ? map['school_logo_url'] : null
     return {
       authLogoUrl: typeof map['auth_logo_url'] === 'string' ? map['auth_logo_url'] : legacyLogoUrl,
+      authLogoUrlDark: typeof map['auth_logo_url_dark'] === 'string' ? map['auth_logo_url_dark'] : null,
       faviconUrl: typeof map['favicon_url'] === 'string' ? map['favicon_url'] : legacyLogoUrl,
       logoUrl: legacyLogoUrl,
       navigationLogoUrl: typeof map['navigation_logo_url'] === 'string' ? map['navigation_logo_url'] : legacyLogoUrl,
+      navigationLogoUrlDark: typeof map['navigation_logo_url_dark'] === 'string' ? map['navigation_logo_url_dark'] : null,
       platformName: typeof map['platform_name'] === 'string' ? map['platform_name'] : 'CQUPT-SRC 校园漏洞响应平台',
       schoolName: typeof map['school_name'] === 'string' ? map['school_name'] : '重庆邮电大学',
       orgName: typeof map['org_name'] === 'string' ? map['org_name'] : '信息化办公室',
@@ -566,10 +575,12 @@ export class SystemSettingsService {
     file: UploadedSettingsFile | undefined,
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
+    mode: PlatformLogoMode = 'light',
   ): Promise<PlatformSettings> {
-    const validatedFile = validateImageFile(file, MAX_SCHOOL_LOGO_SIZE_BYTES, '校徽')
+    const validatedFile = validateImageFile(file, MAX_SCHOOL_LOGO_SIZE_BYTES, '图标')
     const logoUrl = `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`
-    const settingKey = platformLogoSettingKeys[slot]
+    const darkSettingKey = platformLogoDarkSettingKeys[slot]
+    const settingKey = mode === 'dark' && darkSettingKey ? darkSettingKey : platformLogoSettingKeys[slot]
 
     await this.prisma.$transaction(async (tx) => {
       await tx.systemSetting.upsert({
@@ -578,19 +589,19 @@ export class SystemSettingsService {
         create: {
           key: settingKey,
           value: logoUrl,
-          description: platformLogoSettingDescriptions[slot],
+          description: `${platformLogoSettingDescriptions[slot]}${mode === 'dark' && darkSettingKey ? '（黑夜模式）' : '（白天模式）'}`,
           updatedById: user.id,
         },
       })
 
-      if (slot === 'navigation') {
+      if (slot === 'navigation' && mode !== 'dark') {
         await tx.systemSetting.upsert({
           where: { key: 'school_logo_url' },
           update: { value: logoUrl, updatedById: user.id },
           create: {
             key: 'school_logo_url',
             value: logoUrl,
-            description: '学校校徽',
+            description: '菜单栏图标',
             updatedById: user.id,
           },
         })
@@ -604,6 +615,7 @@ export class SystemSettingsService {
           metadata: {
             key: settingKey,
             mimeType: validatedFile.mimeType,
+            mode,
             slot,
             size: validatedFile.buffer.length,
           },
@@ -622,9 +634,11 @@ export class SystemSettingsService {
     slot: PlatformLogoSlot,
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
+    mode: PlatformLogoMode = 'light',
   ): Promise<PlatformSettings> {
-    const settingKey = platformLogoSettingKeys[slot]
-    const keys = slot === 'navigation' ? [settingKey, 'school_logo_url'] : [settingKey]
+    const darkSettingKey = platformLogoDarkSettingKeys[slot]
+    const settingKey = mode === 'dark' && darkSettingKey ? darkSettingKey : platformLogoSettingKeys[slot]
+    const keys = slot === 'navigation' && mode !== 'dark' ? [settingKey, 'school_logo_url'] : [settingKey]
 
     await this.prisma.$transaction(async (tx) => {
       await tx.systemSetting.deleteMany({ where: { key: { in: keys } } })
@@ -636,6 +650,7 @@ export class SystemSettingsService {
           ipAddress: meta.ipAddress,
           metadata: {
             key: settingKey,
+            mode,
             slot,
             resetToDefault: true,
           },

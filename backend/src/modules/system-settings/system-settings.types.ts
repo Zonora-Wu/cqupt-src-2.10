@@ -36,9 +36,11 @@ export type PendingRegistrationItem = {
 
 export type PlatformSettings = {
   authLogoUrl: string | null
+  authLogoUrlDark: string | null
   faviconUrl: string | null
   logoUrl: string | null
   navigationLogoUrl: string | null
+  navigationLogoUrlDark: string | null
   platformName: string
   schoolName: string
   orgName: string

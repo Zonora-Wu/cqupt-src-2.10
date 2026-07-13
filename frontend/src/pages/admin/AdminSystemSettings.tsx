@@ -8,6 +8,7 @@ import {
   FileText,
   KeyRound,
   Mail,
+  Moon,
   Palette,
   Paintbrush,
   Save,
@@ -15,6 +16,7 @@ import {
   ShieldCheck,
   ShieldQuestion,
   SlidersHorizontal,
+  Sun,
   Upload,
   UserCheck,
   UserX,
@@ -50,7 +52,7 @@ import {
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
-import type { AiQuotaSettings, CertificateTemplateSummary, EmailServiceSettings, PendingRegistrationItem, PlatformLogoSlot, SmtpSecureMode } from '../../services/systemSettings'
+import type { AiQuotaSettings, CertificateTemplateSummary, EmailServiceSettings, PendingRegistrationItem, PlatformLogoMode, PlatformLogoSlot, SmtpSecureMode } from '../../services/systemSettings'
 import {
   createSecurityQuestions,
   generateSecurityQuestionsWithAi,
@@ -99,6 +101,10 @@ const smtpSecureModeLabels: Record<SmtpSecureMode, string> = {
   NONE: '无',
   SSL: 'SSL',
   STARTTLS: 'STARTTLS',
+}
+const platformLogoModeLabels: Record<PlatformLogoMode, string> = {
+  dark: '黑夜',
+  light: '白天',
 }
 
 function getAppliedThemeColor() {
@@ -211,9 +217,11 @@ function clearAppearanceDraft() {
 
 function getPlatformLogoUrlState(value: {
   authLogoUrl?: string | null
+  authLogoUrlDark?: string | null
   faviconUrl?: string | null
   logoUrl?: string | null
   navigationLogoUrl?: string | null
+  navigationLogoUrlDark?: string | null
 }): Record<PlatformLogoSlot, string | null> {
   return {
     auth: value.authLogoUrl ?? value.logoUrl ?? null,
@@ -224,9 +232,11 @@ function getPlatformLogoUrlState(value: {
 
 function getDisplayedPlatformLogoState(value: {
   authLogoUrl?: string | null
+  authLogoUrlDark?: string | null
   faviconUrl?: string | null
   logoUrl?: string | null
   navigationLogoUrl?: string | null
+  navigationLogoUrlDark?: string | null
 }): Record<PlatformLogoSlot, string | null> {
   const persisted = getPlatformLogoUrlState(value)
   const applied = getPlatformLogos()
@@ -241,6 +251,18 @@ function getDisplayedPlatformLogoState(value: {
     favicon: appliedState.favicon ?? persisted.favicon,
     navigation: appliedState.navigation ?? persisted.navigation,
   }
+}
+
+function getPlatformLogoUrl(logos: ReturnType<typeof getPlatformLogos>, slot: PlatformLogoSlot, mode: PlatformLogoMode) {
+  if (slot === 'favicon') return logos.faviconUrl
+  if (slot === 'auth') return mode === 'dark' ? logos.authLogoUrlDark : logos.authLogoUrl
+  return mode === 'dark' ? logos.navigationLogoUrlDark : logos.navigationLogoUrl
+}
+
+function getDefaultPlatformLogoUrl(slot: PlatformLogoSlot, mode: PlatformLogoMode) {
+  if (slot === 'favicon') return defaultPlatformLogos.faviconUrl
+  if (slot === 'auth') return mode === 'dark' ? defaultPlatformLogos.authLogoUrlDark : defaultPlatformLogos.authLogoUrl
+  return mode === 'dark' ? defaultPlatformLogos.navigationLogoUrlDark : defaultPlatformLogos.navigationLogoUrl
 }
 
 type CertificateLayoutKey =
@@ -333,27 +355,39 @@ const platformLogoSlots: Array<{
   title: string
 }> = [
   {
-    description: '用于访客页、用户端、审核端和管理端顶部菜单栏的横版品牌标识。',
+    description: '用于各端顶部导航区域的横版品牌图标。',
     preview: 'wide',
-    recommended: '建议使用横版透明 PNG，默认来自 CQUPT_03_logo。',
+    recommended: '建议使用横版透明 PNG，默认使用公共图标库占位，旧资产在备选中。',
     slot: 'navigation',
-    title: '菜单栏校徽',
+    title: '菜单栏图标',
   },
   {
-    description: '用于登录和注册弹窗顶部的大尺寸校徽，深色和浅色弹窗共用该配置。',
+    description: '用于登录和注册弹窗顶部的大尺寸品牌图标。',
     preview: 'square',
-    recommended: '建议使用居中构图透明 PNG，默认来自 CQUPT_02_logo。',
+    recommended: '建议使用居中构图透明 PNG，默认使用公共图标库占位，旧资产在备选中。',
     slot: 'auth',
-    title: '登录注册弹窗校徽',
+    title: '登录注册弹窗图标',
   },
   {
-    description: '用于浏览器标签页、收藏夹和窗口标题栏图标。',
+    description: '用于浏览器标签页、收藏夹和窗口标题栏。',
     preview: 'favicon',
-    recommended: '建议使用正方形 PNG / WebP，默认来自 CQUPT_01_logo。',
+    recommended: '建议使用正方形 PNG / WebP，默认使用公共图标库占位，旧资产在备选中。',
     slot: 'favicon',
-    title: '浏览器标签页校徽',
+    title: '浏览器标签页图标',
   },
 ]
+
+const legacyPlatformLogoAlternatives: Record<PlatformLogoSlot, Array<{ darkUrl?: string; label: string; lightUrl: string }>> = {
+  auth: [
+    { darkUrl: '/assets/logos/CQUPT_02_logo_dark.png', label: 'CQUPT 旧版', lightUrl: '/assets/logos/CQUPT_02_logo.png' },
+  ],
+  favicon: [
+    { label: 'CQUPT 旧版高清', lightUrl: '/assets/logos/CQUPT_01_logo_1024px.png' },
+  ],
+  navigation: [
+    { darkUrl: '/assets/logos/CQUPT_03_logo_dark.png', label: 'CQUPT 旧版', lightUrl: '/assets/logos/CQUPT_03_logo.png' },
+  ],
+}
 
 export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
@@ -378,6 +412,7 @@ export function AdminSystemSettings() {
   const [paletteDraftColor, setPaletteDraftColor] = useState('')
   const [canApplyThemePreview, setCanApplyThemePreview] = useState(false)
   const [appliedPlatformLogos, setAppliedPlatformLogos] = useState(() => getPlatformLogos())
+  const [platformLogoMode, setPlatformLogoMode] = useState<PlatformLogoMode>('light')
   const [isSavingPlatform, setIsSavingPlatform] = useState(false)
   const [isSavingAppearance, setIsSavingAppearance] = useState(false)
   const [uploadingPlatformLogoSlot, setUploadingPlatformLogoSlot] = useState<PlatformLogoSlot | null>(null)
@@ -813,16 +848,18 @@ export function AdminSystemSettings() {
     setUploadingPlatformLogoSlot(slot)
 
     try {
-      const result = await uploadPlatformLogo(slot, file)
+      const mode = slot === 'favicon' ? 'light' : platformLogoMode
+      const result = await uploadPlatformLogo(slot, file, mode)
       applyPlatformBranding(result)
       if (appearanceDirty) writeAppearanceDraft(themeColor, themePalette)
-      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '校徽'
-      setAppearanceMessage(`${title}已上传并保存`)
-      showNotice(`${title}已同步到对应展示位置。`, 'success', '外观设置已更新')
+      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '图标'
+      const modeLabel = slot === 'favicon' ? '' : `${platformLogoModeLabels[mode]}模式`
+      setAppearanceMessage(`${title}${modeLabel}已上传并保存`)
+      showNotice(`${title}${modeLabel}已同步到对应展示位置。`, 'success', '外观设置已更新')
     } catch (error) {
-      const message = error instanceof Error ? error.message : '校徽上传失败'
+      const message = error instanceof Error ? error.message : '图标上传失败'
       setAppearanceMessage(message)
-      showNotice(message, 'error', '校徽上传失败')
+      showNotice(message, 'error', '图标上传失败')
     } finally {
       setUploadingPlatformLogoSlot(null)
       if (platformLogoInputRefs.current[slot]) platformLogoInputRefs.current[slot]!.value = ''
@@ -834,16 +871,46 @@ export function AdminSystemSettings() {
     setUploadingPlatformLogoSlot(slot)
 
     try {
-      const result = await resetPlatformLogo(slot)
+      const mode = slot === 'favicon' ? 'light' : platformLogoMode
+      const result = await resetPlatformLogo(slot, mode)
       applyPlatformBranding(result)
       if (appearanceDirty) writeAppearanceDraft(themeColor, themePalette)
-      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '校徽'
-      setAppearanceMessage(`${title}已恢复默认`)
-      showNotice(`${title}已恢复为 /CQUPT 默认资产。`, 'success', '外观设置已更新')
+      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '图标'
+      const modeLabel = slot === 'favicon' ? '' : `${platformLogoModeLabels[mode]}模式`
+      setAppearanceMessage(`${title}${modeLabel}已恢复默认`)
+      showNotice(`${title}${modeLabel}已恢复默认占位。`, 'success', '外观设置已更新')
     } catch (error) {
       const message = error instanceof Error ? error.message : '恢复默认失败'
       setAppearanceMessage(message)
       showNotice(message, 'error', '恢复默认失败')
+    } finally {
+      setUploadingPlatformLogoSlot(null)
+    }
+  }
+
+  const handleApplyPlatformLogoAlternative = async (slot: PlatformLogoSlot, alternative: { darkUrl?: string; label: string; lightUrl: string }) => {
+    setAppearanceMessage('')
+    setUploadingPlatformLogoSlot(slot)
+
+    try {
+      const mode = slot === 'favicon' ? 'light' : platformLogoMode
+      const alternativeUrl = mode === 'dark' && alternative.darkUrl ? alternative.darkUrl : alternative.lightUrl
+      const response = await fetch(alternativeUrl)
+      if (!response.ok) throw new Error('备选图标读取失败')
+      const blob = await response.blob()
+      const extension = alternativeUrl.split('.').pop() || 'png'
+      const file = new File([blob], `${slot}-${alternative.label}.${extension}`, { type: blob.type || 'image/png' })
+      const result = await uploadPlatformLogo(slot, file, mode)
+      applyPlatformBranding(result)
+      if (appearanceDirty) writeAppearanceDraft(themeColor, themePalette)
+      const title = platformLogoSlots.find((item) => item.slot === slot)?.title ?? '图标'
+      const modeLabel = slot === 'favicon' ? '' : `${platformLogoModeLabels[mode]}模式`
+      setAppearanceMessage(`${title}${modeLabel}已应用备选：${alternative.label}`)
+      showNotice(`${title}${modeLabel}已应用“${alternative.label}”。`, 'success', '外观设置已更新')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '备选图标应用失败'
+      setAppearanceMessage(message)
+      showNotice(message, 'error', '备选图标应用失败')
     } finally {
       setUploadingPlatformLogoSlot(null)
     }
@@ -1111,29 +1178,48 @@ export function AdminSystemSettings() {
                 </SettingsCard>
 
                 <SettingsCard
-                  description="维护登录页、管理端和公开页面使用的品牌资产。校徽建议使用透明背景 PNG 或清晰的 SVG 转 PNG 文件。"
+                  description="维护登录页、管理端和公开页面使用的品牌图标。建议使用透明背景 PNG 或清晰的 SVG 转 PNG 文件。"
                   icon={<Paintbrush className="h-5 w-5" />}
                   title="外观"
                 >
                   <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950 dark:text-white">学校校徽</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                        点击预览图上传对应校徽，支持 JPG / PNG / WebP / GIF，单个文件最大 2MB。
-                      </p>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950 dark:text-white">品牌图标</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                          点击预览图上传对应图标，支持 JPG / PNG / WebP / GIF，单个文件最大 2MB。
+                        </p>
+                      </div>
+                      <div className="inline-flex w-fit rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-1 dark:border-white/10">
+                        {(['light', 'dark'] as PlatformLogoMode[]).map((mode) => {
+                          const Icon = mode === 'light' ? Sun : Moon
+                          return (
+                            <button
+                              aria-pressed={platformLogoMode === mode}
+                              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                                platformLogoMode === mode
+                                  ? 'bg-brand-600 text-white shadow-sm'
+                                  : 'text-slate-600 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10'
+                              }`}
+                              key={mode}
+                              onClick={() => setPlatformLogoMode(mode)}
+                              type="button"
+                            >
+                              <Icon className="h-4 w-4" />
+                              {platformLogoModeLabels[mode]}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                      菜单栏和登录注册弹窗区分白天/黑夜图标；浏览器标签页图标不区分模式。
+                    </p>
                     <div className="mt-4 grid gap-3 lg:grid-cols-3">
                       {platformLogoSlots.map((item) => {
-                        const previewUrl = item.slot === 'navigation'
-                          ? effectivePlatformLogos.navigationLogoUrl
-                          : item.slot === 'auth'
-                            ? effectivePlatformLogos.authLogoUrl
-                            : effectivePlatformLogos.faviconUrl
-                        const defaultUrl = item.slot === 'navigation'
-                          ? defaultPlatformLogos.navigationLogoUrl
-                          : item.slot === 'auth'
-                            ? defaultPlatformLogos.authLogoUrl
-                            : defaultPlatformLogos.faviconUrl
+                        const mode = item.slot === 'favicon' ? 'light' : platformLogoMode
+                        const previewUrl = getPlatformLogoUrl(effectivePlatformLogos, item.slot, mode)
+                        const defaultUrl = getDefaultPlatformLogoUrl(item.slot, mode)
                         const custom = previewUrl !== defaultUrl
                         const uploading = uploadingPlatformLogoSlot === item.slot
 
@@ -1152,13 +1238,14 @@ export function AdminSystemSettings() {
                                 src={previewUrl}
                               />
                               <span className="mt-3 text-xs font-medium text-slate-500 transition group-hover:text-brand-700 dark:text-slate-400 dark:group-hover:text-brand-200">
-                                {uploading ? '上传中...' : '点击上传'}
+                                {uploading ? '上传中...' : `点击上传${item.slot === 'favicon' ? '' : platformLogoModeLabels[mode]}`}
                               </span>
                             </button>
                             <div className="mt-3 flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.title}</p>
                                 <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.description}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.recommended}</p>
                               </div>
                               <button
                                 className="shrink-0 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
@@ -1175,6 +1262,31 @@ export function AdminSystemSettings() {
                                 ref={(node) => { platformLogoInputRefs.current[item.slot] = node }}
                                 type="file"
                               />
+                            </div>
+                            <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
+                              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">备选图标</p>
+                              <div className="mt-2 grid gap-2">
+                                {legacyPlatformLogoAlternatives[item.slot].map((alternative) => {
+                                  const alternativeUrl = mode === 'dark' && alternative.darkUrl ? alternative.darkUrl : alternative.lightUrl
+                                  return (
+                                    <button
+                                      className="flex min-h-12 items-center gap-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-left transition hover:border-brand-500 hover:bg-brand-50/60 disabled:cursor-not-allowed disabled:opacity-55 dark:border-white/10 dark:hover:border-brand-400 dark:hover:bg-brand-950/45"
+                                      disabled={uploadingPlatformLogoSlot !== null}
+                                      key={alternative.label}
+                                      onClick={() => void handleApplyPlatformLogoAlternative(item.slot, alternative)}
+                                      type="button"
+                                    >
+                                      <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md bg-white p-1 dark:bg-slate-950/55">
+                                        <img alt="" className="max-h-full max-w-full object-contain" src={alternativeUrl} />
+                                      </span>
+                                      <span className="min-w-0">
+                                        <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{alternative.label}</span>
+                                        <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">应用到{item.slot === 'favicon' ? item.title : `${platformLogoModeLabels[mode]}${item.title}`}</span>
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
                         )
@@ -2078,8 +2190,8 @@ function TextField({ value, onChange, type = 'text' }: { value: string; onChange
 
 function validateBrandImageFile(file: File, maxBytes: number) {
   const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-  if (!validTypes.includes(file.type)) return '校徽仅支持 JPG、PNG、WebP、GIF 格式'
-  if (file.size > maxBytes) return '校徽文件不能超过 2MB'
+  if (!validTypes.includes(file.type)) return '图标仅支持 JPG、PNG、WebP、GIF 格式'
+  if (file.size > maxBytes) return '图标文件不能超过 2MB'
   return ''
 }
 

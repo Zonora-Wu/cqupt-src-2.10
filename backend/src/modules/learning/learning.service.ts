@@ -31,7 +31,7 @@ export class LearningService {
     }
   }
 
-  async clickResource(id: string) {
+  async clickResource(id: string, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
     const resource = await this.prisma.learningResource.findFirst({
       where: {
         active: true,
@@ -44,13 +44,35 @@ export class LearningService {
       throw new NotFoundException('资源不存在或已下架')
     }
 
-    const updated = await this.prisma.learningResource.update({
-      where: { id: resource.id },
-      data: {
-        downloadCount: {
-          increment: 1,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const nextResource = await tx.learningResource.update({
+        where: { id: resource.id },
+        data: {
+          downloadCount: {
+            increment: 1,
+          },
         },
-      },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_LEARNING_RESOURCE,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'download',
+            kind: resource.kind,
+            title: resource.title,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: resource.id,
+          targetType: 'LearningResource',
+          userAgent: meta.userAgent,
+        },
+      })
+
+      return nextResource
     })
 
     return {

@@ -46,8 +46,12 @@ export class LearningController {
   }
 
   @Post(':id/click')
-  clickResource(@Param('id') id: string) {
-    return this.learning.clickResource(id)
+  clickResource(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.learning.clickResource(id, user, getRequestMeta(req))
   }
 
   @Get('manage')

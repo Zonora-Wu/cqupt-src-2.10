@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   Res,
   UploadedFile,
@@ -166,27 +167,35 @@ export class SystemSettingsController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   uploadPlatformLogo(
     @Param('slot') slot: string,
+    @Query('mode') mode: string | undefined,
     @UploadedFile() file: UploadedSettingsFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
     if (slot !== 'navigation' && slot !== 'auth' && slot !== 'favicon') {
-      throw new BadRequestException('校徽用途必须是 navigation、auth 或 favicon')
+      throw new BadRequestException('图标用途必须是 navigation、auth 或 favicon')
     }
-    return this.settings.uploadPlatformLogo(slot, file, user, getRequestMeta(req))
+    if (mode !== undefined && mode !== 'light' && mode !== 'dark') {
+      throw new BadRequestException('图标模式必须是 light 或 dark')
+    }
+    return this.settings.uploadPlatformLogo(slot, file, user, getRequestMeta(req), mode)
   }
 
   @Delete('platform/logo/:slot')
   @RequirePermissions('system:manage')
   resetPlatformLogo(
     @Param('slot') slot: string,
+    @Query('mode') mode: string | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
     if (slot !== 'navigation' && slot !== 'auth' && slot !== 'favicon') {
-      throw new BadRequestException('校徽用途必须是 navigation、auth 或 favicon')
+      throw new BadRequestException('图标用途必须是 navigation、auth 或 favicon')
     }
-    return this.settings.resetPlatformLogo(slot, user, getRequestMeta(req))
+    if (mode !== undefined && mode !== 'light' && mode !== 'dark') {
+      throw new BadRequestException('图标模式必须是 light 或 dark')
+    }
+    return this.settings.resetPlatformLogo(slot, user, getRequestMeta(req), mode)
   }
 
   @Get('ai-appearance')

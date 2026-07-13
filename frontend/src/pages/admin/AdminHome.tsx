@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Moon, RefreshCw, Sun } from 'lucide-react'
+import { BookOpen, ChevronRight, Megaphone, Moon, Network, RefreshCw, ShoppingBag, Sun } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
@@ -54,6 +54,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [dashboardError, setDashboardError] = useState('')
   const [dashboardLoading, setDashboardLoading] = useState(true)
   const [insightRefreshing, setInsightRefreshing] = useState(false)
+  const [selectedTrendKey, setSelectedTrendKey] = useState<ActivityTrendKey | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, adminNavItems, adminUtilityPaths)
@@ -96,10 +97,6 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
 
   const primaryMetrics = useMemo(() => buildPrimaryMetrics(dashStats), [dashStats])
   const workloadMetrics = useMemo(() => buildWorkloadMetrics(dashStats), [dashStats])
-  const maxTrend = Math.max(
-    1,
-    ...(dashStats?.activityTrend.map((item) => item.logins + item.vulnerabilities + item.aiCalls + item.learning) ?? [0]),
-  )
 
   const refreshInsight = async () => {
     if (insightRefreshing) return
@@ -256,88 +253,107 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             </SurfacePanel>
           </div>
 
-          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="grid gap-5">
-              <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <SurfacePanel className="h-full p-0">
-                  <SectionHeader title="活跃趋势" meta="登录 / 漏洞 / 学习 / AI" />
-                  <div className="px-5 pb-5">
-                    <div className="grid h-40 grid-cols-7 items-end gap-2">
-                      {(dashStats?.activityTrend ?? []).map((item) => {
-                        const total = item.logins + item.vulnerabilities + item.aiCalls + item.learning
-                        return (
-                          <div className="flex h-full flex-col justify-end gap-2" key={item.date}>
-                            <div className="flex min-h-0 flex-1 items-end rounded bg-black/[0.04] px-1 pb-1 dark:bg-white/[0.06]">
-                              <div
-                                className="w-full rounded-sm bg-brand-600"
-                                style={{ height: `${Math.max(8, (total / maxTrend) * 100)}%` }}
-                              />
-                            </div>
-                            <div className="text-center text-[11px] text-slate-500 dark:text-slate-400">{item.date}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    <div className="mt-4 grid gap-2 text-xs text-slate-500 md:grid-cols-4 dark:text-slate-400">
-                      <TrendMetric label="登录" value={sumTrend(dashStats, 'logins')} />
-                      <TrendMetric label="漏洞" value={sumTrend(dashStats, 'vulnerabilities')} />
-                      <TrendMetric label="学习" value={sumTrend(dashStats, 'learning')} />
-                      <TrendMetric label="AI" value={sumTrend(dashStats, 'aiCalls')} />
-                    </div>
+          <div className="mt-5 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:col-start-1 xl:row-start-1">
+              <SurfacePanel className="flex h-full flex-col p-0">
+                <SectionHeader title="活跃趋势" meta="登录 / 漏洞 / 学习 / AI" />
+                <div className="flex min-h-0 flex-1 flex-col justify-between gap-5 px-5 py-5">
+                  <div className="flex min-h-0 flex-1 items-center">
+                    <ActivityLineChart items={dashStats?.activityTrend ?? []} loading={dashboardLoading} selectedKey={selectedTrendKey} />
                   </div>
-                </SurfacePanel>
+                  <div className="grid gap-2 text-xs text-slate-500 md:grid-cols-4 dark:text-slate-400">
+                    {activitySeries.map((series) => (
+                      <TrendMetric
+                        active={selectedTrendKey === series.key}
+                        color={series.color}
+                        key={series.key}
+                        label={series.label}
+                        onClick={() => setSelectedTrendKey((current) => current === series.key ? null : series.key)}
+                        value={sumTrend(dashStats, series.key)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </SurfacePanel>
 
-                <SurfacePanel className="h-full p-0">
-                  <SectionHeader title="等级分布" meta={`${dashStats?.overview.highRiskVulnerabilities ?? 0} 高风险`} />
-                  <div className="space-y-3 px-5 pb-5">
+              <SurfacePanel className="flex h-full flex-col p-0">
+                <SectionHeader title="等级分布" meta={`${dashStats?.overview.highRiskVulnerabilities ?? 0} 高风险`} />
+                <div className="flex min-h-0 flex-1 flex-col justify-between gap-5 px-5 py-5">
+                  <div className="space-y-4">
                     {(dashStats?.severityDistribution ?? []).map((item) => (
                       <SeverityRow item={item} total={dashStats?.totalVulnerabilities ?? 0} key={item.level} />
                     ))}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <SmallData label="已签发证书" value={dashStats?.overview.issuedCerts ?? 0} />
-                      <SmallData label="本期新用户" value={dashStats?.overview.newUsers ?? 0} />
-                    </div>
                   </div>
-                </SurfacePanel>
-              </div>
-
-              <SurfacePanel className="overflow-hidden p-0">
-                <SectionHeader title="最近审计" meta={`${dashStats?.overview.auditToday ?? 0} 今日`} />
-                <AuditTable items={dashStats?.recentAuditLogs ?? []} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <SmallData label="已签发证书" value={dashStats?.overview.issuedCerts ?? 0} />
+                    <SmallData label="本期新用户" value={dashStats?.overview.newUsers ?? 0} />
+                  </div>
+                </div>
               </SurfacePanel>
             </div>
 
-            <aside className="flex h-full flex-col gap-5">
-              <SurfacePanel className="p-0">
-                <SectionHeader title="待办压力" meta={`${dashStats?.operations.filter((item) => item.count > 0).length ?? 0} 类`} />
-                <div className="divide-y divide-black/5 dark:divide-white/10">
-                  {(dashStats?.operations ?? []).map((item) => (
-                    <button
-                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 text-left transition hover:bg-black/[0.025] dark:hover:bg-white/[0.05]"
-                      key={item.title}
-                      onClick={() => navigate(item.route)}
-                      type="button"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{item.title}</span>
-                        <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{item.label}</span>
-                      </span>
-                      <span className={`rounded-md px-2.5 py-1 text-sm font-semibold ${operationTone(item.severity)}`}>{item.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </SurfacePanel>
+            <SurfacePanel className="overflow-hidden p-0 xl:col-start-1 xl:row-start-2">
+              <SectionHeader title="最近审计" meta={`${dashStats?.overview.auditToday ?? 0} 今日`} />
+              <AuditTable items={dashStats?.recentAuditLogs ?? []} />
+            </SurfacePanel>
 
-              <SurfacePanel className="flex flex-1 flex-col p-0">
-                <SectionHeader title="平台资源" meta="运营面" />
-                <div className="grid flex-1 grid-cols-2 gap-2 px-5 pb-5">
-                  <SmallData label="公告发布" value={dashStats?.platform.activeAnnouncements ?? 0} />
-                  <SmallData label="学习资料" value={dashStats?.platform.activeLearningResources ?? 0} />
-                  <SmallData label="靶场范围" value={dashStats?.platform.learningRanges ?? 0} />
-                  <SmallData label="商城商品" value={dashStats?.platform.activeMallProducts ?? 0} />
-                </div>
-              </SurfacePanel>
-            </aside>
+            <SurfacePanel className="p-0 xl:col-start-2 xl:row-start-1">
+              <SectionHeader title="待办压力" meta={`${dashStats?.operations.filter((item) => item.count > 0).length ?? 0} 类`} />
+              <div className="divide-y divide-black/5 dark:divide-white/10">
+                {(dashStats?.operations ?? []).map((item) => (
+                  <button
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 text-left transition hover:bg-black/[0.025] dark:hover:bg-white/[0.05]"
+                    key={item.title}
+                    onClick={() => navigate(item.route)}
+                    type="button"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{item.title}</span>
+                      <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{item.label}</span>
+                    </span>
+                    <span className={`rounded-md px-2.5 py-1 text-sm font-semibold ${operationTone(item.severity)}`}>{item.count}</span>
+                  </button>
+                ))}
+              </div>
+            </SurfacePanel>
+
+            <SurfacePanel className="flex h-full flex-col p-0 xl:col-start-2 xl:row-start-2">
+              <SectionHeader title="平台资源" meta="运营面" />
+              <div className="grid flex-1 auto-rows-fr gap-2 px-5 py-5">
+                <PlatformResourceTile
+                  color="#2563EB"
+                  description="已发布可见公告"
+                  icon={Megaphone}
+                  label="公告发布"
+                  onClick={() => navigate('/admin/announcements')}
+                  value={dashStats?.platform.activeAnnouncements ?? 0}
+                />
+                <PlatformResourceTile
+                  color="#10B981"
+                  description="工具资料与课程资源"
+                  icon={BookOpen}
+                  label="学习资料"
+                  onClick={() => navigate('/admin/learning')}
+                  value={dashStats?.platform.activeLearningResources ?? 0}
+                />
+                <PlatformResourceTile
+                  color="#F59E0B"
+                  description="靶场与实操入口"
+                  icon={Network}
+                  label="靶场范围"
+                  onClick={() => navigate('/admin/learning')}
+                  value={dashStats?.platform.learningRanges ?? 0}
+                />
+                <PlatformResourceTile
+                  color="#2A6438"
+                  description="当前上架商品"
+                  icon={ShoppingBag}
+                  label="商城商品"
+                  onClick={() => navigate('/admin/mall')}
+                  value={dashStats?.platform.activeMallProducts ?? 0}
+                />
+              </div>
+            </SurfacePanel>
           </div>
 
           <SurfacePanel className="mt-5 overflow-hidden p-0">
@@ -533,13 +549,236 @@ function SkeletonRows({ colSpan, rows }: { colSpan: number; rows: number }) {
   ))
 }
 
-function TrendMetric({ label, value }: { label: string; value: number }) {
+function TrendMetric({
+  active,
+  color,
+  label,
+  onClick,
+  value,
+}: {
+  active: boolean
+  color: string
+  label: string
+  onClick: () => void
+  value: number
+}) {
   return (
-    <div className="rounded-md border border-black/5 px-3 py-2 dark:border-white/10">
-      <span>{label}</span>
+    <button
+      aria-pressed={active}
+      className={`rounded-md border px-3 py-2 text-left transition duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 ${
+        active
+          ? 'border-brand-600/30 bg-brand-600/10 text-slate-900 dark:border-brand-300/25 dark:text-white'
+          : 'border-black/5 hover:border-black/10 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045]'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <span className={`h-1.5 rounded-full transition-all duration-300 ${active ? 'w-5' : 'w-3'}`} style={{ backgroundColor: color }} />
+        {label}
+      </span>
       <span className="ml-2 font-semibold text-slate-800 dark:text-slate-100">{value}</span>
+    </button>
+  )
+}
+
+type ActivityTrendItem = AdminDashboardStats['activityTrend'][number]
+type ActivityTrendKey = 'aiCalls' | 'learning' | 'logins' | 'vulnerabilities'
+
+const activitySeries: Array<{
+  color: string
+  key: ActivityTrendKey
+  label: string
+}> = [
+  { color: '#2A6438', key: 'logins', label: '登录' },
+  { color: '#DC2626', key: 'vulnerabilities', label: '漏洞' },
+  { color: '#10B981', key: 'learning', label: '学习' },
+  { color: '#F59E0B', key: 'aiCalls', label: 'AI' },
+]
+
+function ActivityLineChart({
+  items,
+  loading,
+  selectedKey,
+}: {
+  items: ActivityTrendItem[]
+  loading: boolean
+  selectedKey: ActivityTrendKey | null
+}) {
+  const width = 640
+  const height = 220
+  const padding = { bottom: 34, left: 38, right: 18, top: 18 }
+  const innerWidth = width - padding.left - padding.right
+  const innerHeight = height - padding.top - padding.bottom
+  const visibleSeries = selectedKey ? activitySeries.filter((series) => series.key === selectedKey) : activitySeries
+  const guideLines = [0, 0.5, 1]
+
+  if (loading && items.length === 0) {
+    return <div className="h-full min-h-[240px] w-full animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full min-h-[240px] w-full items-center justify-center rounded-lg border border-dashed border-black/10 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+        暂无趋势数据
+      </div>
+    )
+  }
+
+  const xFor = (index: number) => padding.left + (items.length === 1 ? innerWidth / 2 : (index / (items.length - 1)) * innerWidth)
+  const yFor = (value: number, maxValue: number) => padding.top + innerHeight - (value / maxValue) * innerHeight
+
+  return (
+    <div className="flex h-full min-h-[240px] max-h-[320px] w-full flex-col overflow-hidden rounded-lg border border-black/5 bg-[var(--app-panel-bg)] p-3 dark:border-white/10">
+      <style>
+        {`
+          @keyframes activity-line-draw {
+            from { stroke-dashoffset: 1; opacity: 0.25; }
+            to { stroke-dashoffset: 0; opacity: 1; }
+          }
+          @keyframes activity-point-rise {
+            from { opacity: 0; transform: scale(0.65); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .activity-line {
+            animation: activity-line-draw 520ms cubic-bezier(.22,1,.36,1) both;
+            stroke-dasharray: 1;
+            stroke-dashoffset: 1;
+          }
+          .activity-point {
+            animation: activity-point-rise 360ms cubic-bezier(.22,1,.36,1) both;
+            transform-box: fill-box;
+            transform-origin: center;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .activity-line,
+            .activity-point {
+              animation: none;
+              stroke-dashoffset: 0;
+            }
+          }
+        `}
+      </style>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pb-2">
+        {activitySeries.map((series) => (
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs transition ${
+              selectedKey && selectedKey !== series.key ? 'text-slate-400 opacity-45 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'
+            }`}
+            key={series.key}
+          >
+            <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: series.color }} />
+            {series.label}
+          </span>
+        ))}
+      </div>
+      <svg aria-label="近 7 天活跃趋势折线图" className="min-h-0 flex-1 overflow-visible" preserveAspectRatio="none" viewBox={`0 0 ${width} ${height}`} role="img">
+        <title>近 7 天活跃趋势</title>
+        {guideLines.map((ratio) => {
+          const y = padding.top + ratio * innerHeight
+          return (
+            <g key={ratio}>
+              <line className="stroke-black/10 dark:stroke-white/10" strokeDasharray={ratio === 1 ? '0' : '4 6'} x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
+            </g>
+          )
+        })}
+        {items.map((item, index) => (
+          <text className="fill-slate-400 text-[11px] dark:fill-slate-500" key={item.date} textAnchor="middle" x={xFor(index)} y={height - 8}>
+            {item.date}
+          </text>
+        ))}
+        <g key={selectedKey ?? 'all'}>
+        {visibleSeries.map((series, seriesIndex) => {
+          const seriesMaxValue = Math.max(1, ...items.map((item) => item[series.key]))
+          const points = items.map((item, index) => ({ date: item.date, x: xFor(index), y: yFor(item[series.key], seriesMaxValue), value: item[series.key] }))
+          const path = createSmoothPath(points)
+          return (
+            <g key={series.key}>
+              <path
+                className="activity-line"
+                d={path}
+                fill="none"
+                pathLength={1}
+                stroke={series.color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.6}
+                style={{ animationDelay: `${seriesIndex * 70}ms` }}
+              />
+              {points.map((point, index) => (
+                <g className="group" key={`${series.key}-${items[index].date}`}>
+                  <title>{`${point.date} ${series.label}: ${point.value}`}</title>
+                  <circle
+                    className="activity-point"
+                    cx={point.x}
+                    cy={point.y}
+                    fill="var(--app-panel-bg)"
+                    r={3.6}
+                    stroke={series.color}
+                    strokeWidth={2}
+                    style={{ animationDelay: `${140 + seriesIndex * 70 + index * 24}ms` }}
+                  />
+                  <circle className="cursor-pointer fill-transparent" cx={point.x} cy={point.y} r={10} />
+                  <PointTooltip color={series.color} date={point.date} label={series.label} value={point.value} x={point.x} y={point.y} />
+                </g>
+              ))}
+            </g>
+          )
+        })}
+        </g>
+      </svg>
     </div>
   )
+}
+
+function PointTooltip({
+  color,
+  date,
+  label,
+  value,
+  x,
+  y,
+}: {
+  color: string
+  date: string
+  label: string
+  value: number
+  x: number
+  y: number
+}) {
+  const boxWidth = 104
+  const boxHeight = 36
+  const boxX = Math.max(4, Math.min(x - boxWidth / 2, 640 - boxWidth - 4))
+  const boxY = y < 54 ? y + 14 : y - boxHeight - 12
+
+  return (
+    <g className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100">
+      <rect className="fill-slate-950 dark:fill-white" height={boxHeight} rx={6} width={boxWidth} x={boxX} y={boxY} />
+      <circle cx={boxX + 11} cy={boxY + 12} fill={color} r={3} />
+      <text className="fill-white text-[10px] font-semibold dark:fill-slate-950" x={boxX + 19} y={boxY + 15}>
+        {label} {value}
+      </text>
+      <text className="fill-white/70 text-[10px] dark:fill-slate-700" x={boxX + 11} y={boxY + 29}>
+        {date}
+      </text>
+    </g>
+  )
+}
+
+function createSmoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
+
+  const commands = [`M ${points[0].x} ${points[0].y}`]
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index]
+    const next = points[index + 1]
+    const controlOffset = (next.x - current.x) * 0.42
+    const controlOne = { x: current.x + controlOffset, y: current.y }
+    const controlTwo = { x: next.x - controlOffset, y: next.y }
+    commands.push(`C ${controlOne.x} ${controlOne.y}, ${controlTwo.x} ${controlTwo.y}, ${next.x} ${next.y}`)
+  }
+  return commands.join(' ')
 }
 
 function SeverityRow({
@@ -550,11 +789,11 @@ function SeverityRow({
   total: number
 }) {
   return (
-    <div className="grid grid-cols-[44px_minmax(0,1fr)_32px] items-center gap-3">
+    <div className="grid grid-cols-[44px_minmax(0,1fr)_32px] items-center gap-3 rounded-md border border-black/5 px-3 py-2.5 dark:border-white/10">
       <span className="text-xs text-slate-500 dark:text-slate-400">{item.label}</span>
-      <div className="h-2 rounded-full bg-black/5 dark:bg-white/10">
+      <div className="h-2.5 rounded-full bg-black/5 dark:bg-white/10">
         <div
-          className={`h-2 rounded-full ${severityBar(item.level)}`}
+          className={`h-2.5 rounded-full ${severityBar(item.level)}`}
           style={{ width: `${Math.max(4, percentage(item.count, total))}%` }}
         />
       </div>
@@ -569,6 +808,42 @@ function SmallData({ label, value }: { label: string; value: number }) {
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
+  )
+}
+
+function PlatformResourceTile({
+  color,
+  description,
+  icon: Icon,
+  label,
+  onClick,
+  value,
+}: {
+  color: string
+  description: string
+  icon: typeof Megaphone
+  label: string
+  onClick: () => void
+  value: number
+}) {
+  return (
+    <button
+      className="group grid min-h-[76px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-black/5 bg-[var(--app-panel-bg)] px-3.5 py-3 text-left transition duration-300 hover:-translate-y-0.5 hover:border-black/10 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045]"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-md border border-black/5 dark:border-white/10" style={{ color }}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold leading-none text-slate-950 dark:text-white">{value}</span>
+          <span className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
+        </span>
+        <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{description}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500 dark:text-slate-600 dark:group-hover:text-slate-300" />
+    </button>
   )
 }
 

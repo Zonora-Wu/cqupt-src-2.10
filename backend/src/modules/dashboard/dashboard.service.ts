@@ -531,6 +531,10 @@ export class DashboardService {
           this.prisma.auditLog.count({
             where: {
               action: AuditAction.MANAGE_LEARNING_RESOURCE,
+              metadata: {
+                path: ['action'],
+                equals: 'download',
+              },
               createdAt: { gte: dayStart, lt: dayEnd },
             },
           }),

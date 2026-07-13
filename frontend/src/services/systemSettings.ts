@@ -15,9 +15,11 @@ export type CertificateTemplateSummary = {
 
 export type PlatformSettings = {
   authLogoUrl: string | null
+  authLogoUrlDark: string | null
   faviconUrl: string | null
   logoUrl: string | null
   navigationLogoUrl: string | null
+  navigationLogoUrlDark: string | null
   platformName: string
   schoolName: string
   orgName: string
@@ -168,16 +170,17 @@ export async function uploadSchoolLogo(file: File) {
 }
 
 export type PlatformLogoSlot = 'auth' | 'favicon' | 'navigation'
+export type PlatformLogoMode = 'dark' | 'light'
 
-export async function uploadPlatformLogo(slot: PlatformLogoSlot, file: File) {
+export async function uploadPlatformLogo(slot: PlatformLogoSlot, file: File, mode: PlatformLogoMode = 'light') {
   const formData = new FormData()
   formData.append('file', file)
 
-  return requestForm<PlatformSettings>(`/system-settings/platform/logo/${slot}`, formData)
+  return requestForm<PlatformSettings>(`/system-settings/platform/logo/${slot}?mode=${mode}`, formData)
 }
 
-export async function resetPlatformLogo(slot: PlatformLogoSlot) {
-  return request<PlatformSettings>(`/system-settings/platform/logo/${slot}`, { method: 'DELETE' })
+export async function resetPlatformLogo(slot: PlatformLogoSlot, mode: PlatformLogoMode = 'light') {
+  return request<PlatformSettings>(`/system-settings/platform/logo/${slot}?mode=${mode}`, { method: 'DELETE' })
 }
 
 export async function getAiAssistantAppearance() {
