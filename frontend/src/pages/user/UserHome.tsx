@@ -1,26 +1,13 @@
 import {
   AlertCircle,
   ArrowRight,
-  Award,
   Bell,
   Bot,
-  Brain,
-  BookOpen,
   ChevronRight,
   ClipboardCheck,
-  Clock3,
   FileSignature,
-  FilePlus2,
-  FileSearch,
-  Gauge,
   Moon,
-  SearchCheck,
-  ShieldCheck,
-  Sparkles,
-  Store,
   Sun,
-  Target,
-  Trophy,
   X,
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
@@ -93,27 +80,24 @@ type UserHomeProps = {
 }
 
 const quickActions = [
-  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料', icon: FilePlus2 },
-  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境', icon: Target },
-  { title: '学习资源', description: '下载工具资源与安全学习资料', icon: BookOpen },
-  { title: '积分商城', description: '查看可兑换奖励和申请记录', icon: Store },
+  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料' },
+  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境' },
+  { title: '学习资源', description: '下载工具资源与安全学习资料' },
+  { title: '积分商城', description: '查看可兑换奖励和申请记录' },
 ]
 
 const aiCapabilities = [
   {
     title: '漏洞报告 AI 提交功能',
     description: '上传 PDF 或 Markdown 报告后，辅助提取标题、资产、类型、复现步骤和修复建议。',
-    icon: FileSearch,
   },
   {
     title: '漏洞价值预判',
     description: '结合影响范围、可利用性、复现完整度，给出风险提示和材料补全建议。',
-    icon: SearchCheck,
   },
   {
     title: '学习路径推荐',
     description: '根据提交记录、靶场进度和知识薄弱点，推荐工具资源与下一阶段训练。',
-    icon: Brain,
   },
 ]
 
@@ -223,10 +207,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   }, [])
 
   const stats = [
-    { label: '累计提交', value: String(dashStats.submitCount), hint: '漏洞报告', icon: FilePlus2 },
-    { label: '有效漏洞', value: String(dashStats.confirmedCount), hint: '已通过审核', icon: ShieldCheck },
-    { label: '当前积分', value: String(dashStats.currentPoints), hint: '可兑换资源', icon: Trophy },
-    { label: '证书数量', value: String(dashStats.certCount), hint: '高价值贡献', icon: Award },
+    { label: '累计提交', value: String(dashStats.submitCount), hint: '漏洞报告' },
+    { label: '有效漏洞', value: String(dashStats.confirmedCount), hint: '已通过审核' },
+    { label: '当前积分', value: String(dashStats.currentPoints), hint: '可兑换资源' },
+    { label: '证书数量', value: String(dashStats.certCount), hint: '高价值贡献' },
   ]
 
   const notifUnread = Object.values(preferences.notifications).some(Boolean) ? 3 : 0
@@ -463,22 +447,16 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                           : 'mt-6 max-h-56 translate-y-0 pt-6 opacity-100'
                       }`}
                     >
-                      {aiCapabilities.map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <button
-                            className="group flex h-full flex-col rounded-lg px-1 py-1 text-left transition hover:bg-[var(--app-panel-muted-bg)] dark:hover:bg-white/[0.035]"
-                            key={item.title}
-                            type="button"
-                          >
-                            <div className="flex min-h-6 items-center gap-2">
-                              <Icon className="h-4 w-4 shrink-0 text-brand-700/80 dark:text-brand-300/80" />
-                              <p className="text-sm font-medium">{item.title}</p>
-                            </div>
-                            <p className="mt-2 flex-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
-                          </button>
-                        )
-                      })}
+                      {aiCapabilities.map((item) => (
+                        <button
+                          className="group flex h-full flex-col rounded-lg px-1 py-1 text-left transition hover:bg-[var(--app-panel-muted-bg)] dark:hover:bg-white/[0.035]"
+                          key={item.title}
+                          type="button"
+                        >
+                          <p className="min-h-6 text-sm font-medium">{item.title}</p>
+                          <p className="mt-2 flex-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -492,25 +470,18 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">个人数据汇总</p>
                     <h2 className="mt-1 text-xl font-semibold">安全实践概览</h2>
                   </div>
-                  <ShieldCheck className="h-9 w-9 text-brand-700 dark:text-brand-300" />
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  {stats.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <div
-                        className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 "
-                        key={item.label}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <Icon className="h-4 w-4 text-brand-700 dark:text-brand-300" />
-                          <span className="text-2xl font-semibold">{item.value}</span>
-                        </div>
-                        <p className="mt-2 text-sm font-medium">{item.label}</p>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-                      </div>
-                    )
-                  })}
+                  {stats.map((item) => (
+                    <div
+                      className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 "
+                      key={item.label}
+                    >
+                      <span className="text-2xl font-semibold">{item.value}</span>
+                      <p className="mt-2 text-sm font-medium">{item.label}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+                    </div>
+                  ))}
                 </div>
               </SurfacePanel>
 
@@ -520,7 +491,6 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">AI Skill 库</p>
                     <h2 className="mt-1 text-xl font-semibold">平台公共能力沉淀</h2>
                   </div>
-                  <Gauge className="h-9 w-9 text-brand-700 dark:text-brand-300" />
                 </div>
                 <div className="mt-4 grid flex-1 content-start gap-3">
                   {aiSkills.slice(0, 4).map((item) => (
@@ -529,8 +499,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                       key={item.id}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <Brain className="h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300" />
+                        <div className="min-w-0">
                           <span className="truncate text-sm font-medium">{item.title}</span>
                         </div>
                         <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-brand-300/10 dark:text-brand-300">
@@ -549,34 +518,28 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">快捷入口</h2>
-                <Clock3 className="h-5 w-5 text-slate-400" />
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {quickActions.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
-                      key={item.title}
-                      onClick={() => openMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
-                      type="button"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                        <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
-                      </div>
-                      <p className="mt-4 font-semibold">{item.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
-                    </button>
-                  )
-                })}
+                {quickActions.map((item) => (
+                  <button
+                    className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
+                    key={item.title}
+                    onClick={() => openMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="font-semibold">{item.title}</p>
+                      <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                  </button>
+                ))}
               </div>
             </SurfacePanel>
 
             <SurfacePanel className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold">AI 动态与学习提醒</h2>
-                <Sparkles className="h-5 w-5 text-slate-400" />
               </div>
               <div className="mt-5 space-y-4">
                 {activities.map((item) => (
@@ -767,7 +730,7 @@ function AccessTaskCard({
 
 function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: () => void }) {
   return (
-    <section className="relative z-10 mx-auto max-w-6xl px-5 pb-10 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-10 pt-24 md:px-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>

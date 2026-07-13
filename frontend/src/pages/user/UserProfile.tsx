@@ -16,7 +16,6 @@ import {
   Shield,
   SlidersHorizontal,
   Star,
-  UserRound,
   X,
   XCircle,
 } from 'lucide-react'
@@ -115,7 +114,6 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="My Profile"
-          eyebrowIcon={<UserRound className="h-3.5 w-3.5" />}
           title="个人中心"
           description="查看账号基础信息，维护邮箱与登录密码。敏感操作会记录操作来源并写入审计日志。"
         />

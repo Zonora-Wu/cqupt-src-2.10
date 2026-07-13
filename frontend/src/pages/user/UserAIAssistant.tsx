@@ -589,7 +589,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
       onWidthChange={setHistoryPanelWidth}
     />
     <section
-      className={`relative z-10 mx-auto flex min-h-screen max-w-[980px] flex-col px-5 pb-6 md:px-8 ${
+      className={`relative z-10 mx-auto flex min-h-screen max-w-[1360px] flex-col px-5 pb-6 md:px-8 ${
         hasStarted ? 'pt-24' : 'pt-16'
       }`}
     >
@@ -697,7 +697,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
           <motion.div
             animate={{ opacity: 1, y: 0 }}
-            className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[980px] px-5 pb-6 md:px-8"
+            className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[1360px] px-5 pb-6 md:px-8"
             initial={{ opacity: 0, y: 28 }}
             key="ai-docked-input"
             ref={dockedInputRef}

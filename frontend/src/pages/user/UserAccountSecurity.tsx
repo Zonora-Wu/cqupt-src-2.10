@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Globe,
   KeyRound,
   LogIn,
@@ -12,22 +11,19 @@ import {
   Monitor,
   RefreshCcw,
   Search,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
   XCircle,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { getMyAuditLogs, type MyAuditLogItem, type MyAuditLogQuery } from '../../services/account'
 
 type SecurityTab = 'overview' | 'login' | 'operations'
 
-const TABS: { description: string; icon: ReactNode; id: SecurityTab; label: string }[] = [
-  { id: 'overview', label: '安全概览', icon: <ShieldCheck className="h-4 w-4" />, description: '账号安全状态' },
-  { id: 'login', label: '登录记录', icon: <LogIn className="h-4 w-4" />, description: '登录与登出历史' },
-  { id: 'operations', label: '操作日志', icon: <Activity className="h-4 w-4" />, description: '账号操作记录' },
+const TABS: { description: string; id: SecurityTab; label: string }[] = [
+  { id: 'overview', label: '安全概览', description: '账号安全状态' },
+  { id: 'login', label: '登录记录', description: '登录与登出历史' },
+  { id: 'operations', label: '操作日志', description: '账号操作记录' },
 ]
 
 const MODULE_OPTIONS = ['全部', 'AUTH', 'VULNERABILITY', 'CERTIFICATE', 'ANNOUNCEMENT', 'LEARNING', 'MALL', 'AI', 'SYSTEM']
@@ -53,7 +49,6 @@ export function UserAccountSecurity() {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="Account Security"
-          eyebrowIcon={<Shield className="h-3.5 w-3.5" />}
           title="账号安全"
           description="查看你的登录历史和账号操作记录，及时发现异常。所有记录均来自服务端，无法伪造。"
         />
@@ -77,8 +72,7 @@ export function UserAccountSecurity() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   type="button"
-                >
-                  <span className="mt-0.5">{tab.icon}</span>
+                  >
                   <span>
                     <span className="block text-sm font-semibold">{tab.label}</span>
                     <span
@@ -147,29 +141,23 @@ function SecurityOverview({
     <div className="space-y-5">
       <SurfacePanel className="overflow-hidden p-0">
         <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-          <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
-            <ShieldCheck className="h-5 w-5" />
-            <h2 className="text-xl font-semibold text-slate-950 dark:text-white">安全状态</h2>
-          </div>
+          <h2 className="text-xl font-semibold text-slate-950 dark:text-white">安全状态</h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">当前账号安全评估，如发现异常请及时修改密码或联系管理员。</p>
         </div>
         <div className="grid gap-0 divide-y divide-black/10 dark:divide-white/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <SecurityMetric
-            icon={hasRecentFail ? <ShieldAlert className="h-5 w-5 text-amber-500" /> : <ShieldCheck className="h-5 w-5 text-emerald-500" />}
             label="登录失败次数"
             loading={loading}
             status={hasRecentFail ? 'warn' : 'ok'}
             value={loading ? '—' : String(loginFailCount)}
           />
           <SecurityMetric
-            icon={<Clock className="h-5 w-5 text-brand-600 dark:text-brand-300" />}
             label="上次成功登录"
             loading={loading}
             status="info"
             value={loading ? '—' : (lastLogin ? formatRelativeTime(lastLogin.createdAt) : '无记录')}
           />
           <SecurityMetric
-            icon={<Activity className="h-5 w-5 text-brand-600 dark:text-brand-300" />}
             label="最近操作数"
             loading={loading}
             status="info"
@@ -493,13 +481,11 @@ function LogRow({ compact = false, log }: { compact?: boolean; log: MyAuditLogIt
 }
 
 function SecurityMetric({
-  icon,
   label,
   loading,
   status,
   value,
 }: {
-  icon: ReactNode
   label: string
   loading: boolean
   status: 'ok' | 'warn' | 'info'
@@ -514,7 +500,6 @@ function SecurityMetric({
 
   return (
     <div className="flex flex-col items-center px-6 py-5 text-center">
-      <div className="mb-3">{icon}</div>
       {loading ? (
         <div className="h-7 w-12 animate-pulse rounded bg-black/10 dark:bg-white/10" />
       ) : (

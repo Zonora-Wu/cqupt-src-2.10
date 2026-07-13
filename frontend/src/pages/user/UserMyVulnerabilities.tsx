@@ -3,21 +3,15 @@ import {
   CalendarClock,
   CheckCircle2,
   Eye,
-  Clock3,
-  FileSearch,
-  FileText,
   Filter,
-  History,
   Paperclip,
   RefreshCw,
   ShieldAlert,
-  ShieldCheck,
   Sparkles,
   UploadCloud,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -84,10 +78,10 @@ export function UserMyVulnerabilities() {
     const stats = data?.stats ?? { confirmed: 0, needSupplement: 0, pending: 0, total: 0 }
 
     return [
-      { label: '累计提交', value: String(stats.total), hint: '漏洞报告', icon: FileSearch },
-      { label: '待处理', value: String(stats.pending), hint: '审核或修复中', icon: Clock3 },
-      { label: '已确认', value: String(stats.confirmed), hint: '通过审核', icon: ShieldCheck },
-      { label: '需补充', value: String(stats.needSupplement), hint: '等待完善材料', icon: AlertTriangle },
+      { label: '累计提交', value: String(stats.total), hint: '漏洞报告' },
+      { label: '待处理', value: String(stats.pending), hint: '审核或修复中' },
+      { label: '已确认', value: String(stats.confirmed), hint: '通过审核' },
+      { label: '需补充', value: String(stats.needSupplement), hint: '等待完善材料' },
     ]
   }, [data?.stats])
 
@@ -196,7 +190,6 @@ export function UserMyVulnerabilities() {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="My Reports"
-          eyebrowIcon={<ShieldAlert className="h-3.5 w-3.5" />}
           title="我的漏洞"
           description="查看你提交的漏洞报告、审核状态、积分奖励和 AI 材料建议，按流程完成补充、复测与归档。"
         />
@@ -211,19 +204,13 @@ export function UserMyVulnerabilities() {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
-        {vulnerabilityStats.map((item) => {
-          const Icon = item.icon
-          return (
-            <SurfacePanel className="p-5" key={item.label}>
-              <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                <span className="text-3xl font-semibold">{item.value}</span>
-              </div>
-              <p className="mt-3 text-sm font-medium">{item.label}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-            </SurfacePanel>
-          )
-        })}
+        {vulnerabilityStats.map((item) => (
+          <SurfacePanel className="p-5" key={item.label}>
+            <p className="text-3xl font-semibold">{item.value}</p>
+            <p className="mt-2 text-sm font-medium">{item.label}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+          </SurfacePanel>
+        ))}
       </div>
 
       <SurfacePanel className="relative z-30 mt-6 p-5">
@@ -493,7 +480,7 @@ function VulnerabilityDetailDrawer({
 
               {/* 基础信息 */}
               <section>
-                <SectionTitle icon={<FileText className="h-4 w-4" />} title="基础信息" />
+                <SectionTitle title="基础信息" />
                 <div className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                   <InfoRow label="影响资产" value={detail.assetName} />
                   <InfoRow label="资产 URL" value={detail.assetUrl || '—'} />
@@ -508,26 +495,26 @@ function VulnerabilityDetailDrawer({
 
               {/* 复现步骤 */}
               <section>
-                <SectionTitle icon={<FileSearch className="h-4 w-4" />} title="复现步骤" />
+                <SectionTitle title="复现步骤" />
                 <MarkdownBlock content={detail.reproductionSteps} />
               </section>
 
               {/* 影响评估 */}
               <section>
-                <SectionTitle icon={<AlertTriangle className="h-4 w-4" />} title="影响评估" />
+                <SectionTitle title="影响评估" />
                 <MarkdownBlock content={detail.impactAssessment} />
               </section>
 
               {/* 修复建议 */}
               <section>
-                <SectionTitle icon={<ShieldCheck className="h-4 w-4" />} title="修复建议" />
+                <SectionTitle title="修复建议" />
                 <MarkdownBlock content={detail.repairSuggestion} />
               </section>
 
               {/* 请求包 */}
               {detail.requestPacket && (
                 <section>
-                  <SectionTitle icon={<FileText className="h-4 w-4" />} title="请求包" />
+                  <SectionTitle title="请求包" />
                   <pre className="mt-3 overflow-x-auto rounded-lg bg-[var(--app-panel-muted-bg)] p-4 text-xs leading-6 text-slate-700  dark:text-slate-300">
                     {detail.requestPacket}
                   </pre>
@@ -537,7 +524,7 @@ function VulnerabilityDetailDrawer({
               {/* 测试边界 */}
               {detail.testBoundary && (
                 <section>
-                  <SectionTitle icon={<FileText className="h-4 w-4" />} title="测试边界说明" />
+                  <SectionTitle title="测试边界说明" />
                   <MarkdownBlock content={detail.testBoundary} />
                 </section>
               )}
@@ -545,7 +532,7 @@ function VulnerabilityDetailDrawer({
               {/* 附件 */}
               {detail.attachments.length > 0 && (
                 <section>
-                  <SectionTitle icon={<Paperclip className="h-4 w-4" />} title={`PDF 附件（${detail.attachments.length}）`} />
+                  <SectionTitle title={`PDF 附件（${detail.attachments.length}）`} />
                   <div className="mt-3 grid gap-2">
                     {detail.attachments.map((att) => (
                       <div
@@ -576,7 +563,7 @@ function VulnerabilityDetailDrawer({
               {/* 事件记录 */}
               {detail.events.length > 0 && (
                 <section>
-                  <SectionTitle icon={<History className="h-4 w-4" />} title="流程记录" />
+                  <SectionTitle title="流程记录" />
                   <div className="mt-3 space-y-3">
                     {[...detail.events].reverse().map((ev) => (
                       <div className="flex gap-3" key={ev.id}>
@@ -744,10 +731,9 @@ function SupplementMaterialsModal({
 }
 
 /* ─── 小工具组件 ─── */
-function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
+function SectionTitle({ title }: { title: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-      <span className="text-brand-600 dark:text-brand-400">{icon}</span>
+    <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
       {title}
     </div>
   )

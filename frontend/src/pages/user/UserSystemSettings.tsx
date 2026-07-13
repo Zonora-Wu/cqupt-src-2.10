@@ -1,14 +1,9 @@
 import {
-  Bell,
   Check,
-  Globe,
-  Languages,
   Monitor,
   Moon,
   RotateCcw,
-  SlidersHorizontal,
   Sun,
-  SunMoon,
 } from 'lucide-react'
 import { type MouseEvent, type ReactNode, useEffect, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
@@ -30,11 +25,11 @@ type UserSystemSettingsProps = {
 
 type SettingsCategory = 'appearance' | 'language' | 'notifications' | 'about'
 
-const categories: { description: string; id: SettingsCategory; icon: ReactNode; label: string }[] = [
-  { id: 'appearance', label: '外观', icon: <SunMoon className="h-4 w-4" />, description: '主题与显示模式' },
-  { id: 'language', label: '语言', icon: <Languages className="h-4 w-4" />, description: '界面显示语言' },
-  { id: 'notifications', label: '通知', icon: <Bell className="h-4 w-4" />, description: '消息提醒偏好' },
-  { id: 'about', label: '关于', icon: <Globe className="h-4 w-4" />, description: '版本与平台信息' },
+const categories: { description: string; id: SettingsCategory; label: string }[] = [
+  { id: 'appearance', label: '外观', description: '主题与显示模式' },
+  { id: 'language', label: '语言', description: '界面显示语言' },
+  { id: 'notifications', label: '通知', description: '消息提醒偏好' },
+  { id: 'about', label: '关于', description: '版本与平台信息' },
 ]
 
 export function UserSystemSettings({
@@ -82,7 +77,6 @@ export function UserSystemSettings({
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrow="Device Settings"
-            eyebrowIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}
             title="系统设置"
             description="配置平台外观、语言和通知偏好。所有设置实时生效，只保存在当前浏览器和当前设备，不会同步到服务器或其他设备。"
           />
@@ -107,7 +101,6 @@ export function UserSystemSettings({
                     onClick={() => setActiveCategory(cat.id)}
                     type="button"
                   >
-                    <span className="mt-0.5">{cat.icon}</span>
                     <span>
                       <span className="block text-sm font-semibold">{cat.label}</span>
                       <span className={`mt-1 block text-xs leading-5 ${activeCategory === cat.id ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'}`}>
@@ -124,7 +117,6 @@ export function UserSystemSettings({
             {activeCategory === 'appearance' && (
               <SettingsCard
                 description="调整平台在当前设备上的视觉显示模式和界面行为。"
-                icon={<SunMoon className="h-5 w-5" />}
                 title="外观主题"
               >
                 <div className="px-6 py-5">
@@ -181,7 +173,6 @@ export function UserSystemSettings({
             {activeCategory === 'language' && (
               <SettingsCard
                 description="设置平台界面的显示语言。语言偏好保存在当前设备，不会同步到其他设备或账号。"
-                icon={<Languages className="h-5 w-5" />}
                 title="显示语言"
               >
                 <div className="space-y-2 px-6 py-5">
@@ -209,7 +200,6 @@ export function UserSystemSettings({
             {activeCategory === 'notifications' && (
               <SettingsCard
                 description="配置你希望接收的站内消息类型。通知偏好仅控制当前设备的站内提醒展示，系统安全提醒建议保持开启。"
-                icon={<Bell className="h-5 w-5" />}
                 title="通知设置"
               >
                 <SettingRow
@@ -238,7 +228,6 @@ export function UserSystemSettings({
             {activeCategory === 'about' && (
               <SettingsCard
                 description="当前设备的偏好设置范围与平台版本信息。"
-                icon={<Globe className="h-5 w-5" />}
                 title="关于平台"
               >
                 {(
@@ -283,21 +272,16 @@ export function UserSystemSettings({
 function SettingsCard({
   children,
   description,
-  icon,
   title,
 }: {
   children: ReactNode
   description: string
-  icon: ReactNode
   title: string
 }) {
   return (
     <SurfacePanel className="overflow-visible p-0">
       <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
-        <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
-          {icon}
-          <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
-        </div>
+        <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
       </div>
       <div className="divide-y divide-black/10 dark:divide-white/10">{children}</div>

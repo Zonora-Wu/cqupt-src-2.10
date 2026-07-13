@@ -1,4 +1,4 @@
-import { Medal, Trophy, UserRound } from 'lucide-react'
+import { Trophy, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
@@ -44,11 +44,10 @@ export function UserLeaderboard() {
   const restItems = items.slice(3)
 
   return (
-    <PageSection size="sm">
+    <PageSection>
       <div className="text-center">
         <PageHeader
           eyebrow="Leaderboard"
-          eyebrowIcon={<Medal className="h-3.5 w-3.5" />}
           title="排行榜"
           description="展示校园安全贡献排名，仅用于学习激励。"
           align="center"

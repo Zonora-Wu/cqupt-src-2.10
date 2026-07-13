@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, CalendarClock, Megaphone, Pin } from 'lucide-react'
+import { ArrowLeft, Bell, CalendarClock, Pin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
@@ -124,7 +124,6 @@ export function UserAnnouncements() {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="Announcements"
-          eyebrowIcon={<Megaphone className="h-3.5 w-3.5" />}
           title="平台公告"
           description="查看平台通知、规则更新、安全提醒和学习活动安排，及时了解漏洞提交与审核流程变化。"
         />

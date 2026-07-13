@@ -1581,7 +1581,7 @@ function formatFileSize(sizeBytes: number) {
 }
 
 function PageShell({ children, size = 'lg' }: { children: ReactNode; size?: 'md' | 'lg' }) {
-  const width = size === 'md' ? 'max-w-[1080px]' : 'max-w-[1540px]'
+  const width = size === 'md' ? 'max-w-[1080px]' : 'max-w-[1360px]'
   return <section className={`relative z-10 mx-auto ${width} px-5 pb-8 pt-24 md:px-8`}>{children}</section>
 }
 

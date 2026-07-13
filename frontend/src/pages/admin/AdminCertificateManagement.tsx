@@ -250,7 +250,7 @@ export function AdminCertificateManagement() {
 
   if (selectedCertificate) {
     return (
-      <section className="relative z-10 mx-auto max-w-[1540px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
         <button
           className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
           onClick={() => setSelectedId(null)}

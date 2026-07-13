@@ -1,13 +1,9 @@
 import {
   Award,
-  CalendarClock,
   CheckCircle2,
   Copy,
   Download,
   Eye,
-  FileCheck2,
-  Medal,
-  ShieldCheck,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -70,7 +66,6 @@ export function UserCertificates() {
       const matchesKeyword =
         !normalizedKeyword ||
         item.certificateNo.toLowerCase().includes(normalizedKeyword) ||
-        item.verifyCode.toLowerCase().includes(normalizedKeyword) ||
         item.vulnerability.reportNo.toLowerCase().includes(normalizedKeyword) ||
         item.vulnerability.title.toLowerCase().includes(normalizedKeyword)
       const matchesStatus = status === '全部状态' || item.status === status
@@ -80,10 +75,10 @@ export function UserCertificates() {
   }, [certificates, keyword, status])
 
   const certificateStats = [
-    { label: '证书总数', value: String(stats.total), hint: '已获得贡献证明', icon: Award },
-    { label: '已签发', value: String(stats.issued), hint: '可下载证书', icon: ShieldCheck },
-    { label: '电子证书', value: String(stats.issued), hint: '线上发放保存', icon: CalendarClock },
-    { label: '可公开查询', value: String(certificates.filter((item) => item.publicVerify && item.status === '已签发').length), hint: '支持编号核验', icon: FileCheck2 },
+    { label: '证书总数', value: String(stats.total), hint: '已获得贡献证明' },
+    { label: '已签发', value: String(stats.issued), hint: '可下载证书' },
+    { label: '电子证书', value: String(stats.issued), hint: '线上发放保存' },
+    { label: '可公开查询', value: String(certificates.filter((item) => item.publicVerify && item.status === '已签发').length), hint: '支持编号核验' },
   ]
 
   async function loadCertificates() {
@@ -146,13 +141,13 @@ export function UserCertificates() {
     }
   }
 
-  async function copyVerifyCode(code: string) {
+  async function copyCertificateNo(certificateNo: string) {
     try {
-      await navigator.clipboard.writeText(code)
-      setMessage('查询码已复制。')
+      await navigator.clipboard.writeText(certificateNo)
+      setMessage('证书编号已复制。')
       window.setTimeout(() => setMessage(''), 1800)
     } catch {
-      setError('复制失败，请手动复制查询码')
+      setError('复制失败，请手动复制证书编号')
     }
   }
 
@@ -173,7 +168,6 @@ export function UserCertificates() {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="My Certificates"
-          eyebrowIcon={<Medal className="h-3.5 w-3.5" />}
           title="我的证书"
           description="查看漏洞贡献证书、预览完整 PDF、下载电子证明，并通过证书编号完成公开核验。"
         />
@@ -191,19 +185,13 @@ export function UserCertificates() {
       {message && <AlertMessage className="mt-5" message={message} onClose={() => setMessage('')} variant="success" />}
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
-        {certificateStats.map((item) => {
-          const Icon = item.icon
-          return (
-            <SurfacePanel className="p-5" key={item.label}>
-              <div className="flex items-start justify-between gap-4">
-                <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                <span className="text-3xl font-semibold">{item.value}</span>
-              </div>
-              <p className="mt-3 text-sm font-medium">{item.label}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-            </SurfacePanel>
-          )
-        })}
+        {certificateStats.map((item) => (
+          <SurfacePanel className="p-5" key={item.label}>
+            <p className="text-3xl font-semibold">{item.value}</p>
+            <p className="mt-2 text-sm font-medium">{item.label}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+          </SurfacePanel>
+        ))}
       </div>
 
       <SurfacePanel className="relative z-30 mt-6 p-5">
@@ -211,7 +199,7 @@ export function UserCertificates() {
           <SearchInput
             label="搜索我的证书"
             onChange={setKeyword}
-            placeholder="输入证书编号、查询码、漏洞编号或标题"
+            placeholder="输入证书编号、漏洞编号或标题"
             value={keyword}
           />
           <SelectInput label="证书状态" onChange={setStatus} options={statusOptions} value={status} />
@@ -322,7 +310,6 @@ export function UserCertificates() {
                         <p>关联漏洞：{item.vulnerability.reportNo}</p>
                         <p>签发人：{item.issuer ?? '平台'}</p>
                         <p>签发日期：{formatDate(item.issuedAt)}</p>
-                        <p>查询码：{item.verifyCode}</p>
                       </div>
                     </div>
 
@@ -352,11 +339,11 @@ export function UserCertificates() {
                         </button>
                         <button
                           className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                          onClick={() => void copyVerifyCode(item.verifyCode)}
+                          onClick={() => void copyCertificateNo(item.certificateNo)}
                           type="button"
                         >
                           <Copy className="h-4 w-4" />
-                          复制查询码
+                          复制证书编号
                         </button>
                       </div>
                     </div>

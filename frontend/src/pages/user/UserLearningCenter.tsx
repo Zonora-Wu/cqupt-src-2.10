@@ -1,17 +1,9 @@
 import {
   BookOpen,
   Bot,
-  CheckCircle2,
   Download,
   ExternalLink,
   Expand,
-  FileText,
-  Layers3,
-  PlayCircle,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  TerminalSquare,
   X,
 } from 'lucide-react'
 import { motion } from 'motion/react'
@@ -27,9 +19,9 @@ import type { LearningResourceItem } from '../../services/learning'
 const kindOptions = ['全部资源', '工具资料', '靶场资源']
 
 const learningPath = [
-  { title: '完成授权测试规则答题', status: '已完成', icon: ShieldCheck },
-  { title: '阅读漏洞提交规范手册', status: '建议今天完成', icon: BookOpen },
-  { title: '进入权限控制专题靶场', status: 'AI 推荐', icon: Target },
+  { title: '完成授权测试规则答题', status: '已完成' },
+  { title: '阅读漏洞提交规范手册', status: '建议今天完成' },
+  { title: '进入权限控制专题靶场', status: 'AI 推荐' },
 ]
 
 const categoryStyles: Record<string, string> = {
@@ -79,10 +71,10 @@ export function UserLearningCenter() {
     const resourceCount = resources.filter((item) => item.kind === 'RESOURCE').length
     const rangeCount = resources.filter((item) => item.kind === 'RANGE').length
     return [
-      { label: '工具资料', value: String(resourceCount), hint: '登录后可访问', icon: TerminalSquare },
-      { label: '靶场资源', value: String(rangeCount), hint: '外部链接入口', icon: Target },
-      { label: '累计访问', value: String(resources.reduce((total, item) => total + item.downloadCount, 0)), hint: '平台统计', icon: FileText },
-      { label: '已上架', value: String(resources.length), hint: '可用资源', icon: CheckCircle2 },
+      { label: '工具资料', value: String(resourceCount), hint: '登录后可访问' },
+      { label: '靶场资源', value: String(rangeCount), hint: '外部链接入口' },
+      { label: '累计访问', value: String(resources.reduce((total, item) => total + item.downloadCount, 0)), hint: '平台统计' },
+      { label: '已上架', value: String(resources.length), hint: '可用资源' },
     ]
   }, [resources])
 
@@ -127,17 +119,13 @@ export function UserLearningCenter() {
               下载安全工具、阅读学习资料，并进入授权靶场资源进行练习。所有资源需要登录后访问，点击访问会记录资源使用次数。
             </p>
             <div className="mt-7 grid gap-3 md:grid-cols-4">
-              {overview.map((item) => {
-                const Icon = item.icon
-                return (
-                  <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.label}>
-                    <Icon className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                    <p className="mt-4 text-3xl font-semibold">{item.value}</p>
-                    <p className="mt-1 text-sm font-medium">{item.label}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
-                  </div>
-                )
-              })}
+              {overview.map((item) => (
+                <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.label}>
+                  <p className="text-3xl font-semibold">{item.value}</p>
+                  <p className="mt-2 text-sm font-medium">{item.label}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.hint}</p>
+                </div>
+              ))}
             </div>
           </div>
         </SurfacePanel>
@@ -148,23 +136,16 @@ export function UserLearningCenter() {
               <p className="text-sm text-slate-500 dark:text-slate-400">AI 学习建议</p>
               <h2 className="mt-1 text-xl font-semibold">下一步训练</h2>
             </div>
-            <Sparkles className="h-8 w-8 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3">
-            {learningPath.map((item) => {
-              const Icon = item.icon
-              return (
-                <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 " key={item.title}>
-                  <div className="flex items-start gap-3">
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300" />
-                    <div>
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.status}</p>
-                    </div>
-                  </div>
+            {learningPath.map((item) => (
+              <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 " key={item.title}>
+                <div>
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.status}</p>
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
           <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700" type="button">
             <Bot className="h-4 w-4" />
@@ -184,7 +165,7 @@ export function UserLearningCenter() {
       {message && <AlertMessage className="mt-4" message={message} onClose={() => setMessage('')} variant="error" />}
       {error && <AlertMessage className="mt-4" message={error} onClose={() => setError('')} variant="error" />}
 
-      <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {loading && <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400 lg:col-span-2">正在加载学习资源...</SurfacePanel>}
 
         {!loading &&
@@ -204,11 +185,6 @@ export function UserLearningCenter() {
                     </div>
                     <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
                   </div>
-                  {item.kind === 'RANGE' ? (
-                    <PlayCircle className="h-6 w-6 shrink-0 text-brand-700 dark:text-brand-300" />
-                  ) : (
-                    <Layers3 className="h-6 w-6 shrink-0 text-brand-700 dark:text-brand-300" />
-                  )}
                 </div>
 
                 <p className="mt-3 line-clamp-2 min-h-12 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
@@ -257,8 +233,6 @@ export function UserLearningCenter() {
 }
 
 function LearningCover({ item }: { item: LearningResourceItem }) {
-  const Icon = item.kind === 'RANGE' ? Target : TerminalSquare
-
   return (
     <div className="relative h-40 overflow-hidden bg-gradient-to-br from-brand-100 via-white to-slate-100 dark:from-brand-950/50 dark:via-white/[0.06] dark:to-slate-900">
       {item.coverUrl ? (
@@ -267,8 +241,8 @@ function LearningCover({ item }: { item: LearningResourceItem }) {
         <>
           <div className="absolute inset-5 rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.05]" />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-white/70 bg-[var(--app-panel-bg)] text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-brand-300">
-              <Icon className="h-8 w-8" />
+            <div className="rounded-lg border border-white/70 bg-[var(--app-panel-bg)] px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-brand-300">
+              {item.kindLabel}
             </div>
           </div>
         </>
