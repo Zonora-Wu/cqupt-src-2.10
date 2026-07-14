@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Run on server with sudo. Override when Nginx or backend use different paths.
-NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/test.cquptsrc.asia}"
-BACKEND_UPSTREAM="${BACKEND_UPSTREAM:-http://127.0.0.1:3001}"
+PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/projcets/cqupt-src-test}"
+DEPLOY_DIR="${DEPLOY_DIR:-$PROJECT_DIR/deploy/test}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.test.yml}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-cqupt-src-test}"
+WEB_SERVICE="${WEB_SERVICE:-web}"
+NGINX_CONF="${NGINX_CONF:-/etc/nginx/conf.d/default.conf}"
+BACKEND_UPSTREAM="${BACKEND_UPSTREAM:-http://backend:3000}"
 CHAT_SOCKET_URL="${CHAT_SOCKET_URL:-https://test.cquptsrc.asia}"
+CHECK_PUBLIC_ENDPOINT="${CHECK_PUBLIC_ENDPOINT:-1}"
 
 log() {
   printf '\n===== %s =====\n' "$1"
@@ -15,26 +20,35 @@ fail() {
   exit 1
 }
 
-[[ "${EUID}" -eq 0 ]] || fail 'Run with sudo: sudo ./fix-chat-websocket.sh'
-command -v nginx >/dev/null || fail 'nginx is not installed'
-command -v curl >/dev/null || fail 'curl is not installed'
-[[ -f "$NGINX_CONF" ]] || fail "Nginx config not found: $NGINX_CONF"
+command -v docker >/dev/null || fail 'docker is not installed'
+if [[ "$CHECK_PUBLIC_ENDPOINT" == '1' ]]; then
+  command -v curl >/dev/null || fail 'curl is not installed'
+fi
+[[ -f "$DEPLOY_DIR/$COMPOSE_FILE" ]] || fail "Compose file not found: $DEPLOY_DIR/$COMPOSE_FILE"
+[[ -f "$DEPLOY_DIR/.env" ]] || fail "Environment file not found: $DEPLOY_DIR/.env"
 
-if grep -Fq 'location /socket.io/' "$NGINX_CONF"; then
-  log 'Socket.IO proxy already exists'
+cd "$DEPLOY_DIR"
+COMPOSE=(docker compose -p "$COMPOSE_PROJECT" --env-file .env -f "$COMPOSE_FILE")
+WEB_CONTAINER="$("${COMPOSE[@]}" ps -q "$WEB_SERVICE")"
+[[ -n "$WEB_CONTAINER" ]] || fail "Web service is not running: $WEB_SERVICE"
+
+"${COMPOSE[@]}" exec -T "$WEB_SERVICE" test -f "$NGINX_CONF" || fail "Nginx config not found in container: $NGINX_CONF"
+
+if "${COMPOSE[@]}" exec -T "$WEB_SERVICE" grep -Fq 'location /socket.io/' "$NGINX_CONF"; then
+  log 'Socket.IO proxy already exists in web container'
 else
-  log 'Back up Nginx configuration'
-  backup="${NGINX_CONF}.before-chat-websocket.$(date +%Y%m%d%H%M%S)"
-  cp --preserve=mode,ownership,timestamps "$NGINX_CONF" "$backup"
+  log 'Add Socket.IO proxy to web container'
+  temp_dir="$(mktemp -d)"
+  original="$temp_dir/default.conf.original"
+  updated="$temp_dir/default.conf.updated"
+  trap 'rm -rf "$temp_dir"' EXIT
 
-  temp_file="$(mktemp)"
-  trap 'rm -f "$temp_file"' EXIT
-
-  # The deployed virtual-host file ends with the HTTPS server block closing brace.
-  last_nonempty_line="$(awk 'NF { line = $0 } END { print line }' "$NGINX_CONF")"
+  docker cp "$WEB_CONTAINER:$NGINX_CONF" "$original"
+  last_nonempty_line="$(awk 'NF { line = $0 } END { print line }' "$original")"
   [[ "$last_nonempty_line" == '}' ]] || fail "Expected final server-block brace in: $NGINX_CONF"
-  awk 'NF { last = NR } { lines[NR] = $0 } END { for (index = 1; index < last; index++) print lines[index] }' "$NGINX_CONF" > "$temp_file"
-  cat >> "$temp_file" <<EOF
+
+  awk 'NF { last = NR } { lines[NR] = $0 } END { for (index = 1; index < last; index++) print lines[index] }' "$original" > "$updated"
+  cat >> "$updated" <<EOF
 
     location /socket.io/ {
         proxy_pass ${BACKEND_UPSTREAM};
@@ -52,19 +66,25 @@ else
 }
 EOF
 
-  cat "$temp_file" > "$NGINX_CONF"
-  if ! nginx -t; then
-    cp --preserve=mode,ownership,timestamps "$backup" "$NGINX_CONF"
-    nginx -t || true
-    fail "Nginx validation failed. Restored: $backup"
+  docker cp "$updated" "$WEB_CONTAINER:$NGINX_CONF"
+  if ! "${COMPOSE[@]}" exec -T "$WEB_SERVICE" nginx -t; then
+    docker cp "$original" "$WEB_CONTAINER:$NGINX_CONF"
+    "${COMPOSE[@]}" exec -T "$WEB_SERVICE" nginx -t || true
+    fail 'Nginx validation failed. Original container configuration restored.'
   fi
 fi
 
-log 'Reload Nginx'
-systemctl reload nginx
+log 'Reload web-container Nginx'
+"${COMPOSE[@]}" exec -T "$WEB_SERVICE" nginx -s reload
 
-log 'Check Socket.IO endpoint'
-response="$(curl --fail --silent --show-error --http1.1 "${CHAT_SOCKET_URL%/}/socket.io/?EIO=4&transport=polling")"
-[[ "$response" == *'"sid"'* ]] || fail 'Socket.IO response has no sid. Check BACKEND_UPSTREAM and backend service.'
+if [[ "$CHECK_PUBLIC_ENDPOINT" == '1' ]]; then
+  log 'Check public Socket.IO endpoint'
+  if response="$(curl --fail --silent --show-error --http1.1 "${CHAT_SOCKET_URL%/}/socket.io/?EIO=4&transport=polling")"; then
+    [[ "$response" == *'"sid"'* ]] || fail 'Public Socket.IO response has no sid.'
+    printf 'Public Socket.IO endpoint is reachable.\n'
+  else
+    printf 'WARNING: web container fixed, but public endpoint still fails. Configure WebSocket Upgrade in proxy_net HTTPS proxy.\n' >&2
+  fi
+fi
 
-printf '\nWebSocket proxy fixed. Run ./update-cqupt-test.sh next to deploy migration and restart backend.\n'
+printf '\nWeb-container Socket.IO proxy complete. Run ./update-cqupt-test.sh after code updates; it reapplies this fix after container recreation.\n'

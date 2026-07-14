@@ -7,7 +7,6 @@ DEPLOY_DIR="${DEPLOY_DIR:-$PROJECT_DIR/deploy/test}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.test.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-cqupt-src-test}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-}"
-NGINX_SERVICE="${NGINX_SERVICE:-}"
 CHAT_SOCKET_URL="${CHAT_SOCKET_URL:-}"
 
 if [[ ! -d "$PROJECT_DIR" && -d "$LEGACY_PROJECT_DIR" ]]; then
@@ -71,18 +70,10 @@ log '执行数据库迁移'
 log '重启后端加载迁移后权限与聊天网关'
 "${COMPOSE[@]}" up -d --no-deps --force-recreate "$BACKEND_SERVICE"
 
-NGINX_SERVICE="$(find_service "$NGINX_SERVICE" nginx web proxy)"
-if [[ -n "$NGINX_SERVICE" ]]; then
-  log '检查 Nginx Socket.IO 反向代理'
-  if "${COMPOSE[@]}" exec -T "$NGINX_SERVICE" nginx -T 2>&1 | grep -Fq 'location /socket.io/'; then
-    "${COMPOSE[@]}" exec -T "$NGINX_SERVICE" nginx -t
-    "${COMPOSE[@]}" exec -T "$NGINX_SERVICE" nginx -s reload
-  else
-    fail 'Nginx 缺少 location /socket.io/。按 docs/deployment/README.md 添加 WebSocket Upgrade 反向代理后重试。'
-  fi
-else
-  printf '提示: 未检测到 Compose 内 Nginx。请在宿主机 Nginx 配置添加 /socket.io/ 反向代理并执行 nginx -t && systemctl reload nginx。\n'
-fi
+log '修复 web 容器 Socket.IO 反向代理'
+FIX_SCRIPT="$PROJECT_DIR/fix-chat-websocket.sh"
+[[ -x "$FIX_SCRIPT" ]] || fail "聊天修复脚本不存在或不可执行: $FIX_SCRIPT"
+PROJECT_DIR="$PROJECT_DIR" DEPLOY_DIR="$DEPLOY_DIR" COMPOSE_FILE="$COMPOSE_FILE" COMPOSE_PROJECT="$COMPOSE_PROJECT" CHECK_PUBLIC_ENDPOINT=0 "$FIX_SCRIPT"
 
 if [[ -n "$CHAT_SOCKET_URL" ]]; then
   log '检查 Socket.IO 入口'
