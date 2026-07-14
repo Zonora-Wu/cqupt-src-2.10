@@ -414,6 +414,21 @@ server {
         proxy_send_timeout 300s;
     }
 
+    # Socket.IO uses this Engine.IO path even when application namespace is /chat.
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -458,6 +473,7 @@ curl -s http://127.0.0.1:3001/api/ai/health
 curl -s http://127.0.0.1:5000/health
 curl -I https://src.example.edu.cn/
 curl -s https://src.example.edu.cn/api/health
+curl -i --http1.1 'https://src.example.edu.cn/socket.io/?EIO=4&transport=polling'
 ```
 
 核心回归：

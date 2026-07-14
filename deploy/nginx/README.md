@@ -16,6 +16,7 @@ Nginx 配置目录。
 
 - 前端静态资源服务
 - `/api` 反向代理到后端
+- `/socket.io/` 反向代理并保留 WebSocket Upgrade 头，用于聊天实时消息
 - HTTPS 配置
 - 安全响应头
 - 上传大小限制
