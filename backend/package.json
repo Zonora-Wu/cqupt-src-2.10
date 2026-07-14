@@ -11,6 +11,7 @@
     "test:core-api": "node ../tests/api/core-api-smoke.mjs",
     "test:core-e2e": "node ../tests/e2e/core-e2e.mjs",
     "test:ai-problem-session": "node ../tests/e2e/ai-problem-session-phase2.mjs",
+    "test:chat": "tsx --test test/chat-*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:validate": "prisma validate --schema ../database/prisma/schema.prisma",
     "prisma:generate": "node scripts/prisma-generate.cjs",
@@ -23,6 +24,8 @@
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/platform-socket.io": "^11.1.28",
+    "@nestjs/websockets": "^11.1.28",
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^6.0.0",
     "altcha": "^3.2.0",
@@ -30,7 +33,8 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

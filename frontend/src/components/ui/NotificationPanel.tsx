@@ -10,6 +10,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { NotificationChannel } from '../../services/notifications'
 import { getNotifications } from '../../services/notifications'
+import { NotificationChatCenter } from './NotificationChatCenter'
 
 /* ─── 已读状态存 localStorage ─── */
 const SEEN_KEY_PREFIX = 'notif_seen_'
@@ -39,6 +40,10 @@ const iconBgMap: Record<string, string> = {
 
 /* ─── 通知面板（全屏页面模式，与 UserNotifications 布局一致） ─── */
 export function NotificationPanel({ onClose }: { onClose?: () => void }) {
+  return <NotificationChatCenter onClose={onClose} />
+}
+
+export function NotificationContent({ onClose, onOpenChat }: { onClose?: () => void; onOpenChat: () => void }) {
   const [channels, setChannels] = useState<NotificationChannel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -98,10 +103,11 @@ export function NotificationPanel({ onClose }: { onClose?: () => void }) {
           <div className="flex h-14 items-center gap-2 border-b border-black/10 px-4 dark:border-white/10">
             <MessageSquare className="h-4 w-4 text-brand-600 dark:text-brand-300" />
             <span className="text-sm font-semibold">通知中心</span>
+            <button className="ml-auto rounded-md px-2.5 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-brand-300" onClick={onOpenChat} type="button">消息</button>
             {onClose && (
               <button
                 aria-label="关闭通知"
-                className="ml-auto rounded-md p-1.5 text-slate-400 transition hover:bg-black/5 hover:text-slate-600 dark:hover:bg-white/10 dark:hover:text-white"
+                className="rounded-md p-1.5 text-slate-400 transition hover:bg-black/5 hover:text-slate-600 dark:hover:bg-white/10 dark:hover:text-white"
                 onClick={onClose}
                 type="button"
               >

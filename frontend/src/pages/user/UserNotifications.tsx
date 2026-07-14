@@ -9,6 +9,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { NotificationChannel } from '../../services/notifications'
 import { getNotifications } from '../../services/notifications'
+import { NotificationChatCenter } from '../../components/ui/NotificationChatCenter'
 
 
 /* ─── 已读状态 key 前缀（存 localStorage，值为最后查看时间戳） ─── */
@@ -39,6 +40,10 @@ const iconBgMap: Record<string, string> = {
 
 /* ─── 主组件 ─── */
 export function UserNotifications() {
+  return <NotificationChatCenter />
+}
+
+export function UserNotificationContent({ onOpenChat }: { onOpenChat: () => void }) {
   const [channels, setChannels] = useState<NotificationChannel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -102,6 +107,7 @@ export function UserNotifications() {
           <div className="flex h-14 items-center gap-2 border-b border-black/10 px-4 dark:border-white/10">
             <MessageSquare className="h-4 w-4 text-brand-600 dark:text-brand-300" />
             <span className="text-sm font-semibold">通知中心</span>
+            <button className="ml-auto rounded-md px-2.5 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-brand-300" onClick={onOpenChat} type="button">消息</button>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
             {loading && (

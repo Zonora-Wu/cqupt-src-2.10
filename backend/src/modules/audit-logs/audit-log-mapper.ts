@@ -17,6 +17,13 @@ const actionLabels: Partial<Record<AuditAction, string>> = {
   CHANGE_SYSTEM_SETTING: '修改系统设置',
   CHANGE_USER_PERMISSION: '调整用户权限',
   CHANGE_VULNERABILITY_STATUS: '变更漏洞状态',
+  CHAT_CONVERSATION_MANAGED: '管理聊天会话',
+  CHAT_MESSAGE_BLOCKED: '拦截敏感聊天消息',
+  CHAT_RECORDS_DELETED: '删除聊天记录',
+  CHAT_RECORDS_EXPORTED: '导出聊天记录',
+  CHAT_RECORDS_VIEWED: '查看聊天记录',
+  CHAT_SENSITIVE_WORD_MANAGED: '管理聊天敏感词',
+  CHAT_USER_RESTRICTED: '调整聊天限制',
   CREATE_VULNERABILITY: '创建漏洞记录',
   ISSUE_CERTIFICATE: '签发证书',
   LOGIN: '登录',
@@ -54,6 +61,10 @@ const highRiskActions = new Set<AuditAction>([
   AuditAction.REVIEW_VULNERABILITY,
   AuditAction.REVOKE_CERTIFICATE,
   AuditAction.VIEW_SENSITIVE_ATTACHMENT,
+  AuditAction.CHAT_RECORDS_DELETED,
+  AuditAction.CHAT_RECORDS_EXPORTED,
+  AuditAction.CHAT_RECORDS_VIEWED,
+  AuditAction.CHAT_USER_RESTRICTED,
 ])
 
 const mediumRiskActions = new Set<AuditAction>([
@@ -62,6 +73,9 @@ const mediumRiskActions = new Set<AuditAction>([
   AuditAction.MANAGE_MALL,
   AuditAction.PUBLISH_ANNOUNCEMENT,
   AuditAction.SUBMIT_VULNERABILITY,
+  AuditAction.CHAT_CONVERSATION_MANAGED,
+  AuditAction.CHAT_MESSAGE_BLOCKED,
+  AuditAction.CHAT_SENSITIVE_WORD_MANAGED,
   ...aiRetestActions,
 ])
 
@@ -77,6 +91,13 @@ export function getAuditModule(action: AuditAction): AuditModuleCode {
     CHANGE_SYSTEM_SETTING: 'SYSTEM',
     CHANGE_USER_PERMISSION: 'USER',
     CHANGE_VULNERABILITY_STATUS: 'VULNERABILITY',
+    CHAT_CONVERSATION_MANAGED: 'SYSTEM',
+    CHAT_MESSAGE_BLOCKED: 'SYSTEM',
+    CHAT_RECORDS_DELETED: 'SYSTEM',
+    CHAT_RECORDS_EXPORTED: 'SYSTEM',
+    CHAT_RECORDS_VIEWED: 'SYSTEM',
+    CHAT_SENSITIVE_WORD_MANAGED: 'SYSTEM',
+    CHAT_USER_RESTRICTED: 'SYSTEM',
     CREATE_VULNERABILITY: 'VULNERABILITY',
     ISSUE_CERTIFICATE: 'CERTIFICATE',
     LOGIN: 'AUTH',

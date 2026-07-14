@@ -150,7 +150,7 @@ function assertOk(response: Response, data: unknown, authenticatedRequest: boole
   })
 }
 
-function getAccessToken() {
+export function getAccessToken() {
   const raw = window.localStorage.getItem(AUTH_SESSION_KEY)
   if (!raw) return null
 

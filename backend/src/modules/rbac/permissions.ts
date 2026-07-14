@@ -23,6 +23,8 @@ export const permissionDefinitions = [
   ['ai:use_auditor', '使用审核员 AI'],
   ['ai:use_admin', '使用管理员 AI'],
   ['ai:manage_skills', '管理 AI 知识沉淀'],
+  ['chat:use', '使用聊天'],
+  ['chat:manage', '管理聊天'],
 ] as const
 
 export type PermissionCode = (typeof permissionDefinitions)[number][0]
@@ -35,6 +37,7 @@ export const rolePermissionMap: Record<RoleCode, PermissionCode[]> = {
     'point:read',
     'mall:redeem',
     'ai:use_student',
+    'chat:use',
   ],
   AUDITOR: [
     'vulnerability:read_all',
@@ -45,6 +48,7 @@ export const rolePermissionMap: Record<RoleCode, PermissionCode[]> = {
     'certificate:read',
     'announcement:manage',
     'ai:use_auditor',
+    'chat:use',
   ],
   ADMIN: [
     'vulnerability:read_all',
@@ -63,5 +67,7 @@ export const rolePermissionMap: Record<RoleCode, PermissionCode[]> = {
     'system:manage',
     'ai:use_admin',
     'ai:manage_skills',
+    'chat:use',
+    'chat:manage',
   ],
 }

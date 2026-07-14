@@ -474,3 +474,41 @@ Ship in three independently testable increments:
 3. Moderation, sensitive words, storage warning, export, cleanup.
 
 Do not merge storage deletion before export and cutoff tests pass. Do not expose chat to users before socket room authorization and REST membership tests pass.
+
+---
+
+## Implementation Status (2026-07-13)
+
+Implemented in this workspace:
+
+- [x] Prisma schema, PostgreSQL migration `20260713120000_controlled_chat`, chat audit actions, role permissions, and active-role seed refresh.
+- [x] Persistent direct, group, and implicit global conversations; direct-pair uniqueness; 200-member normal-group guard; global group lazy creation.
+- [x] REST API for bootstrap, staff directory, exact unified-code lookup, direct/group creation, cursor history, idempotent send, read cursor, group lifecycle, restrictions, sensitive words, storage, export, preview, and cleanup.
+- [x] Server-side NFKC normalization, 2,000-character limit, sensitive-word block without rejected plaintext storage, audit hash, per-account send/search limiting, and serializable stranger-quota update.
+- [x] Socket.IO JWT connection authentication, expiry disconnect, user/conversation/global/admin rooms, post-commit event publishing, and personal-room delivery for newly created conversations.
+- [x] Notification-center chat UI for student, auditor, and admin routes: conversation list, unread counts, direct read marker, live message append, reconnect refresh, staff directory, exact-code user search, stranger-rule confirmation, text composer, group creation, sensitive-word controls, storage display, JSONL export, and cutoff cleanup.
+- [x] Administrator REST controls for all-record inspection, conversation close/reopen/dissolve, membership changes, chat restriction, and sensitive-word management. The notification-center admin drawer exposes current-conversation closure plus sensitive-word and storage/retention controls.
+- [x] Streamed JSONL export in 500-row database pages; cleanup uses signed 10-minute preview confirmation token.
+- [x] Policy tests added in `backend/test/chat-policy.test.ts`.
+
+Verification completed:
+
+```text
+npm run prisma:migrate:deploy    PASS
+npm run db:seed                 PASS
+npm run prisma:validate         PASS
+npm run build (backend)         PASS
+npm run build (frontend)        PASS
+npm run test:chat               PASS (5 tests)
+GET /api/health                 200
+```
+
+Not automatically exercised:
+
+- Password login requires a live ALTCHA human-verification solution, so multi-account HTTP/WebSocket end-to-end smoke flow was not automated in this session.
+- Redis Socket.IO adapter is intentionally not enabled for this single-backend local deployment. PostgreSQL remains source of truth; add the adapter before horizontally scaling backend replicas.
+
+Interface adjustment after review:
+
+- [x] Notification-center route now opens chat directly for student, auditor, and administrator. Chat uses the existing notification-center two-column frame; system notification channels remain available through the back control instead of requiring a separate “消息” entry click.
+- [x] Follow-up layout: system notification channels and user/group conversations now share one left-side notification-center list. Selecting a system item renders its read-only feed; selecting a direct/group/global conversation renders the same right-side feed shape plus text composer.

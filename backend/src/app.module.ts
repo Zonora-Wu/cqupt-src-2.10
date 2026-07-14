@@ -11,6 +11,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module'
 import { AttachmentsModule } from './modules/attachments/attachments.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { CaptchaModule } from './modules/captcha/captcha.module'
+import { ChatModule } from './modules/chat/chat.module'
 import { CertificatesModule } from './modules/certificates/certificates.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { HealthModule } from './modules/health/health.module'
@@ -46,6 +47,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
     VulnerabilitiesModule,
     AttachmentsModule,
     CaptchaModule,
+    ChatModule,
     CertificatesModule,
     AnnouncementsModule,
     AuditLogsModule,

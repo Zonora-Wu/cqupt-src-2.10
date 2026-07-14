@@ -14,10 +14,16 @@ export function validateEnv(config: EnvConfig) {
     throw new Error('PORT must be a valid TCP port')
   }
 
+  const chatQuota = Number(config.CHAT_DATABASE_QUOTA_BYTES ?? 5 * 1024 * 1024 * 1024)
+  if (!Number.isSafeInteger(chatQuota) || chatQuota <= 0) {
+    throw new Error('CHAT_DATABASE_QUOTA_BYTES must be a positive integer')
+  }
+
   return {
     ...config,
     PORT: String(port),
     API_PREFIX: config.API_PREFIX ?? 'api',
     FRONTEND_ORIGIN: config.FRONTEND_ORIGIN ?? 'http://localhost:5173',
+    CHAT_DATABASE_QUOTA_BYTES: String(chatQuota),
   }
 }

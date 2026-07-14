@@ -251,6 +251,23 @@ enum AiSkillCandidateStatus {
   FAILED
 }
 
+enum ChatConversationType {
+  DIRECT
+  GROUP
+  GLOBAL
+}
+
+enum ChatConversationStatus {
+  OPEN
+  CLOSED
+  DISSOLVED
+}
+
+enum ChatMemberRole {
+  OWNER
+  MEMBER
+}
+
 enum AuditAction {
   LOGIN
   LOGOUT
@@ -295,6 +312,13 @@ enum AuditAction {
   AI_RETEST_DIRECT_PROPOSAL_CONFIRMED
   AI_RETEST_DIRECT_PROPOSAL_CREATED
   AI_RETEST_DIRECT_STARTED
+  CHAT_MESSAGE_BLOCKED
+  CHAT_CONVERSATION_MANAGED
+  CHAT_USER_RESTRICTED
+  CHAT_RECORDS_EXPORTED
+  CHAT_RECORDS_DELETED
+  CHAT_RECORDS_VIEWED
+  CHAT_SENSITIVE_WORD_MANAGED
 }
 
 model User {
@@ -360,6 +384,14 @@ model User {
   reviewedSkillCandidates AiSkillCandidate[]         @relation("AiSkillCandidateReviewer")
   operatedSkillInstalls AiSkillInstallLog[]         @relation("AiSkillInstallOperator")
   auditLogs             AuditLog[]                  @relation("AuditActor")
+  createdChatConversations ChatConversation[]        @relation("ChatConversationCreator")
+  initiatedChatConversations ChatConversation[]      @relation("ChatDirectInitiator")
+  closedChatConversations ChatConversation[]         @relation("ChatConversationCloser")
+  chatMemberships       ChatConversationMember[]
+  chatMessages          ChatMessage[]               @relation("ChatMessageSender")
+  chatRestrictions      ChatUserRestriction[]       @relation("ChatRestrictedUser")
+  issuedChatRestrictions ChatUserRestriction[]      @relation("ChatRestrictionOperator")
+  createdChatSensitiveWords ChatSensitiveWord[]     @relation("ChatSensitiveWordCreator")
 
   @@index([roleId])
   @@index([authorizationLevel])
@@ -1348,6 +1380,90 @@ model AiKnowledgeMaintenanceTask {
   @@index([knowledgeId, createdAt])
   @@index([status, priority])
   @@index([taskType, status])
+}
+
+model ChatConversation {
+  id                   String                 @id @default(cuid())
+  type                 ChatConversationType
+  status               ChatConversationStatus @default(OPEN)
+  title                String?
+  directKey            String?                @unique
+  directInitiatorId    String?
+  strangerMessageCount Int                    @default(0)
+  acceptedAt           DateTime?
+  createdById          String
+  closedById           String?
+  closedReason         String?                @db.Text
+  closedAt             DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  createdBy            User                   @relation("ChatConversationCreator", fields: [createdById], references: [id])
+  directInitiator      User?                  @relation("ChatDirectInitiator", fields: [directInitiatorId], references: [id])
+  closedBy             User?                  @relation("ChatConversationCloser", fields: [closedById], references: [id])
+  members              ChatConversationMember[]
+  messages             ChatMessage[]
+
+  @@index([type, status])
+  @@index([updatedAt])
+}
+
+model ChatConversationMember {
+  id                String           @id @default(cuid())
+  conversationId    String
+  userId            String
+  role              ChatMemberRole   @default(MEMBER)
+  joinedAt          DateTime         @default(now())
+  removedAt         DateTime?
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  conversation      ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage   ChatMessage?     @relation("ChatLastReadMessage", fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, userId])
+  @@index([userId, removedAt])
+}
+
+model ChatMessage {
+  id              String                   @id @default(cuid())
+  conversationId  String
+  senderId        String
+  clientMessageId String
+  content         String                   @db.Text
+  createdAt       DateTime                 @default(now())
+  conversation    ChatConversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User                     @relation("ChatMessageSender", fields: [senderId], references: [id])
+  readCursors     ChatConversationMember[] @relation("ChatLastReadMessage")
+
+  @@unique([senderId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+}
+
+model ChatUserRestriction {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  disabledById String
+  reason       String    @db.Text
+  disabledAt   DateTime  @default(now())
+  expiresAt    DateTime?
+  liftedAt     DateTime?
+  user         User      @relation("ChatRestrictedUser", fields: [userId], references: [id], onDelete: Cascade)
+  disabledBy   User      @relation("ChatRestrictionOperator", fields: [disabledById], references: [id])
+
+  @@index([expiresAt, liftedAt])
+}
+
+model ChatSensitiveWord {
+  id             String   @id @default(cuid())
+  term           String
+  normalizedTerm String   @unique
+  active         Boolean  @default(true)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      User     @relation("ChatSensitiveWordCreator", fields: [createdById], references: [id])
+
+  @@index([active])
 }
 
 model AuditLog {
