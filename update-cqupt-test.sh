@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/projects/cqupt-src-test}"
-LEGACY_PROJECT_DIR="/home/ubuntu/projcets/cqupt-src-test"
-DEPLOY_DIR="${DEPLOY_DIR:-$PROJECT_DIR/deploy/test}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.test.yml}"
-COMPOSE_PROJECT="${COMPOSE_PROJECT:-cqupt-src-test}"
-BACKEND_SERVICE="${BACKEND_SERVICE:-}"
-CHAT_SOCKET_URL="${CHAT_SOCKET_URL:-}"
-
-if [[ ! -d "$PROJECT_DIR" && -d "$LEGACY_PROJECT_DIR" ]]; then
-  PROJECT_DIR="$LEGACY_PROJECT_DIR"
-  DEPLOY_DIR="$PROJECT_DIR/deploy/test"
-fi
-
-COMPOSE=(docker compose -p "$COMPOSE_PROJECT" --env-file .env -f "$COMPOSE_FILE")
+PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/projcets/cqupt-src-test}"
+DEPLOY_DIR="$PROJECT_DIR/deploy/test"
+DEPLOY_SCOPE="${DEPLOY_SCOPE:-}"
+COMPOSE=(docker compose -p cqupt-src-test --env-file .env -f docker-compose.test.yml)
 
 log() {
   printf '\n===== %s =====\n' "$1"
@@ -25,60 +15,88 @@ fail() {
   exit 1
 }
 
-find_service() {
-  local requested="$1"
-  shift
-
-  if [[ -n "$requested" ]]; then
-    printf '%s\n' "$requested"
-    return
+choose_scope() {
+  if [[ -z "$DEPLOY_SCOPE" ]]; then
+    printf '\n本次更新范围：\n'
+    printf '  1) 仅前端\n'
+    printf '  2) 仅后端\n'
+    printf '  3) 后端 + 数据库迁移\n'
+    printf '  4) 前端 + 后端\n'
+    printf '  5) 前端 + 后端 + 数据库迁移（全量）\n'
+    printf '  6) 仅重启前后端服务\n'
+    printf '  7) 仅更新代码\n'
+    printf '  0) 取消\n'
+    read -r -p '选择 [0-7]: ' DEPLOY_SCOPE
   fi
 
-  local services candidate
-  services="$("${COMPOSE[@]}" config --services)"
-  for candidate in "$@"; do
-    if grep -Fxq "$candidate" <<<"$services"; then
-      printf '%s\n' "$candidate"
-      return
-    fi
-  done
+  case "$DEPLOY_SCOPE" in
+    1|2|3|4|5|6|7) ;;
+    0) exit 0 ;;
+    *) fail '请输入 0 到 7。' ;;
+  esac
 }
 
-command -v git >/dev/null || fail '缺少 git'
-command -v docker >/dev/null || fail '缺少 docker'
+apply_web_config() {
+  local fix_script="$PROJECT_DIR/fix-chat-websocket.sh"
+  [[ -x "$fix_script" ]] || fail "缺少 web 容器配置脚本: $fix_script"
+  PROJECT_DIR="$PROJECT_DIR" DEPLOY_DIR="$DEPLOY_DIR" CHECK_PUBLIC_ENDPOINT=0 "$fix_script"
+}
+
+run_migrations() {
+  log '执行数据库迁移'
+  "${COMPOSE[@]}" exec -T backend npm run prisma:migrate:deploy
+}
+
 [[ -d "$PROJECT_DIR" ]] || fail "项目目录不存在: $PROJECT_DIR"
-[[ -f "$DEPLOY_DIR/$COMPOSE_FILE" ]] || fail "Compose 文件不存在: $DEPLOY_DIR/$COMPOSE_FILE"
-[[ -f "$DEPLOY_DIR/.env" ]] || fail "部署环境文件不存在: $DEPLOY_DIR/.env"
+[[ -f "$DEPLOY_DIR/docker-compose.test.yml" ]] || fail 'Compose 文件不存在。'
+[[ -f "$DEPLOY_DIR/.env" ]] || fail '部署环境文件不存在。'
 
-log '获取 GitHub main 最新代码'
-cd "$PROJECT_DIR"
-git fetch origin main
-git switch main
-git reset --hard origin/main
-git log -1 --oneline
+choose_scope
 
-log '构建并启动容器'
-cd "$DEPLOY_DIR"
-"${COMPOSE[@]}" up -d --build --remove-orphans
-
-BACKEND_SERVICE="$(find_service "$BACKEND_SERVICE" backend api server app)"
-[[ -n "$BACKEND_SERVICE" ]] || fail '未找到后端服务。设置 BACKEND_SERVICE，例如 BACKEND_SERVICE=backend ./update-cqupt-test.sh'
-
-log '执行数据库迁移'
-"${COMPOSE[@]}" exec -T "$BACKEND_SERVICE" npm run prisma:migrate:deploy
-
-log '重启后端加载迁移后权限与聊天网关'
-"${COMPOSE[@]}" up -d --no-deps --force-recreate "$BACKEND_SERVICE"
-
-log '修复 web 容器 Socket.IO 反向代理'
-FIX_SCRIPT="$PROJECT_DIR/fix-chat-websocket.sh"
-[[ -x "$FIX_SCRIPT" ]] || fail "聊天修复脚本不存在或不可执行: $FIX_SCRIPT"
-PROJECT_DIR="$PROJECT_DIR" DEPLOY_DIR="$DEPLOY_DIR" COMPOSE_FILE="$COMPOSE_FILE" COMPOSE_PROJECT="$COMPOSE_PROJECT" CHECK_PUBLIC_ENDPOINT=0 "$FIX_SCRIPT"
-
-if [[ -n "$CHAT_SOCKET_URL" ]]; then
-  log '检查 Socket.IO 入口'
-  curl --fail --silent --show-error --http1.1 "${CHAT_SOCKET_URL%/}/socket.io/?EIO=4&transport=polling" >/dev/null
+if [[ "$DEPLOY_SCOPE" != '6' ]]; then
+  log '拉取 GitHub main'
+  cd "$PROJECT_DIR"
+  git fetch origin main
+  git switch main
+  git reset --hard origin/main
+  git log -1 --oneline
 fi
+
+cd "$DEPLOY_DIR"
+case "$DEPLOY_SCOPE" in
+  1)
+    log '构建并启动前端'
+    "${COMPOSE[@]}" up -d --build --no-deps web
+    apply_web_config
+    ;;
+  2)
+    log '构建并启动后端'
+    "${COMPOSE[@]}" up -d --build --no-deps backend
+    ;;
+  3)
+    log '构建并启动后端'
+    "${COMPOSE[@]}" up -d --build backend
+    run_migrations
+    ;;
+  4)
+    log '构建并启动前后端'
+    "${COMPOSE[@]}" up -d --build --no-deps web backend
+    apply_web_config
+    ;;
+  5)
+    log '全量构建并启动服务'
+    "${COMPOSE[@]}" up -d --build --remove-orphans
+    run_migrations
+    apply_web_config
+    ;;
+  6)
+    log '重启前后端服务'
+    "${COMPOSE[@]}" restart backend web
+    ;;
+  7)
+    log '代码已更新，未构建或重启服务'
+    ;;
+esac
 
 log '服务状态'
 "${COMPOSE[@]}" ps
