@@ -47,6 +47,9 @@ const HISTORY_PANEL_DEFAULT_WIDTH = 264
 const HISTORY_PANEL_MAX_WIDTH = 420
 const HISTORY_PANEL_MIN_WIDTH = 220
 const HISTORY_PANEL_WIDTH_STORAGE_KEY = 'cqupt-src-ai-history-panel-width'
+const HISTORY_PANEL_MIN_CHAT_WIDTH = 860
+const HISTORY_PANEL_GAP = 32
+const DESKTOP_HISTORY_BREAKPOINT = 1024
 
 export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
   const storageKeyRef = useRef(getConversationStorageKey())
@@ -74,7 +77,9 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const [historySessions, setHistorySessions] = useState<AiProblemSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyCollapsed, setHistoryCollapsed] = useState(false)
+  const [historyAutoCollapsed, setHistoryAutoCollapsed] = useState(false)
   const [historyPanelWidth, setHistoryPanelWidth] = useState(loadHistoryPanelWidth)
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 0 : window.innerWidth)
   const [readOnlyHistory, setReadOnlyHistory] = useState(false)
   const [resolutionPrompt, setResolutionPrompt] = useState<AiProblemSession | null>(null)
   const hasStarted = messages.length > 0
@@ -82,6 +87,38 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   useEffect(() => {
     saveHistoryPanelWidth(historyPanelWidth)
   }, [historyPanelWidth])
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth)
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth)
+    return () => window.removeEventListener('resize', updateViewportWidth)
+  }, [])
+
+  const shouldAutoCollapseHistory = viewportWidth >= DESKTOP_HISTORY_BREAKPOINT
+    && viewportWidth < historyPanelWidth + HISTORY_PANEL_MIN_CHAT_WIDTH + HISTORY_PANEL_GAP
+  const historyIsCollapsed = historyCollapsed || shouldAutoCollapseHistory
+  const historyContentInset = !historyIsCollapsed
+    ? getHistoryContentInset(viewportWidth, historyPanelWidth)
+    : 0
+
+  useEffect(() => {
+    if (shouldAutoCollapseHistory) {
+      setHistoryCollapsed(true)
+      setHistoryAutoCollapsed(true)
+      return
+    }
+
+    if (historyAutoCollapsed) {
+      setHistoryCollapsed(false)
+      setHistoryAutoCollapsed(false)
+    }
+  }, [historyAutoCollapsed, shouldAutoCollapseHistory])
+
+  const handleHistoryCollapsedChange = (collapsed: boolean) => {
+    setHistoryAutoCollapsed(false)
+    setHistoryCollapsed(collapsed)
+  }
 
   useEffect(() => {
     let active = true
@@ -579,19 +616,21 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     )}
     <AiHistoryPanel
       activeId={problemSession?.id ?? null}
-      collapsed={historyCollapsed}
+      autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}
+      collapsed={historyIsCollapsed}
       loading={historyLoading}
       sessions={historySessions}
       width={historyPanelWidth}
-      onCollapsedChange={setHistoryCollapsed}
+      onCollapsedChange={handleHistoryCollapsedChange}
       onNew={() => void startFreshProblemSession()}
       onOpen={(id) => void openHistorySession(id)}
       onWidthChange={setHistoryPanelWidth}
     />
     <section
-      className={`relative z-10 mx-auto flex min-h-screen max-w-[1360px] flex-col px-5 pb-6 md:px-8 ${
+      className={`relative z-10 mx-auto flex min-h-screen max-w-[1360px] flex-col px-5 pb-6 transition-[padding-left] duration-300 ease-out md:px-8 ${
         hasStarted ? 'pt-24' : 'pt-16'
       }`}
+      style={historyContentInset ? { paddingLeft: `${historyContentInset + 32}px` } : undefined}
     >
       <MobileHistoryBar
         activeId={problemSession?.id ?? null}
@@ -599,6 +638,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         sessions={historySessions}
         onNew={() => void startFreshProblemSession()}
         onOpen={(id) => void openHistorySession(id)}
+        showAtDesktop={shouldAutoCollapseHistory}
       />
       <AnimatePresence mode="wait">
         {!hasStarted && (
@@ -697,10 +737,11 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
           <motion.div
             animate={{ opacity: 1, y: 0 }}
-            className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[1360px] px-5 pb-6 md:px-8"
+            className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[1360px] px-5 pb-6 transition-[padding-left] duration-300 ease-out md:px-8"
             initial={{ opacity: 0, y: 28 }}
             key="ai-docked-input"
             ref={dockedInputRef}
+            style={historyContentInset ? { paddingLeft: `${historyContentInset + 32}px` } : undefined}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
             <AnimatePresence>
@@ -768,6 +809,7 @@ function PendingAttachmentPreview({
 
 function AiHistoryPanel({
   activeId,
+  autoCollapsed,
   collapsed,
   loading,
   sessions,
@@ -778,6 +820,7 @@ function AiHistoryPanel({
   onWidthChange,
 }: {
   activeId: string | null
+  autoCollapsed: boolean
   collapsed: boolean
   loading: boolean
   sessions: AiProblemSession[]
@@ -804,25 +847,18 @@ function AiHistoryPanel({
     window.addEventListener('pointerup', handlePointerUp)
   }
 
-  if (collapsed) {
-    return (
-      <button
-        aria-label="展开历史对话"
-        className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10  dark:text-slate-300 dark:hover:bg-[var(--app-panel-muted-bg)] dark:hover:text-white lg:inline-flex"
-        onClick={() => onCollapsedChange(false)}
-        title="展开历史对话"
-        type="button"
-      >
-        <PanelLeftOpen className="h-4 w-4" />
-      </button>
-    )
-  }
-
   return (
-    <aside
-      className="fixed bottom-4 left-4 top-20 z-30 hidden flex-col rounded-lg border border-black/10 bg-[var(--app-menu-bg)] px-3 pb-3 pt-3 shadow-xl backdrop-blur-xl dark:border-white/10  lg:flex"
-      style={{ width }}
-    >
+    <>
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.aside
+            animate={{ opacity: 1, x: 0 }}
+            className="fixed bottom-4 left-4 top-20 z-30 hidden flex-col rounded-lg border border-black/10 bg-[var(--app-menu-bg)] px-3 pb-3 pt-3 shadow-xl backdrop-blur-xl dark:border-white/10 lg:flex"
+            exit={{ opacity: 0, x: -(width + 32), transition: { duration: 0.24, ease: [0.22, 1, 0.36, 1] } }}
+            initial={{ opacity: 0, x: -(width + 20) }}
+            style={{ width }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
       <div className="flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <History className="h-4 w-4 text-brand-700 dark:text-brand-300" />
@@ -878,7 +914,27 @@ function AiHistoryPanel({
       >
         <GripVertical className="h-4 w-4" />
       </div>
-    </aside>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {collapsed && !autoCollapsed && (
+          <motion.button
+            aria-label="展开历史对话"
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-[var(--app-panel-muted-bg)] dark:hover:text-white lg:inline-flex"
+            exit={{ opacity: 0, scale: 0.94, x: -8, transition: { duration: 0.18 } }}
+            initial={{ opacity: 0, scale: 0.94, x: -8 }}
+            onClick={() => onCollapsedChange(false)}
+            title="展开历史对话"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            type="button"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
@@ -886,17 +942,19 @@ function MobileHistoryBar({
   activeId,
   loading,
   sessions,
+  showAtDesktop = false,
   onNew,
   onOpen,
 }: {
   activeId: string | null
   loading: boolean
   sessions: AiProblemSession[]
+  showAtDesktop?: boolean
   onNew: () => void
   onOpen: (id: string) => void
 }) {
   return (
-    <div className="mb-4 lg:hidden">
+    <div className={`mb-4 ${showAtDesktop ? '' : 'lg:hidden'}`}>
       <div className="flex items-center gap-2">
         <button
           className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
@@ -2269,6 +2327,14 @@ function getConversationStorageKey() {
 
 function clampHistoryPanelWidth(width: number) {
   return Math.min(HISTORY_PANEL_MAX_WIDTH, Math.max(HISTORY_PANEL_MIN_WIDTH, width))
+}
+
+function getHistoryContentInset(viewportWidth: number, panelWidth: number) {
+  const horizontalPadding = viewportWidth >= 768 ? 32 : 20
+  const pageLeft = Math.max(0, (viewportWidth - 1360) / 2)
+  const panelRight = 16 + panelWidth
+  const contentLeft = pageLeft + horizontalPadding
+  return Math.max(0, Math.ceil(panelRight - contentLeft + 24))
 }
 
 function loadHistoryPanelWidth() {
