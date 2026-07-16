@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { SecurityExamService } from './security-exam.service'
-import { normalizeAiGenerateBody, normalizeQuestionListBody, normalizeSubmitExamBody } from './security-exam.validation'
+import { normalizeAiGenerateBody, normalizeQuestionBody, normalizeQuestionListBody, normalizeSubmitExamBody } from './security-exam.validation'
 
 type RequestLike = { ip?: string; path?: string; headers?: { ['user-agent']?: string; ['x-forwarded-for']?: string | string[] } }
 type UploadedFileLike = { buffer?: Buffer; mimetype?: string; originalname?: string; size?: number }
@@ -67,6 +67,24 @@ export class SecurityExamAdminController {
     return this.securityExam.setQuestionActive(id, body.active === true || body.active === 'true', user, getRequestMeta(req))
   }
 
+  @Put('questions/:id')
+  @RequirePermissions('system:manage')
+  updateQuestion(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.securityExam.updateQuestion(id, normalizeQuestionBody(body), user, getRequestMeta(req))
+  }
+
+  @Delete('questions/:id')
+  @RequirePermissions('system:manage')
+  deleteQuestion(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.securityExam.deleteQuestion(id, user, getRequestMeta(req))
+  }
+
+  @Post('questions/:id/replace')
+  @RequirePermissions('system:manage')
+  replaceQuestion(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.securityExam.replaceQuestion(id, normalizeQuestionBody(body), user, getRequestMeta(req))
+  }
+
   @Post('ai-generate')
   @RequirePermissions('system:manage')
   generate(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
@@ -78,5 +96,12 @@ export class SecurityExamAdminController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   importFile(@UploadedFile() file: UploadedFileLike | undefined, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.securityExam.importQuestionsFromFile(file, user, getRequestMeta(req))
+  }
+
+  @Post('knowledge-generate')
+  @RequirePermissions('system:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  generateFromKnowledgeFile(@UploadedFile() file: UploadedFileLike | undefined, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.securityExam.generateQuestionsFromKnowledgeFile(file, user, getRequestMeta(req))
   }
 }

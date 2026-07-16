@@ -7,21 +7,10 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { getNotificationSeenAt, markNotificationSeen } from '../../services/notificationReadState'
 import type { NotificationChannel } from '../../services/notifications'
 import { getNotifications } from '../../services/notifications'
 import { NotificationChatCenter } from '../../components/ui/NotificationChatCenter'
-
-
-/* ─── 已读状态 key 前缀（存 localStorage，值为最后查看时间戳） ─── */
-const SEEN_KEY_PREFIX = 'notif_seen_'
-
-function getSeenAt(channelId: string): number {
-  return Number(localStorage.getItem(`${SEEN_KEY_PREFIX}${channelId}`) ?? 0)
-}
-
-function markSeen(channelId: string) {
-  localStorage.setItem(`${SEEN_KEY_PREFIX}${channelId}`, String(Date.now()))
-}
 
 /* ─── 图标映射 ─── */
 const iconMap: Record<string, ReactNode> = {
@@ -62,7 +51,7 @@ export function UserNotificationContent({ onOpenChat }: { onOpenChat: () => void
         }
         const map: Record<string, number> = {}
         for (const ch of data.channels) {
-          map[ch.id] = getSeenAt(ch.id)
+          map[ch.id] = getNotificationSeenAt(ch.id)
         }
         setSeenMap(map)
       })
@@ -78,7 +67,7 @@ export function UserNotificationContent({ onOpenChat }: { onOpenChat: () => void
 
   function handleSelect(id: string) {
     setActiveId(id)
-    markSeen(id)
+    markNotificationSeen(id)
     setSeenMap((prev) => ({ ...prev, [id]: Date.now() }))
   }
 

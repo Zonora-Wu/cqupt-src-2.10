@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowRight,
-  Bell,
   Bot,
   ChevronRight,
   ClipboardCheck,
@@ -21,6 +20,7 @@ import { CompleteProfileModal } from '../../components/profile/CompleteProfileMo
 import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { NotificationBell } from '../../components/ui/NotificationPanel'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
@@ -213,8 +213,6 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     { label: '证书数量', value: String(dashStats.certCount), hint: '高价值贡献' },
   ]
 
-  const notifUnread = Object.values(preferences.notifications).some(Boolean) ? 3 : 0
-
   useEffect(() => {
     const nextTheme = resolveThemeMode(preferences.themeMode)
     setTheme(nextTheme)
@@ -294,19 +292,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           <ScrollableNav activeItem={activeMenu} items={menuItems} onChange={openMenu} />
 
           <div className="flex items-center justify-end gap-2">
-            <button
-              aria-label="通知"
-              className="relative rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => navigate('/user/notifications')}
-              type="button"
-            >
-              <Bell className="h-5 w-5" />
-              {notifUnread > 0 && activeMenu !== '通知' && (
-                <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {notifUnread}
-                </span>
-              )}
-            </button>
+            <NotificationBell onClick={() => navigate('/user/notifications')} />
             <button
               aria-label="切换主题"
               className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"

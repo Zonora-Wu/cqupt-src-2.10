@@ -38,6 +38,14 @@ export type SecurityQuestionAdmin = SecurityExamQuestion & {
   updatedAt: string
 }
 
+export type SecurityQuestionInput = {
+  answerKeys: string[]
+  explanation?: string
+  options: SecurityQuestionOption[]
+  stem: string
+  type: SecurityQuestionType
+}
+
 export type SecurityExamSettings = {
   activeCounts: Record<string, number>
   enabled: boolean
@@ -74,6 +82,18 @@ export function setSecurityQuestionActive(id: string, active: boolean) {
   return adminRequest<SecurityQuestionAdmin>(`/system-settings/security-exam/questions/${id}/active`, { body: { active }, method: 'POST' })
 }
 
+export function updateSecurityQuestion(id: string, question: SecurityQuestionInput) {
+  return apiRequest<SecurityQuestionAdmin>(`/system-settings/security-exam/questions/${id}`, { auth: true, body: question, method: 'PUT', unauthenticatedMessage: '请先登录后再管理题库' })
+}
+
+export function deleteSecurityQuestion(id: string) {
+  return apiRequest<{ id: string; ok: boolean }>(`/system-settings/security-exam/questions/${id}`, { auth: true, method: 'DELETE', unauthenticatedMessage: '请先登录后再管理题库' })
+}
+
+export function replaceSecurityQuestion(id: string, question: SecurityQuestionInput) {
+  return adminRequest<SecurityQuestionAdmin>(`/system-settings/security-exam/questions/${id}/replace`, { body: question, method: 'POST' })
+}
+
 export function generateSecurityQuestionsWithAi(data: { difficulty: string; topic: string }) {
   return adminRequest<{ count: number; questions: SecurityQuestionAdmin[] }>('/system-settings/security-exam/ai-generate', { body: data, method: 'POST' })
 }
@@ -82,6 +102,12 @@ export function importSecurityQuestionsFile(file: File) {
   const formData = new FormData()
   formData.append('file', file)
   return apiFormRequest<{ count: number; questions: SecurityQuestionAdmin[] }>('/system-settings/security-exam/import', { auth: true, formData, unauthenticatedMessage: '请先登录后再管理题库' })
+}
+
+export function generateSecurityQuestionsFromKnowledgeFile(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiFormRequest<{ count: number; questions: SecurityQuestionAdmin[] }>('/system-settings/security-exam/knowledge-generate', { auth: true, formData, unauthenticatedMessage: '请先登录后再管理题库' })
 }
 
 function adminRequest<T>(path: string, options: { body?: unknown; method: 'GET' | 'POST' }) {

@@ -31,8 +31,8 @@ export function normalizeSubmitExamBody(body: Record<string, unknown>): Security
 }
 
 export function normalizeAiGenerateBody(body: Record<string, unknown>) {
-  const topic = typeof body.topic === 'string' && body.topic.trim() ? body.topic.trim().slice(0, 120) : '校园网络安全知识、SRC 负责任漏洞提交规范'
-  const difficulty = typeof body.difficulty === 'string' && body.difficulty.trim() ? body.difficulty.trim().slice(0, 40) : '基础到中等'
+  const topic = typeof body.topic === 'string' && body.topic.trim() ? body.topic.trim().slice(0, 120) : '面向大一学生的网络安全法律法规、授权测试边界与渗透测试禁忌'
+  const difficulty = typeof body.difficulty === 'string' && body.difficulty.trim() ? body.difficulty.trim().slice(0, 40) : '入门'
   return { difficulty, topic }
 }
 

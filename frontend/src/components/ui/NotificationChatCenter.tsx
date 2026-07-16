@@ -12,6 +12,12 @@ import {
   sendChatMessage,
 } from '../../services/chat'
 import type { ChatContact, ChatConversation, ChatMessage } from '../../services/chat'
+import {
+  getNotificationSeenAt,
+  getNotificationUnreadCount,
+  markNotificationSeen,
+  NOTIFICATION_READ_STATE_EVENT,
+} from '../../services/notificationReadState'
 import { getNotifications } from '../../services/notifications'
 import type { NotificationChannel } from '../../services/notifications'
 import { SurfacePanel } from './SurfacePanel'
@@ -36,6 +42,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
+  const [notificationReadVersion, setNotificationReadVersion] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
@@ -69,7 +76,14 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
       .then((data) => {
         setMessages(data.messages)
         const latest = data.messages.at(-1)
-        if (latest) void markChatRead(activeChat.id, latest.id).catch(() => {})
+        if (latest) {
+          void markChatRead(activeChat.id, latest.id)
+            .then(() => {
+              window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+              return refresh()
+            })
+            .catch(() => {})
+        }
       })
       .catch((reason) => setError(messageOf(reason)))
   }, [activeChat?.id])
@@ -77,6 +91,12 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, selection])
+
+  useEffect(() => {
+    if (!activeChannel) return
+    markNotificationSeen(activeChannel.id)
+    setNotificationReadVersion((current) => current + 1)
+  }, [activeChannel?.id])
 
   const onSocket = useCallback((event: string, payload: unknown) => {
     if (event === 'message.created') {
@@ -93,8 +113,8 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   useChatSocket(onSocket)
 
   const notificationCount = useMemo(
-    () => channels.reduce((total, channel) => total + channel.messages.length, 0),
-    [channels],
+    () => getNotificationUnreadCount(channels),
+    [channels, notificationReadVersion],
   )
   const chatUnread = useMemo(
     () => conversations.reduce((total, item) => total + item.unread, 0),
@@ -158,6 +178,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
                 onClick={() => setSelection({ id: channel.id, kind: 'notification' })}
                 preview={channel.messages[0]?.content ?? '暂无消息'}
                 title={channel.title}
+                unread={channel.messages.filter((message) => new Date(message.createdAt).getTime() > getNotificationSeenAt(channel.id)).length}
               />
             ))}
 
@@ -423,7 +444,7 @@ function InboxRow({ active, mark, onClick, preview, title, unread }: { active: b
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
-          {unread ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] text-white">{unread > 9 ? '9+' : unread}</span> : null}
+          {unread ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] text-white">{unread > 9 ? '9+' : unread}</span> : null}
         </span>
         <span className="mt-0.5 block truncate text-xs text-slate-400">{preview}</span>
       </span>
@@ -436,6 +457,10 @@ function ChannelMark({ channel }: { channel: NotificationChannel }) {
 }
 
 function ConversationMark({ conversation }: { conversation: ChatConversation }) {
+  if (conversation.avatarUrl) {
+    return <img alt={`${conversation.title}头像`} className="h-8 w-8 shrink-0 rounded-full object-cover" src={conversation.avatarUrl} />
+  }
+
   const background = conversation.type === 'GLOBAL'
     ? 'bg-amber-500'
     : conversation.type === 'GROUP'

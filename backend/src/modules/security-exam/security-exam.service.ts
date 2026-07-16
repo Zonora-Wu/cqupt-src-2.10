@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common'
+import { BadGatewayException, BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiSpace, AuditAction, SecurityQuestion, SecurityQuestionType } from '@prisma/client'
 import { PDFParse } from 'pdf-parse'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -176,6 +176,95 @@ export class SecurityExamService {
     return toAdminView(updated)
   }
 
+  async updateQuestion(id: string, input: NormalizedSecurityQuestionInput, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.securityQuestion.findFirst({ where: { deletedAt: null, id } })
+      if (!existing) throw new NotFoundException('题目不存在或已删除')
+      const question = await tx.securityQuestion.update({
+        data: {
+          answerKeys: input.answerKeys,
+          explanation: input.explanation,
+          options: input.options,
+          stem: input.stem,
+          type: input.type,
+        },
+        where: { id },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'update_security_question', type: input.type },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'SecurityQuestion',
+          userAgent: meta.userAgent,
+        },
+      })
+      return question
+    })
+    return toAdminView(updated)
+  }
+
+  async deleteQuestion(id: string, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.securityQuestion.findFirst({ where: { deletedAt: null, id } })
+      if (!existing) throw new NotFoundException('题目不存在或已删除')
+      await tx.securityQuestion.update({ where: { id }, data: { active: false, deletedAt: new Date() } })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'delete_security_question', type: existing.type },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: id,
+          targetType: 'SecurityQuestion',
+          userAgent: meta.userAgent,
+        },
+      })
+    })
+    return { id, ok: true }
+  }
+
+  async replaceQuestion(id: string, input: NormalizedSecurityQuestionInput, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    const replacement = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.securityQuestion.findFirst({ where: { deletedAt: null, id } })
+      if (!existing) throw new NotFoundException('题目不存在或已删除')
+      await tx.securityQuestion.update({ where: { id }, data: { active: false, deletedAt: new Date() } })
+      const question = await tx.securityQuestion.create({
+        data: {
+          active: true,
+          answerKeys: input.answerKeys,
+          createdById: user.id,
+          explanation: input.explanation,
+          options: input.options,
+          source: 'ADMIN_REPLACEMENT',
+          stem: input.stem,
+          type: input.type,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'replace_security_question', previousQuestionId: id, type: input.type },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: question.id,
+          targetType: 'SecurityQuestion',
+          userAgent: meta.userAgent,
+        },
+      })
+      return question
+    })
+    return toAdminView(replacement)
+  }
+
   async getSettings() {
     const [enabled, threshold] = await Promise.all([this.isSecurityExamRequired(), this.getSecurityExamThreshold()])
     const counts = await this.prisma.securityQuestion.groupBy({
@@ -223,13 +312,7 @@ export class SecurityExamService {
 
   async generateQuestionsWithAi(input: { difficulty: string; topic: string }, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
     const prompt = buildQuestionGenerationPrompt(input.topic, input.difficulty)
-    const result = await this.requestOpenAi('chat/completions', {
-      body: { messages: [{ role: 'system', content: '你是 CQUPT-SRC 网络安全知识题库专家。只输出 JSON，不输出 Markdown。' }, { role: 'user', content: prompt }], model: getOpenAiModel(), temperature: 0.4 },
-      method: 'POST',
-      timeoutMs: 60_000,
-    })
-    const content = extractOpenAiContent(result.body)
-    const questions = normalizeImportedQuestionPayload(parseJsonPayload(content))
+    const { content, questions, result } = await this.generateValidatedQuestionSet(prompt, 0.4)
     const created = await this.createQuestions(questions, user, meta, 'AI_GENERATED')
     await this.prisma.aiCallLog.create({ data: { aiSpace: AiSpace.ADMIN, modelName: getOpenAiModel(), purpose: AiCallPurpose.SECURITY_QUESTION_GENERATION, sanitizedInputSummary: prompt.slice(0, 1000), outputSummary: content.slice(0, 1000), tokensUsed: extractTokenUsage(result.body), userId: user.id } })
     return created
@@ -239,6 +322,16 @@ export class SecurityExamService {
     if (!file?.buffer?.length) throw new BadRequestException('请上传题库文件')
     if (file.size && file.size > 10 * 1024 * 1024) throw new BadRequestException('题库文件不能超过 10MB')
     const text = await extractFileText(file)
+    const name = file.originalname?.toLowerCase() ?? ''
+    if (name.endsWith('.json') || file.mimetype?.includes('application/json')) {
+      try {
+        const questions = normalizeImportedQuestionPayload(JSON.parse(text))
+        return this.createQuestions(questions, user, meta, 'FILE_IMPORT')
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error
+        throw new BadRequestException('题库 JSON 格式无效，请检查后重新导入')
+      }
+    }
     const prompt = buildQuestionImportPrompt(text.slice(0, 20_000))
     const result = await this.requestOpenAi('chat/completions', {
       body: { messages: [{ role: 'system', content: '你是题库结构化解析器。只输出 JSON，不输出 Markdown。' }, { role: 'user', content: prompt }], model: getOpenAiModel(), temperature: 0.1 },
@@ -248,6 +341,19 @@ export class SecurityExamService {
     const content = extractOpenAiContent(result.body)
     const questions = normalizeImportedQuestionPayload(parseJsonPayload(content))
     return this.createQuestions(questions, user, meta, 'AI_IMPORT')
+  }
+
+  async generateQuestionsFromKnowledgeFile(file: UploadedQuestionFile | undefined, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    if (!file?.buffer?.length) throw new BadRequestException('请上传知识库文件')
+    if (file.size && file.size > 10 * 1024 * 1024) throw new BadRequestException('知识库文件不能超过 10MB')
+    const text = await extractFileText(file)
+    if (text.length < 100) throw new BadRequestException('知识库内容过短，无法生成有效题目')
+
+    const prompt = buildQuestionGenerationPrompt('上传知识库中的网络安全规范与授权测试要求', '基础到中等', text.slice(0, 20_000))
+    const { content, questions, result } = await this.generateValidatedQuestionSet(prompt, 0.35)
+    const created = await this.createQuestions(questions, user, meta, 'AI_KNOWLEDGE_GENERATED')
+    await this.prisma.aiCallLog.create({ data: { aiSpace: AiSpace.ADMIN, modelName: getOpenAiModel(), purpose: AiCallPurpose.SECURITY_QUESTION_GENERATION, sanitizedInputSummary: `知识库生成：${file.originalname ?? '未命名文件'}\n${text.slice(0, 1000)}`, outputSummary: content.slice(0, 1000), tokensUsed: extractTokenUsage(result.body), userId: user.id } })
+    return created
   }
 
   private async isSecurityExamRequired() {
@@ -282,6 +388,30 @@ export class SecurityExamService {
       clearTimeout(timeout)
     }
   }
+
+  private async generateValidatedQuestionSet(prompt: string, temperature: number) {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const retryInstruction = attempt === 0
+        ? prompt
+        : `${prompt}\n上一轮输出未通过题库校验。请重新生成完整题库，严格只返回一个 JSON 对象；题目总数必须为 20，且 SINGLE_CHOICE 10 道、TRUE_FALSE 5 道、MULTIPLE_CHOICE 5 道。`
+      const result = await this.requestOpenAi('chat/completions', {
+        body: { messages: [{ role: 'system', content: '你是 CQUPT-SRC 网络安全知识题库专家。只输出 JSON，不输出 Markdown。' }, { role: 'user', content: retryInstruction }], model: getOpenAiModel(), temperature },
+        method: 'POST',
+        timeoutMs: 60_000,
+      })
+      const content = extractOpenAiContent(result.body)
+      try {
+        const questions = normalizeImportedQuestionPayload(parseJsonPayload(content))
+        assertQuestionBlueprint(questions)
+        return { content, questions, result }
+      } catch (error) {
+        lastError = error
+      }
+    }
+    const reason = lastError instanceof Error ? lastError.message : '返回内容不符合题库格式'
+    throw new BadRequestException(`AI 连续两次返回的题库未通过校验：${reason}`)
+  }
 }
 
 function toQuestionView(question: SecurityQuestion): SecurityExamQuestionView {
@@ -295,6 +425,14 @@ function toAdminView(question: SecurityQuestion): SecurityQuestionAdminView {
 function normalizeOptionJson(value: unknown): SecurityQuestionOption[] {
   return Array.isArray(value) ? value.map((item) => ({ key: String((item as { key?: unknown }).key ?? ''), text: String((item as { text?: unknown }).text ?? '') })).filter((item) => item.key && item.text) : []
 }
+function assertQuestionBlueprint(questions: NormalizedSecurityQuestionInput[]) {
+  if (questions.length !== 20) throw new BadRequestException('AI 生成题目数量不符合要求，请重试')
+  for (const [type, count] of Object.entries(QUESTION_BLUEPRINT)) {
+    if (questions.filter((question) => question.type === type).length !== count) {
+      throw new BadRequestException(`AI 生成的${formatType(type as SecurityQuestionType)}数量不符合要求，请重试`)
+    }
+  }
+}
 function normalizeKeys(keys: string[]) { return Array.from(new Set(keys.map((key) => key.trim().toUpperCase()).filter(Boolean))).sort() }
 function sameKeys(a: string[], b: string[]) { const aa = normalizeKeys(a); const bb = normalizeKeys(b); return aa.length === bb.length && aa.every((key, index) => key === bb[index]) }
 function sample<T>(items: T[], count: number) { return [...items].sort(() => Math.random() - 0.5).slice(0, count) }
@@ -305,7 +443,44 @@ function getOpenAiModel() { return process.env.OPENAI_MODEL || process.env.HERME
 async function readResponseBody(response: Response) { const contentType = response.headers.get('content-type') ?? ''; return contentType.includes('application/json') ? response.json() : response.text() }
 function extractOpenAiContent(body: unknown) { const choices = body && typeof body === 'object' ? (body as { choices?: unknown }).choices : null; if (!Array.isArray(choices)) return ''; const first = choices[0] as { message?: { content?: unknown }; text?: unknown } | undefined; return typeof first?.message?.content === 'string' ? first.message.content : typeof first?.text === 'string' ? first.text : '' }
 function extractTokenUsage(body: unknown) { const usage = body && typeof body === 'object' ? (body as { usage?: unknown }).usage : null; const total = usage && typeof usage === 'object' ? ((usage as { total_tokens?: unknown }).total_tokens) : null; const n = Number(total); return Number.isFinite(n) ? Math.ceil(n) : null }
-function parseJsonPayload(content: string) { const cleaned = content.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim(); const start = cleaned.indexOf('{'); const arrayStart = cleaned.indexOf('['); const offset = arrayStart >= 0 && (start < 0 || arrayStart < start) ? arrayStart : start; if (offset < 0) throw new BadRequestException('AI 未返回 JSON 题库'); return JSON.parse(cleaned.slice(offset)) as unknown }
+function parseJsonPayload(content: string) {
+  const cleaned = content.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
+  const start = [cleaned.indexOf('{'), cleaned.indexOf('[')].filter((index) => index >= 0).sort((a, b) => a - b)[0]
+  if (start === undefined) throw new BadRequestException('AI 未返回 JSON 题库')
+  const candidate = extractCompleteJson(cleaned, start)
+  if (!candidate) throw new BadRequestException('AI 返回的 JSON 不完整')
+  try {
+    return JSON.parse(candidate) as unknown
+  } catch {
+    throw new BadRequestException('AI 返回的 JSON 格式无效')
+  }
+}
+function extractCompleteJson(value: string, start: number) {
+  const opening = value[start]
+  const closing = opening === '{' ? '}' : ']'
+  let depth = 0
+  let escaped = false
+  let inString = false
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === opening) depth += 1
+    else if (char === closing && --depth === 0) return value.slice(start, index + 1)
+  }
+  return null
+}
 async function extractFileText(file: UploadedQuestionFile) { const name = file.originalname?.toLowerCase() ?? ''; const mime = file.mimetype ?? ''; if (mime.includes('pdf') || name.endsWith('.pdf')) { const parser = new PDFParse({ data: file.buffer }); const result = await parser.getText(); await parser.destroy(); return (result.text ?? '').trim() } return file.buffer?.toString('utf8').trim() ?? '' }
-function buildQuestionGenerationPrompt(topic: string, difficulty: string) { return `请围绕“${topic}”生成 CQUPT-SRC 新用户准入网络安全知识题库，难度：${difficulty}。必须生成 20 道题：10 道 SINGLE_CHOICE、5 道 TRUE_FALSE、5 道 MULTIPLE_CHOICE。题目必须偏防御、安全规范、负责任漏洞提交、数据脱敏、授权边界，不要包含可直接攻击真实系统的操作步骤。输出 JSON：{"questions":[{"type":"SINGLE_CHOICE","stem":"...","options":[{"key":"A","text":"..."}],"answerKeys":["A"],"explanation":"..."}]}` }
+function buildQuestionGenerationPrompt(topic: string, difficulty: string, knowledgeContext?: string) { return `请围绕“${topic}”生成 CQUPT-SRC 新用户准入网络安全知识题库，难度：${difficulty}。目标读者是没有专业基础的大一学生，题干与选项要简短、清楚、贴近日常校园网络使用场景。
+
+必须生成 20 道题：10 道 SINGLE_CHOICE、5 道 TRUE_FALSE、5 道 MULTIPLE_CHOICE。
+
+重点范围：网络安全法律法规的基础意识（不要求记忆法条编号）、个人信息和数据保护、网络账号安全、授权测试边界、漏洞负责任披露、渗透测试中应避免的行为，例如未授权扫描、爆破、撞库、数据下载、拒绝服务、权限维持、后门植入、公开未修复漏洞。
+
+约束：只考察安全规范和风险判断；不要考察命令、工具参数、漏洞利用、绕过方法、攻击链或真实系统操作步骤；避免专业术语堆砌、复杂计算、陷阱题和需要猜测的题目。每题提供简洁的 explanation，说明正确行为或风险原因。${knowledgeContext ? `\n题目应以以下知识库内容为背景，优先考察其明确规定；知识库未覆盖的内容可使用上述基础安全规范补充。\n知识库：\n${knowledgeContext}\n` : ''}输出 JSON：{"questions":[{"type":"SINGLE_CHOICE","stem":"...","options":[{"key":"A","text":"..."}],"answerKeys":["A"],"explanation":"..."}]}` }
 function buildQuestionImportPrompt(text: string) { return `请将下面题库材料解析成平台标准题库 JSON。只保留网络安全知识、SRC 责任边界、数据脱敏、漏洞提交规范相关内容。若原材料没有答案，请基于安全常识补全答案并写 explanation。输出 JSON 格式同 {"questions":[...]}。材料：\n${text}` }

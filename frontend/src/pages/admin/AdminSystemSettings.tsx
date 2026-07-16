@@ -4,6 +4,7 @@ import {
   Building2,
   CheckCircle,
   DatabaseBackup,
+  Edit3,
   FileBadge2,
   FileText,
   KeyRound,
@@ -22,7 +23,7 @@ import {
   UserX,
   X,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
 import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -55,15 +56,26 @@ import {
 import type { AiQuotaSettings, CertificateTemplateSummary, EmailServiceSettings, PendingRegistrationItem, PlatformLogoMode, PlatformLogoSlot, SmtpSecureMode } from '../../services/systemSettings'
 import {
   createSecurityQuestions,
+  deleteSecurityQuestion,
   generateSecurityQuestionsWithAi,
+  generateSecurityQuestionsFromKnowledgeFile,
   getSecurityExamSettings,
   importSecurityQuestionsFile,
   listSecurityQuestions,
+  replaceSecurityQuestion,
   setSecurityQuestionActive,
+  updateSecurityQuestion,
   updateSecurityExamSettings,
   type SecurityExamSettings,
   type SecurityQuestionAdmin,
+  type SecurityQuestionInput,
+  type SecurityQuestionType,
 } from '../../services/securityExam'
+import {
+  getCurrentResponsibilityAgreementForAdmin,
+  publishResponsibilityAgreement,
+  type AdminResponsibilityAgreement,
+} from '../../services/responsibilityAgreementAdmin'
 import {
   applyBrandTheme,
   brandColorSlots,
@@ -399,6 +411,8 @@ export function AdminSystemSettings() {
     navigation: null,
   })
   const questionBankInputRef = useRef<HTMLInputElement | null>(null)
+  const knowledgeBaseInputRef = useRef<HTMLInputElement | null>(null)
+  const responsibilityAgreementInputRef = useRef<HTMLInputElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
@@ -462,9 +476,17 @@ export function AdminSystemSettings() {
   const [securityExamSettings, setSecurityExamSettings] = useState<SecurityExamSettings | null>(null)
   const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestionAdmin[]>([])
   const [questionBankJson, setQuestionBankJson] = useState('')
-  const [questionAiTopic, setQuestionAiTopic] = useState('校园网络安全知识、SRC 责任边界、漏洞提交规范')
+  const [questionAiTopic, setQuestionAiTopic] = useState('面向大一学生的网络安全法律法规、授权测试边界与渗透测试禁忌')
   const [questionMessage, setQuestionMessage] = useState('')
   const [isQuestionBusy, setIsQuestionBusy] = useState(false)
+  const [questionEditorOpen, setQuestionEditorOpen] = useState(false)
+  const [editingQuestion, setEditingQuestion] = useState<SecurityQuestionAdmin | null>(null)
+  const [replacingQuestion, setReplacingQuestion] = useState<SecurityQuestionAdmin | null>(null)
+  const [responsibilityAgreement, setResponsibilityAgreement] = useState<AdminResponsibilityAgreement>(null)
+  const [responsibilityAgreementEditorOpen, setResponsibilityAgreementEditorOpen] = useState(false)
+  const [responsibilityAgreementTitle, setResponsibilityAgreementTitle] = useState('CQUPT-SRC 校园网络安全测试责任书')
+  const [responsibilityAgreementContent, setResponsibilityAgreementContent] = useState('')
+  const [isSavingResponsibilityAgreement, setIsSavingResponsibilityAgreement] = useState(false)
 
   const confirmChange = (nextState: Exclude<ConfirmState, null>) => {
     setConfirmState(nextState)
@@ -644,11 +666,12 @@ export function AdminSystemSettings() {
   useEffect(() => {
     if (activeSection !== '安全与审计') return
     let active = true
-    Promise.all([getSecurityExamSettings(), listSecurityQuestions()])
-      .then(([settings, questions]) => {
+    Promise.all([getSecurityExamSettings(), listSecurityQuestions(), getCurrentResponsibilityAgreementForAdmin()])
+      .then(([settings, questions, agreement]) => {
         if (!active) return
         setSecurityExamSettings(settings)
         setSecurityQuestions(questions)
+        setResponsibilityAgreement(agreement)
       })
       .catch((error) => {
         if (active) setQuestionMessage(error instanceof Error ? error.message : '安全题库加载失败')
@@ -682,11 +705,15 @@ export function AdminSystemSettings() {
     setQuestionMessage('')
     try {
       setIsQuestionBusy(true)
-      const result = await generateSecurityQuestionsWithAi({ difficulty: '基础到中等', topic: questionAiTopic })
+      const result = await generateSecurityQuestionsWithAi({ difficulty: '入门', topic: questionAiTopic })
       await refreshQuestionBank()
-      setQuestionMessage(`AI 已生成并入库 ${result.count} 道题。`)
+      const message = `AI 已生成并入库 ${result.count} 道题。`
+      setQuestionMessage(message)
+      showNotice(message, 'success', '题库已更新')
     } catch (error) {
-      setQuestionMessage(error instanceof Error ? error.message : 'AI 出题失败')
+      const message = error instanceof Error ? error.message : 'AI 出题失败'
+      setQuestionMessage(message)
+      showNotice(message, 'error', 'AI 出题失败')
     } finally {
       setIsQuestionBusy(false)
     }
@@ -708,6 +735,77 @@ export function AdminSystemSettings() {
     }
   }
 
+  const handleGenerateQuestionsFromKnowledgeFile = async (file: File | undefined) => {
+    if (!file) return
+    setQuestionMessage('')
+    try {
+      setIsQuestionBusy(true)
+      const result = await generateSecurityQuestionsFromKnowledgeFile(file)
+      await refreshQuestionBank()
+      setQuestionMessage(`已依据知识库生成并入库 ${result.count} 道题（10 单选、5 判断、5 多选）。`)
+    } catch (error) {
+      setQuestionMessage(error instanceof Error ? error.message : '知识库题目生成失败')
+    } finally {
+      setIsQuestionBusy(false)
+      if (knowledgeBaseInputRef.current) knowledgeBaseInputRef.current.value = ''
+    }
+  }
+
+  const openQuestionEditor = (question: SecurityQuestionAdmin | null = null, replace = false) => {
+    setEditingQuestion(replace ? null : question)
+    setReplacingQuestion(replace ? question : null)
+    setQuestionEditorOpen(true)
+  }
+
+  const saveQuestionFromEditor = async (question: SecurityQuestionInput) => {
+    try {
+      setIsQuestionBusy(true)
+      if (replacingQuestion) {
+        await replaceSecurityQuestion(replacingQuestion.id, question)
+        setQuestionMessage('题目已替换，原题已从当前题库移除。')
+      } else if (editingQuestion) {
+        await updateSecurityQuestion(editingQuestion.id, question)
+        setQuestionMessage('题目已更新。')
+      } else {
+        await createSecurityQuestions([question])
+        setQuestionMessage('题目已添加。')
+      }
+      await refreshQuestionBank()
+      setQuestionEditorOpen(false)
+      setEditingQuestion(null)
+      setReplacingQuestion(null)
+    } catch (error) {
+      setQuestionMessage(error instanceof Error ? error.message : '题目保存失败')
+    } finally {
+      setIsQuestionBusy(false)
+    }
+  }
+
+  const deleteQuestionFromEditor = (question: SecurityQuestionAdmin) => {
+    confirmChange({
+      danger: true,
+      description: '删除后题目不会再进入新试卷，历史答题记录仍会保留。请确认该题不再需要。',
+      title: '确认删除此题？',
+      onConfirm: () => {
+        void (async () => {
+          try {
+            setIsQuestionBusy(true)
+            await deleteSecurityQuestion(question.id)
+            await refreshQuestionBank()
+            setQuestionMessage('题目已删除。')
+            setQuestionEditorOpen(false)
+            setEditingQuestion(null)
+            setReplacingQuestion(null)
+          } catch (error) {
+            setQuestionMessage(error instanceof Error ? error.message : '题目删除失败')
+          } finally {
+            setIsQuestionBusy(false)
+          }
+        })()
+      },
+    })
+  }
+
   const handleToggleSecurityExam = async () => {
     const next = !(securityExamSettings?.enabled ?? true)
     const threshold = securityExamSettings?.threshold ?? 80
@@ -718,6 +816,50 @@ export function AdminSystemSettings() {
   const handleToggleQuestion = async (id: string, active: boolean) => {
     const updated = await setSecurityQuestionActive(id, active)
     setSecurityQuestions((current) => current.map((item) => item.id === id ? updated : item))
+  }
+
+  const openResponsibilityAgreementEditor = () => {
+    setResponsibilityAgreementTitle(responsibilityAgreement?.title ?? 'CQUPT-SRC 校园网络安全测试责任书')
+    setResponsibilityAgreementContent(responsibilityAgreement?.content ?? '')
+    setResponsibilityAgreementEditorOpen(true)
+  }
+
+  const handleResponsibilityAgreementFile = async (file: File | undefined) => {
+    if (!file) return
+
+    try {
+      if (!file.name.toLowerCase().endsWith('.md')) {
+        showNotice('仅支持导入 .md 格式的责任书文件。', 'error')
+        return
+      }
+      if (file.size > 512 * 1024) {
+        showNotice('责任书文件不能超过 512KB。', 'error')
+        return
+      }
+      setResponsibilityAgreementContent(await file.text())
+      showNotice('已导入 Markdown 正文，请检查后发布新版本。', 'success')
+    } catch {
+      showNotice('责任书文件读取失败，请重新选择。', 'error')
+    } finally {
+      if (responsibilityAgreementInputRef.current) responsibilityAgreementInputRef.current.value = ''
+    }
+  }
+
+  const saveResponsibilityAgreement = async () => {
+    try {
+      setIsSavingResponsibilityAgreement(true)
+      const agreement = await publishResponsibilityAgreement({
+        content: responsibilityAgreementContent,
+        title: responsibilityAgreementTitle,
+      })
+      setResponsibilityAgreement(agreement)
+      setResponsibilityAgreementEditorOpen(false)
+      showNotice(`责任书 ${agreement.version} 已发布，用户需签署新版本后才能继续提交漏洞。`, 'success')
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : '责任书发布失败，请稍后重试。', 'error')
+    } finally {
+      setIsSavingResponsibilityAgreement(false)
+    }
   }
 
   const handleRejectRegistration = async (id: string) => {
@@ -1768,29 +1910,38 @@ export function AdminSystemSettings() {
                   title="准入与责任边界"
                 >
                   <SettingRow control={<SettingToggle enabled={securityExamSettings?.enabled ?? true} onChange={() => void handleToggleSecurityExam()} />} description="新注册用户必须完成安全规范答题，达到分数要求后才能提交漏洞。" title="新用户答题准入" />
-                  <SettingRow control={<SettingToggle enabled />} description="用户必须签署责任书，承诺不进行未授权扫描、爆破、数据下载、权限维持和后门植入。" title="责任书签署后提交漏洞" />
+                  <SettingRow
+                    control={<ActionButton icon={<FileText className="h-4 w-4" />} label="编辑责任书" onClick={openResponsibilityAgreementEditor} />}
+                    description={responsibilityAgreement
+                      ? `当前版本 ${responsibilityAgreement.version}，发布于 ${responsibilityAgreement.publishedAt ? new Date(responsibilityAgreement.publishedAt).toLocaleString('zh-CN') : '未发布'}。发布新版本后，用户需重新签署。`
+                      : '用户必须签署责任书，承诺不进行未授权扫描、爆破、数据下载、权限维持和后门植入。'}
+                    title="责任书签署后提交漏洞"
+                  />
                   <SettingRow control={<SettingToggle enabled />} description="管理员、审核员和用户的关键操作都会写入审计日志。" title="管理员操作留痕" />
                   <SettingRow control={<SettingToggle enabled />} description="导出漏洞、证书、用户信息时默认隐藏手机号、邮箱、Token、Cookie 等敏感字段。" title="导出数据默认脱敏" />
                   <SettingRow control={<SettingToggle enabled />} description="附件查看、下载和预览都会记录操作人、时间、IP 和关联业务编号。" title="附件下载审计" />
                 </SettingsCard>
 
                 <SettingsCard
-                  description="题库用于新用户准入考试。系统每次随机抽取 10 道单选、5 道判断、5 道多选，满分 100 分，默认 80 分通过。"
+                  description="题库会持续保存。系统每次随机抽取 10 道单选、5 道判断、5 道多选，满分 100 分，默认 80 分通过。"
                   icon={<ShieldQuestion className="h-5 w-5" />}
                   title="网络安全知识题库"
                 >
                   <SettingRow
                     control={<TextField onChange={setQuestionAiTopic} value={questionAiTopic} />}
-                    description="AI 会围绕该主题生成完整的 20 道准入题，内容限定为防御、授权边界、数据脱敏和负责任漏洞提交。"
+                    description="AI 会生成适合大一学生的 20 道入门题，重点为网络安全法律法规意识、授权边界，以及渗透测试中应避免的行为。"
                     title="AI 出题主题"
                   />
                   <div className="flex flex-wrap gap-2 px-6 py-4">
                     <ActionButton disabled={isQuestionBusy} icon={<Bot className="h-4 w-4" />} label={isQuestionBusy ? '处理中...' : '让 AI 生成 20 道题并入库'} onClick={() => void handleGenerateQuestions()} />
-                    <ActionButton disabled={isQuestionBusy} icon={<Upload className="h-4 w-4" />} label="上传题库文件由 AI 分析入库" onClick={() => questionBankInputRef.current?.click()} />
+                    <ActionButton disabled={isQuestionBusy} icon={<Upload className="h-4 w-4" />} label="上传知识库由 AI 生成 20 道题" onClick={() => knowledgeBaseInputRef.current?.click()} />
+                    <ActionButton disabled={isQuestionBusy} icon={<Upload className="h-4 w-4" />} label="导入已有题库" onClick={() => questionBankInputRef.current?.click()} />
+                    <ActionButton disabled={isQuestionBusy} icon={<Edit3 className="h-4 w-4" />} label={`可视化编辑题库（${securityQuestions.length}）`} onClick={() => openQuestionEditor()} />
                     <input accept="application/json,text/plain,text/markdown,text/csv,application/pdf" className="hidden" onChange={(event) => void handleImportQuestionFile(event.target.files?.[0])} ref={questionBankInputRef} type="file" />
+                    <input accept="text/plain,text/markdown,application/pdf" className="hidden" onChange={(event) => void handleGenerateQuestionsFromKnowledgeFile(event.target.files?.[0])} ref={knowledgeBaseInputRef} type="file" />
                   </div>
                   <div className="border-t border-black/10 px-6 py-4 dark:border-white/10">
-                    <p className="text-sm font-semibold">直接添加题库 JSON</p>
+                    <p className="text-sm font-semibold">直接导入题库 JSON</p>
                     <textarea
                       className="mt-3 min-h-40 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 font-mono text-xs outline-none focus:border-brand-600/60 dark:border-white/10 "
                       onChange={(event) => setQuestionBankJson(event.target.value)}
@@ -1799,7 +1950,7 @@ export function AdminSystemSettings() {
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <p className="text-xs text-slate-500 dark:text-slate-400">当前启用：单选 {securityExamSettings?.activeCounts.SINGLE_CHOICE ?? 0} / 判断 {securityExamSettings?.activeCounts.TRUE_FALSE ?? 0} / 多选 {securityExamSettings?.activeCounts.MULTIPLE_CHOICE ?? 0}</p>
-                      <ActionButton disabled={isQuestionBusy || !questionBankJson.trim()} icon={<Save className="h-4 w-4" />} label="解析 JSON 并入库" onClick={() => void handleCreateQuestionsFromJson()} />
+                      <ActionButton disabled={isQuestionBusy || !questionBankJson.trim()} icon={<Save className="h-4 w-4" />} label="直接入库" onClick={() => void handleCreateQuestionsFromJson()} />
                     </div>
                     {questionMessage && <p className="mt-3 text-sm text-brand-700 dark:text-brand-300">{questionMessage}</p>}
                   </div>
@@ -1810,9 +1961,12 @@ export function AdminSystemSettings() {
                           <p className="truncate text-sm font-medium">{question.stem}</p>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{question.type} · 答案 {question.answerKeys.join('、')} · {question.source}</p>
                         </div>
-                        <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void handleToggleQuestion(question.id, !question.active)} type="button">
-                          {question.active ? '停用' : '启用'}
-                        </button>
+                        <div className="flex gap-2">
+                          <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => openQuestionEditor(question)} type="button">编辑</button>
+                          <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void handleToggleQuestion(question.id, !question.active)} type="button">
+                            {question.active ? '停用' : '启用'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {securityQuestions.length === 0 && <p className="px-6 py-6 text-center text-sm text-slate-500">暂无题目，可上传题库或让 AI 生成。</p>}
@@ -1883,6 +2037,44 @@ export function AdminSystemSettings() {
         />
       )}
 
+      {responsibilityAgreementEditorOpen && (
+        <ResponsibilityAgreementEditorDialog
+          content={responsibilityAgreementContent}
+          fileInputRef={responsibilityAgreementInputRef}
+          onCancel={() => setResponsibilityAgreementEditorOpen(false)}
+          onChangeContent={setResponsibilityAgreementContent}
+          onChangeTitle={setResponsibilityAgreementTitle}
+          onImport={(file) => void handleResponsibilityAgreementFile(file)}
+          onPublish={() => confirmChange({
+            confirmLabel: '发布新版本',
+            description: '发布后会立即停用当前责任书。所有需要提交漏洞的用户都必须重新阅读并签署新版本。',
+            title: '确认发布责任书新版本？',
+            onConfirm: () => void saveResponsibilityAgreement(),
+          })}
+          publishing={isSavingResponsibilityAgreement}
+          title={responsibilityAgreementTitle}
+        />
+      )}
+
+      {questionEditorOpen && (
+        <SecurityQuestionEditorDialog
+          busy={isQuestionBusy}
+          onAdd={() => openQuestionEditor()}
+          onCancel={() => {
+            setQuestionEditorOpen(false)
+            setEditingQuestion(null)
+            setReplacingQuestion(null)
+          }}
+          onDelete={deleteQuestionFromEditor}
+          onReplace={(question) => openQuestionEditor(question, true)}
+          onSave={(question) => void saveQuestionFromEditor(question)}
+          onSelect={(question) => openQuestionEditor(question)}
+          questions={securityQuestions}
+          replacingQuestion={replacingQuestion}
+          selectedQuestion={editingQuestion}
+        />
+      )}
+
       <ConfirmDialog
         state={confirmState}
         onCancel={() => setConfirmState(null)}
@@ -1936,6 +2128,312 @@ function SettingsCard({
       </div>
       <div className="divide-y divide-black/10 dark:divide-white/10">{children}</div>
     </SurfacePanel>
+  )
+}
+
+const securityQuestionTypeLabels: Record<SecurityQuestionType, string> = {
+  MULTIPLE_CHOICE: '多选题',
+  SINGLE_CHOICE: '单选题',
+  TRUE_FALSE: '判断题',
+}
+
+type SecurityQuestionDraft = SecurityQuestionInput
+
+function createSecurityQuestionDraft(question?: SecurityQuestionAdmin | null, replacement?: SecurityQuestionAdmin | null): SecurityQuestionDraft {
+  const source = question ?? replacement
+  const type = source?.type ?? 'SINGLE_CHOICE'
+  if (!question) {
+    return {
+      answerKeys: [],
+      explanation: '',
+      options: type === 'TRUE_FALSE'
+        ? [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }]
+        : [{ key: 'A', text: '' }, { key: 'B', text: '' }, { key: 'C', text: '' }, { key: 'D', text: '' }],
+      stem: '',
+      type,
+    }
+  }
+  return {
+    answerKeys: [...question.answerKeys],
+    explanation: question.explanation ?? '',
+    options: question.options.map((option) => ({ ...option })),
+    stem: question.stem,
+    type: question.type,
+  }
+}
+
+function SecurityQuestionEditorDialog({
+  busy,
+  onAdd,
+  onCancel,
+  onDelete,
+  onReplace,
+  onSave,
+  onSelect,
+  questions,
+  replacingQuestion,
+  selectedQuestion,
+}: {
+  busy: boolean
+  onAdd: () => void
+  onCancel: () => void
+  onDelete: (question: SecurityQuestionAdmin) => void
+  onReplace: (question: SecurityQuestionAdmin) => void
+  onSave: (question: SecurityQuestionInput) => void
+  onSelect: (question: SecurityQuestionAdmin) => void
+  questions: SecurityQuestionAdmin[]
+  replacingQuestion: SecurityQuestionAdmin | null
+  selectedQuestion: SecurityQuestionAdmin | null
+}) {
+  const [draft, setDraft] = useState<SecurityQuestionDraft>(() => createSecurityQuestionDraft(selectedQuestion, replacingQuestion))
+
+  useEffect(() => {
+    setDraft(createSecurityQuestionDraft(selectedQuestion, replacingQuestion))
+  }, [replacingQuestion, selectedQuestion])
+
+  const setType = (type: SecurityQuestionType) => {
+    setDraft((current) => ({
+      ...current,
+      answerKeys: [],
+      options: type === 'TRUE_FALSE'
+        ? [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }]
+        : current.options.length >= 2 && current.type !== 'TRUE_FALSE'
+          ? current.options
+          : [{ key: 'A', text: '' }, { key: 'B', text: '' }, { key: 'C', text: '' }, { key: 'D', text: '' }],
+      type,
+    }))
+  }
+
+  const setAnswer = (key: string) => {
+    setDraft((current) => ({
+      ...current,
+      answerKeys: current.type === 'MULTIPLE_CHOICE'
+        ? current.answerKeys.includes(key)
+          ? current.answerKeys.filter((item) => item !== key)
+          : [...current.answerKeys, key]
+        : [key],
+    }))
+  }
+
+  const updateOption = (key: string, text: string) => {
+    setDraft((current) => ({ ...current, options: current.options.map((option) => option.key === key ? { ...option, text } : option) }))
+  }
+
+  const addOption = () => {
+    setDraft((current) => current.options.length >= 8 ? current : {
+      ...current,
+      options: [...current.options, { key: String.fromCharCode(65 + current.options.length), text: '' }],
+    })
+  }
+
+  const removeOption = (key: string) => {
+    setDraft((current) => current.options.length <= 2 ? current : {
+      ...current,
+      answerKeys: current.answerKeys.filter((item) => item !== key),
+      options: current.options.filter((option) => option.key !== key),
+    })
+  }
+
+  const valid = draft.stem.trim().length >= 6
+    && draft.options.every((option) => option.text.trim())
+    && draft.answerKeys.length > 0
+    && (draft.type !== 'MULTIPLE_CHOICE' || draft.answerKeys.length >= 2)
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+      <div className="flex h-[min(88vh,760px)] w-full max-w-6xl overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10">
+        <aside className="flex w-80 shrink-0 flex-col border-r border-black/10 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-4 dark:border-white/10">
+            <div>
+              <h2 className="text-base font-semibold">题库编辑</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">共 {questions.length} 道题</p>
+            </div>
+            <button className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700" disabled={busy} onClick={onAdd} type="button">新增题目</button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {questions.map((question) => (
+              <button
+                className={`mb-1 w-full rounded-lg px-3 py-2.5 text-left transition ${selectedQuestion?.id === question.id && !replacingQuestion ? 'bg-brand-600/10 text-brand-800 dark:bg-brand-300/10 dark:text-brand-200' : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.06]'}`}
+                key={question.id}
+                onClick={() => onSelect(question)}
+                type="button"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${question.active ? 'bg-brand-600' : 'bg-slate-300 dark:bg-white/30'}`} />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{securityQuestionTypeLabels[question.type]}</span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-sm font-medium">{question.stem}</p>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <section className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-4 dark:border-white/10">
+            <div>
+              <h2 className="text-lg font-semibold">{replacingQuestion ? `替换题目：${replacingQuestion.stem.slice(0, 24)}` : selectedQuestion ? '编辑题目' : '新增题目'}</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">保存后题目会进入题库；替换会保留旧题的历史答题记录。</p>
+            </div>
+            <button aria-label="关闭题库编辑" className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onCancel} type="button"><X className="h-5 w-5" /></button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <label className="block">
+              <span className="text-sm font-semibold">题型</span>
+              <select className="mt-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm outline-none focus:border-brand-600/60 dark:border-white/10" onChange={(event) => setType(event.target.value as SecurityQuestionType)} value={draft.type}>
+                {(Object.keys(securityQuestionTypeLabels) as SecurityQuestionType[]).map((type) => <option key={type} value={type}>{securityQuestionTypeLabels[type]}</option>)}
+              </select>
+            </label>
+            <label className="mt-5 block">
+              <span className="text-sm font-semibold">题干</span>
+              <textarea className="mt-2 min-h-24 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 text-sm leading-6 outline-none focus:border-brand-600/60 dark:border-white/10" maxLength={500} onChange={(event) => setDraft((current) => ({ ...current, stem: event.target.value }))} value={draft.stem} />
+            </label>
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">选项与正确答案</span>{draft.type !== 'TRUE_FALSE' && <button className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-300" disabled={draft.options.length >= 8} onClick={addOption} type="button">添加选项</button>}</div>
+              <div className="mt-2 space-y-2">
+                {draft.options.map((option) => (
+                  <div className="flex items-center gap-2" key={option.key}>
+                    <button aria-label={`设为 ${option.key} 正确答案`} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition ${draft.answerKeys.includes(option.key) ? 'border-brand-600 bg-brand-600 text-white' : 'border-black/10 text-slate-500 hover:border-brand-600/50 dark:border-white/10 dark:text-slate-400'}`} onClick={() => setAnswer(option.key)} type="button">{option.key}</button>
+                    <input className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm outline-none focus:border-brand-600/60 dark:border-white/10" disabled={draft.type === 'TRUE_FALSE'} onChange={(event) => updateOption(option.key, event.target.value)} value={option.text} />
+                    {draft.type !== 'TRUE_FALSE' && <button aria-label={`删除选项 ${option.key}`} className="rounded-lg p-2 text-slate-400 transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40" disabled={draft.options.length <= 2} onClick={() => removeOption(option.key)} type="button"><X className="h-4 w-4" /></button>}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{draft.type === 'MULTIPLE_CHOICE' ? '多选题至少选择两个正确答案。' : '单选题和判断题只能选择一个正确答案。'}</p>
+            </div>
+            <label className="mt-5 block">
+              <span className="text-sm font-semibold">答案解析</span>
+              <textarea className="mt-2 min-h-20 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 text-sm leading-6 outline-none focus:border-brand-600/60 dark:border-white/10" maxLength={1000} onChange={(event) => setDraft((current) => ({ ...current, explanation: event.target.value }))} value={draft.explanation ?? ''} />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 px-6 py-4 dark:border-white/10">
+            <div>
+              {selectedQuestion && !replacingQuestion && <button className="rounded-lg px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300" disabled={busy} onClick={() => onDelete(selectedQuestion)} type="button">删除题目</button>}
+              {selectedQuestion && !replacingQuestion && <button className="ml-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy} onClick={() => onReplace(selectedQuestion)} type="button">替换题目</button>}
+            </div>
+            <button
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={busy || !valid}
+              onClick={() => onSave({
+                ...draft,
+                answerKeys: [...draft.answerKeys].sort(),
+                explanation: draft.explanation?.trim() || undefined,
+                options: draft.options.map((option) => ({ ...option, text: option.text.trim() })),
+                stem: draft.stem.trim(),
+              })}
+              type="button"
+            >
+              {busy ? '保存中...' : replacingQuestion ? '确认替换' : selectedQuestion ? '保存修改' : '添加题目'}
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function ResponsibilityAgreementEditorDialog({
+  content,
+  fileInputRef,
+  onCancel,
+  onChangeContent,
+  onChangeTitle,
+  onImport,
+  onPublish,
+  publishing,
+  title,
+}: {
+  content: string
+  fileInputRef: RefObject<HTMLInputElement | null>
+  onCancel: () => void
+  onChangeContent: (value: string) => void
+  onChangeTitle: (value: string) => void
+  onImport: (file: File | undefined) => void
+  onPublish: () => void
+  publishing: boolean
+  title: string
+}) {
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10">
+        <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-5 dark:border-white/10">
+          <div>
+            <div className="flex items-center gap-2 text-brand-700 dark:text-brand-300">
+              <FileText className="h-5 w-5" />
+              <h2 className="text-xl font-semibold text-slate-950 dark:text-white">编辑网络安全测试责任书</h2>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">可直接编辑正文，或导入 `.md` 文件。发布会生成新版本并保留既有签署记录。</p>
+          </div>
+          <button
+            aria-label="关闭责任书编辑器"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
+            disabled={publishing}
+            onClick={onCancel}
+            type="button"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-900 dark:text-white">责任书标题</span>
+            <input
+              className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 dark:border-white/10"
+              maxLength={120}
+              onChange={(event) => onChangeTitle(event.target.value)}
+              value={title}
+            />
+          </label>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">责任书正文</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">支持 Markdown 标题、列表和普通段落，最多 100,000 个字符。</p>
+            </div>
+            <ActionButton icon={<Upload className="h-4 w-4" />} label="导入 .md 文件" onClick={() => fileInputRef.current?.click()} />
+            <input
+              accept="text/markdown,.md"
+              className="hidden"
+              onChange={(event) => onImport(event.target.files?.[0])}
+              ref={fileInputRef}
+              type="file"
+            />
+          </div>
+          <textarea
+            className="mt-3 min-h-[420px] w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 font-mono text-sm leading-7 outline-none transition focus:border-brand-600/60 dark:border-white/10"
+            maxLength={100_000}
+            onChange={(event) => onChangeContent(event.target.value)}
+            placeholder="请输入责任书正文，或导入 .md 文件。"
+            value={content}
+          />
+          <p className="mt-2 text-right text-xs text-slate-500 dark:text-slate-400">{content.length.toLocaleString()} / 100,000</p>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-black/10 px-6 py-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">发布新版本后，当前责任书会停用，用户需要重新签署后才能继续提交漏洞。</p>
+          <div className="flex shrink-0 justify-end gap-3">
+            <button
+              className="rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+              disabled={publishing}
+              onClick={onCancel}
+              type="button"
+            >
+              取消
+            </button>
+            <button
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={publishing || !title.trim() || !content.trim()}
+              onClick={onPublish}
+              type="button"
+            >
+              {publishing ? '发布中...' : '发布新版本'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

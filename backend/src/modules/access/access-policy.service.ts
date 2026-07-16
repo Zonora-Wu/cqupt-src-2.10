@@ -1,8 +1,9 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { createHash, randomBytes } from 'node:crypto'
 import { AuditAction, RoleCode, UserStatus } from '@prisma/client'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
-import { SignResponsibilityAgreementInput, SubmitSecurityExamInput } from './access.types'
+import { PublishResponsibilityAgreementInput, SignResponsibilityAgreementInput, SubmitSecurityExamInput } from './access.types'
 
 @Injectable()
 export class AccessPolicyService {
@@ -29,6 +30,60 @@ export class AccessPolicyService {
     if (!agreement) {
       return null
     }
+
+    return {
+      content: agreement.content,
+      id: agreement.id,
+      publishedAt: agreement.publishedAt,
+      title: agreement.title,
+      version: agreement.version,
+    }
+  }
+
+  async publishResponsibilityAgreement(
+    user: AuthenticatedRequestUser,
+    input: PublishResponsibilityAgreementInput,
+    meta: ClientRequestMeta,
+  ) {
+    const publishedAt = new Date()
+    const version = `v${publishedAt.toISOString().slice(0, 10).replaceAll('-', '.')}-${randomBytes(3).toString('hex')}`
+    const contentHash = createHash('sha256').update(`${input.title}\n${input.content}`).digest('hex')
+
+    const agreement = await this.prisma.$transaction(async (tx) => {
+      await tx.responsibilityAgreement.updateMany({
+        data: { active: false },
+        where: { active: true },
+      })
+      const created = await tx.responsibilityAgreement.create({
+        data: {
+          active: true,
+          content: input.content,
+          contentHash,
+          publishedAt,
+          title: input.title,
+          version,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.CHANGE_SYSTEM_SETTING,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: {
+            action: 'publish_responsibility_agreement',
+            contentHash,
+            previousVersionsDeactivated: true,
+            version,
+          },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: created.id,
+          targetType: 'ResponsibilityAgreement',
+          userAgent: meta.userAgent,
+        },
+      })
+      return created
+    })
 
     return {
       content: agreement.content,

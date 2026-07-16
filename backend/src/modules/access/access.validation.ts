@@ -1,10 +1,16 @@
 import { BadRequestException } from '@nestjs/common'
-import { SignResponsibilityAgreementInput, SubmitSecurityExamInput } from './access.types'
+import { PublishResponsibilityAgreementInput, SignResponsibilityAgreementInput, SubmitSecurityExamInput } from './access.types'
 
 export function normalizeSignResponsibilityAgreementBody(body: Record<string, unknown>): SignResponsibilityAgreementInput {
   return {
     deviceFingerprint: optionalText(body.deviceFingerprint, 160),
   }
+}
+
+export function normalizePublishResponsibilityAgreementBody(body: Record<string, unknown>): PublishResponsibilityAgreementInput {
+  const title = requiredText(body.title, '责任书标题', 120)
+  const content = requiredText(body.content, '责任书正文', 100_000)
+  return { content, title }
 }
 
 export function normalizeSubmitSecurityExamBody(body: Record<string, unknown>): SubmitSecurityExamInput {
@@ -30,4 +36,19 @@ function optionalText(value: unknown, maxLength: number) {
   }
 
   return text || undefined
+}
+
+function requiredText(value: unknown, label: string, maxLength: number) {
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`${label}不能为空`)
+  }
+
+  const text = value.trim()
+  if (!text) {
+    throw new BadRequestException(`${label}不能为空`)
+  }
+  if (text.length > maxLength) {
+    throw new BadRequestException(`${label}不能超过 ${maxLength} 个字符`)
+  }
+  return text
 }

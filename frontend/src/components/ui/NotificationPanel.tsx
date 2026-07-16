@@ -7,21 +7,17 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getChatBootstrap } from '../../services/chat'
+import {
+  getNotificationSeenAt,
+  getNotificationUnreadCount,
+  markNotificationSeen,
+  NOTIFICATION_READ_STATE_EVENT,
+} from '../../services/notificationReadState'
 import type { NotificationChannel } from '../../services/notifications'
 import { getNotifications } from '../../services/notifications'
 import { NotificationChatCenter } from './NotificationChatCenter'
-
-/* ─── 已读状态存 localStorage ─── */
-const SEEN_KEY_PREFIX = 'notif_seen_'
-
-function getSeenAt(channelId: string): number {
-  return Number(localStorage.getItem(`${SEEN_KEY_PREFIX}${channelId}`) ?? 0)
-}
-
-function markSeen(channelId: string) {
-  localStorage.setItem(`${SEEN_KEY_PREFIX}${channelId}`, String(Date.now()))
-}
 
 /* ─── 图标 & 背景色映射 ─── */
 const iconMap: Record<string, ReactNode> = {
@@ -59,7 +55,7 @@ export function NotificationContent({ onClose, onOpenChat }: { onClose?: () => v
         setChannels(data.channels)
         if (data.channels.length > 0) setActiveId(data.channels[0].id)
         const map: Record<string, number> = {}
-        for (const ch of data.channels) map[ch.id] = getSeenAt(ch.id)
+        for (const ch of data.channels) map[ch.id] = getNotificationSeenAt(ch.id)
         setSeenMap(map)
       })
       .catch((err: unknown) => {
@@ -74,7 +70,7 @@ export function NotificationContent({ onClose, onOpenChat }: { onClose?: () => v
 
   function handleSelect(id: string) {
     setActiveId(id)
-    markSeen(id)
+    markNotificationSeen(id)
     setSeenMap((prev) => ({ ...prev, [id]: Date.now() }))
   }
 
@@ -233,21 +229,28 @@ export function NotificationBell({
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
 
-  useEffect(() => {
+  const refreshUnreadCount = useCallback(() => {
     let active = true
-    getNotifications()
-      .then((data) => {
+    Promise.all([getNotifications(), getChatBootstrap()])
+      .then(([notifications, chat]) => {
         if (!active) return
-        let total = 0
-        for (const ch of data.channels) {
-          const seen = getSeenAt(ch.id)
-          total += ch.messages.filter((m) => new Date(m.createdAt).getTime() > seen).length
-        }
-        setUnreadCount(total)
+        const chatUnread = chat.conversations.reduce((total, conversation) => total + conversation.unread, 0)
+        setUnreadCount(getNotificationUnreadCount(notifications.channels) + chatUnread)
       })
       .catch(() => {})
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    const cancelRequest = refreshUnreadCount()
+    window.addEventListener(NOTIFICATION_READ_STATE_EVENT, refreshUnreadCount)
+    window.addEventListener('focus', refreshUnreadCount)
+    return () => {
+      cancelRequest()
+      window.removeEventListener(NOTIFICATION_READ_STATE_EVENT, refreshUnreadCount)
+      window.removeEventListener('focus', refreshUnreadCount)
+    }
+  }, [refreshUnreadCount])
 
   return (
     <button

@@ -1,10 +1,12 @@
 import { Body, Controller, Get, Inject, Post, Req, UseGuards } from '@nestjs/common'
-import { CurrentUser } from '../auth/auth.decorators'
+import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { PermissionsGuard } from '../auth/permissions.guard'
 import { AccessPolicyService } from './access-policy.service'
 import {
   normalizeSignResponsibilityAgreementBody,
+  normalizePublishResponsibilityAgreementBody,
   normalizeSubmitSecurityExamBody,
 } from './access.validation'
 
@@ -52,6 +54,28 @@ export class AccessController {
     return this.accessPolicy.signCurrentResponsibilityAgreement(
       user,
       normalizeSignResponsibilityAgreementBody(body),
+      getRequestMeta(req),
+    )
+  }
+
+  @Get('responsibility-agreement/admin/current')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('system:manage')
+  getCurrentResponsibilityAgreementForAdmin() {
+    return this.accessPolicy.getCurrentResponsibilityAgreement()
+  }
+
+  @Post('responsibility-agreement/admin/publish')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('system:manage')
+  publishResponsibilityAgreement(
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.accessPolicy.publishResponsibilityAgreement(
+      user,
+      normalizePublishResponsibilityAgreementBody(body),
       getRequestMeta(req),
     )
   }
