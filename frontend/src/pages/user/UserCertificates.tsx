@@ -1,5 +1,4 @@
 import {
-  Award,
   CheckCircle2,
   Copy,
   Download,
@@ -36,6 +35,7 @@ const certStatusStyles: Record<string, string> = {
 export function UserCertificates() {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('全部状态')
+  const [issuedDate, setIssuedDate] = useState('')
   const [queryCode, setQueryCode] = useState('')
   const [queryResult, setQueryResult] = useState<PublicCertificateVerifyResult | null>(null)
   const [queryTouched, setQueryTouched] = useState(false)
@@ -51,6 +51,7 @@ export function UserCertificates() {
   } | null>(null)
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
   const [downloadingId, setDownloadingId] = useState('')
+  const [copiedCertificateNo, setCopiedCertificateNo] = useState<string | null>(null)
   const previewUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -69,10 +70,11 @@ export function UserCertificates() {
         item.vulnerability.reportNo.toLowerCase().includes(normalizedKeyword) ||
         item.vulnerability.title.toLowerCase().includes(normalizedKeyword)
       const matchesStatus = status === '全部状态' || item.status === status
+      const matchesDate = isOnDate(item.issuedAt, issuedDate)
 
-      return matchesKeyword && matchesStatus
+      return matchesKeyword && matchesStatus && matchesDate
     })
-  }, [certificates, keyword, status])
+  }, [certificates, issuedDate, keyword, status])
 
   const certificateStats = [
     { label: '证书总数', value: String(stats.total), hint: '已获得贡献证明' },
@@ -144,6 +146,8 @@ export function UserCertificates() {
   async function copyCertificateNo(certificateNo: string) {
     try {
       await navigator.clipboard.writeText(certificateNo)
+      setCopiedCertificateNo(certificateNo)
+      window.setTimeout(() => setCopiedCertificateNo((current) => current === certificateNo ? null : current), 1600)
       setMessage('证书编号已复制。')
       window.setTimeout(() => setMessage(''), 1800)
     } catch {
@@ -172,11 +176,10 @@ export function UserCertificates() {
           description="查看漏洞贡献证书、预览完整 PDF、下载电子证明，并通过证书编号完成公开核验。"
         />
         <button
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+          className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
           onClick={() => setQueryOpen(true)}
           type="button"
         >
-          <Award className="h-4 w-4" />
           证书查询
         </button>
       </div>
@@ -195,7 +198,7 @@ export function UserCertificates() {
       </div>
 
       <SurfacePanel className="relative z-30 mt-6 p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px] lg:items-end">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px_150px] xl:items-end">
           <SearchInput
             label="搜索我的证书"
             onChange={setKeyword}
@@ -203,6 +206,7 @@ export function UserCertificates() {
             value={keyword}
           />
           <SelectInput label="证书状态" onChange={setStatus} options={statusOptions} value={status} />
+          <DateFilter label="签发日期" onChange={setIssuedDate} value={issuedDate} />
         </div>
       </SurfacePanel>
 
@@ -275,86 +279,34 @@ export function UserCertificates() {
           <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载证书...</SurfacePanel>
         ) : filteredCertificates.length > 0 ? (
           filteredCertificates.map((item) => (
-            <SurfacePanel className="overflow-hidden p-0 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-              <div className="grid gap-0 lg:grid-cols-[300px_minmax(0,1fr)]">
-                <div className="relative min-h-56 overflow-hidden bg-gradient-to-br from-brand-100 via-white to-amber-50 dark:from-brand-950/40 dark:via-white/[0.06] dark:to-amber-950/25">
-                  <div className="absolute inset-6 rounded-lg border border-white/70 bg-[var(--app-panel-muted-bg)] shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
-                        <Award className="h-8 w-8" />
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">PDF Certificate</p>
-                    </div>
+            <SurfacePanel className="p-4" key={item.id}>
+              <article className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-stretch">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.certificateNo}</span>
+                    <button aria-label={copiedCertificateNo === item.certificateNo ? '证书编号已复制' : '复制证书编号'} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-black/5 hover:text-brand-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-brand-300" onClick={() => void copyCertificateNo(item.certificateNo)} title={copiedCertificateNo === item.certificateNo ? '已复制' : '复制证书编号'} type="button">{copiedCertificateNo === item.certificateNo ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button>
+                    {item.vulnerability.finalSeverity ? <SeverityBadge level={item.vulnerability.finalSeverity as SeverityLevel} /> : null}
+                    <span className={`rounded-md border px-2 py-1 text-xs font-medium ${certStatusStyles[item.status]}`}>{item.status}</span>
                   </div>
+                  <h2 className="mt-2 truncate text-base font-semibold">{item.contribution}</h2>
+                  <p className="mt-1 truncate text-sm text-slate-700 dark:text-slate-300">{item.vulnerability.title}</p>
+                  <dl className="mt-3 grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                    <CertificateData label="关联漏洞" value={item.vulnerability.reportNo} />
+                    <CertificateData label="签发人" value={item.issuer ?? '平台'} />
+                    <CertificateData label="签发日期" value={formatDate(item.issuedAt)} />
+                    <CertificateData label="公开核验" value={item.publicVerify ? '支持' : '不支持'} />
+                  </dl>
                 </div>
-
-                <div className="p-5">
-                  <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.certificateNo}</span>
-                        {item.vulnerability.finalSeverity && (
-                          <SeverityBadge level={item.vulnerability.finalSeverity as SeverityLevel} />
-                        )}
-                        <span className={`rounded-md border px-2 py-1 text-xs font-medium ${certStatusStyles[item.status]}`}>
-                          {item.status}
-                        </span>
-                      </div>
-                      <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.contribution}</h2>
-                      <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">{item.vulnerability.title}</p>
-                      <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                        该证书由 CQUPT-SRC 线上签发，PDF 文件由后端根据当前证书模板生成并受控存储。
-                      </p>
-                      <div className="mt-4 grid gap-2 text-sm text-slate-500 sm:grid-cols-2 dark:text-slate-400">
-                        <p>关联漏洞：{item.vulnerability.reportNo}</p>
-                        <p>签发人：{item.issuer ?? '平台'}</p>
-                        <p>签发日期：{formatDate(item.issuedAt)}</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-                      <p className="text-sm font-medium">证书操作</p>
-                      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                        预览会打开完整 PDF；下载会保存后端生成的电子证书文件。
-                      </p>
-                      <div className="mt-4 grid gap-2">
-                        <button
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-600/20 bg-brand-600/10 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/15 disabled:cursor-not-allowed disabled:opacity-55 dark:text-brand-300"
-                          disabled={item.status !== '已签发' || isPreviewLoading}
-                          onClick={() => void previewCertificate(item)}
-                          type="button"
-                        >
-                          <Eye className="h-4 w-4" />
-                          {isPreviewLoading ? '加载中...' : '预览 PDF'}
-                        </button>
-                        <button
-                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55"
-                          disabled={item.status !== '已签发' || downloadingId === item.id}
-                          onClick={() => void downloadCertificate(item)}
-                          type="button"
-                        >
-                          <Download className="h-4 w-4" />
-                          {downloadingId === item.id ? '下载中...' : '下载 PDF'}
-                        </button>
-                        <button
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                          onClick={() => void copyCertificateNo(item.certificateNo)}
-                          type="button"
-                        >
-                          <Copy className="h-4 w-4" />
-                          复制证书编号
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex shrink-0 flex-wrap content-end justify-end gap-2 lg:self-end">
+                  <button className="inline-flex items-center gap-2 rounded-lg border border-brand-600/20 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/10 disabled:cursor-not-allowed disabled:opacity-55 dark:text-brand-300" disabled={item.status !== '已签发' || isPreviewLoading} onClick={() => void previewCertificate(item)} type="button"><Eye className="h-4 w-4" />{isPreviewLoading ? '加载中' : '预览'}</button>
+                  <button className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55" disabled={item.status !== '已签发' || downloadingId === item.id} onClick={() => void downloadCertificate(item)} type="button"><Download className="h-4 w-4" />{downloadingId === item.id ? '下载中' : '下载 PDF'}</button>
                 </div>
-              </div>
+              </article>
             </SurfacePanel>
           ))
         ) : (
           <EmptyState
-            icon={<CheckCircle2 className="h-10 w-10" />}
+            icon={null}
             title="没有匹配的证书"
             description="调整关键词或证书状态后再试一次。"
           />
@@ -403,4 +355,25 @@ export function UserCertificates() {
 function formatDate(value: string | null) {
   if (!value) return '未签发'
   return new Date(value).toLocaleDateString('zh-CN')
+}
+
+function isOnDate(value: string | null, targetDate: string) {
+  if (!targetDate) return true
+  if (!value) return false
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  return date.toLocaleDateString('en-CA') === targetDate
+}
+
+function DateFilter({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  return <label className="block text-sm font-medium text-slate-700 dark:text-slate-300"><span>{label}</span><input className="mt-2 h-11 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm outline-none transition focus:border-brand-600 dark:border-white/10 dark:text-slate-100" onChange={(event) => onChange(event.target.value)} type="date" value={value} /></label>
+}
+
+function CertificateData({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className="mt-1 truncate font-medium text-slate-800 dark:text-slate-200" title={value}>{value}</dd>
+    </div>
+  )
 }

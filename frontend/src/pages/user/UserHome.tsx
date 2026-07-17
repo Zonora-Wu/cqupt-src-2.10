@@ -173,6 +173,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     }
   }, [location.pathname, navigate])
 
+  useEffect(() => {
+    const state = location.state as { aiPrompt?: unknown } | null
+    if (location.pathname !== '/user/ai' || typeof state?.aiPrompt !== 'string' || !state.aiPrompt.trim()) return
+    setPendingAiPrompt(state.aiPrompt.trim())
+    navigate('/user/ai', { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
+
   // 加载准入状态，新用户未完成责任书或安全答题时进入首页弹窗提醒
   useEffect(() => {
     let active = true

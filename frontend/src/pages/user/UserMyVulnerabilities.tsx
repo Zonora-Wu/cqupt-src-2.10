@@ -1,17 +1,6 @@
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  Eye,
-  Filter,
-  Paperclip,
-  RefreshCw,
-  ShieldAlert,
-  Sparkles,
-  UploadCloud,
-  X,
-} from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -37,10 +26,13 @@ export function UserMyVulnerabilities() {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('全部状态')
   const [level, setLevel] = useState('全部等级')
+  const [submittedDate, setSubmittedDate] = useState('')
   const [data, setData] = useState<MyVulnerabilityListResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null)
+  const [copiedReportNo, setCopiedReportNo] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   /* 详情抽屉 */
   const [detailTarget, setDetailTarget] = useState<MyVulnerabilityItem | null>(null)
@@ -98,10 +90,11 @@ export function UserMyVulnerabilities() {
       const matchesStatus = status === '全部状态' || item.status === status
       const displaySeverity = item.finalSeverity ?? item.selfSeverity
       const matchesLevel = level === '全部等级' || displaySeverity === level
+      const matchesDate = isOnDate(item.submittedAt, submittedDate)
 
-      return matchesKeyword && matchesStatus && matchesLevel
+      return matchesKeyword && matchesStatus && matchesLevel && matchesDate
     })
-  }, [data?.items, keyword, level, status])
+  }, [data?.items, keyword, level, status, submittedDate])
 
   const handlePreviewAttachment = async (attachmentId: string) => {
     setPreviewingAttachmentId(attachmentId)
@@ -114,6 +107,24 @@ export function UserMyVulnerabilities() {
     } finally {
       setPreviewingAttachmentId(null)
     }
+  }
+
+  const copyReportNo = async (reportNo: string) => {
+    try {
+      await navigator.clipboard.writeText(reportNo)
+      setCopiedReportNo(reportNo)
+      window.setTimeout(() => setCopiedReportNo((current) => current === reportNo ? null : current), 1600)
+    } catch {
+      setErrorMessage('复制漏洞编号失败，请手动复制。')
+    }
+  }
+
+  const openAiAdvice = (item: MyVulnerabilityItem) => {
+    navigate('/user/ai', {
+      state: {
+        aiPrompt: `请基于以下漏洞报告给出材料完善建议，不要编造平台实时数据。报告编号：${item.reportNo}；标题：${item.title}；影响资产：${item.assetName}；漏洞类型：${item.vulnerabilityType}；当前状态：${item.status}。请重点检查复现材料、影响说明和修复建议是否完整。`,
+      },
+    })
   }
 
   const openDetail = async (item: MyVulnerabilityItem) => {
@@ -194,12 +205,11 @@ export function UserMyVulnerabilities() {
           description="查看你提交的漏洞报告、审核状态、积分奖励和 AI 材料建议，按流程完成补充、复测与归档。"
         />
         <button
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
+          className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-700"
           onClick={() => void loadReports()}
           type="button"
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          刷新列表
+          {isLoading ? '刷新中' : '刷新列表'}
         </button>
       </div>
 
@@ -214,7 +224,7 @@ export function UserMyVulnerabilities() {
       </div>
 
       <SurfacePanel className="relative z-30 mt-6 p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_160px_160px_150px_auto] xl:items-end">
           <SearchInput
             label="搜索漏洞"
             onChange={setKeyword}
@@ -223,16 +233,17 @@ export function UserMyVulnerabilities() {
           />
           <SelectInput label="审核状态" onChange={setStatus} options={statusOptions} value={status} />
           <SelectInput label="风险等级" onChange={setLevel} options={levelOptions} value={level} />
+          <DateFilter label="提交日期" onChange={setSubmittedDate} value={submittedDate} />
           <button
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+            className="rounded-lg border border-black/10 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
             onClick={() => {
               setKeyword('')
               setStatus('全部状态')
               setLevel('全部等级')
+              setSubmittedDate('')
             }}
             type="button"
           >
-            <Filter className="h-4 w-4" />
             重置
           </button>
         </div>
@@ -250,98 +261,37 @@ export function UserMyVulnerabilities() {
         )}
 
         {filteredVulnerabilities.map((item) => (
-          <SurfacePanel className="p-5 transition hover:border-brand-600/25 hover:bg-white/85 dark:hover:bg-white/[0.055]" key={item.id}>
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-              <div>
+          <SurfacePanel className="p-4" key={item.id}>
+            <article className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.reportNo}</span>
+                  <button aria-label={copiedReportNo === item.reportNo ? '漏洞编号已复制' : '复制漏洞编号'} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-black/5 hover:text-brand-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-brand-300" onClick={() => void copyReportNo(item.reportNo)} title={copiedReportNo === item.reportNo ? '已复制' : '复制编号'} type="button">{copiedReportNo === item.reportNo ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button>
                   <SeverityBadge level={(item.finalSeverity ?? item.selfSeverity) as import('../../utils/severity').SeverityLevel} />
                   <StatusBadge status={item.status as import('../../utils/vulnStatus').VulnStatus} />
                 </div>
-                <h2 className="mt-3 text-xl font-semibold tracking-tight">{item.title}</h2>
-                <div className="mt-3 grid gap-2 text-sm text-slate-500 sm:grid-cols-2 dark:text-slate-400">
-                  <p>影响资产：{item.assetName}</p>
-                  <p>责任单位：{item.ownerUnit || '待确认'}</p>
-                  <p>漏洞类型：{item.vulnerabilityType}</p>
-                  <p>提交时间：{formatDateTime(item.submittedAt)}</p>
-                  <p>最近更新：{formatDateTime(item.updatedAt)}</p>
-                  <p>附件数量：{item.attachments.length}</p>
-                </div>
+                <h2 className="mt-2 truncate text-base font-semibold">{item.title}</h2>
+                <dl className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-sm">
+                  <ReportData label="影响资产" value={item.assetName} />
+                  <ReportData label="漏洞类型" value={item.vulnerabilityType} />
+                  <ReportData label="责任单位" value={item.ownerUnit || '待确认'} />
+                  <ReportData label="提交时间" value={formatDateTime(item.submittedAt)} />
+                  <ReportData label="最近更新" value={formatDateTime(item.updatedAt)} />
+                  <ReportData label="附件 / 积分" value={`${item.attachments.length} 个 / +${item.points}`} />
+                </dl>
               </div>
-
-              <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Sparkles className="h-4 w-4 text-brand-700 dark:text-brand-300" />
-                    AI 建议
-                  </div>
-                  <span className="text-sm font-semibold text-brand-700 dark:text-brand-300">+{item.points}</span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{getReportHint(item)}</p>
+              <div className="flex shrink-0 flex-wrap content-end justify-end gap-2 xl:self-end">
+                <button className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" onClick={() => void openDetail(item)} type="button">查看详情</button>
+                <button className="rounded-lg border border-brand-600/25 px-3 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-600/5 dark:text-brand-300" onClick={() => openAiAdvice(item)} type="button">AI 建议</button>
+                <button className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15" disabled={item.status !== '待补充'} onClick={() => openSupplement(item)} title={item.status === '待补充' ? '提交审核员要求补充的材料' : '当前状态无需补充材料'} type="button">补充材料</button>
               </div>
-            </div>
-
-            {item.attachments.length > 0 && (
-              <div className="mt-5 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                  <Paperclip className="h-4 w-4 text-brand-700 dark:text-brand-300" />
-                  PDF 附件
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {item.attachments.map((attachment) => (
-                    <div
-                      className="flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-sm dark:border-white/10 "
-                      key={attachment.id}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{attachment.originalName}</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                          {formatFileSize(attachment.sizeBytes)} · {formatDateTime(attachment.uploadedAt)}
-                        </p>
-                      </div>
-                      <button
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                        disabled={previewingAttachmentId === attachment.id}
-                        onClick={() => void handlePreviewAttachment(attachment.id)}
-                        type="button"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        {previewingAttachmentId === attachment.id ? '打开中' : '预览'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <CalendarClock className="h-4 w-4" />
-                流程节点将根据审核员操作自动更新
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
-                  onClick={() => void openDetail(item)}
-                  type="button"
-                >
-                  查看详情
-                </button>
-                <button
-                  className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-                  onClick={() => item.status === '待补充' ? openSupplement(item) : void openDetail(item)}
-                  type="button"
-                >
-                  {item.status === '待补充' ? '补充材料' : '查看进度'}
-                </button>
-              </div>
-            </div>
+            </article>
           </SurfacePanel>
         ))}
 
         {!isLoading && filteredVulnerabilities.length === 0 && (
           <EmptyState
-            icon={<CheckCircle2 className="h-10 w-10" />}
+            icon={null}
             title="没有匹配的漏洞报告"
             description={data?.items.length ? '调整关键词或筛选条件后再试一次。' : '你还没有提交漏洞，可以先进入提交漏洞页面创建第一份报告。'}
           />
@@ -394,20 +344,22 @@ function formatDateTime(value: string | null) {
   }).format(date)
 }
 
+function isOnDate(value: string | null, targetDate: string) {
+  if (!targetDate) return true
+  if (!value) return false
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  return date.toLocaleDateString('en-CA') === targetDate
+}
+
+function DateFilter({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+  return <label className="block text-sm font-medium text-slate-700 dark:text-slate-300"><span>{label}</span><input className="mt-2 h-11 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm outline-none transition focus:border-brand-600 dark:border-white/10 dark:text-slate-100" onChange={(event) => onChange(event.target.value)} type="date" value={value} /></label>
+}
+
 function formatFileSize(sizeBytes: number) {
   if (sizeBytes < 1024) return `${sizeBytes} B`
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
   return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-function getReportHint(item: MyVulnerabilityItem) {
-  if (item.lastEvent?.note) return item.lastEvent.note
-  if (item.status === '待补充') return '审核员需要你补充材料，请根据反馈完善复现步骤或证明材料。'
-  if (item.status === '待审核') return '报告已提交，等待审核员确认漏洞有效性与影响范围。'
-  if (item.status === '审核中') return '审核员正在处理该报告，请保持附件和复现材料可访问。'
-  if (item.status === '已确认') return '漏洞已确认有效，后续积分和证书会根据最终审核结果处理。'
-  if (item.status === '修复中') return '漏洞进入修复或复测流程，请等待资产责任单位处理。'
-  return '报告流程已归档，可在证书和积分页面查看后续结果。'
 }
 
 /* ─── 详情抽屉 ─── */
@@ -434,7 +386,6 @@ function VulnerabilityDetailDrawer({
       <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[var(--app-bg)] shadow-2xl ">
         {/* 头部 */}
         <div className="flex shrink-0 items-center gap-3 border-b border-black/10 px-6 py-4 dark:border-white/10">
-          <ShieldAlert className="h-5 w-5 text-brand-600 dark:text-brand-400" />
           <div className="min-w-0 flex-1">
             {detail ? (
               <>
@@ -546,13 +497,12 @@ function VulnerabilityDetailDrawer({
                           </p>
                         </div>
                         <button
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                        className="shrink-0 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
                           disabled={previewingAttachmentId === att.id}
                           onClick={() => onPreviewAttachment(att.id)}
                           type="button"
                         >
-                          <Eye className="h-3.5 w-3.5" />
-                          {previewingAttachmentId === att.id ? '打开中' : '预览'}
+                        {previewingAttachmentId === att.id ? '打开中' : '预览'}
                         </button>
                       </div>
                     ))}
@@ -630,10 +580,7 @@ function SupplementMaterialsModal({
     >
       <div className="w-full max-w-lg rounded-xl border border-black/10 bg-[var(--app-menu-bg)] p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 ">
         {/* 头部 */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-6 w-6" />
-          </div>
+        <div className="flex items-start justify-end gap-4">
           <button
             className="rounded-lg p-1.5 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10"
             onClick={onCancel}
@@ -643,7 +590,7 @@ function SupplementMaterialsModal({
           </button>
         </div>
 
-        <h2 className="mt-4 text-xl font-semibold">补充材料</h2>
+        <h2 className="mt-1 text-xl font-semibold">补充材料</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           报告编号 <span className="font-mono">{item.reportNo}</span>
         </p>
@@ -686,7 +633,6 @@ function SupplementMaterialsModal({
               onFileChange(e.dataTransfer.files[0])
             }}
           >
-            <UploadCloud className="h-5 w-5 shrink-0" />
             {file ? (
               <span className="truncate font-medium text-slate-700 dark:text-slate-300">{file.name}</span>
             ) : (
@@ -735,6 +681,15 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
       {title}
+    </div>
+  )
+}
+
+function ReportData({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+      <dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className="max-w-48 truncate font-medium text-slate-800 dark:text-slate-200" title={value}>{value}</dd>
     </div>
   )
 }
