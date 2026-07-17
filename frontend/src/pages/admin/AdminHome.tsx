@@ -6,6 +6,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { ScrollableNav } from '../../components/navigation/ScrollableNav'
 import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
+import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { adminNavItems, adminUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
@@ -151,7 +152,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
       {activeMenu === '通知' ? (
         <NotificationPanel onClose={() => navigate('/admin')} />
       ) : activeMenu !== '首页' ? (
-        <Suspense fallback={<AdminPageLoading />}>
+        <Suspense fallback={<FullScreenLoader label="正在加载管理页面" />}>
           {activeMenu === '漏洞管理' ? (
             <AdminVulnerabilityManagement />
           ) : activeMenu === '证书管理' ? (
@@ -366,16 +367,6 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         </section>
       )}
     </AppBackground>
-  )
-}
-
-function AdminPageLoading() {
-  return (
-    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
-      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
-        正在加载管理页面...
-      </SurfacePanel>
-    </section>
   )
 }
 

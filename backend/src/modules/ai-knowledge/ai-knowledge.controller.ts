@@ -155,6 +155,12 @@ export class AiKnowledgeController {
     return this.knowledge.listSkillCandidates()
   }
 
+  @Get('skill-audit')
+  @RequirePermissions('ai:manage_skills')
+  listSkillAudit() {
+    return this.knowledge.listSkillAudit()
+  }
+
   @Post('skill-candidates')
   @RequirePermissions('ai:manage_skills')
   createSkillCandidate(@Body() body: Record<string, unknown>) {

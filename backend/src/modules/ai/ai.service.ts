@@ -141,7 +141,7 @@ export class AiService {
     }
 
     const safeMessage = redactSensitiveText(input.message)
-    const skillRoute = this.skillRouter.route({ ...input, message: safeMessage }, user)
+    const skillRoute = await this.skillRouter.route({ ...input, message: safeMessage }, user)
     const knowledgePolicy = await this.getKnowledgeUsagePolicy()
 
     const hasAttachmentContext = hasUserAttachmentContext(input.context)
@@ -1053,7 +1053,7 @@ function getVisibleSkillSpaces(role: RoleCode) {
   return [AiSpace.STUDENT]
 }
 
-function serializeSkillRoute(decision: ReturnType<AiSkillRouterService['route']>) {
+function serializeSkillRoute(decision: Awaited<ReturnType<AiSkillRouterService['route']>>) {
   return {
     active: decision.active.map((skill) => skill.name),
     available: decision.available.map((skill) => skill.name),

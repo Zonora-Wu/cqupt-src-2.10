@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
-import { AiSpace, RoleCode } from '@prisma/client'
+import { AiKnowledgeRoleScope, AiSkillLifecycleStatus, AiSpace, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
+import { PrismaService } from '../prisma/prisma.service'
 import { NormalizedAiChatInput } from './ai.types'
 
 export type AiSkillRouteItem = {
@@ -8,6 +9,7 @@ export type AiSkillRouteItem = {
   title: string
   aiSpace: AiSpace | 'CORE'
   reason: string
+  prompt?: string
 }
 
 export type AiSkillRouteDecision = {
@@ -120,18 +122,41 @@ const ALL_SKILLS = [...CORE_SKILLS, ...ROLE_SKILLS]
 
 @Injectable()
 export class AiSkillRouterService {
-  route(input: NormalizedAiChatInput, user: AuthenticatedRequestUser): AiSkillRouteDecision {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async route(input: NormalizedAiChatInput, user: AuthenticatedRequestUser): Promise<AiSkillRouteDecision> {
     const normalizedMessage = input.message.trim()
     const allowedModes = getAllowedModes(user.role)
     const modeAllowed = allowedModes.includes(input.mode)
 
-    const available = ALL_SKILLS.filter((skill) => skill.modes.includes(input.mode) && modeAllowed)
-    const active = available.filter((skill) => skill.always || matchesAny(skill.triggers, normalizedMessage))
+    const staticAvailable = ALL_SKILLS.filter((skill) => skill.modes.includes(input.mode) && modeAllowed)
+    const dynamicSkills = modeAllowed ? await this.prisma.aiSkill.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 24,
+      where: {
+        active: true,
+        aiSpace: getAiSpace(input.mode),
+        lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+        roleScope: { in: [getRoleScope(user.role), AiKnowledgeRoleScope.ALL] },
+      },
+    }) : []
+    const dynamicAvailable = dynamicSkills.map((skill) => ({
+      aiSpace: skill.aiSpace,
+      name: `hermes:${skill.slug ?? skill.id}`,
+      prompt: skill.content,
+      reason: `知识沉淀 Skill v${skill.version}`,
+      title: skill.title,
+    }))
+    const available = [...staticAvailable.map(toRouteItem), ...dynamicAvailable]
+    const active = [
+      ...staticAvailable.filter((skill) => skill.always || matchesAny(skill.triggers, normalizedMessage)).map(toRouteItem),
+      ...dynamicAvailable.filter((skill) => matchesDynamicSkill(skill, normalizedMessage)),
+    ]
     const blocked = ALL_SKILLS.filter((skill) => !available.some((item) => item.name === skill.name))
 
     return {
-      active: active.map(toRouteItem),
-      available: available.map(toRouteItem),
+      active,
+      available,
       blocked: blocked.map(toRouteItem),
       mode: input.mode,
       strategy: 'explicit_backend_role_routing',
@@ -152,6 +177,7 @@ export class AiSkillRouterService {
 
     const activeRules = activeDefinitions
       .map((skill) => `- ${skill.name}：${skill.prompt}`)
+      .concat(decision.active.filter((item) => item.prompt).map((item) => `- ${item.name}：${item.prompt}`))
       .join('\n')
 
     return [
@@ -165,6 +191,34 @@ export class AiSkillRouterService {
       activeRules,
     ].filter(Boolean).join('\n')
   }
+}
+
+function matchesDynamicSkill(skill: AiSkillRouteItem, message: string) {
+  const source = `${skill.title}\n${skill.prompt ?? ''}`.toLowerCase()
+  const keywords = tokenize(message)
+  if (!keywords.length) return false
+  const matched = keywords.filter((keyword) => source.includes(keyword)).length
+  return matched >= 2 || (keywords.length === 1 && source.includes(keywords[0]))
+}
+
+function tokenize(value: string) {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+  const words = normalized.split(/\s+/).filter((word) => word.length >= 2)
+  const chars = Array.from(normalized.replace(/[^\u4e00-\u9fff]/g, ''))
+  for (let index = 0; index < chars.length - 1; index += 1) words.push(chars.slice(index, index + 2).join(''))
+  return Array.from(new Set(words)).slice(0, 24)
+}
+
+function getAiSpace(mode: NormalizedAiChatInput['mode']) {
+  if (mode === 'admin') return AiSpace.ADMIN
+  if (mode === 'auditor') return AiSpace.AUDITOR
+  return AiSpace.STUDENT
+}
+
+function getRoleScope(role: RoleCode) {
+  if (role === RoleCode.ADMIN) return AiKnowledgeRoleScope.ADMIN
+  if (role === RoleCode.AUDITOR) return AiKnowledgeRoleScope.AUDITOR
+  return AiKnowledgeRoleScope.STUDENT
 }
 
 function matchesAny(triggers: RegExp[] | undefined, message: string) {

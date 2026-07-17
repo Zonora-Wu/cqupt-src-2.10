@@ -16,6 +16,7 @@ import {
 } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
+import { AiSkillLifecycleService } from './ai-skill-lifecycle.service'
 
 type AiProblemSessionMode = 'student' | 'auditor' | 'admin'
 
@@ -60,6 +61,7 @@ type ProblemSessionSummary = {
     safety: number
   }
   scoreDetails: {
+    feedback: { down: number; report: number; up: number }
     modelSuggested: boolean
     ruleFlags: string[]
     scoringVersion: string
@@ -127,7 +129,10 @@ const AUTO_APPROVAL_THRESHOLDS = {
 
 @Injectable()
 export class AiProblemSessionService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AiSkillLifecycleService) private readonly skillLifecycle: AiSkillLifecycleService,
+  ) {}
 
   async create(input: CreateProblemSessionInput, user: AuthenticatedRequestUser) {
     const mode = normalizeMode(input.mode)
@@ -165,7 +170,9 @@ export class AiProblemSessionService {
         userId: user.id,
       },
     })
-    return session ? serializeProblemSession(session) : null
+    if (!session) return null
+    const prompted = await this.maybePromptForInactivity(session)
+    return serializeProblemSession(prompted ?? session)
   }
 
   async getHistory(user: AuthenticatedRequestUser, limit = 30) {
@@ -202,7 +209,9 @@ export class AiProblemSessionService {
   async heartbeat(id: string, user: AuthenticatedRequestUser) {
     await this.assertOwnedSession(id, user.id)
     const session = await this.prisma.aiProblemSession.update({
-      data: { lastActiveAt: new Date() },
+      data: {
+        lastActiveAt: new Date(),
+      },
       where: { id },
     })
     return serializeProblemSession(session)
@@ -214,7 +223,49 @@ export class AiProblemSessionService {
       data: {
         lastActiveAt: new Date(),
         leftAt: new Date(),
+      },
+      where: { id },
+    })
+    return serializeProblemSession(session)
+  }
+
+  async requestResolutionPrompt(id: string, reason: 'INACTIVITY' | 'NEW_CONVERSATION' | 'NEW_QUESTION', user: AuthenticatedRequestUser) {
+    const session = await this.getOwnedSession(id, user.id, true)
+    if (!CONTINUABLE_STATUSES.has(session.status)) return null
+    if (!this.isReusablePromptCandidate(session)) return null
+    if (session.resolutionSnoozedUntil && session.resolutionSnoozedUntil > new Date()) return null
+    if (reason === 'INACTIVITY' && Date.now() - session.lastActiveAt.getTime() < 24 * 60 * 60 * 1000) return null
+    const prompted = await this.prisma.aiProblemSession.update({
+      data: {
+        resolutionPromptCount: { increment: 1 },
+        resolutionPromptedAt: new Date(),
         status: AiProblemSessionStatus.AWAITING_RESOLUTION,
+      },
+      where: { id: session.id },
+    })
+    return serializeProblemSession(prompted)
+  }
+
+  async snoozeResolutionPrompt(id: string, user: AuthenticatedRequestUser) {
+    await this.assertOwnedSession(id, user.id)
+    const session = await this.prisma.aiProblemSession.update({
+      data: {
+        lastActiveAt: new Date(),
+        resolutionSnoozedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        status: AiProblemSessionStatus.ACTIVE,
+      },
+      where: { id },
+    })
+    return serializeProblemSession(session)
+  }
+
+  async resumeResolutionPrompt(id: string, user: AuthenticatedRequestUser) {
+    await this.assertOwnedSession(id, user.id)
+    const session = await this.prisma.aiProblemSession.update({
+      data: {
+        lastActiveAt: new Date(),
+        resolutionSnoozedUntil: null,
+        status: AiProblemSessionStatus.ACTIVE,
       },
       where: { id },
     })
@@ -372,6 +423,7 @@ export class AiProblemSessionService {
       include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
       where: { id },
     })
+    await this.skillLifecycle.processKnowledge(knowledge.id, 'MANUAL_REVIEW').catch(() => undefined)
     return serializeProblemSession(approved)
   }
 
@@ -572,7 +624,7 @@ export class AiProblemSessionService {
     aiSpace: AiSpace
     clusterId?: string | null
     initialQuestion: string
-    turns: Array<{ role: string; sanitizedText: string }>
+    turns: Array<{ metadata?: Prisma.JsonValue | null; role: string; sanitizedText: string }>
   }): Promise<ProblemSessionSummary> {
     const turns = session.turns.map((turn) => ({ content: turn.sanitizedText, role: turn.role }))
     const fullText = turns.map((turn) => `${turn.role}: ${turn.content}`).join('\n')
@@ -580,10 +632,11 @@ export class AiProblemSessionService {
     const assistantMessages = turns.filter((turn) => turn.role === 'assistant').map((turn) => turn.content)
     const problem = userMessages[0] || session.initialQuestion
     const lastAnswer = assistantMessages.at(-1) ?? ''
+    const feedback = collectSessionFeedback(session.turns)
     const rejectionFlags = getProblemSessionRuleFlags(fullText, problem)
     const redactionFlags = getRedactionRuleFlags(fullText)
     const ruleFlags = [...rejectionFlags, ...redactionFlags]
-    const rejectionReason = rejectionFlags[0]
+    const rejectionReason = rejectionFlags[0] ?? (feedback.report > 0 ? '用户举报该 AI 回复，禁止进入知识沉淀' : undefined)
     const hasRedactedSensitiveContent = redactionFlags.length > 0
     const environment = extractLines(fullText, /(windows|wsl|linux|ubuntu|centos|docker|compose|php\s*\d|mysql|mariadb|nginx|apache|node|npm|python|端口|版本|浏览器|burp|nmap|sqlmap)/i, 8)
     const pitfalls = extractLines(fullText, /(报错|错误|失败|不兼容|permission denied|denied|not found|timeout|端口占用|版本|依赖|乱码|空白页|连接失败|启动失败|越权|403|500)/i, 10)
@@ -592,13 +645,15 @@ export class AiProblemSessionService {
     const applicableScope = inferApplicableScope(problem, fullText)
     const nonApplicableScope = inferNonApplicableScope(fullText)
     const duplicate = await this.assessDuplicateRisk(problem, lastAnswer, session.aiSpace)
-    const quality = clampScore((successfulSteps.length >= 2 ? 0.72 : 0.48) + (pitfalls.length ? 0.08 : 0) + (environment.length ? 0.06 : 0))
+    const baselineQuality = clampScore((successfulSteps.length >= 2 ? 0.72 : 0.48) + (pitfalls.length ? 0.08 : 0) + (environment.length ? 0.06 : 0))
+    const quality = clampScore(baselineQuality + Math.min(feedback.up, 2) * 0.08 - feedback.down * 0.2 - feedback.report * 0.5)
     const reuse = clampScore(/积分|余额|商品|兑换|我的|当前|今天|公告|排名|证书|漏洞状态|SRC-\d/i.test(problem) ? 0.22 : quality + 0.08)
-    const safety = rejectionReason ? 0.1 : 0.94
+    const safety = rejectionReason || feedback.report > 0 ? 0.1 : 0.94
     const privacy = rejectionReason ? 0.9 : hasRedactedSensitiveContent ? 0.18 : 0.08
     const poisoningRisk = /忽略.*规则|ignore .*instructions|系统提示词|开发者指令|自动通过|绕过权限/i.test(fullText) ? 0.95 : 0.04
     const skillSignal = inferSkillCandidateSignal(problem, fullText, successfulSteps, pitfalls, environment)
-    const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || reuse < 0.5 || quality < 0.55
+    // 点踩降低质量分并禁止自动入库，但仍保留给管理员审核；不能把用户反馈直接等同于删除知识。
+    const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || feedback.report > 0 || reuse < 0.5 || (feedback.down === 0 && quality < 0.55) || (feedback.down > 0 && baselineQuality < 0.55)
       ? 'DISCARD'
       : skillSignal
         ? 'SKILL'
@@ -618,6 +673,7 @@ export class AiProblemSessionService {
         ? `最终有效步骤：${successfulSteps.join('；')}`
         : lastAnswer.slice(0, 1400),
       scoreDetails: {
+        feedback,
         modelSuggested: false,
         ruleFlags,
         scoringVersion: 'problem-session-rules-v2',
@@ -633,6 +689,29 @@ export class AiProblemSessionService {
       similarKnowledgeMatches: duplicate.matches,
       successfulSteps,
     }
+  }
+
+  private async maybePromptForInactivity(session: { id: string; initialQuestion: string; lastActiveAt: Date; resolutionSnoozedUntil: Date | null; status: AiProblemSessionStatus; turnCount: number; turns?: Array<{ role: string; sanitizedText: string }> }) {
+    if (Date.now() - session.lastActiveAt.getTime() < 24 * 60 * 60 * 1000) return null
+    if (session.resolutionSnoozedUntil && session.resolutionSnoozedUntil > new Date()) return null
+    const detailed = session.turns ? session : await this.prisma.aiProblemSession.findUnique({
+      include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
+      where: { id: session.id },
+    })
+    if (!detailed) return null
+    if (!this.isReusablePromptCandidate(detailed)) return null
+    return this.prisma.aiProblemSession.update({
+      data: { resolutionPromptCount: { increment: 1 }, resolutionPromptedAt: new Date(), status: AiProblemSessionStatus.AWAITING_RESOLUTION },
+      where: { id: session.id },
+    })
+  }
+
+  private isReusablePromptCandidate(session: { initialQuestion: string; turnCount: number; turns?: Array<{ role: string; sanitizedText: string }> }) {
+    if (session.turnCount < 4) return false
+    const text = [session.initialQuestion, ...(session.turns ?? []).map((turn) => turn.sanitizedText)].join('\n')
+    if (/^(你好|在吗|谢谢|帮我查|我有多少积分|我的积分|我的证书|今天.*公告|我的漏洞状态)[？?！!。\s]*$/i.test(session.initialQuestion.trim())) return false
+    if (/(积分|余额|商品库存|我的证书|我的漏洞|公告|排名|订单)/i.test(text) && !/(报错|配置|安装|复现|修复|学习|规则|教程|步骤|环境|docker|部署)/i.test(text)) return false
+    return /(报错|错误|失败|配置|安装|部署|复现|修复|学习|规则|教程|步骤|环境|docker|漏洞报告|网络安全|怎么)/i.test(text)
   }
 
   private async applyKnowledgeClusterDecision(session: {
@@ -838,6 +917,7 @@ export class AiProblemSessionService {
       .filter((item) => item.summary.recommendation !== 'DISCARD' && !item.summary.rejectionReason)
     if (summaries.length < AUTO_APPROVAL_THRESHOLDS.minResolvedSessionCount) return null
     if (summaries.some((item) => item.summary.scores.privacy > AUTO_APPROVAL_THRESHOLDS.maxPrivacyRisk)) return null
+    if (summaries.some((item) => item.summary.scoreDetails.feedback.report > 0 || item.summary.scoreDetails.feedback.down > 0)) return null
     const best = summaries
       .slice()
       .sort((a, b) => b.summary.scores.confidence - a.summary.scores.confidence)[0]
@@ -889,6 +969,7 @@ export class AiProblemSessionService {
         },
       }),
     ])
+    await this.skillLifecycle.processKnowledge(knowledge.id, 'AUTO_APPROVAL').catch(() => undefined)
     return knowledge
   }
 
@@ -1059,6 +1140,18 @@ function serializeProblemSession<T extends {
 
 function normalizeStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
+}
+
+function collectSessionFeedback(turns: Array<{ metadata?: Prisma.JsonValue | null; role: string }>) {
+  const feedback = { down: 0, report: 0, up: 0 }
+  for (const turn of turns) {
+    if (turn.role !== 'assistant' || !isRecord(turn.metadata)) continue
+    const detail = isRecord(turn.metadata.feedback) ? turn.metadata.feedback : null
+    if (detail?.rating === 'UP') feedback.up += 1
+    if (detail?.rating === 'DOWN') feedback.down += 1
+    if (detail?.rating === 'REPORT') feedback.report += 1
+  }
+  return feedback
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1425,6 +1518,11 @@ function parseProblemSessionSummary(value: Prisma.JsonValue | null): ProblemSess
   if (!summary.problem || !summary.resolution || !summary.scores) {
     throw new BadRequestException('问题会话总结字段不完整')
   }
+  if (!summary.scoreDetails) {
+    summary.scoreDetails = { feedback: { down: 0, report: 0, up: 0 }, modelSuggested: false, ruleFlags: [], scoringVersion: 'legacy-session-summary' }
+  } else if (!summary.scoreDetails.feedback) {
+    summary.scoreDetails.feedback = { down: 0, report: 0, up: 0 }
+  }
   return summary
 }
 
@@ -1441,7 +1539,7 @@ function validateProblemSessionSummary(summary: ProblemSessionSummary) {
   if (!summary.problem || !summary.resolution || !summary.recommendation || !summary.scores) {
     throw new BadRequestException('问题会话总结字段不完整')
   }
-  if (!summary.scoreDetails?.scoringVersion || !Array.isArray(summary.scoreDetails.ruleFlags)) {
+  if (!summary.scoreDetails?.scoringVersion || !Array.isArray(summary.scoreDetails.ruleFlags) || !summary.scoreDetails.feedback) {
     throw new BadRequestException('问题会话评分详情字段不完整')
   }
   if (requiredArrays.some((key) => !Array.isArray(summary[key]))) {

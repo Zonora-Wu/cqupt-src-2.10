@@ -57,6 +57,22 @@ export class AiProblemSessionController {
     return this.sessions.leave(id, user)
   }
 
+  @Post(':id/resolution-prompt')
+  resolutionPrompt(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
+    const reason = body.reason === 'NEW_CONVERSATION' || body.reason === 'NEW_QUESTION' ? body.reason : 'INACTIVITY'
+    return this.sessions.requestResolutionPrompt(id, reason, user)
+  }
+
+  @Post(':id/resolution-snooze')
+  resolutionSnooze(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.sessions.snoozeResolutionPrompt(id, user)
+  }
+
+  @Post(':id/resolution-resume')
+  resolutionResume(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.sessions.resumeResolutionPrompt(id, user)
+  }
+
   @Post(':id/resolve')
   resolve(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.sessions.resolve(id, { note: typeof body.note === 'string' ? body.note : undefined }, user)

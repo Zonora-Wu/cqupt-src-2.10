@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { FloatingNotice } from './components/ui/FloatingNotice'
+import { FullScreenLoader } from './components/ui/FullScreenLoader'
 import { GuestHome } from './pages/guest/GuestHome'
 import { PublicOnly, RequireRole } from './routes/guards'
 import { getDefaultPathForRole } from './routes/routeConfig'
@@ -38,6 +39,8 @@ function AppShell() {
   const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getSavedSession()?.user ?? null)
   const [isCheckingSession, setIsCheckingSession] = useState(() => Boolean(getSavedSession()?.accessToken))
+  const [isAppearanceReady, setIsAppearanceReady] = useState(false)
+  const [isInitialVisualReady, setIsInitialVisualReady] = useState(false)
   const [sessionNotice, setSessionNotice] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
@@ -84,6 +87,8 @@ function AppShell() {
       } catch {
         applyBrandTheme('#2A6438')
         applyPlatformBranding()
+      } finally {
+        if (active) setIsAppearanceReady(true)
       }
     }
 
@@ -93,6 +98,17 @@ function AppShell() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (isCheckingSession || !isAppearanceReady) return
+    let active = true
+
+    void waitForInitialVisuals().then(() => {
+      if (active) setIsInitialVisualReady(true)
+    })
+
+    return () => { active = false }
+  }, [isAppearanceReady, isCheckingSession])
 
   useEffect(() => {
     let noticeTimer: number | undefined
@@ -125,11 +141,7 @@ function AppShell() {
   }, [location.pathname, location.state, navigate])
 
   if (isCheckingSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-slate-500  dark:text-white/55">
-        正在校验登录状态...
-      </div>
-    )
+    return <FullScreenLoader label="正在校验登录状态" />
   }
 
   return (
@@ -216,6 +228,7 @@ function AppShell() {
           variant="warning"
         />
       )}
+      <FullScreenLoader visible={!isInitialVisualReady || !isAppearanceReady} />
     </>
   )
 
@@ -228,11 +241,42 @@ function AppShell() {
 }
 
 function AppLoading({ text }: { text: string }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-slate-500  dark:text-white/55">
-      {text}
-    </div>
-  )
+  return <FullScreenLoader label={text} />
+}
+
+async function waitForInitialVisuals() {
+  await Promise.all([waitForFonts(), waitForWindowLoad()])
+  await waitForCurrentImages()
+  await nextPaint()
+}
+
+function waitForFonts() {
+  if (!('fonts' in document)) return Promise.resolve()
+  return withTimeout(document.fonts.ready, 4_000)
+}
+
+function waitForWindowLoad() {
+  if (document.readyState === 'complete') return Promise.resolve()
+  return withTimeout(new Promise<void>((resolve) => window.addEventListener('load', () => resolve(), { once: true })), 4_000)
+}
+
+async function waitForCurrentImages() {
+  const images = Array.from(document.images)
+  await Promise.all(images.map(async (image) => {
+    if (!image.complete) await new Promise<void>((resolve) => {
+      image.addEventListener('error', () => resolve(), { once: true })
+      image.addEventListener('load', () => resolve(), { once: true })
+    })
+    await image.decode?.().catch(() => undefined)
+  }))
+}
+
+function nextPaint() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return Promise.race([promise, new Promise<undefined>((resolve) => window.setTimeout(resolve, timeoutMs))])
 }
 
 export default App

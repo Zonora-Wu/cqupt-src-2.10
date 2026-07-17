@@ -13,6 +13,8 @@ import {
   AiKnowledgeStatus,
   AiKnowledgeVisibility,
   AiSkillCandidateStatus,
+  AiSkillLifecycleOperation,
+  AiSkillLifecycleStatus,
   AiSpace,
   RoleCode,
   Prisma,
@@ -1040,15 +1042,33 @@ ${job.answerSummary}`),
 
     const content = renderSkillMarkdown(input.name, input.description, orderedEntries)
     try {
-      return await this.prisma.aiSkillCandidate.create({
-        data: {
-          content,
-          description: sanitizeFrontmatterValue(input.description),
-          name: input.name,
-          roleScope: firstScope,
-          sourceKnowledgeIds: input.sourceKnowledgeIds,
-          status: AiSkillCandidateStatus.NEEDS_REVIEW,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        const targetSkill = await tx.aiSkill.create({
+          data: {
+            active: false,
+            aiSpace: mapRoleScopeToAiSpace(firstScope),
+            content,
+            contentSha256: stableHash(content),
+            lifecycleStatus: AiSkillLifecycleStatus.DRAFT,
+            roleScope: firstScope,
+            slug: input.name,
+            source: 'admin-skill-candidate',
+            sourceKnowledgeIds: input.sourceKnowledgeIds,
+            title: input.name,
+          },
+        })
+        return tx.aiSkillCandidate.create({
+          data: {
+            content,
+            contentSha256: stableHash(content),
+            description: sanitizeFrontmatterValue(input.description),
+            name: input.name,
+            roleScope: firstScope,
+            sourceKnowledgeIds: input.sourceKnowledgeIds,
+            status: AiSkillCandidateStatus.NEEDS_REVIEW,
+            targetSkillId: targetSkill.id,
+          },
+        })
       })
     } catch (error) {
       if (isUniqueConstraintError(error)) throw new ConflictException('同名 Skill 候选已存在')
@@ -1057,13 +1077,33 @@ ${job.answerSummary}`),
   }
 
   async listSkillCandidates() {
-    return this.prisma.aiSkillCandidate.findMany({ orderBy: { updatedAt: 'desc' } })
+    return this.prisma.aiSkillCandidate.findMany({
+      include: {
+        installLogs: { orderBy: { createdAt: 'desc' }, take: 3 },
+        targetSkill: { select: { id: true, lifecycleStatus: true, slug: true, title: true, version: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+  }
+
+  async listSkillAudit() {
+    return this.prisma.aiSkill.findMany({
+      include: {
+        revisions: {
+          orderBy: { createdAt: 'desc' },
+          select: { candidateId: true, contentSha256: true, createdAt: true, decisionReason: true, operation: true, sourceKnowledgeIds: true, version: true },
+          take: 12,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    })
   }
 
   async reviewSkillCandidate(id: string, input: AiSkillCandidateReviewInput, reviewerId: string) {
     const candidate = await this.prisma.aiSkillCandidate.findUnique({ where: { id } })
     if (!candidate) throw new NotFoundException('Skill 候选不存在')
-    if (candidate.status !== AiSkillCandidateStatus.NEEDS_REVIEW) {
+    if (candidate.status !== AiSkillCandidateStatus.NEEDS_REVIEW && candidate.status !== AiSkillCandidateStatus.DRAFT) {
       throw new ConflictException('只有待审核的 Skill 候选可以执行批准或拒绝')
     }
     if (input.status === AiSkillCandidateStatus.APPROVED) {
@@ -1083,7 +1123,7 @@ ${candidate.content}`)
     })
   }
 
-  async installSkillCandidate(id: string, operatorId: string, targetRoot = process.env.CQUPT_HERMES_SKILLS_ROOT ?? '/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src') {
+  async installSkillCandidate(id: string, operatorId?: string, targetRoot = process.env.CQUPT_HERMES_SKILLS_ROOT ?? '/home/cocking/cqupt-src-hermes-linux/data/skills/cqupt-src') {
     const candidate = await this.prisma.aiSkillCandidate.findUnique({ where: { id } })
     if (!candidate) throw new NotFoundException('Skill 候选不存在')
     if (candidate.status === AiSkillCandidateStatus.INSTALLED) {
@@ -1099,11 +1139,14 @@ ${candidate.content}`)
     }
 
     const safeRoot = resolve(targetRoot)
-    const skillDir = resolve(join(safeRoot, candidate.name))
+    const skillSlug = candidate.targetSkillId
+      ? (await this.prisma.aiSkill.findUnique({ select: { slug: true }, where: { id: candidate.targetSkillId } }))?.slug ?? candidate.name
+      : candidate.name
+    const skillDir = resolve(join(safeRoot, skillSlug))
     assertPathInsideRoot(safeRoot, skillDir)
     const skillPath = join(skillDir, 'SKILL.md')
     assertPathInsideRoot(safeRoot, skillPath)
-    const containerPath = `/opt/data/skills/cqupt-src/${candidate.name}/SKILL.md`
+    const containerPath = `/opt/data/skills/cqupt-src/${skillSlug}/SKILL.md`
     const contentSha256 = stableHash(candidate.content)
 
     const claimed = await this.prisma.aiSkillCandidate.updateMany({
@@ -1128,8 +1171,59 @@ ${candidate.content}`)
           data: { promotedSkillId: id, status: AiKnowledgeStatus.PROMOTED_TO_SKILL },
           where: { id: { in: candidate.sourceKnowledgeIds } },
         })
+        const existingSkill = candidate.targetSkillId
+          ? await tx.aiSkill.findUnique({ where: { id: candidate.targetSkillId } })
+          : await tx.aiSkill.findUnique({ where: { slug: skillSlug } })
+        const skill = existingSkill
+          ? await tx.aiSkill.update({
+              data: {
+                active: true,
+                content: candidate.content,
+                contentSha256,
+                installedPath: realSkillPath,
+                lastPublishedAt: new Date(),
+                lastSyncedAt: new Date(),
+                lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+                sourceClusterIds: Array.from(new Set([...existingSkill.sourceClusterIds, ...(candidate.sourceClusterId ? [candidate.sourceClusterId] : [])])),
+                sourceKnowledgeIds: Array.from(new Set([...existingSkill.sourceKnowledgeIds, ...candidate.sourceKnowledgeIds])),
+                syncError: null,
+                version: existingSkill.version + (candidate.operation === AiSkillLifecycleOperation.UPDATE ? 1 : 0),
+              },
+              where: { id: existingSkill.id },
+            })
+          : await tx.aiSkill.create({
+              data: {
+                active: true,
+                aiSpace: mapRoleScopeToAiSpace(candidate.roleScope),
+                content: candidate.content,
+                contentSha256,
+                installedPath: realSkillPath,
+                lastPublishedAt: new Date(),
+                lastSyncedAt: new Date(),
+                lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+                roleScope: candidate.roleScope,
+                slug: skillSlug,
+                source: 'skill-candidate',
+                sourceKnowledgeIds: candidate.sourceKnowledgeIds,
+                title: candidate.name,
+              },
+            })
+        await tx.aiSkillRevision.create({
+          data: {
+            candidateId: candidate.id,
+            content: candidate.content,
+            contentSha256,
+            decisionReason: candidate.decisionReason,
+            generationModel: candidate.generationModel,
+            operation: candidate.operation,
+            skillId: skill.id,
+            sourceClusterIds: candidate.sourceClusterId ? [candidate.sourceClusterId] : [],
+            sourceKnowledgeIds: candidate.sourceKnowledgeIds,
+            version: skill.version,
+          },
+        })
         return tx.aiSkillCandidate.update({
-          data: { installedPath: realSkillPath, installError: null, status: AiSkillCandidateStatus.INSTALLED },
+          data: { installedPath: realSkillPath, installError: null, status: AiSkillCandidateStatus.INSTALLED, targetSkillId: skill.id },
           where: { id },
         })
       })
@@ -1253,6 +1347,12 @@ ${candidate.content}`)
       return updated
     })
   }
+}
+
+function mapRoleScopeToAiSpace(roleScope: AiKnowledgeRoleScope) {
+  if (roleScope === AiKnowledgeRoleScope.ADMIN) return AiSpace.ADMIN
+  if (roleScope === AiKnowledgeRoleScope.AUDITOR) return AiSpace.AUDITOR
+  return AiSpace.STUDENT
 }
 
 function buildTopicKey(question: string) {

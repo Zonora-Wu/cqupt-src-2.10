@@ -20,6 +20,7 @@ import { CompleteProfileModal } from '../../components/profile/CompleteProfileMo
 import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { NotificationBell } from '../../components/ui/NotificationPanel'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
@@ -317,7 +318,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
       </header>
 
       {activeMenu !== '首页' ? (
-        <Suspense fallback={<UserPageLoading />}>
+        <Suspense fallback={<FullScreenLoader label="正在加载页面" />}>
           {activeMenu === '安全答题' ? (
             <SecurityExamPage
               onBack={() => navigate('/user')}
@@ -569,16 +570,6 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         open={showResponsibilityDialog}
       />
     </AppBackground>
-  )
-}
-
-function UserPageLoading() {
-  return (
-    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
-      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
-        正在加载页面...
-      </SurfacePanel>
-    </section>
   )
 }
 

@@ -15,8 +15,31 @@
         } catch (e) {}
       })()
     </script>
+    <style>
+      #app-boot-loader {
+        align-items: center;
+        background: #f6f8f7;
+        display: flex;
+        inset: 0;
+        justify-content: center;
+        position: fixed;
+        z-index: 100001;
+      }
+      .dark #app-boot-loader { background: #101713; }
+      #app-boot-loader span {
+        animation: app-boot-spin 720ms linear infinite;
+        border: 3px solid rgba(42, 100, 56, .2);
+        border-radius: 50%;
+        border-top-color: #2a6438;
+        box-sizing: border-box;
+        height: 32px;
+        width: 32px;
+      }
+      @keyframes app-boot-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
+    <div aria-label="页面加载中" id="app-boot-loader" role="status"><span></span></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

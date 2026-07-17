@@ -10,6 +10,23 @@
   src: url("/assets/fonts/SmileySans-Oblique.ttf.woff2") format("woff2");
 }
 
+.app-fullscreen-loader__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid color-mix(in srgb, var(--color-brand-600) 20%, transparent);
+  border-top-color: var(--color-brand-600);
+  border-radius: 999px;
+  animation: app-fullscreen-loader-spin 720ms linear infinite;
+}
+
+@keyframes app-fullscreen-loader-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-fullscreen-loader__spinner { animation-duration: 1.5s; }
+}
+
 @theme {
   --font-sans: "Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   --font-mono: "Space Grotesk", "JetBrains Mono", ui-monospace, monospace;

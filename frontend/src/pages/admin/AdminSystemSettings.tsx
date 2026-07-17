@@ -63,7 +63,6 @@ import {
   importSecurityQuestionsFile,
   listSecurityQuestions,
   replaceSecurityQuestion,
-  setSecurityQuestionActive,
   updateSecurityQuestion,
   updateSecurityExamSettings,
   type SecurityExamSettings,
@@ -811,11 +810,6 @@ export function AdminSystemSettings() {
     const threshold = securityExamSettings?.threshold ?? 80
     const updated = await updateSecurityExamSettings({ enabled: next, threshold })
     setSecurityExamSettings(updated)
-  }
-
-  const handleToggleQuestion = async (id: string, active: boolean) => {
-    const updated = await setSecurityQuestionActive(id, active)
-    setSecurityQuestions((current) => current.map((item) => item.id === id ? updated : item))
   }
 
   const openResponsibilityAgreementEditor = () => {
@@ -1911,7 +1905,7 @@ export function AdminSystemSettings() {
                 >
                   <SettingRow control={<SettingToggle enabled={securityExamSettings?.enabled ?? true} onChange={() => void handleToggleSecurityExam()} />} description="新注册用户必须完成安全规范答题，达到分数要求后才能提交漏洞。" title="新用户答题准入" />
                   <SettingRow
-                    control={<ActionButton icon={<FileText className="h-4 w-4" />} label="编辑责任书" onClick={openResponsibilityAgreementEditor} />}
+                    control={<div className="flex justify-end"><ActionButton icon={<FileText className="h-4 w-4" />} label="编辑责任书" onClick={openResponsibilityAgreementEditor} /></div>}
                     description={responsibilityAgreement
                       ? `当前版本 ${responsibilityAgreement.version}，发布于 ${responsibilityAgreement.publishedAt ? new Date(responsibilityAgreement.publishedAt).toLocaleString('zh-CN') : '未发布'}。发布新版本后，用户需重新签署。`
                       : '用户必须签署责任书，承诺不进行未授权扫描、爆破、数据下载、权限维持和后门植入。'}
@@ -1954,31 +1948,6 @@ export function AdminSystemSettings() {
                     </div>
                     {questionMessage && <p className="mt-3 text-sm text-brand-700 dark:text-brand-300">{questionMessage}</p>}
                   </div>
-                  <div className="max-h-80 overflow-y-auto border-t border-black/10 dark:border-white/10">
-                    {securityQuestions.slice(0, 80).map((question) => (
-                      <div className="flex items-start justify-between gap-4 border-b border-black/5 px-6 py-3 last:border-b-0 dark:border-white/5" key={question.id}>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{question.stem}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{question.type} · 答案 {question.answerKeys.join('、')} · {question.source}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => openQuestionEditor(question)} type="button">编辑</button>
-                          <button className="rounded-lg border border-black/10 px-3 py-1.5 text-xs transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void handleToggleQuestion(question.id, !question.active)} type="button">
-                            {question.active ? '停用' : '启用'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {securityQuestions.length === 0 && <p className="px-6 py-6 text-center text-sm text-slate-500">暂无题目，可上传题库或让 AI 生成。</p>}
-                  </div>
-                </SettingsCard>
-                <SettingsCard
-                  description="会话超时和日志保留策略会影响平台运维安全。"
-                  icon={<DatabaseBackup className="h-5 w-5" />}
-                  title="后台安全"
-                >
-                  <SettingRow control={<TextField value="180 天" />} description="审计日志用于追踪敏感操作，建议生产环境保留至少 180 天。" title="审计日志保留" />
-                  <SettingRow control={<TextField value="120 分钟" />} description="管理员长时间无操作后自动退出，降低共享设备风险。" title="会话超时" />
                 </SettingsCard>
               </>
             )}

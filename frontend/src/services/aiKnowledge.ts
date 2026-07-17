@@ -185,6 +185,26 @@ export type AiSkillCandidate = {
   installError?: string | null
   createdAt: string
   updatedAt: string
+  operation?: 'CREATE' | 'UPDATE'
+  origin?: 'ADMIN' | 'AUTO_APPROVAL' | 'MANUAL_REVIEW'
+  decisionScore?: number | null
+  decisionReason?: string | null
+  generationModel?: string | null
+  sourceClusterId?: string | null
+  targetSkill?: { id: string; title: string; slug?: string | null; version: number; lifecycleStatus: 'DRAFT' | 'PUBLISHED' | 'FAILED' } | null
+}
+
+export type AiSkillAudit = {
+  id: string
+  title: string
+  slug?: string | null
+  version: number
+  lifecycleStatus: 'DRAFT' | 'PUBLISHED' | 'FAILED'
+  sourceKnowledgeIds: string[]
+  sourceClusterIds: string[]
+  installedPath?: string | null
+  syncError?: string | null
+  revisions: Array<{ candidateId?: string | null; contentSha256: string; createdAt: string; decisionReason?: string | null; operation: 'CREATE' | 'UPDATE'; sourceKnowledgeIds: string[]; version: number }>
 }
 
 export type AiKnowledgeStats = {
@@ -317,6 +337,10 @@ export function listAiKnowledgeCaptureJobs(params: { page?: number; pageSize?: n
 
 export function listAiSkillCandidates() {
   return apiRequest<AiSkillCandidate[]>('/ai/knowledge/skill-candidates', { auth: true, method: 'GET' })
+}
+
+export function listAiSkillAudit() {
+  return apiRequest<AiSkillAudit[]>('/ai/knowledge/skill-audit', { auth: true, method: 'GET' })
 }
 
 export function createAiSkillCandidate(body: { name: string; description: string; sourceKnowledgeIds: string[] }) {

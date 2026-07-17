@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { createAiProblemSession, discardAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, resolveAiProblemSession, sendAiChat, submitAiTurnFeedback, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
+import { createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
@@ -82,6 +82,8 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 0 : window.innerWidth)
   const [readOnlyHistory, setReadOnlyHistory] = useState(false)
   const [resolutionPrompt, setResolutionPrompt] = useState<AiProblemSession | null>(null)
+  const [resolutionAction, setResolutionAction] = useState<'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null>(null)
+  const [resolutionError, setResolutionError] = useState('')
   const hasStarted = messages.length > 0
 
   useEffect(() => {
@@ -165,8 +167,6 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
     return () => {
       active = false
-      const id = problemSessionIdRef.current
-      if (id && hasProblemContentRef.current) void leaveAiProblemSession(id).catch(() => undefined)
     }
   }, [])
 
@@ -181,17 +181,13 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
       void heartbeatAiProblemSession(id)
         .then((session) => {
           setProblemSession(session)
-          if (session.shouldAskResolution) setResolutionPrompt(session)
+          setResolutionPrompt(session.shouldAskResolution ? session : null)
         })
         .catch(() => undefined)
     }, 30_000)
 
     const handleVisibilityChange = () => {
-      const id = problemSessionIdRef.current
-      if (!id) return
-      if (document.visibilityState === 'hidden') {
-        if (hasProblemContentRef.current) void leaveAiProblemSession(id).catch(() => undefined)
-      } else {
+      if (document.visibilityState === 'visible') {
         void getActiveAiProblemSession('student')
           .then((session) => {
             if (!session) return
@@ -298,6 +294,12 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const startFreshProblemSession = async () => {
     const currentId = problemSessionIdRef.current
     if (currentId && hasProblemContentRef.current) {
+      const prompt = await requestAiProblemSessionResolutionPrompt(currentId, 'NEW_CONVERSATION').catch(() => null)
+      if (prompt) {
+        setResolutionError('')
+        setResolutionPrompt(prompt)
+        return null
+      }
       await leaveAiProblemSession(currentId).catch(() => undefined)
     }
     const session = await createAiProblemSession('student')
@@ -334,37 +336,61 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     problemSessionIdRef.current = canContinue ? session.id : null
     setProblemSession(session)
     setReadOnlyHistory(!canContinue)
-    setResolutionPrompt(session.shouldAskResolution ? session : null)
+    setResolutionPrompt(null)
     setMessages(messagesFromProblemSession(session))
   }
 
   const continueProblemSession = async () => {
     const id = resolutionPrompt?.id ?? problemSessionIdRef.current
     if (!id) return
-    const session = await heartbeatAiProblemSession(id)
-    problemSessionIdRef.current = session.id
-    setProblemSession(session)
-    setResolutionPrompt(null)
+    setResolutionAction('CONTINUE')
+    setResolutionError('')
+    try {
+      const session = await resumeAiProblemSessionResolutionPrompt(id)
+      problemSessionIdRef.current = session.id
+      setProblemSession(session)
+      setResolutionPrompt(null)
+    } catch {
+      setResolutionError('无法继续该会话，请稍后重试。')
+    } finally {
+      setResolutionAction(null)
+    }
+  }
+
+  const snoozeProblemSession = async () => {
+    const id = resolutionPrompt?.id ?? problemSessionIdRef.current
+    if (!id) return
+    setResolutionAction('SNOOZE')
+    setResolutionError('')
+    try {
+      const session = await snoozeAiProblemSessionResolutionPrompt(id)
+      problemSessionIdRef.current = session.id
+      setProblemSession(session)
+      setResolutionPrompt(null)
+    } catch {
+      setResolutionError('暂时无法设置提醒，请稍后重试。')
+    } finally {
+      setResolutionAction(null)
+    }
   }
 
   const resolveProblemSession = async () => {
     const id = resolutionPrompt?.id ?? problemSessionIdRef.current
     if (!id) return
-    await resolveAiProblemSession(id)
-    problemSessionIdRef.current = null
-    setReadOnlyHistory(false)
-    await refreshHistorySessions()
-    await startFreshProblemSession()
-  }
-
-  const discardProblemSession = async () => {
-    const id = resolutionPrompt?.id ?? problemSessionIdRef.current
-    if (!id) return
-    await discardAiProblemSession(id)
-    problemSessionIdRef.current = null
-    setReadOnlyHistory(false)
-    await refreshHistorySessions()
-    await startFreshProblemSession()
+    setResolutionAction('RESOLVE')
+    setResolutionError('')
+    try {
+      await resolveAiProblemSession(id)
+      problemSessionIdRef.current = null
+      setReadOnlyHistory(false)
+      setResolutionPrompt(null)
+      await refreshHistorySessions()
+      await startFreshProblemSession()
+    } catch (error) {
+      setResolutionError(error instanceof Error ? `未进入沉淀：${error.message}` : '未进入沉淀：总结失败，会话已保留。')
+    } finally {
+      setResolutionAction(null)
+    }
   }
 
   const sendMessage = async (overrideContent?: string) => {
@@ -373,6 +399,15 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     if ((!content && !attachment) || sending || uploadingAttachment) return
 
     const effectiveContent = content || '请阅读附件内容，并给出整理、修改或下一步建议。'
+    const existingId = problemSessionIdRef.current
+    if (existingId && !readOnlyHistory) {
+      const prompt = await requestAiProblemSessionResolutionPrompt(existingId, 'NEW_QUESTION').catch(() => null)
+      if (prompt) {
+        setResolutionError('')
+        setResolutionPrompt(prompt)
+        return
+      }
+    }
     const shouldExtractReportDrafts = Boolean(attachment && isReportDraftIntent(effectiveContent))
     const userAttachment = attachment ? { name: attachment.file.name, size: attachment.file.size } : undefined
 
@@ -607,13 +642,6 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
 
   return (
     <>
-    {resolutionPrompt && (
-      <ProblemSessionResolutionModal
-        onContinue={() => void continueProblemSession()}
-        onDiscard={() => void discardProblemSession()}
-        onResolve={() => void resolveProblemSession()}
-      />
-    )}
     <AiHistoryPanel
       activeId={problemSession?.id ?? null}
       autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}
@@ -640,6 +668,15 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         onOpen={(id) => void openHistorySession(id)}
         showAtDesktop={shouldAutoCollapseHistory}
       />
+      {resolutionPrompt ? (
+        <ProblemSessionResolutionCard
+          busy={resolutionAction}
+          error={resolutionError}
+          onContinue={() => void continueProblemSession()}
+          onSnooze={() => void snoozeProblemSession()}
+          onResolve={() => void resolveProblemSession()}
+        />
+      ) : null}
       <AnimatePresence mode="wait">
         {!hasStarted && (
           <motion.div
@@ -1002,55 +1039,40 @@ function formatHistoryTime(value: string) {
   return date.toLocaleString('zh-CN', { day: '2-digit', hour: '2-digit', minute: '2-digit', month: '2-digit' })
 }
 
-function ProblemSessionResolutionModal({
+function ProblemSessionResolutionCard({
+  busy,
+  error,
   onContinue,
-  onDiscard,
+  onSnooze,
   onResolve,
 }: {
+  busy: 'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null
+  error: string
   onContinue: () => void
-  onDiscard: () => void
+  onSnooze: () => void
   onResolve: () => void
 }) {
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-lg border border-black/10 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">
-            <Bot className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-slate-950 dark:text-white">这个问题解决了吗？</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-              邮宝会根据你的选择处理本次问题会话。确认已解决后，后续阶段才会进入总结和知识沉淀审核。
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-          <button
-            className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            onClick={onResolve}
-            type="button"
-          >
-            已解决
-          </button>
-          <button
-            className="inline-flex items-center justify-center rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
-            onClick={onContinue}
-            type="button"
-          >
-            继续这个问题
-          </button>
-          <button
-            className="inline-flex items-center justify-center rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 dark:text-red-200 dark:hover:bg-red-950/30"
-            onClick={onDiscard}
-            type="button"
-          >
-            不沉淀
-          </button>
+  return (
+    <motion.aside
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-5 flex flex-col gap-4 rounded-lg border border-brand-600/20 bg-[var(--app-panel-bg)] px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+      initial={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300"><Bot className="h-4 w-4" /></div>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-950 dark:text-white">这个问题解决了吗？</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">确认后才进入总结和沉淀审核；稍后再问会在 7 天内不再提醒。</p>
+          {error ? <p className="mt-1 text-xs leading-5 text-red-600 dark:text-red-300">{error}</p> : null}
         </div>
       </div>
-    </div>,
-    document.body,
+      <div className="grid shrink-0 grid-cols-3 gap-2 sm:flex">
+        <button className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={busy !== null} onClick={onResolve} type="button">{busy === 'RESOLVE' ? '处理中' : '已解决'}</button>
+        <button className="rounded-lg border border-black/10 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy !== null} onClick={onSnooze} type="button">{busy === 'SNOOZE' ? '设置中' : '稍后再问'}</button>
+        <button className="rounded-lg border border-black/10 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy !== null} onClick={onContinue} type="button">{busy === 'CONTINUE' ? '继续中' : '继续'}</button>
+      </div>
+    </motion.aside>
   )
 }
 

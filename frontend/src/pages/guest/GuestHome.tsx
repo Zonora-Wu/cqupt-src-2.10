@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
+import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { getPublicPageFromPath, publicPagePaths, type PublicPage } from '../../routes/routeConfig'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
@@ -406,19 +407,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 }
 
 function LazyPage({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
-}
-
-function PageSkeleton() {
-  return (
-    <div className="relative z-10 mx-auto min-h-screen max-w-6xl px-5 pt-32 md:px-8">
-      <div className="h-7 w-48 animate-pulse rounded-lg bg-black/10 dark:bg-white/10" />
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <div className="h-36 animate-pulse rounded-lg bg-black/10 dark:bg-white/10 md:col-span-2" />
-        <div className="h-36 animate-pulse rounded-lg bg-black/10 dark:bg-white/10" />
-      </div>
-    </div>
-  )
+  return <Suspense fallback={<FullScreenLoader label="正在加载页面" />}>{children}</Suspense>
 }
 
 function PageTransition({ children }: { children: ReactNode }) {

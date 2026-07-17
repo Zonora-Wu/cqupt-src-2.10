@@ -30,6 +30,7 @@ import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
 import { CopyableCode } from '../../components/ui/CopyableCode'
 import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -364,13 +365,13 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       ) : activeMenu === '首页' ? (
         <AuditorDashboard onNavigate={openMenu} />
       ) : activeMenu === '漏洞审核' ? (
-        <Suspense fallback={<AuditorPageLoading />}>
+        <Suspense fallback={<FullScreenLoader label="正在加载审核页面" />}>
           <AdminVulnerabilityManagement />
         </Suspense>
       ) : activeMenu === '复测归档' ? (
         <AuditorRetestArchive />
       ) : activeMenu === '证书管理' ? (
-        <Suspense fallback={<AuditorPageLoading />}>
+        <Suspense fallback={<FullScreenLoader label="正在加载审核页面" />}>
           <AdminCertificateManagement />
         </Suspense>
       ) : activeMenu === 'AI 辅助' ? (
@@ -378,23 +379,13 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       ) : activeMenu === '审核记录' ? (
         <AuditorReviewHistory />
       ) : activeMenu === '公告管理' ? (
-        <Suspense fallback={<AuditorPageLoading />}>
+        <Suspense fallback={<FullScreenLoader label="正在加载审核页面" />}>
           <AdminAnnouncementManagement />
         </Suspense>
       ) : (
         <AuditorProfile user={user} />
       )}
     </AppBackground>
-  )
-}
-
-function AuditorPageLoading() {
-  return (
-    <section className="relative z-10 mx-auto max-w-[960px] px-5 pb-8 pt-24 md:px-8">
-      <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
-        正在加载审核页面...
-      </SurfacePanel>
-    </section>
   )
 }
 

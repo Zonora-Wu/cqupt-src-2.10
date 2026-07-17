@@ -245,6 +245,28 @@ export function leaveAiProblemSession(id: string) {
   })
 }
 
+export function requestAiProblemSessionResolutionPrompt(id: string, reason: 'INACTIVITY' | 'NEW_CONVERSATION' | 'NEW_QUESTION') {
+  return apiRequest<AiProblemSession | null>(`/ai/problem-sessions/${id}/resolution-prompt`, {
+    auth: true,
+    body: { reason },
+    method: 'POST',
+  })
+}
+
+export function snoozeAiProblemSessionResolutionPrompt(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/resolution-snooze`, {
+    auth: true,
+    method: 'POST',
+  })
+}
+
+export function resumeAiProblemSessionResolutionPrompt(id: string) {
+  return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/resolution-resume`, {
+    auth: true,
+    method: 'POST',
+  })
+}
+
 export function resolveAiProblemSession(id: string, note?: string) {
   return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/resolve`, {
     auth: true,

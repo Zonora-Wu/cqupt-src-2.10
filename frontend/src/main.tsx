@@ -8,3 +8,5 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+requestAnimationFrame(() => document.getElementById('app-boot-loader')?.remove())

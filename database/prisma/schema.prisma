@@ -251,6 +251,23 @@ enum AiSkillCandidateStatus {
   FAILED
 }
 
+enum AiSkillLifecycleStatus {
+  DRAFT
+  PUBLISHED
+  FAILED
+}
+
+enum AiSkillLifecycleOperation {
+  CREATE
+  UPDATE
+}
+
+enum AiSkillLifecycleOrigin {
+  ADMIN
+  AUTO_APPROVAL
+  MANUAL_REVIEW
+}
+
 enum ChatConversationType {
   DIRECT
   GROUP
@@ -962,19 +979,36 @@ model AiUserQuota {
 }
 
 model AiSkill {
-  id          String    @id @default(cuid())
-  aiSpace     AiSpace
-  title       String
-  content     String    @db.Text
-  source      String?
-  createdById String?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   User?     @relation("AiSkillCreator", fields: [createdById], references: [id])
+  id                  String                 @id @default(cuid())
+  aiSpace             AiSpace
+  title               String
+  content             String                 @db.Text
+  source              String?
+  createdById         String?
+  active              Boolean                @default(true)
+  slug                String?                @unique
+  roleScope           AiKnowledgeRoleScope   @default(ALL)
+  canonicalKey        String?
+  sourceKnowledgeIds  String[]               @default([])
+  sourceClusterIds    String[]               @default([])
+  lifecycleStatus     AiSkillLifecycleStatus @default(PUBLISHED)
+  version             Int                    @default(1)
+  contentSha256       String?
+  installedPath       String?
+  lastPublishedAt     DateTime?
+  lastSyncedAt        DateTime?
+  syncError           String?                @db.Text
+  metadata            Json?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  createdBy           User?                  @relation("AiSkillCreator", fields: [createdById], references: [id])
+  candidateTargets    AiSkillCandidate[]     @relation("AiSkillCandidateTarget")
+  revisions           AiSkillRevision[]
 
   @@index([aiSpace])
   @@index([active])
+  @@index([aiSpace, roleScope, lifecycleStatus])
+  @@index([canonicalKey])
 }
 
 model AiFaqEntry {
@@ -1095,6 +1129,9 @@ model AiProblemSession {
   startedAt          DateTime               @default(now())
   lastActiveAt       DateTime               @default(now())
   leftAt             DateTime?
+  resolutionPromptedAt DateTime?
+  resolutionSnoozedUntil DateTime?
+  resolutionPromptCount Int                    @default(0)
   resolvedAt         DateTime?
   closedAt           DateTime?
   resolutionByUser   Boolean?
@@ -1335,15 +1372,49 @@ model AiSkillCandidate {
   reviewNote         String?                @db.Text
   installedPath      String?
   installError       String?                @db.Text
+  operation          AiSkillLifecycleOperation @default(CREATE)
+  origin             AiSkillLifecycleOrigin    @default(ADMIN)
+  targetSkillId      String?
+  sourceClusterId    String?
+  decisionScore      Float?
+  decisionReason     String?                @db.Text
+  generationModel    String?
+  contentSha256      String?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
   reviewedBy         User?                  @relation("AiSkillCandidateReviewer", fields: [reviewedById], references: [id])
+  targetSkill        AiSkill?               @relation("AiSkillCandidateTarget", fields: [targetSkillId], references: [id], onDelete: SetNull)
   installLogs        AiSkillInstallLog[]
+  revisions          AiSkillRevision[]
 
   @@index([status, updatedAt])
   @@index([roleScope])
   @@index([reviewedById])
+  @@index([targetSkillId])
+  @@index([origin, updatedAt])
+}
+
+model AiSkillRevision {
+  id                 String                    @id @default(cuid())
+  skillId            String
+  candidateId        String?
+  version            Int
+  operation          AiSkillLifecycleOperation
+  content            String                    @db.Text
+  contentSha256      String
+  sourceKnowledgeIds String[]                  @default([])
+  sourceClusterIds   String[]                  @default([])
+  generationModel    String?
+  decisionReason     String?                   @db.Text
+  createdAt          DateTime                  @default(now())
+
+  skill              AiSkill                   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  candidate          AiSkillCandidate?         @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@unique([skillId, version])
+  @@index([candidateId])
+  @@index([skillId, createdAt])
 }
 
 model AiSkillInstallLog {

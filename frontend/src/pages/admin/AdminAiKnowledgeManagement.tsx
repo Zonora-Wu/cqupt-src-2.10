@@ -14,6 +14,7 @@ import {
   listAiKnowledgeConversations,
   listAiKnowledgeMaintenanceTasks,
   listAiProblemSessionsForReview,
+  listAiSkillAudit,
   listAiSkillCandidates,
   processAiKnowledgeCaptures,
   resolveAiKnowledgeMaintenanceTask,
@@ -33,6 +34,7 @@ import {
   type AiKnowledgeStatus,
   type AiProblemSession,
   type AiSkillCandidate,
+  type AiSkillAudit,
 } from '../../services/aiKnowledge'
 
 const statusLabels: Record<string, string> = {
@@ -110,6 +112,7 @@ export function AdminAiKnowledgeManagement() {
   const [conversations, setConversations] = useState<AiKnowledgeConversation[]>([])
   const [problemSessions, setProblemSessions] = useState<AiProblemSession[]>([])
   const [candidates, setCandidates] = useState<AiSkillCandidate[]>([])
+  const [skillAudit, setSkillAudit] = useState<AiSkillAudit[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [stats, setStats] = useState<AiKnowledgeStats | null>(null)
   const [captureJobs, setCaptureJobs] = useState<AiKnowledgeStats['recentQueue']>([])
@@ -130,10 +133,11 @@ export function AdminAiKnowledgeManagement() {
     setLoading(true)
     setError('')
     try {
-      const [statsData, entriesData, candidatesData, jobsData, conversationData, problemSessionData, maintenanceTaskData] = await Promise.all([
+      const [statsData, entriesData, candidatesData, skillAuditData, jobsData, conversationData, problemSessionData, maintenanceTaskData] = await Promise.all([
         getAiKnowledgeStats(),
         listAiKnowledge({ page: 1, pageSize: 20, status: activeTab === 'AUTO_APPROVED' ? 'AUTO_APPROVED' : activeTab === 'SKILLS' ? undefined : status === 'ALL' ? undefined : status, keyword }),
         listAiSkillCandidates(),
+        listAiSkillAudit(),
         listAiKnowledgeCaptureJobs({ page: 1, pageSize: 8 }),
         listAiKnowledgeConversations({ page: 1, pageSize: 8 }),
         listAiProblemSessionsForReview({ page: 1, pageSize: 8 }),
@@ -142,6 +146,7 @@ export function AdminAiKnowledgeManagement() {
       setStats(statsData)
       setEntries(entriesData.items)
       setCandidates(candidatesData)
+      setSkillAudit(skillAuditData)
       setCaptureJobs(jobsData.items)
       setConversations(conversationData.items)
       setProblemSessions(problemSessionData.items)
@@ -636,11 +641,29 @@ export function AdminAiKnowledgeManagement() {
                   </div>
                   {candidate.installedPath ? <p className="mt-2 break-all text-xs text-slate-500 dark:text-slate-400">安装路径：{candidate.installedPath}</p> : null}
                   {candidate.installError ? <p className="mt-2 text-xs text-red-600 dark:text-red-300">{candidate.installError}</p> : null}
+                  {candidate.origin ? <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{candidate.origin === 'AUTO_APPROVAL' ? '自动入库' : candidate.origin === 'MANUAL_REVIEW' ? '人工入库草案' : '管理员创建'} · {candidate.operation === 'UPDATE' ? '更新已有 Skill' : '新建 Skill'}{candidate.decisionScore !== undefined && candidate.decisionScore !== null ? ` · 匹配 ${(candidate.decisionScore * 100).toFixed(0)}%` : ''}</p> : null}
+                  {candidate.decisionReason ? <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">判定：{candidate.decisionReason}</p> : null}
+                  {candidate.targetSkill ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">目标：{candidate.targetSkill.title} v{candidate.targetSkill.version} · {candidate.targetSkill.lifecycleStatus}</p> : null}
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     <button className="rounded-lg border border-emerald-500/20 px-2 py-1.5 text-xs text-emerald-700 disabled:opacity-60 dark:text-emerald-200" disabled={candidate.status === 'APPROVED' || candidate.status === 'INSTALLED'} onClick={() => void runAction(candidate.id, () => reviewAiSkillCandidate(candidate.id, 'APPROVED', '允许安装到平台 Hermes'), 'Skill 候选已批准')} type="button">批准</button>
                     <button className="rounded-lg border border-red-500/20 px-2 py-1.5 text-xs text-red-700 disabled:opacity-60 dark:text-red-200" disabled={candidate.status === 'REJECTED'} onClick={() => void runAction(candidate.id, () => reviewAiSkillCandidate(candidate.id, 'REJECTED', '暂不晋升 Skill'), 'Skill 候选已拒绝')} type="button">拒绝</button>
                     <button className="rounded-lg border border-brand-600/20 px-2 py-1.5 text-xs text-brand-700 disabled:opacity-60 dark:text-brand-200" disabled={candidate.status !== 'APPROVED'} onClick={() => { if (window.confirm(`确认安装 Skill ${candidate.name} 到平台 Hermes skills 目录？安装后会影响平台 Agent 可加载能力。`)) void runAction(candidate.id, () => installAiSkillCandidate(candidate.id), 'Skill 已安装到平台 Hermes 目录') }} type="button">安装</button>
                   </div>
+                </div>
+              ))}
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel className="p-5">
+            <h2 className="text-lg font-semibold">发布与版本审计</h2>
+            <div className="mt-4 space-y-3">
+              {skillAudit.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">暂无 Skill 生命周期记录。</p> : null}
+              {skillAudit.map((skill) => (
+                <div className="rounded-lg border border-black/5 p-3 text-sm dark:border-white/10" key={skill.id}>
+                  <div className="flex items-center justify-between gap-3"><span className="font-medium">{skill.title}</span><StatusBadge status={skill.lifecycleStatus} /></div>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{skill.slug || skill.id} · v{skill.version} · 来源知识 {skill.sourceKnowledgeIds.length} 条</p>
+                  {skill.syncError ? <p className="mt-1 text-xs text-red-600 dark:text-red-300">同步异常：{skill.syncError}</p> : null}
+                  {skill.revisions.slice(0, 3).map((revision) => <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" key={`${skill.id}-${revision.version}`}>v{revision.version} · {revision.operation === 'UPDATE' ? '更新' : '新建'} · {new Date(revision.createdAt).toLocaleString()}</p>)}
                 </div>
               ))}
             </div>
