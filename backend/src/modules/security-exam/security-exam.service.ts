@@ -390,27 +390,49 @@ export class SecurityExamService {
   }
 
   private async generateValidatedQuestionSet(prompt: string, temperature: number) {
+    const batches = await Promise.all([
+      this.generateValidatedQuestionBatch(prompt, temperature, SecurityQuestionType.SINGLE_CHOICE, QUESTION_BLUEPRINT[SecurityQuestionType.SINGLE_CHOICE]),
+      this.generateValidatedQuestionBatch(prompt, temperature, SecurityQuestionType.TRUE_FALSE, QUESTION_BLUEPRINT[SecurityQuestionType.TRUE_FALSE]),
+      this.generateValidatedQuestionBatch(prompt, temperature, SecurityQuestionType.MULTIPLE_CHOICE, QUESTION_BLUEPRINT[SecurityQuestionType.MULTIPLE_CHOICE]),
+    ])
+    const questions = batches.flatMap((batch) => batch.questions)
+    assertQuestionBlueprint(questions)
+    return {
+      content: batches.map((batch) => batch.content).join('\n'),
+      questions,
+      result: { body: { usage: { total_tokens: batches.reduce((total, batch) => total + (extractTokenUsage(batch.result.body) ?? 0), 0) } } },
+    }
+  }
+
+  private async generateValidatedQuestionBatch(
+    prompt: string,
+    temperature: number,
+    type: SecurityQuestionType,
+    count: number,
+  ) {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const retryInstruction = attempt === 0
-        ? prompt
-        : `${prompt}\n上一轮输出未通过题库校验。请重新生成完整题库，严格只返回一个 JSON 对象；题目总数必须为 20，且 SINGLE_CHOICE 10 道、TRUE_FALSE 5 道、MULTIPLE_CHOICE 5 道。`
+        ? buildQuestionBatchPrompt(prompt, type, count)
+        : `${buildQuestionBatchPrompt(prompt, type, count)}\n上一轮输出未通过校验。请严格只返回 ${count} 道 ${type} 题，不能少题、不能混入其他题型。`
       const result = await this.requestOpenAi('chat/completions', {
-        body: { messages: [{ role: 'system', content: '你是 CQUPT-SRC 网络安全知识题库专家。只输出 JSON，不输出 Markdown。' }, { role: 'user', content: retryInstruction }], model: getOpenAiModel(), temperature },
+        body: { max_tokens: type === SecurityQuestionType.SINGLE_CHOICE ? 5000 : 3000, messages: [{ role: 'system', content: '你是 CQUPT-SRC 网络安全知识题库专家。只输出 JSON，不输出 Markdown。' }, { role: 'user', content: retryInstruction }], model: getOpenAiModel(), temperature },
         method: 'POST',
-        timeoutMs: 60_000,
+        timeoutMs: 45_000,
       })
       const content = extractOpenAiContent(result.body)
       try {
         const questions = normalizeImportedQuestionPayload(parseJsonPayload(content))
-        assertQuestionBlueprint(questions)
+        if (questions.length !== count || questions.some((question) => question.type !== type)) {
+          throw new BadRequestException(`AI 返回的${formatType(type)}数量或题型不符合要求`)
+        }
         return { content, questions, result }
       } catch (error) {
         lastError = error
       }
     }
     const reason = lastError instanceof Error ? lastError.message : '返回内容不符合题库格式'
-    throw new BadRequestException(`AI 连续两次返回的题库未通过校验：${reason}`)
+    throw new BadRequestException(`AI 连续两次返回的${formatType(type)}未通过校验：${reason}`)
   }
 }
 
@@ -478,9 +500,10 @@ function extractCompleteJson(value: string, start: number) {
 async function extractFileText(file: UploadedQuestionFile) { const name = file.originalname?.toLowerCase() ?? ''; const mime = file.mimetype ?? ''; if (mime.includes('pdf') || name.endsWith('.pdf')) { const parser = new PDFParse({ data: file.buffer }); const result = await parser.getText(); await parser.destroy(); return (result.text ?? '').trim() } return file.buffer?.toString('utf8').trim() ?? '' }
 function buildQuestionGenerationPrompt(topic: string, difficulty: string, knowledgeContext?: string) { return `请围绕“${topic}”生成 CQUPT-SRC 新用户准入网络安全知识题库，难度：${difficulty}。目标读者是没有专业基础的大一学生，题干与选项要简短、清楚、贴近日常校园网络使用场景。
 
-必须生成 20 道题：10 道 SINGLE_CHOICE、5 道 TRUE_FALSE、5 道 MULTIPLE_CHOICE。
+最终题库蓝图为 20 道题：10 道 SINGLE_CHOICE、5 道 TRUE_FALSE、5 道 MULTIPLE_CHOICE；本次请求的具体题型和数量以末尾批次要求为准。
 
 重点范围：网络安全法律法规的基础意识（不要求记忆法条编号）、个人信息和数据保护、网络账号安全、授权测试边界、漏洞负责任披露、渗透测试中应避免的行为，例如未授权扫描、爆破、撞库、数据下载、拒绝服务、权限维持、后门植入、公开未修复漏洞。
 
 约束：只考察安全规范和风险判断；不要考察命令、工具参数、漏洞利用、绕过方法、攻击链或真实系统操作步骤；避免专业术语堆砌、复杂计算、陷阱题和需要猜测的题目。每题提供简洁的 explanation，说明正确行为或风险原因。${knowledgeContext ? `\n题目应以以下知识库内容为背景，优先考察其明确规定；知识库未覆盖的内容可使用上述基础安全规范补充。\n知识库：\n${knowledgeContext}\n` : ''}输出 JSON：{"questions":[{"type":"SINGLE_CHOICE","stem":"...","options":[{"key":"A","text":"..."}],"answerKeys":["A"],"explanation":"..."}]}` }
+function buildQuestionBatchPrompt(basePrompt: string, type: SecurityQuestionType, count: number) { return `${basePrompt}\n\n本轮只生成 ${count} 道 ${type}。不要生成其他题型；返回 JSON 中 questions 数组必须恰好有 ${count} 项。${type === SecurityQuestionType.SINGLE_CHOICE ? '每题提供 A、B、C、D 四个选项且只有一个正确答案。' : type === SecurityQuestionType.TRUE_FALSE ? '每题提供 A=正确、B=错误 两个选项且只有一个正确答案。' : '每题提供 A、B、C、D 四个选项，answerKeys 必须有两个或以上正确答案。'}` }
 function buildQuestionImportPrompt(text: string) { return `请将下面题库材料解析成平台标准题库 JSON。只保留网络安全知识、SRC 责任边界、数据脱敏、漏洞提交规范相关内容。若原材料没有答案，请基于安全常识补全答案并写 explanation。输出 JSON 格式同 {"questions":[...]}。材料：\n${text}` }

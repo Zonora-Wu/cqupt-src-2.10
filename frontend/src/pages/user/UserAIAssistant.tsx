@@ -156,11 +156,13 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
         const current = session ?? await createAiProblemSession('student')
         const detailed = await getAiProblemSession(current.id).catch(() => current)
         if (!active) return
+        // 用户已在初始化期间创建新会话时，不能把旧会话及其消息回填回来。
+        if (problemSessionIdRef.current && problemSessionIdRef.current !== detailed.id) return
         problemSessionIdRef.current = detailed.id
         setProblemSession(detailed)
         setResolutionPrompt(detailed.shouldAskResolution ? detailed : null)
         if (detailed.turns?.length) {
-          setMessages(messagesFromProblemSession(detailed))
+          setMessages((currentMessages) => currentMessages.length > 0 ? currentMessages : messagesFromProblemSession(detailed))
         }
       })
       .catch(() => undefined)
@@ -399,15 +401,6 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     if ((!content && !attachment) || sending || uploadingAttachment) return
 
     const effectiveContent = content || '请阅读附件内容，并给出整理、修改或下一步建议。'
-    const existingId = problemSessionIdRef.current
-    if (existingId && !readOnlyHistory) {
-      const prompt = await requestAiProblemSessionResolutionPrompt(existingId, 'NEW_QUESTION').catch(() => null)
-      if (prompt) {
-        setResolutionError('')
-        setResolutionPrompt(prompt)
-        return
-      }
-    }
     const shouldExtractReportDrafts = Boolean(attachment && isReportDraftIntent(effectiveContent))
     const userAttachment = attachment ? { name: attachment.file.name, size: attachment.file.size } : undefined
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { AiKnowledgeRoleScope, AiSkillLifecycleStatus, AiSpace, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -122,7 +122,7 @@ const ALL_SKILLS = [...CORE_SKILLS, ...ROLE_SKILLS]
 
 @Injectable()
 export class AiSkillRouterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async route(input: NormalizedAiChatInput, user: AuthenticatedRequestUser): Promise<AiSkillRouteDecision> {
     const normalizedMessage = input.message.trim()
