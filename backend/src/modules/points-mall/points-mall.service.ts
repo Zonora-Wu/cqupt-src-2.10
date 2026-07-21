@@ -18,6 +18,7 @@ import {
   productStatusLabelMap,
   redemptionStatusLabelMap,
 } from './points-mall.types'
+import { getLeaderboardRangeStart, rankLeaderboard } from './leaderboard.utils'
 
 type UploadedImageFile = {
   buffer?: Buffer
@@ -503,87 +504,125 @@ export class PointsMallService {
   }
 
   async getLeaderboard(scope: 'all' | 'month' | 'week', currentUserId: string) {
-    const now = new Date()
-    let rangeStart: Date | undefined
-
-    if (scope === 'month') {
-      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    } else if (scope === 'week') {
-      const dayOfWeek = now.getDay()
-      // 周一为本周起始
-      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday)
-      rangeStart.setHours(0, 0, 0, 0)
-    }
-
-    // 取所有启用学生用户及其积分入账条目和有效漏洞数
-    const users = await this.prisma.user.findMany({
-      where: {
-        deletedAt: null,
-        role: { code: RoleCode.STUDENT },
-        status: UserStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-        name: true,
-        pointEntries: {
-          where: {
-            direction: PointDirection.IN,
-            ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
-          },
-          select: { balanceAfter: true, points: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-        },
-        submittedReports: {
-          where: {
-            status: {
-              in: [
-                VulnerabilityStatus.CONFIRMED,
-                VulnerabilityStatus.FIXING,
-                VulnerabilityStatus.PENDING_RETEST,
-                VulnerabilityStatus.ARCHIVED,
-                VulnerabilityStatus.CERTIFIED,
-              ],
+    const rangeStart = getLeaderboardRangeStart(scope)
+    const validStatuses = [
+      VulnerabilityStatus.CONFIRMED,
+      VulnerabilityStatus.FIXING,
+      VulnerabilityStatus.PENDING_RETEST,
+      VulnerabilityStatus.ARCHIVED,
+      VulnerabilityStatus.CERTIFIED,
+    ]
+    const [entries, currentUser] = await Promise.all([
+      this.prisma.pointLedgerEntry.findMany({
+        where: {
+          direction: PointDirection.IN,
+          reportId: { not: null },
+          ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
+          report: {
+            is: {
+              deletedAt: null,
+              status: { in: validStatuses },
             },
           },
-          select: { id: true },
+          user: {
+            deletedAt: null,
+            role: { code: RoleCode.STUDENT },
+            status: UserStatus.ACTIVE,
+          },
         },
-      },
-    })
+        orderBy: { createdAt: 'asc' },
+        select: {
+          createdAt: true,
+          points: true,
+          report: { select: { finalSeverity: true, id: true, selfSeverity: true } },
+          user: { select: { avatarUrl: true, id: true, name: true } },
+        },
+      }),
+      this.prisma.user.findFirst({
+        where: {
+          id: currentUserId,
+          deletedAt: null,
+          role: { code: RoleCode.STUDENT },
+          status: UserStatus.ACTIVE,
+        },
+        select: { avatarUrl: true, id: true, name: true },
+      }),
+    ])
 
-    // 计算各用户分数：总榜用最新余额，周/月榜用该时段累计积入
-    const scored = users
-      .map((user) => {
-        const score =
-          scope === 'all'
-            ? (user.pointEntries[0]?.balanceAfter ?? 0)
-            : user.pointEntries.reduce((sum, entry) => sum + entry.points, 0)
-        return {
-          id: user.id,
-          isCurrent: user.id === currentUserId,
-          name: maskName(user.name),
-          reports: user.submittedReports.length,
-          score,
-        }
-      })
-      .filter((user) => user.score > 0 || user.isCurrent)
-      .sort((a, b) => b.score - a.score || b.reports - a.reports)
+    const aggregates = new Map<string, {
+      achievedAt: Date
+      avatarUrl: string | null
+      highSeverityReportIds: Set<string>
+      id: string
+      name: string
+      reportIds: Set<string>
+      score: number
+    }>()
 
-    // 给排名
-    const ranked = scored.map((user, index) => ({
-      ...user,
-      rank: index + 1,
-    }))
-
-    const currentUserEntry = ranked.find((user) => user.isCurrent)
-    const top50 = ranked.slice(0, 50)
-
-    // 若当前用户不在 top50，追加到末尾
-    if (currentUserEntry && !top50.find((user) => user.isCurrent)) {
-      top50.push(currentUserEntry)
+    for (const entry of entries) {
+      if (!entry.report) continue
+      const aggregate = aggregates.get(entry.user.id) ?? {
+        achievedAt: entry.createdAt,
+        avatarUrl: entry.user.avatarUrl,
+        highSeverityReportIds: new Set<string>(),
+        id: entry.user.id,
+        name: entry.user.name,
+        reportIds: new Set<string>(),
+        score: 0,
+      }
+      aggregate.score += entry.points
+      aggregate.achievedAt = entry.createdAt
+      aggregate.reportIds.add(entry.report.id)
+      const severity = entry.report.finalSeverity ?? entry.report.selfSeverity
+      if (severity === 'HIGH' || severity === 'CRITICAL') {
+        aggregate.highSeverityReportIds.add(entry.report.id)
+      }
+      aggregates.set(entry.user.id, aggregate)
     }
 
-    return { items: top50 }
+    const ranked = rankLeaderboard(
+      [...aggregates.values()]
+        .filter((user) => user.score > 0)
+        .map((user) => ({
+          achievedAt: user.achievedAt,
+          avatarUrl: user.avatarUrl,
+          highSeverityReports: user.highSeverityReportIds.size,
+          id: user.id,
+          name: maskName(user.name),
+          reports: user.reportIds.size,
+          score: user.score,
+        })),
+    )
+    const currentRank = ranked.find((entry) => entry.id === currentUserId)
+    const me = currentRank ?? (currentUser ? {
+      avatarUrl: currentUser.avatarUrl,
+      id: currentUser.id,
+      name: maskName(currentUser.name),
+      rank: null,
+      reports: 0,
+      score: 0,
+    } : null)
+
+    return {
+      items: ranked.slice(0, 100).map((entry) => ({
+        avatarUrl: entry.avatarUrl,
+        id: entry.id,
+        isCurrent: entry.id === currentUserId,
+        name: entry.name,
+        rank: entry.rank,
+        reports: entry.reports,
+        score: entry.score,
+      })),
+      me: me ? {
+        avatarUrl: me.avatarUrl,
+        id: me.id,
+        isCurrent: true,
+        name: me.name,
+        rank: me.rank,
+        reports: me.reports,
+        score: me.score,
+      } : null,
+    }
   }
 }
 
