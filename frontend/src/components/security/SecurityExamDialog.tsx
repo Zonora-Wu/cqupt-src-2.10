@@ -128,7 +128,7 @@ export function SecurityExamDialog({ onClose, onPassed, open }: Props) {
                       {question.options.map((option) => (
                         <button
                           aria-pressed={selected.includes(option.key)}
-                          className={`rounded-lg border px-3 py-2.5 text-left text-sm leading-6 transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 ring-1 ring-brand-600/20 dark:border-brand-300/70 dark:bg-brand-600/25 dark:text-white dark:ring-brand-300/20' : 'border-black/10 bg-white text-slate-700 hover:border-brand-600/30 hover:bg-black/5 dark:border-white/15 dark:bg-white/[0.07] dark:text-slate-100 dark:hover:border-brand-300/40 dark:hover:bg-white/[0.11]'}`}
+                          className={`rounded-lg border px-3 py-2.5 text-left text-sm leading-6 transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 ring-1 ring-brand-600/20 dark:border-brand-300/70 dark:bg-brand-600/25 dark:text-white dark:ring-brand-300/20' : 'border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text)] hover:border-brand-600/40 hover:bg-[var(--app-surface-muted)] dark:hover:border-brand-300/50'}`}
                           key={option.key}
                           onClick={() => toggleAnswer(question, option.key)}
                           type="button"
