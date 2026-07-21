@@ -336,6 +336,7 @@ enum AuditAction {
   CHAT_RECORDS_DELETED
   CHAT_RECORDS_VIEWED
   CHAT_SENSITIVE_WORD_MANAGED
+  NOTIFICATION_DELIVERY
 }
 
 model User {
@@ -409,11 +410,38 @@ model User {
   chatRestrictions      ChatUserRestriction[]       @relation("ChatRestrictedUser")
   issuedChatRestrictions ChatUserRestriction[]      @relation("ChatRestrictionOperator")
   createdChatSensitiveWords ChatSensitiveWord[]     @relation("ChatSensitiveWordCreator")
+  platformNotifications PlatformNotification[]
 
   @@index([roleId])
   @@index([authorizationLevel])
   @@index([authorizationSourceId])
   @@index([status])
+}
+
+model PlatformNotification {
+  id               String    @id @default(cuid())
+  recipientId      String
+  eventKey         String    @unique
+  channelId        String
+  channelTitle     String
+  iconType         String
+  menuScope        String?
+  content          String    @db.Text
+  entityType       String?
+  entityId         String?
+  route            String?
+  emailRequired    Boolean   @default(false)
+  emailStatus      String    @default("NOT_REQUIRED")
+  emailAttemptedAt DateTime?
+  emailError       String?   @db.Text
+  readAt           DateTime?
+  createdAt        DateTime  @default(now())
+  recipient        User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([recipientId, menuScope, readAt])
+  @@index([recipientId, channelId, createdAt])
+  @@index([entityType, entityId])
 }
 
 model AuthorizationSource {

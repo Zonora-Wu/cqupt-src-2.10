@@ -22,6 +22,15 @@ export class DashboardController {
     return this.dashboard.getUserDashboard(user)
   }
 
+  @Post('user/ai-insight/run')
+  @RequirePermissions('vulnerability:read_own')
+  refreshUserDashboardAiInsight(
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() request: RequestLike,
+  ) {
+    return this.dashboard.refreshUserDashboardAiInsight(user, getRequestMeta(request))
+  }
+
   @Get('auditor')
   @RequirePermissions('vulnerability:review')
   getAuditorDashboard() {

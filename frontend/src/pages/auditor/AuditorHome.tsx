@@ -40,6 +40,7 @@ import { auditorNavItems, auditorUtilityPaths, getLabelFromPath, getPathFromLabe
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
+import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 import {
   listRetestQueue,
   listReviewQueue,
@@ -310,6 +311,12 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, auditorNavItems, auditorUtilityPaths)
+  const notificationUnread = useNotificationUnread()
+  const navBadges = {
+    '漏洞审核': notificationUnread.menu['auditor-review'] ?? 0,
+    '复测归档': notificationUnread.menu['auditor-retest'] ?? 0,
+    '证书管理': notificationUnread.menu['auditor-certificates'] ?? 0,
+  }
 
   const openMenu = (label: string) => {
     const path = getPathFromLabel(label, auditorNavItems, auditorUtilityPaths)
@@ -331,9 +338,9 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
-          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={auditorMenuItems} onChange={openMenu} />
           <div className="flex items-center justify-end gap-2">
-            <NotificationBell onClick={() => navigate('/auditor/notifications')} />
+            <NotificationBell notificationUnreadCount={notificationUnread.bell} onClick={() => navigate('/auditor/notifications')} />
             <button
               aria-label="切换主题"
               className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -356,7 +363,7 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
           </div>
         </div>
         <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} items={auditorMenuItems} mobile onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={auditorMenuItems} mobile onChange={openMenu} />
         </div>
       </header>
 

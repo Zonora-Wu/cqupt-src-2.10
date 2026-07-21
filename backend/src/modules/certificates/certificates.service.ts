@@ -2,12 +2,14 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundEx
 import {
   AuditAction,
   CertificateStatus,
+  RoleCode,
   VulnerabilitySeverity,
   VulnerabilityStatus,
 } from '@prisma/client'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
 import { generateCertificatePdf } from './certificate-pdf.generator'
 import { NormalizedIssueCertificateInput, NormalizedRevokeCertificateInput } from './certificate.types'
 
@@ -26,6 +28,8 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
     @Inject(S3StorageService)
     private readonly storage: S3StorageService,
+    @Inject(NotificationDeliveryService)
+    private readonly notifications: NotificationDeliveryService,
   ) {}
 
   async listManageCertificates() {
@@ -201,6 +205,7 @@ export class CertificatesService {
       key: pdfStorageKey,
     })
 
+    const notificationIds: string[] = []
     const certificate = await this.prisma.$transaction(async (tx) => {
       const created = await tx.certificate.create({
         data: {
@@ -273,8 +278,31 @@ export class CertificatesService {
         },
       })
 
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'certificate', channelTitle: '证书签发通知',
+        content: `漏洞报告「${report.title}」（${report.reportNo}）的证书 ${certificateNo} 已签发。`,
+        emailRequired: true, entityId: created.id, entityType: 'Certificate',
+        eventKey: `certificate:${created.id}:issued:${report.submitter.id}`,
+        iconType: 'award', menuScope: 'user-certificates', recipientId: report.submitter.id,
+        route: `/user/certificates?certificateId=${created.id}`,
+      }))
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.ADMIN], {
+        channelId: 'certificate-workflow', channelTitle: '证书管理通知',
+        content: `证书 ${certificateNo} 已为漏洞报告「${report.title}」（${report.reportNo}）签发。`,
+        entityId: created.id, entityType: 'Certificate', eventKeyPrefix: `certificate:${created.id}:issued:admin`,
+        iconType: 'award', menuScope: 'admin-certificates', route: `/admin/certificates?certificateId=${created.id}`,
+      }))
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+        channelId: 'certificate-workflow', channelTitle: '证书管理通知',
+        content: `证书 ${certificateNo} 已为漏洞报告「${report.title}」（${report.reportNo}）签发。`,
+        entityId: created.id, entityType: 'Certificate', eventKeyPrefix: `certificate:${created.id}:issued:auditor`,
+        iconType: 'award', menuScope: 'auditor-certificates', route: `/auditor/certificates?certificateId=${created.id}`,
+      }))
+
       return created
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return summarizeCertificate(certificate)
   }

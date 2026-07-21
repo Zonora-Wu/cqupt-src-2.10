@@ -151,6 +151,18 @@ export class EmailService {
     })
   }
 
+  async sendPlatformNotification(input: { body: string; subject: string; to: string }) {
+    const settings = await this.getOperationalSettings()
+    const transporter = this.createTransporter(settings)
+    await transporter.sendMail({
+      from: formatSender(settings),
+      replyTo: settings.replyTo || undefined,
+      subject: input.subject,
+      text: input.body,
+      to: normalizeEmail(input.to),
+    })
+  }
+
   private async getOperationalSettings() {
     const settings = await this.getStoredSettings()
     validateSettings(settings)

@@ -6,9 +6,11 @@ import {
   ReviewDecision,
   VulnerabilitySeverity,
   VulnerabilityStatus,
+  RoleCode,
 } from '@prisma/client'
 import { AccessPolicyService } from '../access/access-policy.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import {
   AdminVulnerabilityDetailResponse,
@@ -32,6 +34,7 @@ export class VulnerabilitiesService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AccessPolicyService) private readonly accessPolicy: AccessPolicyService,
+    @Inject(NotificationDeliveryService) private readonly notifications: NotificationDeliveryService,
   ) {}
 
   async listReviewQueue(): Promise<ReviewQueueResponse> {
@@ -217,6 +220,7 @@ export class VulnerabilitiesService {
     const points = input.decision === ReviewDecision.CONFIRM ? input.points ?? defaultPoints(finalSeverity) : undefined
     const now = new Date()
 
+    const notificationIds: string[] = []
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
@@ -297,8 +301,39 @@ export class VulnerabilitiesService {
         },
       })
 
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'audit',
+        channelTitle: '漏洞审核通知',
+        content: reviewNotificationContent(input.decision, report.reportNo, report.title),
+        emailRequired: true,
+        entityId: report.id,
+        entityType: 'VulnerabilityReport',
+        eventKey: `vulnerability:${report.id}:review:${input.decision}:${now.toISOString()}:${report.submitter.id}`,
+        iconType: 'shield',
+        menuScope: 'user-vulnerabilities',
+        recipientId: report.submitter.id,
+        route: `/user/vulnerabilities?reportId=${report.id}`,
+      }))
+
+      if (input.decision === ReviewDecision.CONFIRM) {
+        notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.ADMIN], {
+          channelId: 'certificate-workflow', channelTitle: '证书管理通知',
+          content: `漏洞报告「${report.title}」（${report.reportNo}）已确认有效，请跟进复测与证书流程。`,
+          entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:confirmed:admin:${now.toISOString()}`,
+          iconType: 'shield', menuScope: 'admin-certificates', route: `/admin/certificates?vulnerabilityId=${report.id}`,
+        }))
+        notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+          channelId: 'retest-workflow', channelTitle: '复测归档通知',
+          content: `漏洞报告「${report.title}」（${report.reportNo}）已确认有效，等待复测归档。`,
+          entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:confirmed:auditor:${now.toISOString()}`,
+          iconType: 'shield', menuScope: 'auditor-retest', route: `/auditor/retest?vulnerabilityId=${report.id}`,
+        }))
+      }
+
       return next
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       finalSeverity: updated.finalSeverity ? formatSeverity(updated.finalSeverity) : null,
@@ -401,6 +436,7 @@ export class VulnerabilitiesService {
     const nextStatus = getRetestNextStatus(input.decision, report.status)
     const now = new Date()
 
+    const notificationIds: string[] = []
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
@@ -451,8 +487,35 @@ export class VulnerabilitiesService {
         },
       })
 
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'audit', channelTitle: '漏洞审核通知',
+        content: retestNotificationContent(input.decision, report.reportNo, report.title),
+        emailRequired: nextStatus === VulnerabilityStatus.ARCHIVED,
+        entityId: report.id, entityType: 'VulnerabilityReport',
+        eventKey: `vulnerability:${report.id}:retest:${input.decision}:${now.toISOString()}:${report.submitterId}`,
+        iconType: 'shield', menuScope: 'user-vulnerabilities', recipientId: report.submitterId,
+        route: `/user/vulnerabilities?reportId=${report.id}`,
+      }))
+
+      if (nextStatus === VulnerabilityStatus.ARCHIVED) {
+        notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.ADMIN], {
+          channelId: 'certificate-workflow', channelTitle: '证书管理通知',
+          content: `漏洞报告「${report.title}」（${report.reportNo}）已归档，可进入证书签发流程。`,
+          entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:archived:admin:${now.toISOString()}`,
+          iconType: 'shield', menuScope: 'admin-certificates', route: `/admin/certificates?vulnerabilityId=${report.id}`,
+        }))
+        notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+          channelId: 'certificate-workflow', channelTitle: '证书管理通知',
+          content: `漏洞报告「${report.title}」（${report.reportNo}）已归档，可进入证书签发流程。`,
+          entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:archived:auditor:${now.toISOString()}`,
+          iconType: 'shield', menuScope: 'auditor-certificates', route: `/auditor/certificates?vulnerabilityId=${report.id}`,
+        }))
+      }
+
       return next
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       id: updated.id,
@@ -487,6 +550,7 @@ export class VulnerabilitiesService {
       )
     }
 
+    const notificationIds: string[] = []
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
@@ -520,8 +584,18 @@ export class VulnerabilitiesService {
         },
       })
 
+      const eventKey = `vulnerability:${report.id}:pending-retest:${next.updatedAt.toISOString()}`
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+        channelId: 'retest-workflow', channelTitle: '复测归档通知',
+        content: `漏洞报告「${report.title}」（${report.reportNo}）已进入待复测。`,
+        entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: eventKey,
+        iconType: 'shield', menuScope: 'auditor-retest', route: `/auditor/retest?vulnerabilityId=${report.id}`,
+      }))
+
       return next
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       id: updated.id,
@@ -541,6 +615,7 @@ export class VulnerabilitiesService {
     const now = new Date()
     const reportNo = await this.generateReportNo()
 
+    const notificationIds: string[] = []
     const report = await this.prisma.$transaction(async (tx) => {
       const created = await tx.vulnerabilityReport.create({
         data: {
@@ -593,8 +668,23 @@ export class VulnerabilitiesService {
         },
       })
 
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.ADMIN], {
+        channelId: 'pending-vuln', channelTitle: '待处理漏洞报告',
+        content: `新漏洞报告「${created.title}」（${created.reportNo}）已提交。`,
+        entityId: created.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${created.id}:submitted:admin`,
+        iconType: 'shield', menuScope: 'admin-vulnerabilities', route: `/admin/vulnerabilities?vulnerabilityId=${created.id}`,
+      }))
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+        channelId: 'pending-review', channelTitle: '待初审漏洞',
+        content: `新漏洞报告「${created.title}」（${created.reportNo}）待审核。`,
+        entityId: created.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${created.id}:submitted:auditor`,
+        iconType: 'shield', menuScope: 'auditor-review', route: `/auditor/review?vulnerabilityId=${created.id}`,
+      }))
+
       return created
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       id: report.id,
@@ -745,6 +835,7 @@ export class VulnerabilitiesService {
       throw new BadRequestException('当前状态不需要补充材料，无需操作')
     }
 
+    const notificationIds: string[] = []
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
@@ -778,8 +869,23 @@ export class VulnerabilitiesService {
         },
       })
 
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.ADMIN], {
+        channelId: 'pending-vuln', channelTitle: '待处理漏洞报告',
+        content: `漏洞报告「${report.title}」（${report.reportNo}）已补充材料并重新提交。`,
+        entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:supplemented:admin:${next.updatedAt.toISOString()}`,
+        iconType: 'shield', menuScope: 'admin-vulnerabilities', route: `/admin/vulnerabilities?vulnerabilityId=${report.id}`,
+      }))
+      notificationIds.push(...await this.notifications.createForRoles(tx, [RoleCode.AUDITOR], {
+        channelId: 'pending-review', channelTitle: '待初审漏洞',
+        content: `漏洞报告「${report.title}」（${report.reportNo}）已补充材料并重新提交。`,
+        entityId: report.id, entityType: 'VulnerabilityReport', eventKeyPrefix: `vulnerability:${report.id}:supplemented:auditor:${next.updatedAt.toISOString()}`,
+        iconType: 'shield', menuScope: 'auditor-review', route: `/auditor/review?vulnerabilityId=${report.id}`,
+      }))
+
       return next
     })
+
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       id: updated.id,
@@ -1095,4 +1201,25 @@ function formatEventAction(action: string): string {
   }
 
   return actionMap[action] ?? action
+}
+
+function reviewNotificationContent(decision: ReviewDecision, reportNo: string, title: string) {
+  const label: Record<ReviewDecision, string> = {
+    ARCHIVE: '已归档',
+    CONFIRM: '已确认有效',
+    NEEDS_SUPPLEMENT: '需要补充材料',
+    REJECT: '审核未通过',
+    RETEST_PASS: '复测通过',
+    RETURN_TO_FIX: '已退回修复',
+  }
+  return `你的漏洞报告「${title}」（${reportNo}）${label[decision]}。具体意见请登录平台查看。`
+}
+
+function retestNotificationContent(decision: string, reportNo: string, title: string) {
+  const label: Record<string, string> = {
+    ARCHIVE: '已归档',
+    RETEST_PASS: '复测通过并归档',
+    RETURN_TO_FIX: '复测未通过，已退回修复',
+  }
+  return `你的漏洞报告「${title}」（${reportNo}）${label[decision] ?? '复测状态已更新'}。具体意见请登录平台查看。`
 }

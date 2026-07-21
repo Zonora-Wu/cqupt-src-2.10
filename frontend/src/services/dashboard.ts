@@ -7,6 +7,14 @@ export type UserDashboardStats = {
   submitCount: number
 }
 
+export type UserDashboardAiInsight = {
+  findings: string[]
+  generatedAt: string
+  model: string
+  source: 'hermes'
+  summary: string
+}
+
 export type AuditorDashboardStats = {
   pendingArchive: number
   pendingCerts: number
@@ -132,6 +140,14 @@ export async function getUserDashboard() {
   return apiRequest<UserDashboardStats>('/dashboard/user', {
     auth: true,
     method: 'GET',
+    unauthenticatedMessage: '请先登录',
+  })
+}
+
+export async function runUserDashboardAiInsight() {
+  return apiRequest<UserDashboardAiInsight>('/dashboard/user/ai-insight/run', {
+    auth: true,
+    method: 'POST',
     unauthenticatedMessage: '请先登录',
   })
 }

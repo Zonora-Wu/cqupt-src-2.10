@@ -13,6 +13,7 @@ import { adminNavItems, adminUtilityPaths, getLabelFromPath, getPathFromLabel, i
 import { type AuthUser } from '../../services/auth'
 import { type AdminDashboardStats, getAdminDashboard, runAdminDashboardAiInsight } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
+import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
@@ -59,6 +60,11 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, adminNavItems, adminUtilityPaths)
+  const notificationUnread = useNotificationUnread()
+  const navBadges = {
+    '漏洞管理': notificationUnread.menu['admin-vulnerabilities'] ?? 0,
+    '证书管理': notificationUnread.menu['admin-certificates'] ?? 0,
+  }
 
   const openMenu = (label: string) => {
     const path = getPathFromLabel(label, adminNavItems, adminUtilityPaths)
@@ -119,10 +125,10 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
           <BrandLogo />
 
-          <ScrollableNav activeItem={activeMenu} items={adminMenuItems} onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={adminMenuItems} onChange={openMenu} />
 
           <div className="flex items-center justify-end gap-2">
-            <NotificationBell onClick={() => navigate('/admin/notifications')} />
+            <NotificationBell notificationUnreadCount={notificationUnread.bell} onClick={() => navigate('/admin/notifications')} />
             <button
               aria-label="切换主题"
               className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -145,7 +151,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
           </div>
         </div>
         <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} items={adminMenuItems} mobile onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={adminMenuItems} mobile onChange={openMenu} />
         </div>
       </header>
 

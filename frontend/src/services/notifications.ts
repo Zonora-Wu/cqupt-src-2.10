@@ -3,7 +3,11 @@ import { apiRequest } from './apiClient'
 export type NotificationMessage = {
   content: string
   createdAt: string
+  entityId?: string | null
+  entityType?: string | null
   id: string
+  readAt?: string | null
+  route?: string | null
 }
 
 export type NotificationChannel = {
@@ -15,6 +19,26 @@ export type NotificationChannel = {
 
 export type NotificationsResponse = {
   channels: NotificationChannel[]
+  unread: {
+    bell: number
+    menu: Record<string, number>
+  }
+}
+
+export function markNotificationRead(notificationId: string) {
+  return apiRequest<{ success: boolean }>(`/notifications/${notificationId}/read`, { auth: true, method: 'POST' })
+}
+
+export function markNotificationChannelRead(channelId: string) {
+  return apiRequest<{ success: boolean }>(`/notifications/channels/${channelId}/read`, { auth: true, method: 'POST' })
+}
+
+export function markNotificationEntityRead(entityType: string, entityId: string) {
+  return apiRequest<{ success: boolean }>('/notifications/entities/read', {
+    auth: true,
+    body: { entityId, entityType },
+    method: 'POST',
+  })
 }
 
 export function getNotifications() {

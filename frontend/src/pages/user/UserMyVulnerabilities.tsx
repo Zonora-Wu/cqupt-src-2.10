@@ -1,6 +1,6 @@
 import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -18,6 +18,8 @@ import {
   uploadVulnerabilityAttachment,
 } from '../../services/vulnerabilities'
 import type { MyVulnerabilityDetail, MyVulnerabilityItem, MyVulnerabilityListResponse } from '../../services/vulnerabilities'
+import { markNotificationEntityRead } from '../../services/notifications'
+import { NOTIFICATION_READ_STATE_EVENT } from '../../services/notificationReadState'
 
 const statusOptions = ['全部状态', '草稿', '待审核', '审核中', '待补充', '已确认', '修复中', '已归档']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
@@ -33,6 +35,7 @@ export function UserMyVulnerabilities() {
   const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null)
   const [copiedReportNo, setCopiedReportNo] = useState<string | null>(null)
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   /* 详情抽屉 */
   const [detailTarget, setDetailTarget] = useState<MyVulnerabilityItem | null>(null)
@@ -65,6 +68,15 @@ export function UserMyVulnerabilities() {
   useEffect(() => {
     void loadReports()
   }, [])
+
+  useEffect(() => {
+    const reportId = searchParams.get('reportId')
+    if (!reportId || !data) return
+    const item = data.items.find((candidate) => candidate.id === reportId)
+    if (!item) return
+    void openDetail(item)
+    setSearchParams({}, { replace: true })
+  }, [data, searchParams, setSearchParams])
 
   const vulnerabilityStats = useMemo(() => {
     const stats = data?.stats ?? { confirmed: 0, needSupplement: 0, pending: 0, total: 0 }
@@ -135,6 +147,8 @@ export function UserMyVulnerabilities() {
     try {
       const d = await getMyVulnerabilityDetail(item.id)
       setDetail(d)
+      await markNotificationEntityRead('VulnerabilityReport', item.id)
+      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '详情加载失败')
     } finally {

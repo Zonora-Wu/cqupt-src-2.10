@@ -6,6 +6,7 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { EmailService } from '../email/email.service'
 import { HumanVerificationService } from '../human-verification/human-verification.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordWithOldInput, SendCurrentEmailCodeInput, UpdateProfileBasicsInput } from './account.types'
 
 type UploadedImageFile = { buffer?: Buffer; mimetype?: string; size?: number }
@@ -28,6 +29,8 @@ export class AccountService {
     private readonly humanVerification: HumanVerificationService,
     @Inject(EmailService)
     private readonly email: EmailService,
+    @Inject(NotificationDeliveryService)
+    private readonly notifications: NotificationDeliveryService,
   ) {}
 
   async getProfile(user: AuthenticatedRequestUser) {
@@ -249,6 +252,8 @@ export class AccountService {
       throw new UnauthorizedException('邮箱验证码错误或已过期')
     }
 
+    const notificationIds: string[] = []
+    const changedAt = new Date()
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
@@ -288,7 +293,15 @@ export class AccountService {
           userAgent: meta.userAgent,
         },
       })
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'system', channelTitle: '账号安全通知',
+        content: `你的账号密码已于 ${formatSecurityTime(changedAt)} 修改。操作 IP：${maskIp(meta.ipAddress)}。如非本人操作，请立即联系管理员。`,
+        emailRequired: true, entityId: `password:${changedAt.toISOString()}`, entityType: 'SecurityEvent',
+        eventKey: `security:${user.id}:password:${changedAt.toISOString()}`, iconType: 'bell',
+        recipientId: user.id, route: roleSecurityRoute(user.role),
+      }))
     })
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       message: '密码已更新，请在其他设备上重新登录。',
@@ -315,6 +328,8 @@ export class AccountService {
       throw new BadRequestException('新密码不能与旧密码相同')
     }
 
+    const notificationIds: string[] = []
+    const changedAt = new Date()
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
@@ -349,7 +364,15 @@ export class AccountService {
           userAgent: meta.userAgent,
         },
       })
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'system', channelTitle: '账号安全通知',
+        content: `你的账号密码已于 ${formatSecurityTime(changedAt)} 修改。操作 IP：${maskIp(meta.ipAddress)}。如非本人操作，请立即联系管理员。`,
+        emailRequired: true, entityId: `password:${changedAt.toISOString()}`, entityType: 'SecurityEvent',
+        eventKey: `security:${user.id}:password:${changedAt.toISOString()}`, iconType: 'bell',
+        recipientId: user.id, route: roleSecurityRoute(user.role),
+      }))
     })
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       message: '密码已更新，请在其他设备上重新登录。',
@@ -425,6 +448,8 @@ export class AccountService {
       throw new UnauthorizedException('邮箱验证码错误或已过期')
     }
 
+    const notificationIds: string[] = []
+    const changedAt = new Date()
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
@@ -456,7 +481,15 @@ export class AccountService {
           userAgent: meta.userAgent,
         },
       })
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'system', channelTitle: '账号安全通知',
+        content: `你的绑定邮箱已于 ${formatSecurityTime(changedAt)} 修改。新邮箱：${maskEmail(input.newEmail)}。操作 IP：${maskIp(meta.ipAddress)}。`,
+        emailRequired: true, entityId: `email:${changedAt.toISOString()}`, entityType: 'SecurityEvent',
+        eventKey: `security:${user.id}:email:${changedAt.toISOString()}`, iconType: 'bell',
+        recipientId: user.id, route: roleSecurityRoute(user.role),
+      }))
     })
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
       email: input.newEmail,
@@ -539,6 +572,26 @@ function maskEmail(email: string) {
 
 function generateEmailCode() {
   return String(randomInt(0, 1_000_000)).padStart(6, '0')
+}
+
+function formatSecurityTime(value: Date) {
+  return value.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+function maskIp(ipAddress?: string) {
+  if (!ipAddress) return '未知'
+  if (ipAddress.includes(':')) {
+    const groups = ipAddress.split(':').filter(Boolean)
+    return `${groups.slice(0, 2).join(':')}:****:****`
+  }
+  const parts = ipAddress.split('.')
+  return parts.length === 4 ? `${parts[0]}.${parts[1]}.*.*` : '已隐藏'
+}
+
+function roleSecurityRoute(role: string) {
+  if (role === 'ADMIN') return '/admin/account-security'
+  if (role === 'AUDITOR') return '/auditor/profile'
+  return '/user/account-security'
 }
 
 const auditActionLabels: Record<string, string> = {

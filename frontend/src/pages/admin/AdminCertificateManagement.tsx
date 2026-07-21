@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CopyableCode } from '../../components/ui/CopyableCode'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -27,6 +28,8 @@ import {
   revokeCertificate,
 } from '../../services/certificates'
 import type { ManagedCertificateItem, SeverityLabel } from '../../services/certificates'
+import { markNotificationEntityRead } from '../../services/notifications'
+import { NOTIFICATION_READ_STATE_EVENT } from '../../services/notificationReadState'
 
 type CertificateStatus = '待签发' | '已签发' | '已撤销'
 type NoticeState = { text: string; variant: 'error' | 'info' | 'success' | 'warning' }
@@ -122,6 +125,7 @@ function SortHeaderButton({
 }
 
 export function AdminCertificateManagement() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<ManagedCertificateItem[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, issued: 0, revoked: 0 })
   const [keyword, setKeyword] = useState('')
@@ -159,6 +163,20 @@ export function AdminCertificateManagement() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (items.length === 0) return
+    const certificateId = searchParams.get('certificateId')
+    const vulnerabilityId = searchParams.get('vulnerabilityId')
+    if (!certificateId && !vulnerabilityId) return
+    const target = items.find((item) => (
+      (certificateId && item.certificateId === certificateId) ||
+      (vulnerabilityId && item.vulnerabilityId === vulnerabilityId)
+    ))
+    if (!target) return
+    setSelectedId(target.id)
+    setSearchParams({}, { replace: true })
+  }, [items, searchParams, setSearchParams])
 
   const filteredCertificates = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
@@ -213,6 +231,15 @@ export function AdminCertificateManagement() {
   }, [pageSize, safePage, sortedCertificates])
 
   const selectedCertificate = selectedId ? items.find((item) => item.id === selectedId) ?? null : null
+
+  useEffect(() => {
+    if (!selectedCertificate) return
+    const reads = [markNotificationEntityRead('VulnerabilityReport', selectedCertificate.vulnerabilityId)]
+    if (selectedCertificate.certificateId) reads.push(markNotificationEntityRead('Certificate', selectedCertificate.certificateId))
+    void Promise.all(reads)
+      .then(() => window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT)))
+      .catch(() => {})
+  }, [selectedCertificate?.id])
 
   async function previewPdf(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId) {

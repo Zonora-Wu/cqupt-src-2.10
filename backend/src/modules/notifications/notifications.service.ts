@@ -7,6 +7,10 @@ export type NotificationMessage = {
   id: string
   content: string
   createdAt: string
+  entityId?: string | null
+  entityType?: string | null
+  readAt?: string | null
+  route?: string | null
 }
 
 export type NotificationChannel = {
@@ -21,15 +25,21 @@ export class NotificationsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getNotifications(user: AuthenticatedRequestUser) {
-    const [auditMessages, pointMessages, systemMessages, announcementMessages] = await Promise.all([
+    const [persistent, auditMessages, pointMessages, systemMessages, announcementMessages] = await Promise.all([
+      this.prisma.platformNotification.findMany({
+        where: { recipientId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
       this.getAuditNotifications(user.id),
       this.getPointNotifications(user.id),
       this.getSystemNotifications(user.id),
       this.getAnnouncementNotifications(user.role),
     ])
 
+    const persistentEntityIds = new Set(persistent.map((item) => item.entityId).filter(Boolean))
     const channels: NotificationChannel[] = [
-      { iconType: 'shield', id: 'audit', messages: auditMessages, title: '漏洞审核通知' },
+      { iconType: 'shield', id: 'audit', messages: auditMessages.filter((item) => !item.entityId || !persistentEntityIds.has(item.entityId)), title: '漏洞审核通知' },
       { iconType: 'award', id: 'points', messages: pointMessages, title: '积分变动' },
       { iconType: 'megaphone', id: 'announcement', messages: announcementMessages, title: '平台公告' },
       { iconType: 'bell', id: 'system', messages: systemMessages, title: '系统通知' },
@@ -42,7 +52,7 @@ export class NotificationsService {
       ])
       channels.unshift(
         { iconType: 'bell', id: 'pending-registration', messages: pendingRegMessages, title: '待审核注册申请' },
-        { iconType: 'shield', id: 'pending-vuln', messages: pendingVulnMessages, title: '待处理漏洞报告' },
+        { iconType: 'shield', id: 'pending-vuln', messages: pendingVulnMessages.filter((item) => !item.entityId || !persistentEntityIds.has(item.entityId)), title: '待处理漏洞报告' },
       )
     }
 
@@ -52,12 +62,66 @@ export class NotificationsService {
         this.getAuditorPendingRetestNotifications(),
       ])
       channels.unshift(
-        { iconType: 'shield', id: 'pending-review', messages: pendingReviewMessages, title: '待初审漏洞' },
-        { iconType: 'bell', id: 'pending-retest', messages: pendingRetestMessages, title: '待复测漏洞' },
+        { iconType: 'shield', id: 'pending-review', messages: pendingReviewMessages.filter((item) => !item.entityId || !persistentEntityIds.has(item.entityId)), title: '待初审漏洞' },
+        { iconType: 'bell', id: 'pending-retest', messages: pendingRetestMessages.filter((item) => !item.entityId || !persistentEntityIds.has(item.entityId)), title: '待复测漏洞' },
       )
     }
 
-    return { channels }
+    for (const notification of persistent) {
+      let channel = channels.find((item) => item.id === notification.channelId)
+      if (!channel) {
+        channel = {
+          iconType: normalizeIconType(notification.iconType),
+          id: notification.channelId,
+          messages: [],
+          title: notification.channelTitle,
+        }
+        channels.unshift(channel)
+      }
+      channel.messages.push({
+        content: notification.content,
+        createdAt: notification.createdAt.toISOString(),
+        entityId: notification.entityId,
+        entityType: notification.entityType,
+        id: notification.id,
+        readAt: notification.readAt?.toISOString() ?? null,
+        route: notification.route,
+      })
+    }
+    for (const channel of channels) {
+      channel.messages.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    }
+
+    const unreadRows = persistent.filter((item) => !item.readAt)
+    const menu: Record<string, number> = {}
+    for (const item of unreadRows) {
+      if (item.menuScope) menu[item.menuScope] = (menu[item.menuScope] ?? 0) + 1
+    }
+    return { channels, unread: { bell: unreadRows.length, menu } }
+  }
+
+  async markRead(userId: string, notificationId: string) {
+    await this.prisma.platformNotification.updateMany({
+      where: { id: notificationId, recipientId: userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+    return { success: true }
+  }
+
+  async markChannelRead(userId: string, channelId: string) {
+    await this.prisma.platformNotification.updateMany({
+      where: { channelId, recipientId: userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+    return { success: true }
+  }
+
+  async markEntityRead(userId: string, entityType: string, entityId: string) {
+    await this.prisma.platformNotification.updateMany({
+      where: { entityId, entityType, recipientId: userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+    return { success: true }
   }
 
   private async getAuditNotifications(userId: string) {
@@ -76,6 +140,8 @@ export class NotificationsService {
     return events.map((event) => ({
       content: formatAuditMessage(event.action, event.report.title, event.note),
       createdAt: event.createdAt.toISOString(),
+      entityId: event.reportId,
+      entityType: 'VulnerabilityReport',
       id: event.id,
     }))
   }
@@ -165,6 +231,8 @@ export class NotificationsService {
     return reports.map((r) => ({
       content: `漏洞报告「${r.title}」（${r.reportNo}）已提交，请及时跟进审核。`,
       createdAt: r.createdAt.toISOString(),
+      entityId: r.id,
+      entityType: 'VulnerabilityReport',
       id: `pending-vuln-${r.id}`,
     }))
   }
@@ -180,6 +248,8 @@ export class NotificationsService {
     return reports.map((r) => ({
       content: `漏洞报告「${r.title}」（${r.reportNo}）待审核，请及时处理。`,
       createdAt: r.createdAt.toISOString(),
+      entityId: r.id,
+      entityType: 'VulnerabilityReport',
       id: `review-${r.id}`,
     }))
   }
@@ -195,9 +265,15 @@ export class NotificationsService {
     return reports.map((r) => ({
       content: `漏洞报告「${r.title}」（${r.reportNo}）已标记待复测，请前往「复测归档」完成验证。`,
       createdAt: r.updatedAt.toISOString(),
+      entityId: r.id,
+      entityType: 'VulnerabilityReport',
       id: `retest-${r.id}`,
     }))
   }
+}
+
+function normalizeIconType(value: string): NotificationChannel['iconType'] {
+  return value === 'award' || value === 'megaphone' || value === 'shield' ? value : 'bell'
 }
 
 function formatAuditMessage(action: string, reportTitle: string, note: string | null): string {

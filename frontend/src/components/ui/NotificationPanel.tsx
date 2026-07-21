@@ -11,7 +11,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { getChatBootstrap } from '../../services/chat'
 import {
   getNotificationSeenAt,
-  getNotificationUnreadCount,
   markNotificationSeen,
   NOTIFICATION_READ_STATE_EVENT,
 } from '../../services/notificationReadState'
@@ -223,19 +222,20 @@ export function NotificationContent({ onClose, onOpenChat }: { onClose?: () => v
 
 /* ─── 通知铃铛按钮（带 unread 红点，独立拉数据） ─── */
 export function NotificationBell({
+  notificationUnreadCount = 0,
   onClick,
 }: {
+  notificationUnreadCount?: number
   onClick: () => void
 }) {
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [chatUnreadCount, setChatUnreadCount] = useState(0)
 
   const refreshUnreadCount = useCallback(() => {
     let active = true
-    Promise.all([getNotifications(), getChatBootstrap()])
-      .then(([notifications, chat]) => {
+    getChatBootstrap()
+      .then((chat) => {
         if (!active) return
-        const chatUnread = chat.conversations.reduce((total, conversation) => total + conversation.unread, 0)
-        setUnreadCount(getNotificationUnreadCount(notifications.channels) + chatUnread)
+        setChatUnreadCount(chat.conversations.reduce((total, conversation) => total + conversation.unread, 0))
       })
       .catch(() => {})
     return () => { active = false }
@@ -251,6 +251,8 @@ export function NotificationBell({
       window.removeEventListener('focus', refreshUnreadCount)
     }
   }, [refreshUnreadCount])
+
+  const unreadCount = notificationUnreadCount + chatUnreadCount
 
   return (
     <button

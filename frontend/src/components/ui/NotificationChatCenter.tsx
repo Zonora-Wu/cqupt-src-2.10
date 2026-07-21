@@ -1,5 +1,6 @@
 import { MessageCirclePlus, Send } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useChatSocket } from '../../hooks/useChatSocket'
 import { getSavedSession } from '../../services/auth'
 import { ApiError } from '../../services/apiClient'
@@ -18,7 +19,7 @@ import {
   markNotificationSeen,
   NOTIFICATION_READ_STATE_EVENT,
 } from '../../services/notificationReadState'
-import { getNotifications } from '../../services/notifications'
+import { getNotifications, markNotificationChannelRead, markNotificationRead } from '../../services/notifications'
 import type { NotificationChannel } from '../../services/notifications'
 import { SurfacePanel } from './SurfacePanel'
 
@@ -33,6 +34,7 @@ const notificationMarks: Record<string, string> = {
 
 export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const currentUser = getSavedSession()?.user
+  const navigate = useNavigate()
   const [channels, setChannels] = useState<NotificationChannel[]>([])
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [staff, setStaff] = useState<ChatContact[]>([])
@@ -43,11 +45,13 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const [error, setError] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
   const [notificationReadVersion, setNotificationReadVersion] = useState(0)
+  const [serverNotificationUnread, setServerNotificationUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     const [notices, chat] = await Promise.all([getNotifications(), getChatBootstrap()])
     setChannels(notices.channels)
+    setServerNotificationUnread(notices.unread.bell)
     setConversations(chat.conversations)
     setStaff(chat.staff)
     setSelection((current) => current ?? defaultSelection(notices.channels, chat.conversations))
@@ -95,6 +99,14 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     if (!activeChannel) return
     markNotificationSeen(activeChannel.id)
+    void markNotificationChannelRead(activeChannel.id).then(() => {
+      const readAt = new Date().toISOString()
+      setChannels((current) => current.map((channel) => channel.id === activeChannel.id
+        ? { ...channel, messages: channel.messages.map((message) => ({ ...message, readAt: message.readAt === null ? readAt : message.readAt })) }
+        : channel))
+      setServerNotificationUnread((current) => Math.max(0, current - activeChannel.messages.filter((message) => message.readAt === null).length))
+      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+    }).catch(() => {})
     setNotificationReadVersion((current) => current + 1)
   }, [activeChannel?.id])
 
@@ -112,8 +124,8 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
 
   useChatSocket(onSocket)
 
-  const notificationCount = useMemo(
-    () => getNotificationUnreadCount(channels),
+  const notificationCount = serverNotificationUnread + useMemo(
+    () => getNotificationUnreadCount(channels.filter((channel) => channel.messages.every((message) => message.readAt === undefined))),
     [channels, notificationReadVersion],
   )
   const chatUnread = useMemo(
@@ -178,7 +190,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
                 onClick={() => setSelection({ id: channel.id, kind: 'notification' })}
                 preview={channel.messages[0]?.content ?? '暂无消息'}
                 title={channel.title}
-                unread={channel.messages.filter((message) => new Date(message.createdAt).getTime() > getNotificationSeenAt(channel.id)).length}
+                unread={channel.messages.filter((message) => message.readAt === null || (message.readAt === undefined && new Date(message.createdAt).getTime() > getNotificationSeenAt(channel.id))).length}
               />
             ))}
 
@@ -205,7 +217,12 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
               <button className="shrink-0 underline underline-offset-2" onClick={() => setError('')} type="button">知道了</button>
             </div>
           )}
-          {activeChannel && <SystemChannel channel={activeChannel} onBack={() => setSelection(null)} />}
+          {activeChannel && <SystemChannel channel={activeChannel} onBack={() => setSelection(null)} onOpen={async (message) => {
+            if (!message.route) return
+            if (message.readAt === null) await markNotificationRead(message.id).catch(() => ({ success: false }))
+            window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+            navigate(message.route)
+          }} />}
           {activeChat && (
             <ChatChannel
               bottomRef={bottomRef}
@@ -226,7 +243,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   )
 }
 
-function SystemChannel({ channel, onBack }: { channel: NotificationChannel; onBack: () => void }) {
+function SystemChannel({ channel, onBack, onOpen }: { channel: NotificationChannel; onBack: () => void; onOpen: (message: NotificationChannel['messages'][number]) => void }) {
   return (
     <>
       <DetailHeader meta={`共 ${channel.messages.length} 条`} onBack={onBack} title={channel.title} />
@@ -237,12 +254,17 @@ function SystemChannel({ channel, onBack }: { channel: NotificationChannel; onBa
           ) : (
             <div className="space-y-6">
               {channel.messages.map((message) => (
-                <article className="border-l-2 border-brand-600/70 pl-4" key={message.id}>
+                <article
+                  className={`border-l-2 border-brand-600/70 pl-4 ${message.route ? 'cursor-pointer rounded-r-md py-2 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]' : ''}`}
+                  key={message.id}
+                  onClick={() => void onOpen(message)}
+                >
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
                     <span>{channel.title}</span>
                     <time>{formatTime(message.createdAt)}</time>
                   </div>
                   <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-300">{message.content}</p>
+                  {message.route && <p className="mt-1 text-xs text-brand-700 dark:text-brand-300">查看详情</p>}
                 </article>
               ))}
             </div>

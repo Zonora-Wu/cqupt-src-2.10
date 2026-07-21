@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, forwardRef, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { AuditAction, AuthorizationLevel, RoleCode, User, UserStatus } from '@prisma/client'
 
 export type PendingRegistrationResponse = { pending: true; message: string }
@@ -10,6 +10,7 @@ import { HumanVerificationService } from '../human-verification/human-verificati
 import { HumanVerificationInput } from '../human-verification/human-verification.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { RbacService } from '../rbac/rbac.service'
+import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
 import { ClientRequestMeta, LoginResponse } from './auth.types'
 import { NormalizedRegisterInput } from './auth.validation'
 
@@ -31,6 +32,8 @@ export class AuthService {
     private readonly humanVerification: HumanVerificationService,
     @Inject(EmailService)
     private readonly email: EmailService,
+    @Inject(forwardRef(() => NotificationDeliveryService))
+    private readonly notifications: NotificationDeliveryService,
   ) {}
 
   async loginWithPassword(unifiedCode: string, password: string, humanInput: HumanVerificationInput | null, meta: ClientRequestMeta): Promise<LoginResponse> {
@@ -328,9 +331,14 @@ export class AuthService {
     const refreshToken = randomBytes(48).toString('base64url')
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex')
     const refreshExpiresAt = new Date(getJwtExpiry(process.env.JWT_REFRESH_EXPIRES_IN, 7 * 24 * 60 * 60) * 1000)
+    const loginAt = new Date()
+    const unfamiliarAdminIp = user.role.code === RoleCode.ADMIN && meta.ipAddress
+      ? await this.isUnfamiliarLoginIp(user.id, meta.ipAddress)
+      : false
+    const notificationIds: string[] = []
 
-    await this.prisma.$transaction([
-      this.prisma.refreshToken.create({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.create({
         data: {
           userId: user.id,
           tokenHash: refreshTokenHash,
@@ -338,12 +346,12 @@ export class AuthService {
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
         },
-      }),
-      this.prisma.user.update({
+      })
+      await tx.user.update({
         where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      }),
-      this.prisma.auditLog.create({
+        data: { lastLoginAt: loginAt },
+      })
+      await tx.auditLog.create({
         data: {
           actorId: user.id,
           action: AuditAction.LOGIN,
@@ -354,8 +362,18 @@ export class AuthService {
           userAgent: meta.userAgent,
           requestPath: meta.requestPath,
         },
-      }),
-    ])
+      })
+      if (unfamiliarAdminIp) {
+        notificationIds.push(await this.notifications.create(tx, {
+          channelId: 'system', channelTitle: '管理员登录安全提醒',
+          content: `检测到管理员账号于 ${formatSecurityTime(loginAt)} 从新 IP ${maskIp(meta.ipAddress)} 登录。如非本人操作，请立即修改密码并检查账号。`,
+          emailRequired: true, entityId: `login:${loginAt.toISOString()}`, entityType: 'SecurityEvent',
+          eventKey: `security:${user.id}:unfamiliar-login:${loginAt.toISOString()}`, iconType: 'bell',
+          recipientId: user.id, route: '/admin/account-security',
+        }))
+      }
+    })
+    await this.notifications.dispatchAfterCommit(notificationIds)
 
     const accessToken = signJwt(
       {
@@ -380,6 +398,20 @@ export class AuthService {
         permissions,
       },
     }
+  }
+
+  private async isUnfamiliarLoginIp(userId: string, ipAddress: string) {
+    const [previousLogin, matchingLogin] = await Promise.all([
+      this.prisma.auditLog.findFirst({
+        where: { action: AuditAction.LOGIN, actorId: userId, ipAddress: { not: null }, result: 'success' },
+        select: { id: true },
+      }),
+      this.prisma.auditLog.findFirst({
+        where: { action: AuditAction.LOGIN, actorId: userId, ipAddress, result: 'success' },
+        select: { id: true },
+      }),
+    ])
+    return Boolean(previousLogin && !matchingLogin)
   }
 
   private async writeLoginAudit(actorId: string | null, result: string, meta: ClientRequestMeta) {
@@ -486,6 +518,20 @@ export class AuthService {
     this.passwordLoginFailures.delete(this.getPasswordLoginFailureKey(unifiedCode, ipAddress))
   }
 
+}
+
+function formatSecurityTime(value: Date) {
+  return value.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+function maskIp(ipAddress?: string) {
+  if (!ipAddress) return '未知'
+  if (ipAddress.includes(':')) {
+    const groups = ipAddress.split(':').filter(Boolean)
+    return `${groups.slice(0, 2).join(':')}:****:****`
+  }
+  const parts = ipAddress.split('.')
+  return parts.length === 4 ? `${parts[0]}.${parts[1]}.*.*` : '已隐藏'
 }
 
 function generateEmailCode() {

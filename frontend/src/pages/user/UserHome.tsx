@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   FileSignature,
   Moon,
+  RefreshCw,
   Sun,
   X,
 } from 'lucide-react'
@@ -24,9 +25,8 @@ import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { NotificationBell } from '../../components/ui/NotificationPanel'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
-import { getAiSkills, type AiSkillLibraryItem } from '../../services/ai'
 import { type AuthUser } from '../../services/auth'
-import { getUserDashboard } from '../../services/dashboard'
+import { getUserDashboard, runUserDashboardAiInsight, type UserDashboardAiInsight } from '../../services/dashboard'
 import { getAccountProfile } from '../../services/account'
 import {
   getUserDevicePreferences,
@@ -37,6 +37,7 @@ import {
   type UserDevicePreferences,
 } from '../../services/userPreferences'
 import { applyColorTheme, transitionColorTheme } from '../../utils/themeTransition'
+import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 
 const UserAIAssistant = lazy(() =>
   import('./UserAIAssistant').then((module) => ({ default: module.UserAIAssistant })),
@@ -102,30 +103,6 @@ const aiCapabilities = [
   },
 ]
 
-const fallbackAiSkills: AiSkillLibraryItem[] = [
-  {
-    aiSpace: 'STUDENT',
-    content: '辅助整理漏洞标题、影响资产、复现步骤、影响说明、修复建议与附件清单。',
-    id: 'local-report-polish',
-    source: 'platform-default',
-    title: '漏洞报告整理',
-  },
-  {
-    aiSpace: 'STUDENT',
-    content: '提醒 token、Cookie、密码、手机号、学号等敏感信息先脱敏再提交。',
-    id: 'local-redaction',
-    source: 'platform-default',
-    title: '敏感信息脱敏',
-  },
-  {
-    aiSpace: 'STUDENT',
-    content: '结合 Web 安全基础、权限控制、注入与文件上传方向推荐下一步训练。',
-    id: 'local-learning-path',
-    source: 'platform-default',
-    title: '学习路径推荐',
-  },
-]
-
 const activities = [
   { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600' },
   { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500' },
@@ -152,7 +129,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
   const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
-  const [aiSkills, setAiSkills] = useState<AiSkillLibraryItem[]>(fallbackAiSkills)
+  const [aiInsight, setAiInsight] = useState<UserDashboardAiInsight | null>(null)
+  const [aiInsightError, setAiInsightError] = useState('')
+  const [aiInsightRefreshing, setAiInsightRefreshing] = useState(false)
   const [navAvatarUrl, setNavAvatarUrl] = useState<string | null>(null)
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
   const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
@@ -161,6 +140,11 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, userNavItems, userUtilityPaths)
+  const notificationUnread = useNotificationUnread()
+  const navBadges = {
+    '我的漏洞': notificationUnread.menu['user-vulnerabilities'] ?? 0,
+    '我的证书': notificationUnread.menu['user-certificates'] ?? 0,
+  }
 
   const openMenu = (label: string) => {
     const path = getPathFromLabel(label, userNavItems, userUtilityPaths)
@@ -207,12 +191,18 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
       .catch(() => { /* 静默失败，福贝默认值 */ })
   }, [])
 
-  // 加载平台公共 AI skill 库
-  useEffect(() => {
-    getAiSkills()
-      .then((data) => setAiSkills(data.skills.length > 0 ? data.skills : fallbackAiSkills))
-      .catch(() => { /* 静默失败，保留内置 skill 展示 */ })
-  }, [])
+  const refreshAiInsight = async () => {
+    if (aiInsightRefreshing) return
+    setAiInsightRefreshing(true)
+    setAiInsightError('')
+    try {
+      setAiInsight(await runUserDashboardAiInsight())
+    } catch (error) {
+      setAiInsightError(error instanceof Error ? error.message : 'AI 分析失败，请稍后重试')
+    } finally {
+      setAiInsightRefreshing(false)
+    }
+  }
 
   const stats = [
     { label: '累计提交', value: String(dashStats.submitCount), hint: '漏洞报告' },
@@ -297,10 +287,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <BrandLogo />
           </div>
 
-          <ScrollableNav activeItem={activeMenu} items={menuItems} onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={menuItems} onChange={openMenu} />
 
           <div className="flex items-center justify-end gap-2">
-            <NotificationBell onClick={() => navigate('/user/notifications')} />
+            <NotificationBell notificationUnreadCount={notificationUnread.bell} onClick={() => navigate('/user/notifications')} />
             <button
               aria-label="切换主题"
               className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -320,7 +310,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
         </div>
         <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} items={menuItems} mobile onChange={openMenu} />
+          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={menuItems} mobile onChange={openMenu} />
         </div>
       </header>
 
@@ -479,30 +469,21 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                 </div>
               </SurfacePanel>
 
-              <SurfacePanel className="flex h-full flex-col p-6">
+              <SurfacePanel className="flex h-full flex-col overflow-hidden p-0">
                 <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">AI Skill 库</p>
-                    <h2 className="mt-1 text-xl font-semibold">平台公共能力沉淀</h2>
+                  <div className="px-5 py-4">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">近 30 天脱敏汇总</p>
+                    <h2 className="mt-1 text-xl font-semibold">Hermes 实践分析</h2>
                   </div>
+                  <button aria-label="刷新 AI 分析" className="mr-4 rounded-lg p-2 text-slate-400 transition hover:bg-black/5 hover:text-brand-700 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-brand-200" disabled={aiInsightRefreshing} onClick={() => void refreshAiInsight()} title="刷新 AI 分析" type="button"><RefreshCw className={`h-4 w-4 ${aiInsightRefreshing ? 'animate-spin' : ''}`} /></button>
                 </div>
-                <div className="mt-4 grid flex-1 content-start gap-3">
-                  {aiSkills.slice(0, 4).map((item) => (
-                    <div
-                      className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 dark:border-white/10 "
-                      key={item.id}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className="truncate text-sm font-medium">{item.title}</span>
-                        </div>
-                        <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-brand-300/10 dark:text-brand-300">
-                          {item.aiSpace === 'STUDENT' ? '学生' : item.aiSpace === 'AUDITOR' ? '审核' : '管理'}
-                        </span>
-                      </div>
-                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.content}</p>
-                    </div>
-                  ))}
+                <div className="flex min-h-0 flex-1 flex-col border-t border-black/10 px-5 py-4 dark:border-white/10">
+                  {aiInsight ? <>
+                    <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">{aiInsight.summary}</p>
+                    {aiInsight.findings.length > 0 ? <div className="mt-4 space-y-2">{aiInsight.findings.map((finding) => <p className="border-l-2 border-brand-600/60 pl-3 text-xs leading-5 text-slate-500 dark:text-slate-400" key={finding}>{finding}</p>)}</div> : null}
+                    <p className="mt-auto pt-4 text-xs text-slate-400">{new Date(aiInsight.generatedAt).toLocaleString()} · {aiInsight.model}</p>
+                  </> : <div className="flex flex-1 items-center text-sm leading-6 text-slate-500 dark:text-slate-400">仅在点击刷新后，将近 30 天漏洞状态与积分汇总发送给 Hermes 分析。</div>}
+                  {aiInsightError ? <p className="mt-3 text-xs leading-5 text-red-600 dark:text-red-300">{aiInsightError}</p> : null}
                 </div>
               </SurfacePanel>
             </div>

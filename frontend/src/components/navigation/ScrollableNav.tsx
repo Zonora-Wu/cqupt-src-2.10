@@ -2,6 +2,7 @@ import { useRef } from 'react'
 
 type ScrollableNavProps = {
   activeItem: string
+  badges?: Record<string, number>
   className?: string
   items: string[]
   mobile?: boolean
@@ -10,6 +11,7 @@ type ScrollableNavProps = {
 
 export function ScrollableNav({
   activeItem,
+  badges = {},
   className = '',
   items,
   mobile = false,
@@ -50,7 +52,12 @@ export function ScrollableNav({
               onClick={() => onChange(item)}
               type="button"
             >
-              {item}
+              <span className="relative inline-flex items-center">
+                {item}
+                {(badges[item] ?? 0) > 0 && (
+                  <span aria-label={`${item}有未读通知`} className="absolute -right-2 -top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+                )}
+              </span>
             </button>
           ))}
         </div>

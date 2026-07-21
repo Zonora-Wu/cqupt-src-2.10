@@ -6,6 +6,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -23,6 +24,8 @@ import {
   type PublicCertificateVerifyResult,
 } from '../../services/certificates'
 import type { SeverityLevel } from '../../utils/severity'
+import { markNotificationEntityRead } from '../../services/notifications'
+import { NOTIFICATION_READ_STATE_EVENT } from '../../services/notificationReadState'
 
 const statusOptions = ['全部状态', '已签发', '已撤销']
 
@@ -53,12 +56,22 @@ export function UserCertificates() {
   const [downloadingId, setDownloadingId] = useState('')
   const [copiedCertificateNo, setCopiedCertificateNo] = useState<string | null>(null)
   const previewUrlRef = useRef<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     void loadCertificates()
 
     return releasePreviewUrl
   }, [])
+
+  useEffect(() => {
+    const certificateId = searchParams.get('certificateId')
+    if (!certificateId || certificates.length === 0) return
+    const certificate = certificates.find((item) => item.id === certificateId)
+    if (!certificate) return
+    void previewCertificate(certificate)
+    setSearchParams({}, { replace: true })
+  }, [certificates, searchParams, setSearchParams])
 
   const filteredCertificates = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
@@ -122,6 +135,8 @@ export function UserCertificates() {
       releasePreviewUrl()
       previewUrlRef.current = url
       setPreviewState({ certificate, url })
+      await markNotificationEntityRead('Certificate', certificate.id)
+      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : '证书 PDF 预览失败')
     } finally {

@@ -31,6 +31,14 @@ export type UserDashboardStats = {
   submitCount: number
 }
 
+export type UserDashboardAiInsight = {
+  findings: string[]
+  generatedAt: string
+  model: string
+  source: 'hermes'
+  summary: string
+}
+
 // ---- 审核员仪表盘 ----
 export type AuditorDashboardStats = {
   pendingArchive: number
@@ -185,6 +193,103 @@ export class DashboardService {
       confirmedCount,
       currentPoints: latestEntry?.balanceAfter ?? 0,
       submitCount,
+    }
+  }
+
+  async refreshUserDashboardAiInsight(user: AuthenticatedRequestUser, meta: RequestMeta = {}): Promise<UserDashboardAiInsight> {
+    const snapshot = await this.buildUserDashboardAiSnapshot(user.id)
+    const startedAt = Date.now()
+    const insight = await this.requestHermesUserDashboardInsight(snapshot)
+
+    await Promise.all([
+      this.prisma.aiCallLog.create({
+        data: {
+          aiSpace: AiSpace.STUDENT,
+          ipAddress: meta.ipAddress,
+          modelName: insight.model,
+          outputSummary: insight.summary,
+          purpose: AiCallPurpose.AUDIT_ANALYSIS,
+          sanitizedInputSummary: JSON.stringify(snapshot),
+          userAgent: meta.userAgent,
+          userId: user.id,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          action: AuditAction.CALL_AI,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { dataScope: '30d aggregated vulnerability status and point totals only', durationMs: Date.now() - startedAt, model: insight.model },
+          requestPath: '/dashboard/user/ai-insight/run',
+          result: 'success',
+          targetType: 'USER_DASHBOARD_AI_INSIGHT',
+          userAgent: meta.userAgent,
+        },
+      }),
+    ])
+
+    return insight
+  }
+
+  private async buildUserDashboardAiSnapshot(userId: string) {
+    const periodEnd = new Date()
+    const periodStart = startOfDay(addDays(periodEnd, -29))
+    const reportWhere = { deletedAt: null, submitterId: userId, submittedAt: { gte: periodStart, lte: periodEnd } }
+    const [reportStatuses, latestPoints, earned, redeemed] = await Promise.all([
+      this.prisma.vulnerabilityReport.groupBy({ by: ['status'], _count: { _all: true }, where: reportWhere }),
+      this.prisma.pointLedgerEntry.findFirst({ orderBy: { createdAt: 'desc' }, select: { balanceAfter: true }, where: { userId } }),
+      this.prisma.pointLedgerEntry.aggregate({ _sum: { points: true }, where: { createdAt: { gte: periodStart, lte: periodEnd }, direction: 'IN', userId } }),
+      this.prisma.pointLedgerEntry.aggregate({ _sum: { points: true }, where: { createdAt: { gte: periodStart, lte: periodEnd }, direction: 'OUT', userId } }),
+    ])
+
+    const statusCounts = Object.fromEntries(reportStatuses.map((item) => [item.status, item._count._all]))
+    return {
+      period: { end: periodEnd.toISOString(), label: '近 30 天', start: periodStart.toISOString() },
+      points: {
+        currentBalance: latestPoints?.balanceAfter ?? 0,
+        earnedInPeriod: earned._sum.points ?? 0,
+        redeemedInPeriod: Math.abs(redeemed._sum.points ?? 0),
+      },
+      vulnerability: {
+        confirmedCount: sumStatusCounts(statusCounts, [VulnerabilityStatus.CONFIRMED, VulnerabilityStatus.FIXING, VulnerabilityStatus.PENDING_RETEST, VulnerabilityStatus.ARCHIVED, VulnerabilityStatus.CERTIFIED]),
+        pendingSupplementCount: statusCounts[VulnerabilityStatus.NEEDS_SUPPLEMENT] ?? 0,
+        reviewingCount: sumStatusCounts(statusCounts, [VulnerabilityStatus.SUBMITTED, VulnerabilityStatus.PENDING_REVIEW]),
+        submittedCount: reportStatuses.reduce((total, item) => total + item._count._all, 0),
+      },
+    }
+  }
+
+  private async requestHermesUserDashboardInsight(snapshot: Awaited<ReturnType<DashboardService['buildUserDashboardAiSnapshot']>>): Promise<UserDashboardAiInsight> {
+    const apiKey = getOpenAiApiKey()
+    if (!apiKey) throw new Error('Hermes API key not configured')
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), getRequestTimeoutMs())
+    try {
+      const response = await fetch(new URL('chat/completions', getOpenAiBaseUrl()), {
+        body: JSON.stringify({
+          messages: [
+            { content: '你是高校 SRC 平台的个人安全实践分析助手。只返回严格 JSON，不要 Markdown。只使用输入聚合数据，不推断身份、能力、排名或敏感属性；不编造漏洞细节。字段：summary,findings。summary 80 字以内；findings 为 1 到 3 条客观分析，每条 80 字以内。', role: 'system' },
+            { content: JSON.stringify(snapshot), role: 'user' },
+          ],
+          model: getOpenAiModel(),
+          temperature: 0.2,
+        }),
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        method: 'POST',
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(`Hermes request failed: ${response.status}`)
+      const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string }
+      const value = parseJsonObject(payload.choices?.[0]?.message?.content ?? '')
+      const record = value as Record<string, unknown> | null
+      if (!record || typeof record.summary !== 'string' || !record.summary.trim()) throw new Error('Hermes 返回内容无法解析')
+      const findings = Array.isArray(record.findings)
+        ? record.findings.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim().slice(0, 80)).slice(0, 3)
+        : []
+      return { findings, generatedAt: new Date().toISOString(), model: payload.model ?? getOpenAiModel(), source: 'hermes', summary: record.summary.trim().slice(0, 80) }
+    } finally {
+      clearTimeout(timeout)
     }
   }
 
@@ -692,6 +797,10 @@ function buildSeverityDistribution(
     { count: counts.LOW, label: '低危', level: 'low' as const },
     { count: counts.INFO, label: '提示', level: 'info' as const },
   ]
+}
+
+function sumStatusCounts(counts: Record<string, number>, statuses: VulnerabilityStatus[]) {
+  return statuses.reduce((total, status) => total + (counts[status] ?? 0), 0)
 }
 
 function buildFallbackInsight(snapshot: DashboardSnapshot, degradedReason?: string): AdminDashboardAiInsight {
