@@ -136,6 +136,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
   const [showAccessTodoDialog, setShowAccessTodoDialog] = useState(false)
   const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
+  const [showSecurityExamDialog, setShowSecurityExamDialog] = useState(false)
   const [showProfileDialog, setShowProfileDialog] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -274,9 +275,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
     setShowProfileDialog(true)
   }
 
-  const openSecurityExamPage = () => {
+  const openSecurityExamDialog = () => {
     setShowAccessTodoDialog(false)
-    navigate('/user/security-exam')
+    setShowSecurityExamDialog(true)
   }
 
   return (
@@ -316,16 +317,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
       {activeMenu !== '首页' ? (
         <Suspense fallback={<FullScreenLoader label="正在加载页面" />}>
-          {activeMenu === '安全答题' ? (
-            <SecurityExamPage
-              onBack={() => navigate('/user')}
-              onPassed={() => {
-                void refreshAccessStatus().then((status) => {
-                  if (!hasPendingAccessTasks(status)) navigate('/user')
-                })
-              }}
-            />
-          ) : activeMenu === '提交漏洞' ? (
+          {activeMenu === '提交漏洞' ? (
             <UserSubmitVulnerability />
           ) : activeMenu === '我的漏洞' ? (
             <UserMyVulnerabilities />
@@ -536,7 +528,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         onClose={() => setShowAccessTodoDialog(false)}
         onOpenAgreement={openResponsibilityDialog}
         onOpenProfile={openProfileDialog}
-        onStartExam={openSecurityExamPage}
+        onStartExam={openSecurityExamDialog}
         open={showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
       />
       {showProfileDialog && (
@@ -556,6 +548,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           await refreshAccessStatus()
         }}
         open={showResponsibilityDialog}
+      />
+      <SecurityExamDialog
+        onClose={() => setShowSecurityExamDialog(false)}
+        onPassed={async () => {
+          await refreshAccessStatus()
+        }}
+        open={showSecurityExamDialog}
       />
     </AppBackground>
   )
@@ -690,28 +689,5 @@ function AccessTaskCard({
         </button>
       </div>
     </div>
-  )
-}
-
-function SecurityExamPage({ onBack, onPassed }: { onBack: () => void; onPassed: () => void }) {
-  return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-10 pt-24 md:px-8">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">安全准入答题</h1>
-          <p className="mt-3 max-w-3xl leading-7 text-slate-600 dark:text-slate-400">
-            完成答题并达到平台要求分数后，即可更新准入状态。
-          </p>
-        </div>
-        <button
-          className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-          onClick={onBack}
-          type="button"
-        >
-          返回首页
-        </button>
-      </div>
-      <SecurityExamDialog embedded onClose={onBack} onPassed={onPassed} open />
-    </section>
   )
 }

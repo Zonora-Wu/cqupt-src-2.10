@@ -29,7 +29,6 @@ export const userNavItems: NavItem[] = [
 ]
 
 export const userUtilityPaths: Record<string, string> = {
-  安全答题: '/user/security-exam',
   通知: '/user/notifications',
   个人中心: '/user/profile',
   账号安全: '/user/account-security',

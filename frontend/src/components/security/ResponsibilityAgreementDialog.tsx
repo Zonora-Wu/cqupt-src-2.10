@@ -2,6 +2,7 @@ import { FileSignature, Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FloatingNotice } from '../ui/FloatingNotice'
+import { ExitConfirmationDialog } from './ExitConfirmationDialog'
 import {
   getCurrentResponsibilityAgreement,
   signCurrentResponsibilityAgreement,
@@ -24,6 +25,7 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
   const [signing, setSigning] = useState(false)
   const [remainingSeconds, setRemainingSeconds] = useState(requiredReadSeconds)
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
+  const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -32,6 +34,7 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
     setAgreement(null)
     setLoading(true)
     setMessage(null)
+    setExitConfirmationOpen(false)
     setRemainingSeconds(requiredReadSeconds)
 
     getCurrentResponsibilityAgreement()
@@ -56,6 +59,17 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
       window.clearInterval(timer)
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || signing) return
+      event.preventDefault()
+      setExitConfirmationOpen(true)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, signing])
 
   if (!open || typeof document === 'undefined') return null
 
@@ -97,7 +111,8 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
           <button
             aria-label="关闭"
             className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10"
-            onClick={onClose}
+            disabled={signing}
+            onClick={() => setExitConfirmationOpen(true)}
             type="button"
           >
             <X className="h-5 w-5" />
@@ -154,6 +169,13 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
           </button>
         </div>
       </div>
+      <ExitConfirmationDialog
+        description="退出后阅读倒计时将重置，需要重新完成阅读时长后才能签署。"
+        onCancel={() => setExitConfirmationOpen(false)}
+        onConfirm={() => { setExitConfirmationOpen(false); onClose() }}
+        open={exitConfirmationOpen}
+        title="确认退出责任书签署？"
+      />
     </div>,
     document.body,
   )

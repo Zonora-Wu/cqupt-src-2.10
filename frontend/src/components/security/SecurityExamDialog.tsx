@@ -2,14 +2,13 @@ import { Loader2, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FloatingNotice } from '../ui/FloatingNotice'
+import { ExitConfirmationDialog } from './ExitConfirmationDialog'
 import { getSecurityExamPaper, submitSecurityExamAnswers, type SecurityExamPaper, type SecurityExamQuestion } from '../../services/securityExam'
 
 type Props = {
   open: boolean
-  onClose?: () => void
+  onClose: () => void
   onPassed?: () => void
-  force?: boolean
-  embedded?: boolean
 }
 
 const typeLabels: Record<SecurityExamQuestion['type'], string> = {
@@ -18,18 +17,20 @@ const typeLabels: Record<SecurityExamQuestion['type'], string> = {
   TRUE_FALSE: '判断题',
 }
 
-export function SecurityExamDialog({ embedded = false, force = false, onClose, onPassed, open }: Props) {
+export function SecurityExamDialog({ onClose, onPassed, open }: Props) {
   const [paper, setPaper] = useState<SecurityExamPaper | null>(null)
   const [answers, setAnswers] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' | 'warning' } | null>(null)
+  const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
     let active = true
     setLoading(true)
     setMessage(null)
+    setExitConfirmationOpen(false)
     getSecurityExamPaper()
       .then((data) => { if (active) { setPaper(data); setAnswers({}) } })
       .catch((error) => { if (active) setMessage({ text: error instanceof Error ? error.message : '题卷加载失败', type: 'error' }) })
@@ -37,9 +38,20 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
     return () => { active = false }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || submitting) return
+      event.preventDefault()
+      setExitConfirmationOpen(true)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, submitting])
+
   const answeredCount = useMemo(() => paper?.questions.filter((question) => (answers[question.id] ?? []).length > 0).length ?? 0, [answers, paper])
 
-  if (!open || (!embedded && typeof document === 'undefined')) return null
+  if (!open || typeof document === 'undefined') return null
 
   const toggleAnswer = (question: SecurityExamQuestion, key: string) => {
     setAnswers((current) => {
@@ -63,7 +75,7 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
       const result = await submitSecurityExamAnswers(paper.questions.map((question) => ({ questionId: question.id, selectedKeys: answers[question.id] ?? [] })))
       if (result.passed) {
         setMessage({ text: `答题通过：${result.score} 分（${result.correctCount}/${result.questionCount}），现在可以继续提交漏洞。`, type: 'success' })
-        window.setTimeout(() => { onPassed?.(); onClose?.() }, 900)
+        window.setTimeout(() => { onPassed?.(); onClose() }, 900)
       } else {
         setMessage({ text: `本次 ${result.score} 分，未达到 ${result.threshold} 分。请重新学习后再答题。`, type: 'warning' })
       }
@@ -75,7 +87,7 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
   }
 
   const content = (
-    <div className={`flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10 ${embedded ? 'max-h-none' : 'max-h-[92vh]'}`}>
+    <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10">
         <div className="flex items-start justify-between gap-4 border-b border-black/10 p-5 dark:border-white/10">
           <div>
             <div className="flex items-center gap-2">
@@ -86,11 +98,9 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
               系统随机抽取 10 道单选、5 道判断、5 道多选，共 100 分，达到 {paper?.threshold ?? 80} 分后才允许提交漏洞。
             </p>
           </div>
-          {!force && (
-            <button className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button">
+            <button aria-label="退出答题" className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white" disabled={submitting} onClick={() => setExitConfirmationOpen(true)} type="button">
               <X className="h-5 w-5" />
             </button>
-          )}
         </div>
 
         {message && (
@@ -117,12 +127,13 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
                     <div className="mt-3 grid gap-2 md:grid-cols-2">
                       {question.options.map((option) => (
                         <button
-                          className={`rounded-lg border px-3 py-2 text-left text-sm transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 dark:border-brand-300/50 dark:text-brand-200' : 'border-black/10 bg-white hover:bg-black/5 dark:border-white/10 dark:bg-[var(--app-panel-bg)] dark:text-slate-200 dark:hover:bg-white/10'}`}
+                          aria-pressed={selected.includes(option.key)}
+                          className={`rounded-lg border px-3 py-2.5 text-left text-sm leading-6 transition ${selected.includes(option.key) ? 'border-brand-600 bg-brand-600/10 text-brand-800 ring-1 ring-brand-600/20 dark:border-brand-300/70 dark:bg-brand-600/25 dark:text-white dark:ring-brand-300/20' : 'border-black/10 bg-white text-slate-700 hover:border-brand-600/30 hover:bg-black/5 dark:border-white/15 dark:bg-white/[0.07] dark:text-slate-100 dark:hover:border-brand-300/40 dark:hover:bg-white/[0.11]'}`}
                           key={option.key}
                           onClick={() => toggleAnswer(question, option.key)}
                           type="button"
                         >
-                          <span className="font-semibold">{option.key}.</span> {option.text}
+                          <span className={selected.includes(option.key) ? 'font-semibold text-brand-800 dark:text-brand-200' : 'font-semibold text-slate-500 dark:text-slate-300'}>{option.key}.</span> {option.text}
                         </button>
                       ))}
                     </div>
@@ -142,11 +153,16 @@ export function SecurityExamDialog({ embedded = false, force = false, onClose, o
     </div>
   )
 
-  if (embedded) return content
-
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
       {content}
+      <ExitConfirmationDialog
+        description="退出后本次作答不会保存，再次进入将重新生成题卷。"
+        onCancel={() => setExitConfirmationOpen(false)}
+        onConfirm={() => { setExitConfirmationOpen(false); onClose() }}
+        open={exitConfirmationOpen}
+        title="确认退出安全答题？"
+      />
     </div>,
     document.body,
   )
