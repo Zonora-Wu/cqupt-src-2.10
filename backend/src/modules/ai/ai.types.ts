@@ -201,6 +201,24 @@ export type AiAttachmentTextResponse = {
   textExcerpt: string
 }
 
+export type AiReportAssessment = {
+  disclaimer: string
+  imageEvidenceNotice: string | null
+  improvements: string[]
+  limitations: string[]
+  score: number
+  strengths: string[]
+  summary: string
+}
+
+export type AiReportAnalysisResponse = {
+  assessment: AiReportAssessment
+  draft: AiVulnerabilityDraft
+  fileName: string
+  omittedFields: string[]
+  redactionCount: number
+}
+
 export type AiCard =
   | {
       type: 'LEARNING_RESOURCE'

@@ -133,9 +133,7 @@ export function UserMyVulnerabilities() {
 
   const openAiAdvice = (item: MyVulnerabilityItem) => {
     navigate('/user/ai', {
-      state: {
-        aiPrompt: `请基于以下漏洞报告给出材料完善建议，不要编造平台实时数据。报告编号：${item.reportNo}；标题：${item.title}；影响资产：${item.assetName}；漏洞类型：${item.vulnerabilityType}；当前状态：${item.status}。请重点检查复现材料、影响说明和修复建议是否完整。`,
-      },
+      state: { aiAdviceReportId: item.id },
     })
   }
 

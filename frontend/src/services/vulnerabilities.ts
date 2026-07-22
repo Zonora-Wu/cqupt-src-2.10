@@ -4,9 +4,13 @@ export type CreateVulnerabilityPayload = {
   assetName: string
   assetUrl?: string
   detailMarkdown: string
+  impactAssessment?: string
   ownerUnit?: string
+  repairSuggestion?: string
+  reproductionSteps?: string
   requestPacket?: string
   selfSeverity: string
+  testBoundary?: string
   title: string
   vulnerabilityType: string
 }

@@ -5,11 +5,12 @@ import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiAttachmentText, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
+import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 
 type ChatMessage = {
   assistantTurnId?: string
@@ -22,12 +23,15 @@ type ChatMessage = {
   cards?: AiCard[]
   actions?: AiPendingAction[]
   reportDrafts?: AiVulnerabilityDraft[]
+  reportAssessment?: AiReportAssessment
   sessionId?: string
   usedKnowledge?: boolean
 }
 
 type UserAIAssistantProps = {
+  initialAdviceReportId?: string | null
   initialPrompt?: string | null
+  onInitialAdviceConsumed?: () => void
   onInitialPromptConsumed?: () => void
 }
 
@@ -41,6 +45,11 @@ type ChatAttachment = {
   size: number
 }
 
+type PendingReportSelection = {
+  drafts: AiVulnerabilityDraft[]
+  file: File
+}
+
 const MAX_STORED_MESSAGES = 80
 const CONTINUABLE_SESSION_STATUSES = new Set(['ACTIVE', 'AWAITING_RESOLUTION'])
 const HISTORY_PANEL_DEFAULT_WIDTH = 264
@@ -51,7 +60,7 @@ const HISTORY_PANEL_MIN_CHAT_WIDTH = 860
 const HISTORY_PANEL_GAP = 32
 const DESKTOP_HISTORY_BREAKPOINT = 1024
 
-export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
+export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitialAdviceConsumed, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
   const storageKeyRef = useRef(getConversationStorageKey())
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredMessages(storageKeyRef.current))
   const [input, setInput] = useState('')
@@ -67,12 +76,15 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   const reportFileInputRef = useRef<HTMLInputElement | null>(null)
   const reportAttachmentFilesRef = useRef<Record<string, File>>({})
   const consumedInitialPromptRef = useRef<string | null>(null)
+  const consumedAdviceReportIdRef = useRef<string | null>(null)
   const problemSessionIdRef = useRef<string | null>(null)
   const hasProblemContentRef = useRef(messages.length > 0)
   const [bottomInset, setBottomInset] = useState(156)
   const [showScrollDown, setShowScrollDown] = useState(false)
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [pendingReportSelection, setPendingReportSelection] = useState<PendingReportSelection | null>(null)
+  const [reportNotice, setReportNotice] = useState<{ message: string; title: string } | null>(null)
   const [problemSession, setProblemSession] = useState<AiProblemSession | null>(null)
   const [historySessions, setHistorySessions] = useState<AiProblemSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -257,6 +269,35 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
   }, [initialPrompt])
 
   useEffect(() => {
+    const reportId = initialAdviceReportId?.trim()
+    if (!reportId || consumedAdviceReportIdRef.current === reportId) return
+
+    consumedAdviceReportIdRef.current = reportId
+    onInitialAdviceConsumed?.()
+    setMessages((current) => [...current, { content: '请对这份已提交的漏洞报告进行评分并给出完善建议。', role: 'user' }])
+    setSending(true)
+    analyzeStoredVulnerabilityReport(reportId)
+      .then((result) => {
+        setMessages((current) => [
+          ...current,
+          {
+            content: '已按平台漏洞报告标准完成分析。本次仅提供评分和修改建议，不会重复创建或提交漏洞。',
+            reportAssessment: result.assessment,
+            role: 'assistant',
+          },
+        ])
+        return getAiQuota()
+      })
+      .then(setAiQuota)
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'AI 建议生成失败，请稍后重试。'
+        setReportNotice({ message, title: 'AI 建议未完成' })
+        setMessages((current) => [...current, { content: message, role: 'assistant' }])
+      })
+      .finally(() => setSending(false))
+  }, [initialAdviceReportId, onInitialAdviceConsumed])
+
+  useEffect(() => {
     if (!hasStarted || !dockedInputRef.current) return
 
     const updateBottomInset = () => {
@@ -395,38 +436,62 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     }
   }
 
+  const analyzeSelectedReportDraft = async (file: File, draft: AiVulnerabilityDraft) => {
+    setPendingReportSelection(null)
+    setUploadingAttachment(true)
+    try {
+      const result = await analyzeAiReportDraft(file, draft.id)
+      reportAttachmentFilesRef.current[result.draft.id] = file
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: '报告分析已完成。请核对并补全下方信息，确认授权边界后可直接提交。',
+          reportAssessment: result.assessment,
+          reportDrafts: [result.draft],
+        },
+      ])
+      getAiQuota().then(setAiQuota).catch(() => undefined)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '报告分析失败，请稍后重试。'
+      setReportNotice({ message, title: '报告分析未完成' })
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', content: message },
+      ])
+    } finally {
+      setUploadingAttachment(false)
+      if (reportFileInputRef.current) reportFileInputRef.current.value = ''
+    }
+  }
+
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? input).trim()
     const attachment = pendingAttachment
     if ((!content && !attachment) || sending || uploadingAttachment) return
 
     const effectiveContent = content || '请阅读附件内容，并给出整理、修改或下一步建议。'
-    const shouldExtractReportDrafts = Boolean(attachment && isReportDraftIntent(effectiveContent))
     const userAttachment = attachment ? { name: attachment.file.name, size: attachment.file.size } : undefined
 
     setMessages((current) => [...current, { attachment: userAttachment, role: 'user', content: effectiveContent }])
     setInput('')
     setPendingAttachment(null)
 
-    if (shouldExtractReportDrafts && attachment) {
+    if (attachment) {
       setUploadingAttachment(true)
       try {
         const result = await uploadAiReportDraft(attachment.file)
-        result.drafts.forEach((draft) => {
-          reportAttachmentFilesRef.current[draft.id] = attachment.file
-        })
-        setMessages((current) => [
-          ...current,
-          {
-            role: 'assistant',
-            content: `${result.message}\n\n我已按你的提交/生成报告意图，把附件内容拆成可编辑的漏洞提交卡片。报告中没有的信息会保持为空；请补齐标题、影响资产、漏洞类型、等级、复现步骤、影响评估和修复建议后，再逐项确认提交。`,
-            reportDrafts: result.drafts,
-          },
-        ])
+        if (result.drafts.length === 1) {
+          await analyzeSelectedReportDraft(attachment.file, result.drafts[0])
+        } else {
+          setPendingReportSelection({ drafts: result.drafts, file: attachment.file })
+        }
       } catch (error) {
+        const message = error instanceof Error ? error.message : '附件解析失败，请确认 PDF 可复制文本后再试。'
+        setReportNotice({ message, title: '附件解析未完成' })
         setMessages((current) => [
           ...current,
-          { role: 'assistant', content: error instanceof Error ? error.message : '附件解析失败，请确认 PDF 可复制文本后再试。' },
+          { role: 'assistant', content: message },
         ])
       } finally {
         setUploadingAttachment(false)
@@ -436,29 +501,13 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
     }
 
     setSending(true)
-    setUploadingAttachment(Boolean(attachment))
 
     try {
       const activeSessionId = await ensureProblemSession(effectiveContent)
-      const attachmentContext = attachment ? await uploadAiAttachmentText(attachment.file) : null
       const result = await sendAiChat(
         effectiveContent,
         'student',
-        attachmentContext
-          ? {
-              attachments: [
-                {
-                  fileName: attachmentContext.fileName,
-                  kind: attachmentContext.kind,
-                  mimeType: attachmentContext.mimeType,
-                  size: attachmentContext.size,
-                  sourceTextLength: attachmentContext.sourceTextLength,
-                  textExcerpt: attachmentContext.textExcerpt,
-                },
-              ],
-              attachmentUsePolicy: '附件是用户本轮提问的上下文。不要默认把附件当作要提交的漏洞报告；只有用户明确要求生成/提交漏洞报告时才引导提交，否则按用户输入提供修改、总结、检查或建议。',
-            }
-          : undefined,
+        undefined,
         activeSessionId,
       )
       if (result.sessionId) {
@@ -552,10 +601,10 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
       ])
       return
     }
-    if (file.size > 20 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       setMessages((current) => [
         ...current,
-        { role: 'assistant', content: '附件文件不能超过 20MB，请压缩后再上传。' },
+        { role: 'assistant', content: '附件文件不能超过 10MB，请压缩后再上传。' },
       ])
       return
     }
@@ -726,6 +775,7 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
                           content={message.content}
                           getReportAttachmentFile={(draftId) => reportAttachmentFilesRef.current[draftId]}
                           knowledgeSources={message.knowledgeSources}
+                          reportAssessment={message.reportAssessment}
                           reportDrafts={message.reportDrafts}
                           usedKnowledge={message.usedKnowledge}
                         />
@@ -803,6 +853,18 @@ export function UserAIAssistant({ initialPrompt, onInitialPromptConsumed }: User
           </>
         )}
       </AnimatePresence>
+
+      <ReportDraftSelectionDialog
+        pending={pendingReportSelection}
+        onCancel={() => {
+          setPendingReportSelection(null)
+          if (reportFileInputRef.current) reportFileInputRef.current.value = ''
+        }}
+        onSelect={(draft) => {
+          if (pendingReportSelection) void analyzeSelectedReportDraft(pendingReportSelection.file, draft)
+        }}
+      />
+      {reportNotice && <AlertMessage message={reportNotice.message} onClose={() => setReportNotice(null)} title={reportNotice.title} variant="error" />}
     </section>
     </>
   )
@@ -834,6 +896,65 @@ function PendingAttachmentPreview({
         variant="input"
       />
     </motion.div>
+  )
+}
+
+function ReportDraftSelectionDialog({
+  onCancel,
+  onSelect,
+  pending,
+}: {
+  onCancel: () => void
+  onSelect: (draft: AiVulnerabilityDraft) => void
+  pending: PendingReportSelection | null
+}) {
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <AnimatePresence>
+      {pending && (
+        <motion.div
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm"
+          exit={{ opacity: 0 }}
+          initial={{ opacity: 0 }}
+          onClick={onCancel}
+        >
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            className="max-h-[min(760px,88vh)] w-full max-w-2xl overflow-hidden rounded-lg border border-black/10 bg-[var(--app-menu-bg)] shadow-2xl dark:border-white/10"
+            exit={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 12 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-black/10 px-5 py-4 dark:border-white/10">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">选择需要分析的漏洞</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">报告识别到 {pending.drafts.length} 个漏洞。每次仅分析并提交一个。</p>
+            </div>
+            <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
+              {pending.drafts.map((draft, index) => (
+                <button
+                  className="flex w-full items-start justify-between gap-4 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 text-left transition hover:border-brand-500/40 hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/[0.06]"
+                  key={draft.id}
+                  onClick={() => onSelect(draft)}
+                  type="button"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-xs text-slate-400">漏洞 {index + 1}</span>
+                    <span className="mt-1 block truncate text-sm font-semibold text-slate-900 dark:text-white">{draft.title || '未识别标题'}</span>
+                    <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{draft.assetName || '未识别影响资产'}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{draft.vulnerabilityType || '类型待补充'}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end border-t border-black/10 px-5 py-3 dark:border-white/10">
+              <button className="rounded-lg border border-black/10 px-4 py-2 text-sm text-slate-600 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10" onClick={onCancel} type="button">取消</button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   )
 }
 
@@ -1309,10 +1430,6 @@ function AttachmentCard({
   )
 }
 
-function isReportDraftIntent(content: string) {
-  return /提交|创建.*(漏洞|报告|草稿)|自动填写|填报|导入|漏洞草稿|报告草稿|提交卡片|拆成.*漏洞|生成.*(漏洞|报告|提交|草稿)/.test(content)
-}
-
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -1329,6 +1446,7 @@ function AssistantMessageBubble({
   content,
   getReportAttachmentFile,
   knowledgeSources,
+  reportAssessment,
   reportDrafts,
   usedKnowledge,
 }: {
@@ -1337,6 +1455,7 @@ function AssistantMessageBubble({
   content: string
   getReportAttachmentFile?: (draftId: string) => File | undefined
   knowledgeSources?: AiChatResponse['knowledgeSources']
+  reportAssessment?: AiReportAssessment
   reportDrafts?: AiVulnerabilityDraft[]
   usedKnowledge?: boolean
 }) {
@@ -1358,7 +1477,14 @@ function AssistantMessageBubble({
         </div>
       )}
 
-      {hasReportDrafts && <ReportDraftCards drafts={reportDrafts ?? []} getAttachmentFile={getReportAttachmentFile} />}
+      {hasReportDrafts && <ReportDraftCards assessment={reportAssessment} drafts={reportDrafts ?? []} getAttachmentFile={getReportAttachmentFile} />}
+      {reportAssessment && !hasReportDrafts && (
+        <div className="px-4 pb-4">
+          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10">
+            <ReportAssessmentPanel assessment={reportAssessment} />
+          </div>
+        </div>
+      )}
 
       {hasCards && (
         <div className="px-4 pb-4">
@@ -1576,7 +1702,8 @@ function findCardAction(card: AiCard, actions?: AiPendingAction[]) {
 type DraftSubmitState =
   | { status: 'idle' }
   | { status: 'submitting' }
-  | { reportNo: string; status: 'submitted' }
+  | { reportId: string; reportNo: string; status: 'submitted' }
+  | { message: string; reportId: string; reportNo: string; status: 'attachment-error' }
   | { message: string; status: 'error' }
 
 type ConfirmDraftState = {
@@ -1592,17 +1719,20 @@ const severityOptions = [
   { label: '信息', value: 'INFO' },
 ]
 
-function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabilityDraft[]; getAttachmentFile?: (draftId: string) => File | undefined }) {
+function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessment?: AiReportAssessment; drafts: AiVulnerabilityDraft[]; getAttachmentFile?: (draftId: string) => File | undefined }) {
   const [editableDrafts, setEditableDrafts] = useState<AiVulnerabilityDraft[]>(drafts)
   const [submitStates, setSubmitStates] = useState<Record<string, DraftSubmitState>>({})
   const [confirming, setConfirming] = useState<ConfirmDraftState>(null)
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null)
+  const [accessLoading, setAccessLoading] = useState(true)
+  const [agreed, setAgreed] = useState(false)
 
   useEffect(() => {
     let active = true
     getAccessStatus()
       .then((status) => { if (active) setAccessStatus(status) })
       .catch(() => { /* 后端提交接口仍会强制校验 */ })
+      .finally(() => { if (active) setAccessLoading(false) })
     return () => { active = false }
   }, [])
 
@@ -1643,8 +1773,12 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
       assetName: draft.assetName.trim(),
       assetUrl: draft.assetUrl?.trim() || undefined,
       detailMarkdown: buildDraftMarkdown(draft),
+      impactAssessment: draft.impactAssessment.trim(),
       ownerUnit: draft.ownerUnit?.trim() || undefined,
+      repairSuggestion: draft.repairSuggestion.trim(),
+      reproductionSteps: draft.reproductionSteps.trim(),
       selfSeverity: draft.selfSeverity,
+      testBoundary: draft.testBoundary?.trim(),
       title: draft.title.trim(),
       vulnerabilityType: draft.vulnerabilityType.trim(),
     }
@@ -1652,10 +1786,21 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
     try {
       setSubmitStates((current) => ({ ...current, [draft.id]: { status: 'submitting' } }))
       const result = await createVulnerability(payload)
-      if (attachmentFile) {
+      try {
         await uploadVulnerabilityAttachment(result.id, attachmentFile)
+      } catch (error) {
+        setSubmitStates((current) => ({
+          ...current,
+          [draft.id]: {
+            message: error instanceof Error ? error.message : '原始报告附件上传失败',
+            reportId: result.id,
+            reportNo: result.reportNo,
+            status: 'attachment-error',
+          },
+        }))
+        return
       }
-      setSubmitStates((current) => ({ ...current, [draft.id]: { reportNo: result.reportNo, status: 'submitted' } }))
+      setSubmitStates((current) => ({ ...current, [draft.id]: { reportId: result.id, reportNo: result.reportNo, status: 'submitted' } }))
     } catch (error) {
       setSubmitStates((current) => ({
         ...current,
@@ -1667,9 +1812,10 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
   return (
     <div className="px-4 pb-4">
       <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
+        {assessment && <ReportAssessmentPanel assessment={assessment} />}
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">从报告识别到 {editableDrafts.length} 个漏洞草稿</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">报告信息确认</p>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">空字段会提示补全，提交前需二次确认</p>
         </div>
@@ -1678,7 +1824,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
           {editableDrafts.map((draft, index) => {
             const missing = getDraftMissingFields(draft)
             const state = submitStates[draft.id] ?? { status: 'idle' }
-            const disabled = state.status === 'submitting' || state.status === 'submitted'
+            const disabled = state.status === 'submitting' || state.status === 'submitted' || state.status === 'attachment-error'
             const attachmentFile = getAttachmentFile?.(draft.id)
             return (
               <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 shadow-sm dark:border-white/10" key={draft.id}>
@@ -1723,7 +1869,7 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
                     value={draft.selfSeverity}
                   />
                   <DraftTextInput label="责任单位/定级单元（可选）" value={draft.ownerUnit ?? ''} onChange={(value) => updateDraft(draft.id, { ownerUnit: value })} />
-                  <DraftTextInput label="测试边界（可选）" value={draft.testBoundary ?? ''} onChange={(value) => updateDraft(draft.id, { testBoundary: value })} />
+                  <DraftTextInput label="测试边界" value={draft.testBoundary ?? ''} onChange={(value) => updateDraft(draft.id, { testBoundary: value })} />
                 </div>
 
                 <div className="mt-3 grid gap-3">
@@ -1732,24 +1878,33 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
                   <DraftTextArea label="修复建议" value={draft.repairSuggestion} onChange={(value) => updateDraft(draft.id, { repairSuggestion: value })} />
                 </div>
 
-                <div className="mt-3 flex flex-col gap-2 border-t border-black/10 pt-3 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+                <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-black/10 pt-3 text-xs leading-5 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                  <input checked={agreed} className="mt-0.5 h-4 w-4 accent-brand-600" onChange={(event) => setAgreed(event.target.checked)} type="checkbox" />
+                  <span>我已阅读并同意《CQUPT-SRC 授权测试规则》《CQUPT-SRC 漏洞提交规范》《校园网络安全测试行为边界说明》。</span>
+                </label>
+
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {state.status === 'submitted'
                       ? `已提交：${state.reportNo}，原始报告附件已随漏洞记录归档。`
+                      : state.status === 'attachment-error'
+                        ? `漏洞 ${state.reportNo} 已创建，但附件上传失败：${state.message}。请前往“我的漏洞”补充材料。`
                       : state.status === 'error'
                         ? state.message
                         : attachmentFile
                           ? `将随漏洞一同上传附件：${attachmentFile.name}`
                           : '请确认报告信息、测试授权边界与复现内容准确无误。刷新页面后需重新上传附件才能随漏洞归档。'}
+                    {(state.status === 'submitted' || state.status === 'attachment-error') && (
+                      <a className="ml-2 font-medium text-brand-700 hover:underline dark:text-brand-300" href="/user/vulnerabilities">查看我的漏洞</a>
+                    )}
                   </p>
                   <button
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-                    disabled={disabled}
+                    disabled={disabled || accessLoading || !agreed || missing.length > 0 || !attachmentFile}
                     onClick={() => setConfirming({ draft, index })}
                     type="button"
                   >
-                    <Shield className="h-4 w-4" />
-                    {state.status === 'submitting' ? '提交中...' : state.status === 'submitted' ? '已提交' : '确认提交'}
+                    {state.status === 'submitting' ? '提交中...' : state.status === 'submitted' || state.status === 'attachment-error' ? '已创建' : accessLoading ? '检查准入状态...' : '确认提交'}
                   </button>
                 </div>
               </div>
@@ -1810,6 +1965,47 @@ function ReportDraftCards({ drafts, getAttachmentFile }: { drafts: AiVulnerabili
   )
 }
 
+function ReportAssessmentPanel({ assessment }: { assessment: AiReportAssessment }) {
+  return (
+    <div className="mb-4 border-b border-black/10 pb-4 dark:border-white/10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">AI 报告建议</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{assessment.summary}</p>
+        </div>
+        <div className="shrink-0 text-left sm:text-right">
+          <p className="text-2xl font-semibold text-brand-700 dark:text-brand-300">{assessment.score}</p>
+          <p className="text-xs text-slate-400">Agent 评分 / 100</p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <AssessmentList items={assessment.strengths} title="报告优点" />
+        <AssessmentList items={assessment.improvements} title="修改建议" />
+      </div>
+      {(assessment.limitations.length > 0 || assessment.imageEvidenceNotice) && (
+        <div className="mt-3 text-xs leading-5 text-amber-700 dark:text-amber-200">
+          {assessment.imageEvidenceNotice && <p>{assessment.imageEvidenceNotice}</p>}
+          {assessment.limitations.map((item) => <p key={item}>{item}</p>)}
+        </div>
+      )}
+      <p className="mt-3 text-xs leading-5 text-slate-400">{assessment.disclaimer}</p>
+    </div>
+  )
+}
+
+function AssessmentList({ items, title }: { items: string[]; title: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+      {items.length > 0 ? (
+        <ul className="mt-1 space-y-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {items.map((item) => <li key={item}>- {item}</li>)}
+        </ul>
+      ) : <p className="mt-1 text-xs text-slate-400">暂无</p>}
+    </div>
+  )
+}
+
 function DraftTextInput({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
   return (
     <label className="block">
@@ -1850,15 +2046,15 @@ function getDraftMissingFields(draft: AiVulnerabilityDraft) {
   if (!draft.assetName?.trim()) missing.push('影响资产')
   if (!draft.vulnerabilityType?.trim() || !vulnerabilityTypes.includes(draft.vulnerabilityType as (typeof vulnerabilityTypes)[number])) missing.push('漏洞类型')
   if (!draft.selfSeverity?.trim()) missing.push('自评等级')
-  if (!draft.reproductionSteps?.trim() || draft.reproductionSteps.trim().length < 10) missing.push('复现步骤')
-  if (!draft.impactAssessment?.trim() || draft.impactAssessment.trim().length < 10) missing.push('影响评估')
-  if (!draft.repairSuggestion?.trim() || draft.repairSuggestion.trim().length < 6) missing.push('修复建议')
+  if (!draft.reproductionSteps?.trim() || draft.reproductionSteps.trim().length < 8) missing.push('复现步骤')
+  if (!draft.impactAssessment?.trim() || draft.impactAssessment.trim().length < 8) missing.push('影响评估')
+  if (!draft.repairSuggestion?.trim() || draft.repairSuggestion.trim().length < 8) missing.push('修复建议')
+  if (!draft.testBoundary?.trim() || draft.testBoundary.trim().length < 10) missing.push('测试边界')
   return missing
 }
 
 function buildDraftMarkdown(draft: AiVulnerabilityDraft) {
-  const testBoundary = draft.testBoundary?.trim()
-    || '本次测试仅在学校授权范围内进行，未进行未授权扫描、爆破、数据下载、权限维持、后门植入或影响业务运行的操作。'
+  const testBoundary = draft.testBoundary?.trim() || ''
   const proof = draft.detailMarkdown?.trim()
     ? `已上传原始报告作为利用证明附件。AI 根据报告内容整理的关键证据：\n\n${draft.detailMarkdown.trim()}`
     : '已上传原始报告作为利用证明附件，请审核员结合附件核验证据。'

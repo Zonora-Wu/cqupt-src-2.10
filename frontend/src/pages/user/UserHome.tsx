@@ -26,7 +26,7 @@ import { NotificationBell } from '../../components/ui/NotificationPanel'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { type AuthUser } from '../../services/auth'
-import { getUserDashboard, runUserDashboardAiInsight, type UserDashboardAiInsight } from '../../services/dashboard'
+import { getUserDashboard, runUserDashboardAiInsight, type UserDashboardAiInsight, type UserDashboardStats } from '../../services/dashboard'
 import { getAccountProfile } from '../../services/account'
 import {
   getUserDevicePreferences,
@@ -81,13 +81,6 @@ type UserHomeProps = {
   user: AuthUser
 }
 
-const quickActions = [
-  { title: '提交漏洞', description: '上传漏洞报告、截图与复现材料' },
-  { title: '进入靶场', description: '选择适合当前能力阶段的训练环境' },
-  { title: '学习资源', description: '下载工具资源与安全学习资料' },
-  { title: '积分商城', description: '查看可兑换奖励和申请记录' },
-]
-
 const aiCapabilities = [
   {
     title: '漏洞报告 AI 提交功能',
@@ -101,12 +94,6 @@ const aiCapabilities = [
     title: '学习路径推荐',
     description: '根据提交记录、靶场进度和知识薄弱点，推荐工具资源与下一阶段训练。',
   },
-]
-
-const activities = [
-  { title: 'AI 建议为“弱口令风险报告”补充影响范围截图', time: '今天 10:24', tone: 'bg-brand-600' },
-  { title: 'SQL 注入基础靶场已推荐到你的学习路径', time: '昨天 18:36', tone: 'bg-amber-500' },
-  { title: 'Web 基础靶场已完成 70%，建议进入权限控制专题', time: '04-25 21:10', tone: 'bg-blue-500' },
 ]
 
 const menuItems = userNavItems.map((item) => item.label)
@@ -124,11 +111,13 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [aiFocused, setAiFocused] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null)
+  const [pendingAiAdviceReportId, setPendingAiAdviceReportId] = useState<string | null>(null)
   const [preferences, setPreferences] = useState<UserDevicePreferences>(() =>
     getUserDevicePreferences(preferenceKey),
   )
   const [theme, setTheme] = useState<EffectiveTheme>(() => resolveThemeMode(preferences.themeMode))
-  const [dashStats, setDashStats] = useState({ submitCount: 0, confirmedCount: 0, currentPoints: 0, certCount: 0 })
+  const [dashStats, setDashStats] = useState<UserDashboardStats | null>(null)
+  const [dashError, setDashError] = useState('')
   const [aiInsight, setAiInsight] = useState<UserDashboardAiInsight | null>(null)
   const [aiInsightError, setAiInsightError] = useState('')
   const [aiInsightRefreshing, setAiInsightRefreshing] = useState(false)
@@ -159,9 +148,15 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   }, [location.pathname, navigate])
 
   useEffect(() => {
-    const state = location.state as { aiPrompt?: unknown } | null
-    if (location.pathname !== '/user/ai' || typeof state?.aiPrompt !== 'string' || !state.aiPrompt.trim()) return
-    setPendingAiPrompt(state.aiPrompt.trim())
+    const state = location.state as { aiAdviceReportId?: unknown; aiPrompt?: unknown } | null
+    if (location.pathname !== '/user/ai') return
+    if (typeof state?.aiAdviceReportId === 'string' && state.aiAdviceReportId.trim()) {
+      setPendingAiAdviceReportId(state.aiAdviceReportId.trim())
+    } else if (typeof state?.aiPrompt === 'string' && state.aiPrompt.trim()) {
+      setPendingAiPrompt(state.aiPrompt.trim())
+    } else {
+      return
+    }
     navigate('/user/ai', { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
@@ -185,11 +180,27 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
       .catch(() => { /* 静默失败 */ })
   }, [])
 
-  // 加载仪表盘数据
+  const loadDashboard = async () => {
+    setDashError('')
+    try {
+      setDashStats(await getUserDashboard())
+    } catch (error) {
+      setDashError(error instanceof Error ? error.message : '首页进展加载失败')
+    }
+  }
+
   useEffect(() => {
+    let active = true
     getUserDashboard()
-      .then((data) => setDashStats(data))
-      .catch(() => { /* 静默失败，福贝默认值 */ })
+      .then((data) => {
+        if (active) setDashStats(data)
+      })
+      .catch((error: unknown) => {
+        if (active) setDashError(error instanceof Error ? error.message : '首页进展加载失败')
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const refreshAiInsight = async () => {
@@ -206,10 +217,39 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   }
 
   const stats = [
-    { label: '累计提交', value: String(dashStats.submitCount), hint: '漏洞报告' },
-    { label: '有效漏洞', value: String(dashStats.confirmedCount), hint: '已通过审核' },
-    { label: '当前积分', value: String(dashStats.currentPoints), hint: '可兑换资源' },
-    { label: '证书数量', value: String(dashStats.certCount), hint: '高价值贡献' },
+    { label: '累计提交', value: dashStats ? String(dashStats.submitCount) : '—', hint: '漏洞报告' },
+    { label: '有效漏洞', value: dashStats ? String(dashStats.confirmedCount) : '—', hint: '已通过审核' },
+    { label: '当前积分', value: dashStats ? String(dashStats.currentPoints) : '—', hint: '可兑换资源' },
+    { label: '证书数量', value: dashStats ? String(dashStats.certCount) : '—', hint: '高价值贡献' },
+  ]
+  const quickActions = [
+    {
+      description: '上传报告与复现材料',
+      label: '开始提交',
+      path: '/user/submit',
+      title: '提交漏洞',
+    },
+    {
+      description: dashStats?.progress.supplementCount
+        ? `${dashStats.progress.supplementCount} 个漏洞需要补充材料`
+        : '查看审核状态与处理记录',
+      label: dashStats?.progress.supplementCount ? '立即处理' : '查看记录',
+      path: '/user/vulnerabilities',
+      title: '我的漏洞',
+      warning: Boolean(dashStats?.progress.supplementCount),
+    },
+    {
+      description: '靶场训练与学习资源',
+      label: '进入学习',
+      path: '/user/learning',
+      title: '学习中心',
+    },
+    {
+      description: dashStats ? `${dashStats.currentPoints} 可用积分` : '查看商品与兑换记录',
+      label: '前往商城',
+      path: '/user/mall',
+      title: '积分商城',
+    },
   ]
 
   useEffect(() => {
@@ -325,7 +365,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
             <UserLearningCenter />
           ) : activeMenu === 'AI助手' ? (
             <UserAIAssistant
+              initialAdviceReportId={pendingAiAdviceReportId}
               initialPrompt={pendingAiPrompt}
+              onInitialAdviceConsumed={() => setPendingAiAdviceReportId(null)}
               onInitialPromptConsumed={() => setPendingAiPrompt(null)}
             />
           ) : activeMenu === '积分商城' ? (
@@ -482,44 +524,40 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-            <SurfacePanel className="p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold">快捷入口</h2>
+            <SurfacePanel className="h-full overflow-hidden p-0">
+              <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+                <p className="text-sm text-slate-500 dark:text-slate-400">常用操作</p>
+                <h2 className="mt-1 text-xl font-semibold">快捷入口</h2>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="divide-y divide-black/[0.07] px-2 dark:divide-white/[0.08]">
                 {quickActions.map((item) => (
                   <button
-                    className="group rounded-lg border border-black/10 p-4 text-left transition hover:border-brand-600/30 hover:bg-brand-600/5 dark:border-white/10 dark:hover:bg-white/[0.06]"
+                    className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-md px-4 py-4 text-left transition-colors hover:bg-black/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600/50 dark:hover:bg-white/[0.05]"
                     key={item.title}
-                    onClick={() => openMenu(item.title === '进入靶场' || item.title === '学习资源' ? '学习中心' : item.title)}
+                    onClick={() => navigate(item.path)}
                     type="button"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="font-semibold">{item.title}</p>
-                      <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
+                      <p className={`mt-1 truncate text-sm ${item.warning ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {item.description}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
+                    <span className="flex items-center gap-1 text-sm font-medium text-brand-700 dark:text-brand-300">
+                      {item.label}
+                      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </button>
                 ))}
               </div>
             </SurfacePanel>
 
-            <SurfacePanel className="p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold">AI 动态与学习提醒</h2>
-              </div>
-              <div className="mt-5 space-y-4">
-                {activities.map((item) => (
-                  <div className="flex gap-4 rounded-lg border border-black/5 p-4 dark:border-white/10" key={item.title}>
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone}`} />
-                    <div>
-                      <p className="font-medium">{item.title}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SurfacePanel>
+            <UserProgressPanel
+              data={dashStats}
+              error={dashError}
+              onNavigate={navigate}
+              onRetry={() => void loadDashboard()}
+            />
           </div>
         </section>
       )}
@@ -557,6 +595,104 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         open={showSecurityExamDialog}
       />
     </AppBackground>
+  )
+}
+
+function UserProgressPanel({
+  data,
+  error,
+  onNavigate,
+  onRetry,
+}: {
+  data: UserDashboardStats | null
+  error: string
+  onNavigate: (path: string) => void
+  onRetry: () => void
+}) {
+  return (
+    <SurfacePanel className="p-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-slate-500 dark:text-slate-400">个人数据汇总</p>
+          <h2 className="mt-1 text-xl font-semibold">我的进展与待办</h2>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-5 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-4">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <button className="mt-3 text-sm font-medium text-brand-700 hover:underline dark:text-brand-300" onClick={onRetry} type="button">
+            重新加载
+          </button>
+        </div>
+      ) : !data ? (
+        <div aria-label="正在加载进展" className="mt-5 space-y-3">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div className="flex animate-pulse items-center gap-5 border-b border-black/[0.06] py-3 last:border-b-0 dark:border-white/[0.08]" key={index}>
+              <span className="h-3 w-20 rounded bg-black/[0.07] dark:bg-white/[0.08]" />
+              <span className="h-4 flex-1 rounded bg-black/[0.07] dark:bg-white/[0.08]" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 divide-y divide-black/[0.07] dark:divide-white/[0.08]">
+          <ProgressRow
+            label="必须处理"
+            value={data.progress.requiredActionCount > 0 ? `${data.progress.requiredActionCount} 个漏洞等待处理` : '当前没有必须处理的漏洞'}
+            warning={data.progress.requiredActionCount > 0}
+          />
+          <ProgressRow
+            description={data.progress.latestReport ? `${data.progress.latestReport.reportNo} · ${data.progress.latestReport.title}` : undefined}
+            label="审核进度"
+            value={data.progress.latestReport?.statusLabel ?? '暂无已提交漏洞'}
+          />
+          <ProgressRow
+            label="补充材料"
+            value={data.progress.supplementCount > 0 ? `${data.progress.supplementCount} 个漏洞需要补充` : '无需补充材料'}
+            warning={data.progress.supplementCount > 0}
+          />
+          <ProgressRow
+            label="积分与证书"
+            value={`${data.currentPoints} 可用积分 · ${data.certCount} 份证书`}
+          />
+          <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">下一步</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">{data.progress.nextAction.description}</p>
+            </div>
+            <button
+              className="shrink-0 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50"
+              onClick={() => onNavigate(data.progress.nextAction.route)}
+              type="button"
+            >
+              {data.progress.nextAction.label}
+            </button>
+          </div>
+        </div>
+      )}
+    </SurfacePanel>
+  )
+}
+
+function ProgressRow({
+  description,
+  label,
+  value,
+  warning = false,
+}: {
+  description?: string
+  label: string
+  value: string
+  warning?: boolean
+}) {
+  return (
+    <div className="grid gap-1 py-3.5 sm:grid-cols-[112px_minmax(0,1fr)] sm:gap-4">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <div className="min-w-0 sm:text-right">
+        <p className={`text-sm font-medium ${warning ? 'text-amber-700 dark:text-amber-300' : 'text-slate-800 dark:text-slate-100'}`}>{value}</p>
+        {description ? <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400" title={description}>{description}</p> : null}
+      </div>
+    </div>
   )
 }
 

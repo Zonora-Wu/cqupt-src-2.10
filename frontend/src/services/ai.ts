@@ -80,6 +80,24 @@ export type AiAttachmentTextResponse = {
   textExcerpt: string
 }
 
+export type AiReportAssessment = {
+  disclaimer: string
+  imageEvidenceNotice: string | null
+  improvements: string[]
+  limitations: string[]
+  score: number
+  strengths: string[]
+  summary: string
+}
+
+export type AiReportAnalysisResponse = {
+  assessment: AiReportAssessment
+  draft: AiVulnerabilityDraft
+  fileName: string
+  omittedFields: string[]
+  redactionCount: number
+}
+
 export type AiChatResponse = {
   content: string
   mode: AiChatMode
@@ -322,6 +340,25 @@ export async function uploadAiReportDraft(file: File) {
     auth: true,
     formData,
     unauthenticatedMessage: '请先登录后再上传报告',
+  })
+}
+
+export async function analyzeAiReportDraft(file: File, draftId: string) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('draftId', draftId)
+
+  return apiFormRequest<AiReportAnalysisResponse>('/ai/report-analysis', {
+    auth: true,
+    formData,
+    unauthenticatedMessage: '请先登录后再分析报告',
+  })
+}
+
+export function analyzeStoredVulnerabilityReport(reportId: string) {
+  return apiRequest<AiReportAnalysisResponse>(`/ai/vulnerability-advice/${encodeURIComponent(reportId)}`, {
+    auth: true,
+    method: 'POST',
   })
 }
 

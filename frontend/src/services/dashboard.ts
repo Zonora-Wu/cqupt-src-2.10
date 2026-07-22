@@ -4,6 +4,23 @@ export type UserDashboardStats = {
   certCount: number
   confirmedCount: number
   currentPoints: number
+  progress: {
+    latestReport: {
+      id: string
+      reportNo: string
+      status: string
+      statusLabel: string
+      title: string
+      updatedAt: string
+    } | null
+    nextAction: {
+      description: string
+      label: string
+      route: string
+    }
+    requiredActionCount: number
+    supplementCount: number
+  }
   submitCount: number
 }
 

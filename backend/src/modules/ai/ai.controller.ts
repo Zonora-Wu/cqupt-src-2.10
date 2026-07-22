@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -90,9 +91,35 @@ export class AiController {
   }
 
   @Post('report-drafts')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  @RequirePermissions('ai:use_student')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined) {
     return this.reportDrafts.extractVulnerabilityDrafts(file)
+  }
+
+  @Post('report-analysis')
+  @RequirePermissions('ai:use_student')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async analyzeReport(
+    @UploadedFile() file: UploadedPdfFile | undefined,
+    @Body('draftId') draftId: string | undefined,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    const normalizedDraftId = typeof draftId === 'string' ? draftId.trim() : ''
+    if (!normalizedDraftId) throw new BadRequestException('请选择要分析的漏洞')
+    const prepared = await this.reportDrafts.prepareVulnerabilityAnalysis(file, normalizedDraftId)
+    return this.ai.analyzeVulnerabilityReport(prepared, user, getRequestMeta(req))
+  }
+
+  @Post('vulnerability-advice/:reportId')
+  @RequirePermissions('ai:use_student')
+  analyzeStoredVulnerabilityReport(
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.ai.analyzeStoredVulnerabilityReport(reportId, user, getRequestMeta(req))
   }
 
   @Post('attachments/text')

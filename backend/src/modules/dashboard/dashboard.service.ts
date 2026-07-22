@@ -28,7 +28,72 @@ export type UserDashboardStats = {
   certCount: number
   confirmedCount: number
   currentPoints: number
+  progress: {
+    latestReport: {
+      id: string
+      reportNo: string
+      status: VulnerabilityStatus
+      statusLabel: string
+      title: string
+      updatedAt: Date
+    } | null
+    nextAction: {
+      description: string
+      label: string
+      route: string
+    }
+    requiredActionCount: number
+    supplementCount: number
+  }
   submitCount: number
+}
+
+function buildUserDashboardNextAction(
+  latestSupplementReport: { id: string; reportNo: string; title: string } | null,
+  latestReport: { id: string; reportNo: string; status: VulnerabilityStatus; title: string } | null,
+) {
+  if (latestSupplementReport) {
+    return {
+      description: `${latestSupplementReport.reportNo} 等待补充材料`,
+      label: '补充漏洞材料',
+      route: `/user/vulnerabilities?reportId=${encodeURIComponent(latestSupplementReport.id)}`,
+    }
+  }
+
+  if (
+    latestReport
+    && latestReport.status !== VulnerabilityStatus.ARCHIVED
+    && latestReport.status !== VulnerabilityStatus.CERTIFIED
+    && latestReport.status !== VulnerabilityStatus.REJECTED
+  ) {
+    return {
+      description: `${latestReport.reportNo} 当前${formatUserDashboardStatus(latestReport.status)}`,
+      label: '查看最新进展',
+      route: `/user/vulnerabilities?reportId=${encodeURIComponent(latestReport.id)}`,
+    }
+  }
+
+  return {
+    description: latestReport ? '当前没有需要处理的漏洞' : '提交后可在首页跟踪审核进度',
+    label: '提交新漏洞',
+    route: '/user/submit',
+  }
+}
+
+function formatUserDashboardStatus(status: VulnerabilityStatus) {
+  const labels: Record<VulnerabilityStatus, string> = {
+    ARCHIVED: '已归档',
+    CERTIFIED: '已签发证书',
+    CONFIRMED: '已确认',
+    DRAFT: '草稿',
+    FIXING: '修复中',
+    NEEDS_SUPPLEMENT: '待补充',
+    PENDING_RETEST: '待复测',
+    PENDING_REVIEW: '审核中',
+    REJECTED: '已驳回',
+    SUBMITTED: '待审核',
+  }
+  return labels[status]
 }
 
 export type UserDashboardAiInsight = {
@@ -151,7 +216,7 @@ export class DashboardService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getUserDashboard(user: AuthenticatedRequestUser): Promise<UserDashboardStats> {
-    const [submitCount, confirmedCount, certCount] = await Promise.all([
+    const [submitCount, confirmedCount, certCount, supplementCount, latestReport, latestSupplementReport] = await Promise.all([
       this.prisma.vulnerabilityReport.count({
         where: {
           deletedAt: null,
@@ -180,6 +245,31 @@ export class DashboardService {
           status: { in: [CertificateStatus.ISSUED] },
         },
       }),
+      this.prisma.vulnerabilityReport.count({
+        where: {
+          deletedAt: null,
+          status: VulnerabilityStatus.NEEDS_SUPPLEMENT,
+          submitterId: user.id,
+        },
+      }),
+      this.prisma.vulnerabilityReport.findFirst({
+        where: {
+          deletedAt: null,
+          status: { not: VulnerabilityStatus.DRAFT },
+          submitterId: user.id,
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        select: { id: true, reportNo: true, status: true, title: true, updatedAt: true },
+      }),
+      this.prisma.vulnerabilityReport.findFirst({
+        where: {
+          deletedAt: null,
+          status: VulnerabilityStatus.NEEDS_SUPPLEMENT,
+          submitterId: user.id,
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        select: { id: true, reportNo: true, title: true },
+      }),
     ])
 
     const latestEntry = await this.prisma.pointLedgerEntry.findFirst({
@@ -192,6 +282,15 @@ export class DashboardService {
       certCount,
       confirmedCount,
       currentPoints: latestEntry?.balanceAfter ?? 0,
+      progress: {
+        latestReport: latestReport ? {
+          ...latestReport,
+          statusLabel: formatUserDashboardStatus(latestReport.status),
+        } : null,
+        nextAction: buildUserDashboardNextAction(latestSupplementReport, latestReport),
+        requiredActionCount: supplementCount,
+        supplementCount,
+      },
       submitCount,
     }
   }
