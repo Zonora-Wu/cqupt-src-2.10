@@ -517,13 +517,20 @@ export function AdminSystemSettings() {
   useEffect(() => {
     let active = true
 
+    void getAiAssistantAppearance()
+      .then((appearance) => {
+        if (active) setAiAvatarUrl(appearance.avatarUrl)
+      })
+      .catch((error) => {
+        if (active) setAiAvatarMessage(error instanceof Error ? error.message : '邮宝头像加载失败')
+      })
+
     async function loadInitialData() {
       try {
-        const [mode, template, platform, aiAppearance, aiQuota, emailService] = await Promise.all([
+        const [mode, template, platform, aiQuota, emailService] = await Promise.all([
           getRegistrationMode(),
           getActiveCertificateTemplate(),
           getPlatformSettings(),
-          getAiAssistantAppearance(),
           getAiQuotaSettings(),
           getEmailServiceSettings(),
         ])
@@ -582,7 +589,6 @@ export function AdminSystemSettings() {
             faviconUrl: displayedLogoState.favicon,
             navigationLogoUrl: displayedLogoState.navigation,
           })
-          setAiAvatarUrl(aiAppearance.avatarUrl)
           setDefaultAiDailyTokens(String(aiQuota.defaultDailyTokens))
           setDefaultAiWeeklyTokens(String(aiQuota.defaultWeeklyTokens))
           setDefaultAiMonthlyTokens(String(aiQuota.defaultMonthlyTokens))
@@ -1260,7 +1266,8 @@ export function AdminSystemSettings() {
                     onClick={() => setActiveSection(section.label)}
                     type="button"
                   >
-                    <span className="mt-0.5">{section.icon}</span>
+                    <span className="mt-0.5">{section.icon} 
+                    </span>
                     <span>
                       <span className="block text-sm font-semibold">{section.label}</span>
                       <span className={`mt-1 block text-xs leading-5 ${activeSection === section.label ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'}`}>
