@@ -84,11 +84,13 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [availableSkills, setAvailableSkills] = useState<AiSkillLibraryItem[]>([])
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>(() => loadSkillPreferences(skillPreferenceKeyRef.current).activeSkillIds)
   const [pinnedSkillIds, setPinnedSkillIds] = useState<string[]>(() => loadSkillPreferences(skillPreferenceKeyRef.current).pinnedSkillIds)
+  const [draggedSkillId, setDraggedSkillId] = useState<string | null>(null)
   const [skillDialogOpen, setSkillDialogOpen] = useState(false)
   const [dismissedQuotaWarning, setDismissedQuotaWarning] = useState<'20' | '5' | null>(null)
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null)
   const dockedInputRef = useRef<HTMLDivElement | null>(null)
   const composerEditorRef = useRef<SkillComposerEditorHandle | null>(null)
+  const pinnedSkillStripRef = useRef<HTMLDivElement | null>(null)
   const reportFileInputRef = useRef<HTMLInputElement | null>(null)
   const reportAttachmentFilesRef = useRef<Record<string, File>>({})
   const consumedInitialPromptRef = useRef<string | null>(null)
@@ -117,8 +119,12 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const reloadSkills = () => getAiSkills().then((result) => {
     const usable = result.skills.filter(isUsableAiSkill)
     const usableIds = new Set(usable.map((skill) => skill.id))
+    const defaultPinnedIds = usable.filter((skill) => skill.defaultPinnedForUsers).map((skill) => skill.id)
     setAvailableSkills(usable)
-    setPinnedSkillIds((current) => current.filter((id) => usableIds.has(id)))
+    setPinnedSkillIds((current) => [...new Set([
+      ...current.filter((id) => usableIds.has(id)),
+      ...defaultPinnedIds,
+    ])])
     setSelectedSkillIds((current) => current.filter((id) => usableIds.has(id)).slice(0, 3))
   })
   useEffect(() => {
@@ -638,6 +644,19 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     window.setTimeout(() => composerEditorRef.current?.focus(), 0)
   }
 
+  const movePinnedSkill = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return
+    setPinnedSkillIds((current) => {
+      const sourceIndex = current.indexOf(sourceId)
+      const targetIndex = current.indexOf(targetId)
+      if (sourceIndex < 0 || targetIndex < 0) return current
+      const next = [...current]
+      const [moved] = next.splice(sourceIndex, 1)
+      next.splice(targetIndex, 0, moved)
+      return next
+    })
+  }
+
   const inputBox = (
     <div className="mx-auto w-full">
       <QuotaWarning
@@ -645,7 +664,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         quota={aiQuota}
         onDismiss={setDismissedQuotaWarning}
       />
-      <div className="mb-2 flex max-w-full items-center gap-2 overflow-x-auto pb-1">
+      <div className="mb-2 flex max-w-full items-center gap-2 pb-1">
         <AiModelConfigurationButton
           onChanged={() => void reloadModelSelection()}
           onNotice={setModelNotice}
@@ -657,35 +676,62 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           )}
         />
         <button className={inputModuleClass(false)} onClick={() => setSkillDialogOpen(true)} type="button">Skill 管理</button>
-        {pinnedSkillIds.map((skillId) => {
-          const skill = availableSkills.find((item) => item.id === skillId)
-          if (!skill) return null
-          const active = selectedSkillIds.includes(skill.id)
-          return (
-            <button
-              aria-pressed={active}
-              className={inputModuleClass(active)}
-              key={skill.id}
-              onClick={() => {
-                if (!active && selectedSkillIds.length >= 3) {
-                  setModelNotice('一次最多使用 3 个 Skill')
-                  return
-                }
-                const nextIds = active
-                  ? selectedSkillIds.filter((id) => id !== skill.id)
-                  : [...selectedSkillIds, skill.id]
-                setSelectedSkillIds(nextIds)
-                composerEditorRef.current?.setSkills(availableSkills.filter((item) => nextIds.includes(item.id)))
-              }}
-              type="button"
-            >
-              {skill.title}
-            </button>
-          )
-        })}
+        <div
+          className="min-w-0 flex-1 overflow-x-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onWheel={(event) => {
+            const element = pinnedSkillStripRef.current
+            if (!element || element.scrollWidth <= element.clientWidth) return
+            event.preventDefault()
+            element.scrollLeft += event.deltaY || event.deltaX
+          }}
+          ref={pinnedSkillStripRef}
+        >
+          <div className="flex w-max items-center gap-2">
+            {pinnedSkillIds.map((skillId) => {
+              const skill = availableSkills.find((item) => item.id === skillId)
+              if (!skill) return null
+              const active = selectedSkillIds.includes(skill.id)
+              return (
+                <button
+                  aria-label={`${skill.title}，可拖动调整顺序`}
+                  aria-pressed={active}
+                  className={`${inputModuleClass(active)} cursor-grab select-none active:cursor-grabbing ${draggedSkillId === skill.id ? 'opacity-50' : ''}`}
+                  draggable
+                  key={skill.id}
+                  onClick={() => {
+                    if (!active && selectedSkillIds.length >= 3) {
+                      setModelNotice('一次最多使用 3 个 Skill')
+                      return
+                    }
+                    const nextIds = active
+                      ? selectedSkillIds.filter((id) => id !== skill.id)
+                      : [...selectedSkillIds, skill.id]
+                    setSelectedSkillIds(nextIds)
+                    composerEditorRef.current?.setSkills(availableSkills.filter((item) => nextIds.includes(item.id)))
+                  }}
+                  onDragEnd={() => setDraggedSkillId(null)}
+                  onDragEnter={() => {
+                    if (draggedSkillId) movePinnedSkill(draggedSkillId, skill.id)
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', skill.id)
+                    setDraggedSkillId(skill.id)
+                  }}
+                  title="拖动调整顺序，点击启用或停用"
+                  type="button"
+                >
+                  <GripVertical aria-hidden="true" className="h-3.5 w-3.5 opacity-60" />
+                  {skill.title}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
       <motion.div
-        className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 /90 dark:shadow-black/25"
+        className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[var(--app-bg)]/90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >

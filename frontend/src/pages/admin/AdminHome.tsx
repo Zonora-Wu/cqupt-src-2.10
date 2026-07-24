@@ -173,7 +173,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
             <AdminPointsMallManagement />
           ) : activeMenu === '审计日志' ? (
             <AdminAuditLogManagement />
-          ) : activeMenu === 'AI 知识库' ? (
+          ) : activeMenu === 'AI 管理' ? (
             <AdminAiKnowledgeManagement />
           ) : (
             <AdminSystemSettings />

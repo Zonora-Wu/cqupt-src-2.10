@@ -1251,6 +1251,8 @@ model AiSkill {
   source              String?
   createdById         String?
   active              Boolean                @default(true)
+  visibleToUsers      Boolean                @default(false)
+  defaultPinnedForUsers Boolean               @default(false)
   slug                String?                @unique
   roleScope           AiKnowledgeRoleScope   @default(ALL)
   canonicalKey        String?
@@ -1276,6 +1278,7 @@ model AiSkill {
 
   @@index([aiSpace])
   @@index([active])
+  @@index([visibleToUsers, defaultPinnedForUsers])
   @@index([aiSpace, roleScope, lifecycleStatus])
   @@index([canonicalKey])
 }

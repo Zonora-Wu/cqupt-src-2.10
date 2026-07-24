@@ -147,6 +147,7 @@ export class AiSkillRouterService {
           {
             lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
             roleScope: { in: [getRoleScope(user.role), AiKnowledgeRoleScope.ALL] },
+            ...(user.role === RoleCode.STUDENT ? { visibleToUsers: true } : {}),
           },
           {
             createdById: user.id,
