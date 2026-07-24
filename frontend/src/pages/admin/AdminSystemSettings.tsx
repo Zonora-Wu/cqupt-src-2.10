@@ -87,6 +87,8 @@ import {
   type BrandColorSlot,
 } from '../../utils/brandTheme'
 import { applyPlatformBranding, defaultPlatformLogos, getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
+import { AdminAiPolicyPanel } from '../../components/ai/AdminAiPolicyPanel'
+import { AdminPlatformAiPanel } from '../../components/ai/AdminPlatformAiPanel'
 
 type SettingsSection =
   | '基础设置'
@@ -1719,6 +1721,20 @@ export function AdminSystemSettings() {
                       onClick={() => void handleSaveAiQuota()}
                     />
                   </div>
+                </SettingsCard>
+                <SettingsCard
+                  description="控制普通用户使用平台模型或自有模型。管理员和审核员始终使用平台模型。"
+                  icon={<Bot className="h-5 w-5" />}
+                  title="用户 AI 模式"
+                >
+                  <AdminAiPolicyPanel />
+                </SettingsCard>
+                <SettingsCard
+                  description="按用途配置主模型和最多两个备用模型。平台 Key 加密保存，不会在保存后回显。"
+                  icon={<ServerCog className="h-5 w-5" />}
+                  title="平台 AI"
+                >
+                  <AdminPlatformAiPanel />
                 </SettingsCard>
               </>
             )}

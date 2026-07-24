@@ -1,6 +1,34 @@
 import { apiFormRequest, apiRequest } from './apiClient'
 
 export type AiChatMode = 'student' | 'auditor' | 'admin'
+export type AiProviderPreset = {
+  baseUrl: string
+  category: 'OFFICIAL' | 'AGGREGATOR' | 'RELAY'
+  id: string
+  name: string
+  protocol: 'OPENAI_COMPATIBLE'
+}
+
+export type AiUserCredential = {
+  createdAt: string
+  id: string
+  lastFour: string
+  name: string
+  providerId: string
+  status: 'ACTIVE' | 'DISABLED'
+  provider: { category: AiProviderPreset['category']; name: string }
+  _count: { models: number }
+}
+
+export type AiUserModel = {
+  id: string
+  credentialId: string
+  displayName: string
+  enabled: boolean
+  isDefault: boolean
+  model: string
+  credential: { lastFour: string; name: string; providerId: string; status: 'ACTIVE' | 'DISABLED' }
+}
 
 export type AiCard =
   | {
@@ -200,6 +228,10 @@ export type AiSkillLibraryItem = {
   id: string
   source: string | null
   title: string
+  lifecycleStatus?: 'DRAFT' | 'ACTIVE_PRIVATE' | 'SUBMITTED' | 'UNDER_REVIEW' | 'CHANGES_REQUESTED' | 'REJECTED' | 'PUBLISHED' | 'DISABLED' | 'ARCHIVED' | 'FAILED'
+  createdById?: string | null
+  slug?: string | null
+  owned?: boolean
 }
 
 export type AiSkillLibraryResponse = {
@@ -207,17 +239,61 @@ export type AiSkillLibraryResponse = {
   skills: AiSkillLibraryItem[]
 }
 
-export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>, sessionId?: string) {
+export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>, sessionId?: string, modelProfileId?: string, skillIds?: string[]) {
   return apiRequest<AiChatResponse>('/ai/chat', {
     auth: true,
     body: {
       context,
       message,
+      modelProfileId,
       mode,
       sessionId,
+      skillIds,
     },
     method: 'POST',
   })
+}
+
+export function listAiProviders() {
+  return apiRequest<AiProviderPreset[]>('/ai/providers', { auth: true, method: 'GET' })
+}
+
+export function listAiUserCredentials() {
+  return apiRequest<AiUserCredential[]>('/ai/user-credentials', { auth: true, method: 'GET' })
+}
+
+export function createAiUserCredential(data: { apiKey: string; consentAccepted: true; name: string; providerId: string }) {
+  return apiRequest<AiUserCredential>('/ai/user-credentials', { auth: true, body: data, method: 'POST' })
+}
+
+export function testAiUserCredential(id: string) {
+  return apiRequest<{ ok: true }>(`/ai/user-credentials/${id}/test`, { auth: true, method: 'POST' })
+}
+
+export function updateAiUserCredential(id: string, enabled: boolean) {
+  return apiRequest<{ id: string; status: AiUserCredential['status'] }>(`/ai/user-credentials/${id}`, {
+    auth: true, body: { enabled }, method: 'PATCH',
+  })
+}
+
+export function deleteAiUserCredential(id: string) {
+  return apiRequest<{ success: true }>(`/ai/user-credentials/${id}`, { auth: true, method: 'DELETE' })
+}
+
+export function listAiUserModels() {
+  return apiRequest<AiUserModel[]>('/ai/user-models', { auth: true, method: 'GET' })
+}
+
+export function createAiUserModel(data: { credentialId: string; displayName: string; isDefault?: boolean; model: string }) {
+  return apiRequest<AiUserModel>('/ai/user-models', { auth: true, body: data, method: 'POST' })
+}
+
+export function setDefaultAiUserModel(id: string) {
+  return apiRequest<{ id: string; isDefault: true }>(`/ai/user-models/${id}/default`, { auth: true, method: 'POST' })
+}
+
+export function deleteAiUserModel(id: string) {
+  return apiRequest<{ success: true }>(`/ai/user-models/${id}`, { auth: true, method: 'DELETE' })
 }
 
 export function createAiProblemSession(mode: AiChatMode = 'student', initialQuestion?: string) {
@@ -385,6 +461,58 @@ export function getAiSkills() {
     auth: true,
     method: 'GET',
   })
+}
+
+export function createAiSkill(data: { content: string; title: string }) {
+  return apiRequest<AiSkillLibraryItem>('/ai/skills', { auth: true, body: data, method: 'POST' })
+}
+
+export function updateAiSkill(id: string, data: { content: string; title: string }) {
+  return apiRequest<AiSkillLibraryItem>(`/ai/skills/${id}`, { auth: true, body: data, method: 'PATCH' })
+}
+
+export function deleteAiSkill(id: string) {
+  return apiRequest<{ success: true }>(`/ai/skills/${id}`, { auth: true, method: 'DELETE' })
+}
+
+export function submitAiSkill(id: string) {
+  return apiRequest<{ reviewId: string; status: 'SUBMITTED' }>(`/ai/skills/${id}/submit`, { auth: true, method: 'POST' })
+}
+
+export function uploadAiSkill(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiFormRequest<AiSkillLibraryItem>('/ai/skills/upload', {
+    auth: true,
+    formData,
+    unauthenticatedMessage: '请先登录后再上传 Skill',
+  })
+}
+
+export function pinAiSkill(id: string, sessionId: string) {
+  return apiRequest(`/ai/skills/${id}/pin/${sessionId}`, { auth: true, method: 'POST' })
+}
+
+export function unpinAiSkill(id: string, sessionId: string) {
+  return apiRequest(`/ai/skills/${id}/pin/${sessionId}`, { auth: true, method: 'DELETE' })
+}
+
+export type AiSkillReviewItem = {
+  id: string
+  status: string
+  submittedAt: string
+  skill: AiSkillLibraryItem & {
+    createdBy?: { id: string; name: string; unifiedCode: string } | null
+    toolGrants?: Array<{ approved: boolean; toolName: string }>
+  }
+}
+
+export function listAiSkillReviews() {
+  return apiRequest<AiSkillReviewItem[]>('/admin/ai-skill-reviews', { auth: true, method: 'GET' })
+}
+
+export function reviewAiSkill(id: string, decision: 'approve' | 'reject' | 'request-changes', note?: string) {
+  return apiRequest(`/admin/ai-skill-reviews/${id}/${decision}`, { auth: true, body: { note }, method: 'POST' })
 }
 
 export type RedeemResult = {

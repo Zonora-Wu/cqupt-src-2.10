@@ -28,13 +28,16 @@
     "@nestjs/websockets": "^11.1.28",
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^6.0.0",
+    "@types/unzipper": "^0.10.11",
     "altcha": "^3.2.0",
     "nodemailer": "^9.0.3",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.0",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "unzipper": "^0.12.5",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

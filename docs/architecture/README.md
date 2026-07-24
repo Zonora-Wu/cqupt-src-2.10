@@ -19,6 +19,7 @@
 | `DATABASE_MODEL.md` | PostgreSQL / Prisma 领域模型摘要，覆盖用户、RBAC、漏洞、证书、学习、商城、AI Knowledge 与 Skill Candidate。 |
 | `AI_CONTEXT_INJECTION.md` | 邮宝最小上下文注入与 dataRequests 后端托管只读工具网关。 |
 | `AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md` | 新版问题会话式知识沉淀架构：AiProblemSession、解决确认、知识聚类、自动入库、知识库回答复用和来源标注。 |
+| `AI_MODEL_SKILL_RUNTIME_ARCHITECTURE.md` | 目标架构：TypeScript Agent Runtime、用户 BYOK 三档策略、Provider 目录、角色隔离 Skill、密钥安全和 Hermes Docker 下线迁移。 |
 
 ## AI 架构阅读顺序
 
@@ -27,3 +28,4 @@
 3. `../AI_KNOWLEDGE_BASE.md`：理解问题会话式知识沉淀的产品与治理方案。
 4. `AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`：理解落地的数据流、状态机和 API 边界。
 5. `../HERMES_RUNTIME.md`：理解平台 Hermes 与 CLI Hermes 的运行目录差异。
+6. `AI_MODEL_SKILL_RUNTIME_ARCHITECTURE.md`：理解后续移除独立 Hermes Docker、建设自有 Runtime 与 BYOK/Skill 平台化的目标方案。

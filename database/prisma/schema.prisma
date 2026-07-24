@@ -253,7 +253,14 @@ enum AiSkillCandidateStatus {
 
 enum AiSkillLifecycleStatus {
   DRAFT
+  ACTIVE_PRIVATE
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  REJECTED
   PUBLISHED
+  DISABLED
+  ARCHIVED
   FAILED
 }
 
@@ -266,6 +273,44 @@ enum AiSkillLifecycleOrigin {
   ADMIN
   AUTO_APPROVAL
   MANUAL_REVIEW
+}
+
+enum AiUserModelPolicy {
+  USER_PLATFORM_ONLY
+  USER_BYOK_ONLY
+  USER_HYBRID
+}
+
+enum AiProviderCategory {
+  OFFICIAL
+  AGGREGATOR
+  RELAY
+}
+
+enum AiCredentialStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AiModelSource {
+  PLATFORM
+  USER_BYOK
+}
+
+enum AiAgentRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AiModelPurpose {
+  USER_INTERACTIVE
+  ADMIN_INTERACTIVE
+  AUDITOR_INTERACTIVE
+  BACKGROUND_TASK
+  STRUCTURED_ANALYSIS
+  SKILL_GENERATION
 }
 
 enum ChatConversationType {
@@ -411,6 +456,12 @@ model User {
   issuedChatRestrictions ChatUserRestriction[]      @relation("ChatRestrictionOperator")
   createdChatSensitiveWords ChatSensitiveWord[]     @relation("ChatSensitiveWordCreator")
   platformNotifications PlatformNotification[]
+  aiProviderCredentials UserProviderCredential[]
+  aiModelProfiles       UserModelProfile[]
+  aiProviderConsents    UserProviderConsent[]
+  aiAgentRuns           AiAgentRun[]
+  aiSkillReviews        AiSkillReview[]            @relation("AiSkillReviewer")
+  aiConversationSkillPins AiConversationSkillPin[]
 
   @@index([roleId])
   @@index([authorizationLevel])
@@ -1000,6 +1051,190 @@ model AiCallLog {
   @@index([userId, createdAt])
 }
 
+model AiModelPolicy {
+  id        String            @id @default("global")
+  userMode  AiUserModelPolicy @default(USER_PLATFORM_ONLY)
+  updatedById String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model AiProviderPreset {
+  id           String             @id
+  name         String
+  category     AiProviderCategory
+  baseUrl      String
+  protocol     String             @default("OPENAI_COMPATIBLE")
+  modelsPath   String?
+  enabled      Boolean            @default(true)
+  source       String             @default("PLATFORM")
+  sourceCommit String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  credentials  UserProviderCredential[]
+}
+
+model UserProviderCredential {
+  id          String             @id @default(cuid())
+  userId      String
+  providerId  String
+  name        String
+  ciphertext  String             @db.Text
+  iv          String
+  authTag     String
+  keyVersion  Int                @default(1)
+  lastFour    String
+  status      AiCredentialStatus @default(ACTIVE)
+  consentVersion String
+  consentedAt DateTime
+  lastUsedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    AiProviderPreset   @relation(fields: [providerId], references: [id])
+  models      UserModelProfile[]
+  consents    UserProviderConsent[]
+
+  @@index([userId, status])
+  @@index([providerId])
+}
+
+model UserProviderConsent {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String
+  version      String
+  acceptedAt   DateTime
+  revokedAt    DateTime?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credential   UserProviderCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@unique([credentialId, version])
+  @@index([userId, revokedAt])
+}
+
+model UserModelProfile {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String
+  model        String
+  displayName  String
+  enabled      Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credential   UserProviderCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@unique([credentialId, model])
+  @@index([userId, enabled])
+  @@index([userId, isDefault])
+}
+
+model AiAgentRun {
+  id             String           @id @default(cuid())
+  userId         String?
+  source         AiModelSource
+  modelName      String
+  providerId     String?
+  credentialId  String?
+  purpose        AiCallPurpose
+  status         AiAgentRunStatus @default(RUNNING)
+  policySnapshot Json
+  inputTokens    Int?
+  outputTokens   Int?
+  errorCode      String?
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  steps          AiAgentRunStep[]
+  toolCalls      AiAgentToolCall[]
+  usage          AiAgentUsage?
+
+  @@index([userId, startedAt])
+  @@index([status, startedAt])
+}
+
+model PlatformProviderCredential {
+  id         String             @id @default(cuid())
+  providerId String
+  name       String
+  ciphertext String             @db.Text
+  iv         String
+  authTag    String
+  keyVersion Int                @default(1)
+  lastFour   String
+  status     AiCredentialStatus @default(ACTIVE)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  routes     PlatformModelRoute[]
+
+  @@index([providerId, status])
+}
+
+model PlatformModelRoute {
+  id                 String         @id @default(cuid())
+  purpose            AiModelPurpose
+  priority           Int
+  credentialId       String
+  baseUrl            String
+  model              String
+  enabled            Boolean        @default(true)
+  automaticFailover  Boolean        @default(true)
+  failureThreshold   Int            @default(3)
+  cooldownSeconds    Int            @default(60)
+  consecutiveFailures Int           @default(0)
+  circuitOpenUntil   DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  credential         PlatformProviderCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@unique([purpose, priority])
+  @@index([purpose, enabled, priority])
+}
+
+model AiAgentRunStep {
+  id          String   @id @default(cuid())
+  runId       String
+  sequence    Int
+  kind        String
+  status      String
+  summary     String?  @db.Text
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  run         AiAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+}
+
+model AiAgentToolCall {
+  id          String   @id @default(cuid())
+  runId       String
+  callId      String
+  toolName    String
+  status      String
+  argumentHash String
+  resultSummary String? @db.Text
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  run         AiAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, callId])
+  @@index([runId, startedAt])
+}
+
+model AiAgentUsage {
+  id           String   @id @default(cuid())
+  runId        String   @unique
+  inputTokens  Int?
+  outputTokens Int?
+  cachedTokens Int?
+  reasoningTokens Int?
+  usageConfirmed Boolean @default(false)
+  createdAt    DateTime @default(now())
+  run          AiAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
 model AiUserQuota {
   id           String   @id @default(cuid())
   userId       String   @unique
@@ -1042,6 +1277,10 @@ model AiSkill {
   createdBy           User?                  @relation("AiSkillCreator", fields: [createdById], references: [id])
   candidateTargets    AiSkillCandidate[]     @relation("AiSkillCandidateTarget")
   revisions           AiSkillRevision[]
+  files               AiSkillFile[]
+  toolGrants          AiSkillToolGrant[]
+  reviews             AiSkillReview[]
+  conversationPins    AiConversationSkillPin[]
 
   @@index([aiSpace])
   @@index([active])
@@ -1179,6 +1418,9 @@ model AiProblemSession {
   summaryJson        Json?
   knowledgeEntryId   String?
   duplicateRiskScore Float                  @default(0)
+  modelBindingKey    String?
+  modelName          String?
+  modelSource        AiModelSource?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
@@ -1453,6 +1695,66 @@ model AiSkillRevision {
   @@unique([skillId, version])
   @@index([candidateId])
   @@index([skillId, createdAt])
+}
+
+model AiSkillFile {
+  id          String   @id @default(cuid())
+  skillId     String
+  path        String
+  content     String   @db.Text
+  mimeType    String
+  sizeBytes   Int
+  sha256      String
+  createdAt   DateTime @default(now())
+  skill       AiSkill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, path])
+  @@index([skillId])
+}
+
+model AiSkillToolGrant {
+  id          String   @id @default(cuid())
+  skillId     String
+  toolName    String
+  approved    Boolean  @default(false)
+  approvedAt  DateTime?
+  approvedById String?
+  createdAt   DateTime @default(now())
+  skill       AiSkill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, toolName])
+}
+
+model AiSkillReview {
+  id          String   @id @default(cuid())
+  skillId     String
+  revisionId  String
+  reviewerId  String?
+  status      String   @default("PENDING")
+  note        String?  @db.Text
+  submittedAt DateTime @default(now())
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  skill       AiSkill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  reviewer    User?    @relation("AiSkillReviewer", fields: [reviewerId], references: [id])
+
+  @@index([status, submittedAt])
+  @@index([skillId, createdAt])
+}
+
+model AiConversationSkillPin {
+  id          String   @id @default(cuid())
+  userId      String
+  sessionId   String
+  skillId     String
+  revisionId  String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill       AiSkill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, skillId])
+  @@index([userId, sessionId])
 }
 
 model AiSkillInstallLog {

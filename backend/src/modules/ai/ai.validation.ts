@@ -10,9 +10,17 @@ export function normalizeAiChatBody(body: AiChatBody): NormalizedAiChatInput {
   return {
     context: normalizeContext(body.context),
     message,
+    modelProfileId: normalizeOptionalId(body.modelProfileId, '模型配置 ID'),
     mode,
     sessionId: normalizeOptionalId(body.sessionId, '问题会话 ID'),
+    skillIds: normalizeSkillIds(body.skillIds),
   }
+}
+
+function normalizeSkillIds(value: unknown) {
+  if (value === undefined || value === null) return undefined
+  if (!Array.isArray(value) || value.length > 3) throw new BadRequestException('每轮最多选择 3 个 Skill')
+  return [...new Set(value.map((item) => normalizeOptionalId(item, 'Skill ID')).filter((item): item is string => Boolean(item)))]
 }
 
 export function normalizeAiRoutePreviewBody(body: Record<string, unknown>) {

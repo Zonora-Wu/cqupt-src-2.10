@@ -1,0 +1,31 @@
+{
+  "upstream": "https://github.com/farion1231/cc-switch",
+  "commit": "a377d79303bc1e592d2783d559ca5bd6b8ba1417",
+  "license": "MIT",
+  "reviewedSources": [
+    {
+      "upstreamFile": "src/config/hermesProviderPresets.ts",
+      "localFile": "../../ai-provider.catalog.ts",
+      "concepts": [
+        "provider display metadata",
+        "OpenAI-compatible base URL presets",
+        "official and aggregator categorization"
+      ]
+    },
+    {
+      "upstreamFile": "src/config/universalProviderPresets.ts",
+      "localFile": "../../ai-model.service.ts",
+      "concepts": [
+        "separate provider credentials and model profiles",
+        "administrator-managed relay endpoint"
+      ]
+    }
+  ],
+  "excluded": [
+    "affiliate links",
+    "promotion metadata",
+    "desktop application settings",
+    "localhost proxy takeover",
+    "native non-OpenAI protocols"
+  ]
+}

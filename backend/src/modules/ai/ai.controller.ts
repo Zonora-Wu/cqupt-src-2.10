@@ -65,11 +65,6 @@ export class AiController {
     return this.ai.getQuota(user.id)
   }
 
-  @Get('skills')
-  skills(@CurrentUser() user: AuthenticatedRequestUser) {
-    return this.ai.getSkillLibrary(user)
-  }
-
   @Post('chat')
   chat(
     @Body() body: AiChatBody,

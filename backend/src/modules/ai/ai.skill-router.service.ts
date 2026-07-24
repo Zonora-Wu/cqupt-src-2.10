@@ -130,14 +130,29 @@ export class AiSkillRouterService {
     const modeAllowed = allowedModes.includes(input.mode)
 
     const staticAvailable = ALL_SKILLS.filter((skill) => skill.modes.includes(input.mode) && modeAllowed)
+    const pinnedSkillIds = input.sessionId ? (await this.prisma.aiConversationSkillPin.findMany({
+      where: { sessionId: input.sessionId, userId: user.id },
+      select: { skillId: true },
+      take: 3,
+    })).map((pin) => pin.skillId) : []
+    const explicitSkillIds = input.skillIds ?? []
+    const slashSkill = normalizedMessage.match(/^\/([a-z0-9-]{2,80})(?:\s|$)/i)?.[1]
     const dynamicSkills = modeAllowed ? await this.prisma.aiSkill.findMany({
       orderBy: { updatedAt: 'desc' },
       take: 24,
       where: {
         active: true,
         aiSpace: getAiSpace(input.mode),
-        lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
-        roleScope: { in: [getRoleScope(user.role), AiKnowledgeRoleScope.ALL] },
+        OR: [
+          {
+            lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+            roleScope: { in: [getRoleScope(user.role), AiKnowledgeRoleScope.ALL] },
+          },
+          {
+            createdById: user.id,
+            lifecycleStatus: AiSkillLifecycleStatus.ACTIVE_PRIVATE,
+          },
+        ],
       },
     }) : []
     const dynamicAvailable = dynamicSkills.map((skill) => ({
@@ -148,9 +163,16 @@ export class AiSkillRouterService {
       title: skill.title,
     }))
     const available = [...staticAvailable.map(toRouteItem), ...dynamicAvailable]
+    const selectedDynamic = dynamicAvailable.filter((skill, index) => {
+      const id = dynamicSkills[index]?.id
+      const slug = dynamicSkills[index]?.slug
+      return explicitSkillIds.includes(id) || pinnedSkillIds.includes(id) || (slashSkill && slashSkill === slug)
+    })
+    const automaticallyMatched = dynamicAvailable.filter((skill) => matchesDynamicSkill(skill, normalizedMessage))
+    const activeDynamic = [...selectedDynamic, ...automaticallyMatched.filter((skill) => !selectedDynamic.some((selected) => selected.name === skill.name))].slice(0, 3)
     const active = [
       ...staticAvailable.filter((skill) => skill.always || matchesAny(skill.triggers, normalizedMessage)).map(toRouteItem),
-      ...dynamicAvailable.filter((skill) => matchesDynamicSkill(skill, normalizedMessage)),
+      ...activeDynamic,
     ]
     const blocked = ALL_SKILLS.filter((skill) => !available.some((item) => item.name === skill.name))
 
