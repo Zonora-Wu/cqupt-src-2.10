@@ -5,6 +5,7 @@ export type EmailPurpose =
   | 'CHANGE_PASSWORD'
   | 'LOGIN'
   | 'REGISTER'
+  | 'RESET_PASSWORD'
 
 export type EmailServiceSettings = {
   enabled: boolean

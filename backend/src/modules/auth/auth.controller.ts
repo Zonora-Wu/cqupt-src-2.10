@@ -4,7 +4,7 @@ import { JwtAuthGuard } from './jwt-auth.guard'
 import { AuthService } from './auth.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from './auth.types'
 import { normalizeHumanVerificationInput } from '../human-verification/human-verification.validation'
-import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody, normalizeUnifiedCode } from './auth.validation'
+import { normalizeEmail, normalizeEmailCode, normalizeRegisterBody, normalizeResetPasswordBody, normalizeUnifiedCode } from './auth.validation'
 
 type RequestLike = {
   ip?: string
@@ -87,6 +87,20 @@ export class AuthController {
       normalizeHumanVerificationInput(body as Record<string, unknown>),
       getRequestMeta(req),
     )
+  }
+
+  @Post('password-reset/email-code')
+  sendPasswordResetCode(@Body() body: SendEmailCodeBody, @Req() req: RequestLike) {
+    return this.auth.sendPasswordResetCode(
+      normalizeEmail(body.email),
+      normalizeHumanVerificationInput(body as Record<string, unknown>),
+      getRequestMeta(req),
+    )
+  }
+
+  @Post('password-reset')
+  resetPassword(@Body() body: RegisterBody, @Req() req: RequestLike) {
+    return this.auth.resetPassword(normalizeResetPasswordBody(body), getRequestMeta(req))
   }
 
   @Post('register')
