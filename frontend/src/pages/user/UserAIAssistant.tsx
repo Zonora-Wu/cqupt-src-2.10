@@ -1,17 +1,20 @@
-import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Settings2, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, getAiSkills, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, listAiUserModels, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiSkillLibraryItem, type AiTurnFeedbackRating, type AiUserModel, type AiVulnerabilityDraft } from '../../services/ai'
+import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, getAiSkills, heartbeatAiProblemSession, isUsableAiSkill, leaveAiProblemSession, listAiProblemSessions, listAiUserModels, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiSkillLibraryItem, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { AiSkillDialog } from '../../components/ai/AiSkillDialog'
+import { AiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
+import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { SkillComposerEditor, type SkillComposerEditorHandle } from '../../components/ai/SkillComposerEditor'
 
 type ChatMessage = {
   assistantTurnId?: string
@@ -60,9 +63,15 @@ const HISTORY_PANEL_WIDTH_STORAGE_KEY = 'cqupt-src-ai-history-panel-width'
 const HISTORY_PANEL_MIN_CHAT_WIDTH = 860
 const HISTORY_PANEL_GAP = 32
 const DESKTOP_HISTORY_BREAKPOINT = 1024
+const inputModuleClass = (active: boolean) => `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition ${
+  active
+    ? 'border-brand-600 bg-brand-600 text-white'
+    : 'border-black/10 bg-[var(--app-panel-bg)] text-slate-700 hover:border-brand-600/40 dark:border-white/10 dark:text-slate-200'
+}`
 
 export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitialAdviceConsumed, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
   const storageKeyRef = useRef(getConversationStorageKey())
+  const skillPreferenceKeyRef = useRef(getSkillPreferenceStorageKey())
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredMessages(storageKeyRef.current))
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -70,15 +79,16 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [userName, setUserName] = useState('我')
   const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
   const [aiQuota, setAiQuota] = useState<AiQuota | null>(null)
-  const [availableModels, setAvailableModels] = useState<AiUserModel[]>([])
-  const [selectedModelId, setSelectedModelId] = useState('')
+  const [usingOwnModel, setUsingOwnModel] = useState(false)
+  const [modelNotice, setModelNotice] = useState('')
   const [availableSkills, setAvailableSkills] = useState<AiSkillLibraryItem[]>([])
-  const [selectedSkillId, setSelectedSkillId] = useState('')
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>(() => loadSkillPreferences(skillPreferenceKeyRef.current).activeSkillIds)
+  const [pinnedSkillIds, setPinnedSkillIds] = useState<string[]>(() => loadSkillPreferences(skillPreferenceKeyRef.current).pinnedSkillIds)
   const [skillDialogOpen, setSkillDialogOpen] = useState(false)
   const [dismissedQuotaWarning, setDismissedQuotaWarning] = useState<'20' | '5' | null>(null)
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null)
   const dockedInputRef = useRef<HTMLDivElement | null>(null)
-  const inputTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const composerEditorRef = useRef<SkillComposerEditorHandle | null>(null)
   const reportFileInputRef = useRef<HTMLInputElement | null>(null)
   const reportAttachmentFilesRef = useRef<Record<string, File>>({})
   const consumedInitialPromptRef = useRef<string | null>(null)
@@ -100,19 +110,27 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 0 : window.innerWidth)
   const [readOnlyHistory, setReadOnlyHistory] = useState(false)
 
-  useEffect(() => {
-    void listAiUserModels().then((models) => {
-      const enabled = models.filter((model) => model.enabled && model.credential.status === 'ACTIVE')
-      setAvailableModels(enabled)
-      setSelectedModelId(enabled.find((model) => model.isDefault)?.id ?? '')
-    }).catch(() => undefined)
-  }, [])
+  const reloadModelSelection = () => listAiUserModels()
+    .then((models) => setUsingOwnModel(models.some((model) => model.isDefault && model.enabled && model.credential.status === 'ACTIVE')))
+  useEffect(() => { void reloadModelSelection().catch(() => undefined) }, [])
 
-  const reloadSkills = () => getAiSkills().then((result) => setAvailableSkills(result.skills.filter((skill) => ['ACTIVE_PRIVATE', 'PUBLISHED'].includes(skill.lifecycleStatus ?? 'PUBLISHED'))))
+  const reloadSkills = () => getAiSkills().then((result) => {
+    const usable = result.skills.filter(isUsableAiSkill)
+    const usableIds = new Set(usable.map((skill) => skill.id))
+    setAvailableSkills(usable)
+    setPinnedSkillIds((current) => current.filter((id) => usableIds.has(id)))
+    setSelectedSkillIds((current) => current.filter((id) => usableIds.has(id)).slice(0, 3))
+  })
   useEffect(() => {
     const timer = window.setTimeout(() => void reloadSkills().catch(() => undefined), 0)
     return () => window.clearTimeout(timer)
   }, [])
+  useEffect(() => {
+    saveSkillPreferences(skillPreferenceKeyRef.current, { activeSkillIds: selectedSkillIds, pinnedSkillIds })
+  }, [pinnedSkillIds, selectedSkillIds])
+  useEffect(() => {
+    composerEditorRef.current?.setSkills(availableSkills.filter((skill) => selectedSkillIds.includes(skill.id)))
+  }, [availableSkills, selectedSkillIds])
   const [resolutionPrompt, setResolutionPrompt] = useState<AiProblemSession | null>(null)
   const [resolutionAction, setResolutionAction] = useState<'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null>(null)
   const [resolutionError, setResolutionError] = useState('')
@@ -248,22 +266,6 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     if (!readOnlyHistory) saveStoredMessages(storageKeyRef.current, messages)
     hasProblemContentRef.current = messages.length > 0
   }, [messages, readOnlyHistory])
-
-  useEffect(() => {
-    const textarea = inputTextareaRef.current
-    if (!textarea) return
-
-    const resizeTextarea = () => {
-      const maxHeight = Math.max(160, Math.floor(window.innerHeight * 0.5))
-      textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
-      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
-    }
-
-    resizeTextarea()
-    window.addEventListener('resize', resizeTextarea)
-    return () => window.removeEventListener('resize', resizeTextarea)
-  }, [input])
 
   useEffect(() => {
     const el = scrollAnchorRef.current
@@ -495,6 +497,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
     setMessages((current) => [...current, { attachment: userAttachment, role: 'user', content: effectiveContent }])
     setInput('')
+    composerEditorRef.current?.clearText()
     setPendingAttachment(null)
 
     if (attachment) {
@@ -529,8 +532,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         'student',
         undefined,
         activeSessionId,
-        selectedModelId || undefined,
-        selectedSkillId ? [selectedSkillId] : undefined,
+        undefined,
+        selectedSkillIds.length ? selectedSkillIds : undefined,
       )
       if (result.sessionId) {
         problemSessionIdRef.current = result.sessionId
@@ -577,7 +580,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setSending(true)
     try {
       const activeSessionId = await ensureProblemSession(prompt)
-      const result = await sendAiChat(prompt, 'student', undefined, activeSessionId, selectedModelId || undefined, selectedSkillId ? [selectedSkillId] : undefined)
+      const result = await sendAiChat(prompt, 'student', undefined, activeSessionId, undefined, selectedSkillIds.length ? selectedSkillIds : undefined)
       if (result.sessionId) problemSessionIdRef.current = result.sessionId
       if (result.quota) setAiQuota(result.quota)
       setMessages((current) =>
@@ -632,7 +635,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     }
 
     setPendingAttachment({ file, id: `${file.name}-${file.size}-${file.lastModified}` })
-    window.setTimeout(() => inputTextareaRef.current?.focus(), 0)
+    window.setTimeout(() => composerEditorRef.current?.focus(), 0)
   }
 
   const inputBox = (
@@ -642,37 +645,50 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         quota={aiQuota}
         onDismiss={setDismissedQuotaWarning}
       />
+      <div className="mb-2 flex max-w-full items-center gap-2 overflow-x-auto pb-1">
+        <AiModelConfigurationButton
+          onChanged={() => void reloadModelSelection()}
+          onNotice={setModelNotice}
+          trigger={(open) => (
+            <button className={inputModuleClass(false)} onClick={open} type="button">
+              <Settings2 className="h-4 w-4" />
+              模型配置
+            </button>
+          )}
+        />
+        <button className={inputModuleClass(false)} onClick={() => setSkillDialogOpen(true)} type="button">Skill 管理</button>
+        {pinnedSkillIds.map((skillId) => {
+          const skill = availableSkills.find((item) => item.id === skillId)
+          if (!skill) return null
+          const active = selectedSkillIds.includes(skill.id)
+          return (
+            <button
+              aria-pressed={active}
+              className={inputModuleClass(active)}
+              key={skill.id}
+              onClick={() => {
+                if (!active && selectedSkillIds.length >= 3) {
+                  setModelNotice('一次最多使用 3 个 Skill')
+                  return
+                }
+                const nextIds = active
+                  ? selectedSkillIds.filter((id) => id !== skill.id)
+                  : [...selectedSkillIds, skill.id]
+                setSelectedSkillIds(nextIds)
+                composerEditorRef.current?.setSkills(availableSkills.filter((item) => nextIds.includes(item.id)))
+              }}
+              type="button"
+            >
+              {skill.title}
+            </button>
+          )
+        })}
+      </div>
       <motion.div
         className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 /90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="flex flex-wrap items-center justify-end gap-3 px-1 pb-1">
-          <label className="text-xs text-slate-500 dark:text-slate-400">
-            <span className="sr-only">对话模型</span>
-            <select
-              className="max-w-48 bg-transparent py-1 text-right outline-none"
-              onChange={(event) => {
-                const nextModelId = event.target.value
-                if (nextModelId === selectedModelId) return
-                setSelectedModelId(nextModelId)
-                void startFreshProblemSession()
-              }}
-              value={selectedModelId}
-            >
-              <option value="">平台模型</option>
-              {availableModels.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-            </select>
-          </label>
-          <label className="text-xs text-slate-500 dark:text-slate-400">
-            <span className="sr-only">对话 Skill</span>
-            <select className="max-w-48 bg-transparent py-1 text-right outline-none" onChange={(event) => setSelectedSkillId(event.target.value)} value={selectedSkillId}>
-              <option value="">自动选择 Skill</option>
-              {availableSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.title}</option>)}
-            </select>
-          </label>
-          <button className="text-xs font-medium text-brand-700 dark:text-brand-300" onClick={() => setSkillDialogOpen(true)} type="button">管理 Skill</button>
-        </div>
         <AnimatePresence initial={false}>
           {pendingAttachment && (
             <PendingAttachmentPreview
@@ -702,24 +718,21 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           >
             <Paperclip className={`h-5 w-5 ${uploadingAttachment ? 'animate-pulse' : ''}`} />
           </button>
-          <textarea
-            className="ai-chat-input-scroll min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-white/30"
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void sendMessage()
-              }
-            }}
+          <SkillComposerEditor
+            disabled={readOnlyHistory || sending || uploadingAttachment}
+            onChange={setInput}
+            onSkillsChange={(skillIds) => setSelectedSkillIds((current) => {
+              const next = skillIds.slice(0, 3)
+              return current.length === next.length && current.every((id, index) => id === next[index]) ? current : next
+            })}
+            onSubmit={() => void sendMessage()}
             placeholder={pendingAttachment ? '说明你希望邮宝如何处理这个附件，例如：帮我修改建议 / 总结重点 / 生成提交草稿' : '询问漏洞报告、复现步骤、修复建议或学习路径'}
-            ref={inputTextareaRef}
-            rows={1}
-            value={input}
+            ref={composerEditorRef}
           />
           <button
             aria-label="发送"
             className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-            disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || (!selectedModelId && (aiQuota?.enabled === false || aiQuota?.remaining === 0))}
+            disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || (!usingOwnModel && (aiQuota?.enabled === false || aiQuota?.remaining === 0))}
             onClick={() => void sendMessage()}
             type="button"
           >
@@ -732,7 +745,21 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
   return (
     <>
-    {skillDialogOpen && <AiSkillDialog onClose={() => setSkillDialogOpen(false)} onChanged={() => void reloadSkills()} />}
+    <FloatingNotice message={modelNotice} onClose={() => setModelNotice('')} variant="success" />
+    {skillDialogOpen && (
+      <AiSkillDialog
+        activeSkillIds={selectedSkillIds}
+        onActiveChange={(skillIds) => {
+          const limitedIds = skillIds.slice(0, 3)
+          setSelectedSkillIds(limitedIds)
+          composerEditorRef.current?.setSkills(availableSkills.filter((skill) => limitedIds.includes(skill.id)))
+        }}
+        onChanged={() => void reloadSkills()}
+        onClose={() => setSkillDialogOpen(false)}
+        onPinnedChange={setPinnedSkillIds}
+        pinnedSkillIds={pinnedSkillIds}
+      />
+    )}
     <AiHistoryPanel
       activeId={problemSession?.id ?? null}
       autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}
@@ -2583,6 +2610,33 @@ function getConversationStorageKey() {
   const session = getSavedSession()
   const id = session?.user?.unifiedCode ?? session?.user?.id ?? 'anonymous'
   return `cqupt-src-ai-conversation:${id}`
+}
+
+function getSkillPreferenceStorageKey() {
+  const session = getSavedSession()
+  const id = session?.user?.unifiedCode ?? session?.user?.id ?? 'anonymous'
+  return `cqupt-src-ai-skill-preferences:${id}`
+}
+
+function loadSkillPreferences(key: string): { activeSkillIds: string[]; pinnedSkillIds: string[] } {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? '{}') as { activeSkillId?: unknown; activeSkillIds?: unknown; pinnedSkillIds?: unknown }
+    const legacyActiveId = typeof value.activeSkillId === 'string' ? value.activeSkillId : ''
+    return {
+      activeSkillIds: Array.isArray(value.activeSkillIds)
+        ? value.activeSkillIds.filter((id): id is string => typeof id === 'string').slice(0, 3)
+        : legacyActiveId ? [legacyActiveId] : [],
+      pinnedSkillIds: Array.isArray(value.pinnedSkillIds)
+        ? value.pinnedSkillIds.filter((id): id is string => typeof id === 'string')
+        : [],
+    }
+  } catch {
+    return { activeSkillIds: [], pinnedSkillIds: [] }
+  }
+}
+
+function saveSkillPreferences(key: string, value: { activeSkillIds: string[]; pinnedSkillIds: string[] }) {
+  localStorage.setItem(key, JSON.stringify(value))
 }
 
 function clampHistoryPanelWidth(width: number) {

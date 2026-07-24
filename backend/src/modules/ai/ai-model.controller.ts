@@ -63,6 +63,12 @@ export class AiModelController {
     return this.models.setDefaultModel(id, user.id)
   }
 
+  @Post('ai/user-models/platform-default')
+  @RequirePermissions('ai:use_student')
+  platformDefaultModel(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.models.setPlatformDefault(user.id)
+  }
+
   @Delete('ai/user-models/:id')
   @RequirePermissions('ai:use_student')
   deleteModel(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) {

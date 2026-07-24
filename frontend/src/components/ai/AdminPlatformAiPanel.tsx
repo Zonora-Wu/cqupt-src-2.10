@@ -1,27 +1,24 @@
 import { useEffect, useState } from 'react'
 import { listAiProviders, type AiProviderPreset } from '../../services/ai'
 import { deletePlatformAiRoute, getPlatformAiConfig, savePlatformAiRoute, type PlatformAiRoute } from '../../services/systemSettings'
-
-const purposes: Array<{ label: string; value: PlatformAiRoute['purpose'] }> = [
-  { label: '用户对话', value: 'USER_INTERACTIVE' },
-  { label: '管理员交互', value: 'ADMIN_INTERACTIVE' },
-  { label: '审核员交互', value: 'AUDITOR_INTERACTIVE' },
-  { label: '后台任务', value: 'BACKGROUND_TASK' },
-  { label: '结构化分析', value: 'STRUCTURED_ANALYSIS' },
-  { label: 'Skill 生成', value: 'SKILL_GENERATION' },
-]
+import { ProviderPresetForm, type ProviderFormValue } from './ProviderPresetForm'
 
 export function AdminPlatformAiPanel() {
   const [routes, setRoutes] = useState<PlatformAiRoute[]>([])
   const [providers, setProviders] = useState<AiProviderPreset[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [form, setForm] = useState({ apiKey: '', baseUrl: '', model: '', name: '', priority: 0, providerId: 'openai', purpose: 'USER_INTERACTIVE' as PlatformAiRoute['purpose'] })
+  const [providersLoading, setProvidersLoading] = useState(true)
+  const [form, setForm] = useState<ProviderFormValue & { priority: number }>({
+    apiKey: '', baseUrl: '', model: '', name: '', notes: '', priority: 0, providerId: 'custom', websiteUrl: '',
+  })
 
   const reload = async () => {
-    const [config, providerRows] = await Promise.all([getPlatformAiConfig(), listAiProviders()])
-    setRoutes(config.routes)
+    setProvidersLoading(true)
+    const providerRows = await listAiProviders().finally(() => setProvidersLoading(false))
     setProviders(providerRows)
+    const config = await getPlatformAiConfig()
+    setRoutes(config.routes.filter((route) => route.purpose === 'GLOBAL'))
   }
   useEffect(() => { const timer = window.setTimeout(() => void reload().catch(() => setMessage('平台模型配置加载失败')), 0); return () => window.clearTimeout(timer) }, [])
 
@@ -33,25 +30,56 @@ export function AdminPlatformAiPanel() {
   }
 
   return (
-    <div className="space-y-4 px-6 py-5">
-      <div className="grid gap-3 md:grid-cols-3">
-        <Select label="用途" value={form.purpose} onChange={(value) => setForm({ ...form, purpose: value as PlatformAiRoute['purpose'] })} options={purposes} />
-        <Select label="优先级" value={String(form.priority)} onChange={(value) => setForm({ ...form, priority: Number(value) })} options={[{ label: '主模型', value: '0' }, { label: '备用一', value: '1' }, { label: '备用二', value: '2' }]} />
-        <Select label="供应商" value={form.providerId} onChange={(value) => setForm({ ...form, providerId: value })} options={[...providers.map((provider) => ({ label: provider.name, value: provider.id })), { label: '第三方中转站', value: 'relay' }]} />
-        <Field label="凭据名称" value={form.name} onChange={(value) => setForm({ ...form, name: value })} />
-        <Field label="模型名称" value={form.model} onChange={(value) => setForm({ ...form, model: value })} />
-        <Field label="API Key" type="password" value={form.apiKey} onChange={(value) => setForm({ ...form, apiKey: value })} />
-        {form.providerId === 'relay' && <div className="md:col-span-3"><Field label="中转站 Base URL（HTTPS）" value={form.baseUrl} onChange={(value) => setForm({ ...form, baseUrl: value })} /></div>}
-      </div>
-      <div className="flex items-center justify-between gap-4"><p className="text-sm text-slate-500">{message}</p><button className={primaryClass} disabled={busy} onClick={() => void run(() => savePlatformAiRoute({ ...form, automaticFailover: true }), '平台模型路由已保存')} type="button">保存路由</button></div>
-      <div className="divide-y divide-black/10 border-t border-black/10 dark:divide-white/10 dark:border-white/10">
-        {routes.map((route) => <div className="flex flex-wrap items-center gap-3 py-3 text-sm" key={route.id}><div className="min-w-0 flex-1"><p className="font-semibold">{purposes.find((item) => item.value === route.purpose)?.label} · {route.priority === 0 ? '主模型' : `备用 ${route.priority}`}</p><p className="truncate text-xs text-slate-500">{route.model} · {route.credentialName} ****{route.credentialLastFour}{route.circuitOpenUntil ? ' · 熔断冷却中' : ''}</p></div><button className="text-xs font-medium text-red-600" disabled={busy} onClick={() => void run(() => deletePlatformAiRoute(route.id), '路由已删除')} type="button">删除</button></div>)}
+    <div className="grid min-h-[520px] lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="border-b border-black/10 bg-slate-50/70 p-5 dark:border-white/10 dark:bg-white/[0.03] lg:border-b-0 lg:border-r">
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">调用顺序</p>
+        <div className="mt-3 space-y-2">
+          {[0, 1, 2].map((priority) => {
+            const route = routes.find((item) => item.priority === priority)
+            return (
+              <button
+                className={`w-full rounded-lg border px-3 py-3 text-left transition ${form.priority === priority ? 'border-brand-600 bg-white shadow-sm dark:bg-white/[0.08]' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+                key={priority}
+                onClick={() => setForm({ ...form, priority })}
+                type="button"
+              >
+                <span className="block text-sm font-semibold">{priorityLabel(priority)}</span>
+                <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{route ? `${route.model} · ****${route.credentialLastFour}` : '未配置'}</span>
+              </button>
+            )
+          })}
+        </div>
+      </aside>
+      <div className="space-y-5 p-5 sm:p-6">
+        <div>
+          <h3 className="text-base font-semibold">{priorityLabel(form.priority)}</h3>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">保存后覆盖该位置现有配置。</p>
+        </div>
+        <ProviderPresetForm
+          onChange={(value) => setForm({ ...form, ...value })}
+          providers={providers}
+          providersLoading={providersLoading}
+          value={form}
+        />
+        <div className="flex flex-col-reverse gap-3 border-t border-black/10 pt-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-h-5 text-sm text-slate-500 dark:text-slate-400">{message}</p>
+          <button className={primaryClass} disabled={busy} onClick={() => void run(() => savePlatformAiRoute({ ...form, purpose: 'GLOBAL', automaticFailover: true }), '平台模型已保存')} type="button">确定并保存</button>
+        </div>
+        <div className="space-y-2">
+          {routes.map((route) => (
+            <div className="flex items-center gap-3 rounded-lg border border-black/10 px-3 py-3 text-sm dark:border-white/10" key={route.id}>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{priorityLabel(route.priority)}</p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">{route.model} · {route.credentialName} ****{route.credentialLastFour}{route.circuitOpenUntil ? ' · 熔断冷却中' : ''}</p>
+              </div>
+              <button className="rounded-md px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-500/10 dark:text-red-400" disabled={busy} onClick={() => void run(() => deletePlatformAiRoute(route.id), '配置已删除')} type="button">删除</button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
-const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-brand-600 dark:border-white/15'
 const primaryClass = 'rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50'
-function Field({ label, onChange, type = 'text', value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) { return <label className="text-xs font-medium">{label}<input className={inputClass} onChange={(event) => onChange(event.target.value)} type={type} value={value} /></label> }
-function Select({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: Array<{ label: string; value: string }>; value: string }) { return <label className="text-xs font-medium">{label}<select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label> }
+function priorityLabel(priority: number) { return priority === 0 ? '主模型' : `备用模型 ${priority}` }

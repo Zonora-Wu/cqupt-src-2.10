@@ -83,7 +83,7 @@ export class AiModelService {
     const apiKey = requiredText(input.apiKey, 'API Key', 500)
     const preset = findProviderPreset(providerId)
     const requestedBaseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : ''
-    const baseUrl = preset?.baseUrl ?? validateAdminBaseUrl(requestedBaseUrl)
+    const baseUrl = validateAdminBaseUrl(requestedBaseUrl || preset?.baseUrl || '')
     const encrypted = this.crypto.encrypt(apiKey)
 
     return this.prisma.$transaction(async (tx) => {
@@ -115,10 +115,13 @@ export class AiModelService {
 
   async resolvePlatformCandidates(purpose: AiModelPurpose): Promise<AiResolvedModel[]> {
     const now = new Date()
+    const globalCount = await this.prisma.platformModelRoute.count({
+      where: { enabled: true, purpose: AiModelPurpose.GLOBAL },
+    })
     const routes = await this.prisma.platformModelRoute.findMany({
       where: {
         enabled: true,
-        purpose,
+        purpose: globalCount > 0 ? AiModelPurpose.GLOBAL : purpose,
         credential: { status: AiCredentialStatus.ACTIVE },
         OR: [{ circuitOpenUntil: null }, { circuitOpenUntil: { lte: now } }],
       },
@@ -174,12 +177,14 @@ export class AiModelService {
     const name = requiredText(input.name, '凭据名称', 40)
     const providerId = requiredText(input.providerId, '供应商', 50)
     const apiKey = requiredText(input.apiKey, 'API Key', 500)
+    const requestedBaseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : ''
     if (input.consentAccepted !== true) throw new BadRequestException('必须确认第三方数据授权')
     const preset = findProviderPreset(providerId)
     if (!preset) throw new BadRequestException('供应商不在平台白名单中')
     if (await this.prisma.userProviderCredential.count({ where: { userId: user.id } }) >= MAX_CREDENTIALS) {
       throw new BadRequestException(`每个用户最多保存 ${MAX_CREDENTIALS} 个凭据`)
     }
+    const baseUrl = validateProviderBaseUrl(requestedBaseUrl || preset.baseUrl)
     await this.ensureProviderPreset(providerId)
     const encrypted = this.crypto.encrypt(apiKey)
     return this.prisma.userProviderCredential.create({
@@ -189,11 +194,12 @@ export class AiModelService {
         consentedAt: new Date(),
         lastFour: apiKey.slice(-4),
         name,
+        baseUrl,
         providerId,
         userId: user.id,
         consents: { create: { acceptedAt: new Date(), userId: user.id, version: AI_PROVIDER_CONSENT_VERSION } },
       },
-      select: { id: true, lastFour: true, name: true, providerId: true, status: true, createdAt: true },
+      select: { id: true, baseUrl: true, lastFour: true, name: true, providerId: true, status: true, createdAt: true },
     })
   }
 
@@ -242,6 +248,10 @@ export class AiModelService {
   }
 
   async setDefaultModel(id: string, userId: string) {
+    const { userMode } = await this.getPolicy()
+    if (userMode === AiUserModelPolicy.USER_PLATFORM_ONLY) {
+      throw new ForbiddenException('管理员当前仅允许使用平台模型')
+    }
     const profile = await this.requireModel(id, userId)
     if (!profile.enabled || profile.credential.status !== AiCredentialStatus.ACTIVE) {
       throw new BadRequestException('停用的模型不能设为默认')
@@ -251,6 +261,18 @@ export class AiModelService {
       this.prisma.userModelProfile.update({ where: { id }, data: { isDefault: true } }),
     ])
     return { id, isDefault: true }
+  }
+
+  async setPlatformDefault(userId: string) {
+    const { userMode } = await this.getPolicy()
+    if (userMode === AiUserModelPolicy.USER_BYOK_ONLY) {
+      throw new ForbiddenException('管理员当前要求使用自有模型')
+    }
+    await this.prisma.userModelProfile.updateMany({
+      where: { userId },
+      data: { isDefault: false },
+    })
+    return { source: AiModelSource.PLATFORM }
   }
 
   async deleteModel(id: string, userId: string) {
@@ -266,14 +288,15 @@ export class AiModelService {
     }
     const { userMode } = await this.getPolicy()
     if (userMode === AiUserModelPolicy.USER_PLATFORM_ONLY) return (await this.resolvePlatformCandidates(AiModelPurpose.USER_INTERACTIVE))[0]
-    if (userMode === AiUserModelPolicy.USER_HYBRID && !requestedModelId) return (await this.resolvePlatformCandidates(AiModelPurpose.USER_INTERACTIVE))[0]
-
     const profile = requestedModelId
       ? await this.requireModel(requestedModelId, user.id)
       : await this.prisma.userModelProfile.findFirst({
           where: { userId: user.id, enabled: true, isDefault: true },
           include: { credential: { include: { provider: true } } },
         })
+    if (!profile && userMode === AiUserModelPolicy.USER_HYBRID) {
+      return (await this.resolvePlatformCandidates(AiModelPurpose.USER_INTERACTIVE))[0]
+    }
     if (!profile || !profile.enabled || profile.credential.status !== AiCredentialStatus.ACTIVE) {
       throw new ForbiddenException('当前策略要求使用自有模型，请先配置并启用默认模型')
     }
@@ -283,7 +306,7 @@ export class AiModelService {
     await this.prisma.userProviderCredential.update({ where: { id: profile.credentialId }, data: { lastUsedAt: new Date() } })
     return {
       apiKey: this.crypto.decrypt(profile.credential),
-      baseUrl: profile.credential.provider.baseUrl,
+      baseUrl: profile.credential.baseUrl,
       credentialId: profile.credentialId,
       model: profile.model,
       providerId: profile.credential.providerId,
@@ -293,7 +316,7 @@ export class AiModelService {
 
   async testCredential(id: string, userId: string) {
     const credential = await this.requireCredential(id, userId, true)
-    const response = await fetch(new URL('models', credential.provider.baseUrl), {
+    const response = await fetch(new URL('models', credential.baseUrl), {
       headers: { Authorization: `Bearer ${this.crypto.decrypt(credential)}` },
       redirect: 'manual',
       signal: AbortSignal.timeout(12_000),
@@ -306,7 +329,15 @@ export class AiModelService {
     const preset = findProviderPreset(id)!
     await this.prisma.aiProviderPreset.upsert({
       where: { id },
-      create: { ...preset, protocol: 'OPENAI_COMPATIBLE', source: 'CC_SWITCH', sourceCommit: AI_PROVIDER_CATALOG_SOURCE_COMMIT },
+      create: {
+        baseUrl: preset.baseUrl,
+        category: preset.category,
+        id: preset.id,
+        name: preset.name,
+        protocol: 'OPENAI_COMPATIBLE',
+        source: 'CC_SWITCH',
+        sourceCommit: AI_PROVIDER_CATALOG_SOURCE_COMMIT,
+      },
       update: { baseUrl: preset.baseUrl, category: preset.category, enabled: true, name: preset.name },
     })
   }
@@ -331,6 +362,10 @@ export class AiModelService {
 }
 
 function validateAdminBaseUrl(value: string) {
+  return validateProviderBaseUrl(value)
+}
+
+function validateProviderBaseUrl(value: string) {
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' || isPrivateHostname(url.hostname)) {

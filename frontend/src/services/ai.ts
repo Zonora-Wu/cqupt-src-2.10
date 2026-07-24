@@ -4,12 +4,17 @@ export type AiChatMode = 'student' | 'auditor' | 'admin'
 export type AiProviderPreset = {
   baseUrl: string
   category: 'OFFICIAL' | 'AGGREGATOR' | 'RELAY'
+  defaultModel: string
   id: string
   name: string
+  notes: string
   protocol: 'OPENAI_COMPATIBLE'
+  region: 'CUSTOM' | 'CN' | 'GLOBAL'
+  websiteUrl: string
 }
 
 export type AiUserCredential = {
+  baseUrl: string
   createdAt: string
   id: string
   lastFour: string
@@ -239,6 +244,11 @@ export type AiSkillLibraryResponse = {
   skills: AiSkillLibraryItem[]
 }
 
+export function isUsableAiSkill(skill: AiSkillLibraryItem) {
+  if (!skill.owned) return true
+  return ['ACTIVE_PRIVATE', 'PUBLISHED'].includes(skill.lifecycleStatus ?? '')
+}
+
 export function sendAiChat(message: string, mode: AiChatMode = 'student', context?: Record<string, unknown>, sessionId?: string, modelProfileId?: string, skillIds?: string[]) {
   return apiRequest<AiChatResponse>('/ai/chat', {
     auth: true,
@@ -262,7 +272,7 @@ export function listAiUserCredentials() {
   return apiRequest<AiUserCredential[]>('/ai/user-credentials', { auth: true, method: 'GET' })
 }
 
-export function createAiUserCredential(data: { apiKey: string; consentAccepted: true; name: string; providerId: string }) {
+export function createAiUserCredential(data: { apiKey: string; baseUrl: string; consentAccepted: true; name: string; providerId: string }) {
   return apiRequest<AiUserCredential>('/ai/user-credentials', { auth: true, body: data, method: 'POST' })
 }
 
@@ -290,6 +300,10 @@ export function createAiUserModel(data: { credentialId: string; displayName: str
 
 export function setDefaultAiUserModel(id: string) {
   return apiRequest<{ id: string; isDefault: true }>(`/ai/user-models/${id}/default`, { auth: true, method: 'POST' })
+}
+
+export function setPlatformAiUserModel() {
+  return apiRequest<{ source: 'PLATFORM' }>('/ai/user-models/platform-default', { auth: true, method: 'POST' })
 }
 
 export function deleteAiUserModel(id: string) {

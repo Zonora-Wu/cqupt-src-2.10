@@ -45,6 +45,7 @@ export type AiModelPolicyResponse = {
 
 export type CreateUserCredentialInput = {
   apiKey?: unknown
+  baseUrl?: unknown
   consentAccepted?: unknown
   name?: unknown
   providerId?: unknown

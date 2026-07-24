@@ -15,7 +15,7 @@ import {
   type UserDevicePreferences,
 } from '../../services/userPreferences'
 import { transitionColorTheme } from '../../utils/themeTransition'
-import { AiModelSettingsPanel } from '../../components/ai/AiModelSettingsPanel'
+import { AiModelConfigurationLauncher } from '../../components/ai/AiModelConfigurationLauncher'
 
 type UserSystemSettingsProps = {
   effectiveTheme: 'dark' | 'light'
@@ -204,7 +204,7 @@ export function UserSystemSettings({
                 description="配置你自己的 OpenAI-compatible 模型。密钥加密保存，保存后不可查看明文。"
                 title="自有 AI 模型"
               >
-                <AiModelSettingsPanel onNotice={setMessage} />
+                <AiModelConfigurationLauncher onNotice={setMessage} />
               </SettingsCard>
             )}
 
