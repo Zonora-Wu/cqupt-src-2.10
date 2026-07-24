@@ -88,7 +88,7 @@ import {
 } from '../../utils/brandTheme'
 import { applyPlatformBranding, defaultPlatformLogos, getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
 import { AdminAiPolicyPanel } from '../../components/ai/AdminAiPolicyPanel'
-import { AdminPlatformAiPanel } from '../../components/ai/AdminPlatformAiPanel'
+import { AdminAiModelConfigurationLauncher } from '../../components/ai/AiModelConfigurationLauncher'
 
 type SettingsSection =
   | '基础设置'
@@ -1723,11 +1723,11 @@ export function AdminSystemSettings() {
                   <AdminAiPolicyPanel />
                 </SettingsCard>
                 <SettingsCard
-                  description="按用途配置主模型和最多两个备用模型。平台 Key 加密保存，不会在保存后回显。"
+                  description="配置全平台共用的主模型和最多两个备用模型。平台 Key 加密保存，不会在保存后回显。"
                   icon={<ServerCog className="h-5 w-5" />}
                   title="平台 AI"
                 >
-                  <AdminPlatformAiPanel />
+                  <AdminAiModelConfigurationLauncher />
                 </SettingsCard>
               </>
             )}

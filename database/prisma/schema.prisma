@@ -305,6 +305,7 @@ enum AiAgentRunStatus {
 }
 
 enum AiModelPurpose {
+  GLOBAL
   USER_INTERACTIVE
   ADMIN_INTERACTIVE
   AUDITOR_INTERACTIVE
@@ -1069,6 +1070,7 @@ model UserProviderCredential {
   userId      String
   providerId  String
   name        String
+  baseUrl     String
   ciphertext  String             @db.Text
   iv          String
   authTag     String

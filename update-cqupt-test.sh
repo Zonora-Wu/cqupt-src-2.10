@@ -15,6 +15,21 @@ fail() {
   exit 1
 }
 
+validate_ai_credential_key() {
+  local env_file="$DEPLOY_DIR/.env"
+  local raw
+  raw="$(awk -F= '/^AI_CREDENTIAL_ENCRYPTION_KEY=/{print substr($0, index($0, "=") + 1); exit}' "$env_file")"
+  [[ -n "$raw" ]] || fail "缺少 AI_CREDENTIAL_ENCRYPTION_KEY。执行: openssl rand -base64 32，然后写入 $env_file"
+
+  if [[ "$raw" =~ ^[[:xdigit:]]{64}$ ]]; then
+    return
+  fi
+
+  local decoded_bytes
+  decoded_bytes="$(printf '%s' "$raw" | base64 -d 2>/dev/null | wc -c | tr -d ' ')"
+  [[ "$decoded_bytes" == '32' ]] || fail 'AI_CREDENTIAL_ENCRYPTION_KEY 必须是 32 字节 Base64 或 64 位十六进制密钥。'
+}
+
 choose_scope() {
   if [[ -z "$DEPLOY_SCOPE" ]]; then
     printf '\n本次更新范围：\n'
@@ -52,6 +67,10 @@ run_migrations() {
 [[ -f "$DEPLOY_DIR/.env" ]] || fail '部署环境文件不存在。'
 
 choose_scope
+
+if [[ "$DEPLOY_SCOPE" =~ ^(2|3|4|5|6)$ ]]; then
+  validate_ai_credential_key
+fi
 
 if [[ "$DEPLOY_SCOPE" != '6' ]]; then
   log '拉取 GitHub main'

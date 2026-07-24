@@ -64,7 +64,7 @@ export type PlatformAiRoute = {
   model: string
   priority: number
   providerId: string
-  purpose: 'USER_INTERACTIVE' | 'ADMIN_INTERACTIVE' | 'AUDITOR_INTERACTIVE' | 'BACKGROUND_TASK' | 'STRUCTURED_ANALYSIS' | 'SKILL_GENERATION'
+  purpose: 'GLOBAL' | 'USER_INTERACTIVE' | 'ADMIN_INTERACTIVE' | 'AUDITOR_INTERACTIVE' | 'BACKGROUND_TASK' | 'STRUCTURED_ANALYSIS' | 'SKILL_GENERATION'
 }
 
 export function getPlatformAiConfig() {
