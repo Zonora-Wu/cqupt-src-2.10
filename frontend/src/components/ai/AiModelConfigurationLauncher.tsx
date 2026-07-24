@@ -47,17 +47,27 @@ export function AiModelConfigurationButton({
 }
 
 export function AdminAiModelConfigurationLauncher() {
-  const [open, setOpen] = useState(false)
-
   return (
-    <>
+    <AdminAiModelConfigurationButton
+      trigger={(open) => (
       <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-950 dark:text-white">全局模型路由</p>
           <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">所有平台 AI 功能共用一组主备模型。</p>
         </div>
-        <button className={buttonClass} onClick={() => setOpen(true)} type="button">配置平台模型</button>
+        <button className={buttonClass} onClick={open} type="button">配置平台模型</button>
       </div>
+      )}
+    />
+  )
+}
+
+export function AdminAiModelConfigurationButton({ trigger }: { trigger: (open: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {trigger(() => setOpen(true))}
       <AiConfigurationDialog
         description="配置一个主模型和最多两个备用模型，调用失败时按顺序切换。"
         onClose={() => setOpen(false)}

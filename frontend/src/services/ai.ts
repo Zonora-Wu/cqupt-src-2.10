@@ -228,15 +228,20 @@ export type AiQuota = {
 }
 
 export type AiSkillLibraryItem = {
+  active?: boolean
   aiSpace: 'STUDENT' | 'AUDITOR' | 'ADMIN'
   content: string
+  createdBy?: { name: string; role: { code: 'ADMIN' | 'AUDITOR' | 'STUDENT' }; unifiedCode: string } | null
   id: string
   source: string | null
   title: string
+  defaultPinnedForUsers?: boolean
   lifecycleStatus?: 'DRAFT' | 'ACTIVE_PRIVATE' | 'SUBMITTED' | 'UNDER_REVIEW' | 'CHANGES_REQUESTED' | 'REJECTED' | 'PUBLISHED' | 'DISABLED' | 'ARCHIVED' | 'FAILED'
   createdById?: string | null
+  skillKind?: 'SYSTEM' | 'USER'
   slug?: string | null
   owned?: boolean
+  visibleToUsers?: boolean
 }
 
 export type AiSkillLibraryResponse = {
@@ -487,6 +492,14 @@ export function updateAiSkill(id: string, data: { content: string; title: string
 
 export function deleteAiSkill(id: string) {
   return apiRequest<{ success: true }>(`/ai/skills/${id}`, { auth: true, method: 'DELETE' })
+}
+
+export function setAiSkillActive(id: string, active: boolean) {
+  return apiRequest<AiSkillLibraryItem>(`/ai/skills/${id}/${active ? 'activate' : 'deactivate'}`, { auth: true, method: 'POST' })
+}
+
+export function updateAiSkillPresentation(id: string, data: { defaultPinnedForUsers?: boolean; visibleToUsers?: boolean }) {
+  return apiRequest<AiSkillLibraryItem>(`/admin/ai-skills/${id}/presentation`, { auth: true, body: data, method: 'PATCH' })
 }
 
 export function submitAiSkill(id: string) {

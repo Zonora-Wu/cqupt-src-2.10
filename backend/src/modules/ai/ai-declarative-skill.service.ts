@@ -40,12 +40,20 @@ export class AiDeclarativeSkillService {
       : {
           OR: [
             { createdById: user.id },
-            { lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED, roleScope: { in: [AiKnowledgeRoleScope.ALL, AiKnowledgeRoleScope.STUDENT] } },
+            {
+              lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+              roleScope: { in: [AiKnowledgeRoleScope.ALL, AiKnowledgeRoleScope.STUDENT] },
+              visibleToUsers: true,
+            },
           ],
         }
     const skills = await this.prisma.aiSkill.findMany({
-      where: { active: true, ...ownerFilter },
-      include: { toolGrants: true, _count: { select: { files: true, revisions: true } } },
+      where: user.role === RoleCode.ADMIN ? ownerFilter : { active: true, ...ownerFilter },
+      include: {
+        createdBy: { select: { name: true, role: { select: { code: true } }, unifiedCode: true } },
+        toolGrants: true,
+        _count: { select: { files: true, revisions: true } },
+      },
       orderBy: { updatedAt: 'desc' },
     })
     return {
@@ -53,6 +61,7 @@ export class AiDeclarativeSkillService {
       skills: skills.map((skill) => ({
         ...skill,
         content: skill.createdById === user.id || skill.lifecycleStatus === AiSkillLifecycleStatus.PUBLISHED ? skill.content : '',
+        skillKind: !skill.createdBy || skill.createdBy.role.code === RoleCode.ADMIN ? 'SYSTEM' : 'USER',
         owned: skill.createdById === user.id,
       })),
     }
@@ -114,12 +123,50 @@ export class AiDeclarativeSkillService {
 
   async setActive(id: string, active: boolean, user: AuthenticatedRequestUser) {
     const skill = await this.requireOwner(id, user)
+    if (user.role === RoleCode.ADMIN) {
+      if (active && skill.lifecycleStatus === AiSkillLifecycleStatus.ARCHIVED) {
+        throw new BadRequestException('已归档 Skill 不能重新启用')
+      }
+      return this.prisma.aiSkill.update({
+        where: { id },
+        data: { active },
+      })
+    }
     if (active && !(new Set<AiSkillLifecycleStatus>([AiSkillLifecycleStatus.DRAFT, AiSkillLifecycleStatus.ACTIVE_PRIVATE])).has(skill.lifecycleStatus)) {
       throw new BadRequestException('当前 Skill 状态不能启用为私有版本')
     }
     return this.prisma.aiSkill.update({
       where: { id },
       data: { active, lifecycleStatus: active ? AiSkillLifecycleStatus.ACTIVE_PRIVATE : AiSkillLifecycleStatus.DISABLED },
+    })
+  }
+
+  async updatePresentation(id: string, input: Record<string, unknown>, user: AuthenticatedRequestUser) {
+    if (user.role !== RoleCode.ADMIN || !user.permissions.includes('ai:manage_skills')) {
+      throw new ForbiddenException('无 Skill 展示配置权限')
+    }
+    const skill = await this.prisma.aiSkill.findUnique({
+      include: { createdBy: { select: { role: { select: { code: true } } } } },
+      where: { id },
+    })
+    if (!skill) throw new NotFoundException('Skill 不存在')
+    if (skill.createdBy && skill.createdBy.role.code !== RoleCode.ADMIN) {
+      throw new BadRequestException('用户 Skill 不能配置为系统默认 Skill')
+    }
+    const visibleToUsers = optionalBoolean(input.visibleToUsers, '用户侧展示')
+    const defaultPinnedForUsers = optionalBoolean(input.defaultPinnedForUsers, '默认固定')
+    const nextDefaultPinned = defaultPinnedForUsers ?? skill.defaultPinnedForUsers
+    const nextVisible = visibleToUsers ?? skill.visibleToUsers
+    if (nextDefaultPinned && !nextVisible) throw new BadRequestException('默认固定的 Skill 必须在用户侧展示')
+    if ((nextVisible || nextDefaultPinned) && (
+      skill.lifecycleStatus !== AiSkillLifecycleStatus.PUBLISHED
+      || (skill.roleScope !== AiKnowledgeRoleScope.ALL && skill.roleScope !== AiKnowledgeRoleScope.STUDENT)
+    )) {
+      throw new BadRequestException('只有已发布且适用于用户的系统 Skill 可以在用户侧展示')
+    }
+    return this.prisma.aiSkill.update({
+      data: { defaultPinnedForUsers: nextDefaultPinned, visibleToUsers: nextVisible },
+      where: { id },
     })
   }
 
@@ -212,7 +259,9 @@ export class AiDeclarativeSkillService {
   }
 
   private async requireOwner(id: string, user: AuthenticatedRequestUser) {
-    const skill = await this.prisma.aiSkill.findFirst({ where: { id, createdById: user.id } })
+    const skill = await this.prisma.aiSkill.findFirst({
+      where: user.role === RoleCode.ADMIN ? { id } : { id, createdById: user.id },
+    })
     if (!skill) throw new NotFoundException('Skill 不存在或无权操作')
     return skill
   }
@@ -313,6 +362,12 @@ function requiredText(value: unknown, label: string, max: number) {
   if (typeof value !== 'string' || !value.trim()) throw new BadRequestException(`请填写${label}`)
   if (value.trim().length > max) throw new BadRequestException(`${label}不能超过 ${max} 个字符`)
   return value.trim()
+}
+
+function optionalBoolean(value: unknown, label: string) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw new BadRequestException(`${label}必须是布尔值`)
+  return value
 }
 
 function fileFromText(path: string, content: string) {

@@ -1,10 +1,11 @@
-import { Archive, CheckCircle2, DatabaseZap, FileText, Hammer, History, Library, PackageCheck, RefreshCw, ShieldCheck, Sparkles, Wrench, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { AdminSkillReviewPanel } from '../../components/ai/AdminSkillReviewPanel'
+import { AdminSkillManagementPanel } from '../../components/ai/AdminSkillManagementPanel'
+import { AdminAiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
 import {
   createAiSkillCandidate,
   dismissAiKnowledgeMaintenanceTask,
@@ -69,6 +70,7 @@ const roleScopeLabels: Record<string, string> = {
 
 type KnowledgeStatusFilter = AiKnowledgeStatus | 'ALL'
 type KnowledgeWorkspaceTab = 'AUTO_APPROVED' | 'ENTRIES' | 'MAINTENANCE' | 'REVIEW' | 'SKILLS'
+type AdminAiWorkspace = 'KNOWLEDGE_REVIEW' | 'SKILL_MANAGEMENT' | 'SKILL_REVIEW'
 
 const promotableStatuses = new Set<AiKnowledgeStatus>(['APPROVED', 'AUTO_APPROVED', 'PROMOTED_TO_SKILL'])
 
@@ -118,6 +120,7 @@ export function AdminAiKnowledgeManagement() {
   const [stats, setStats] = useState<AiKnowledgeStats | null>(null)
   const [captureJobs, setCaptureJobs] = useState<AiKnowledgeStats['recentQueue']>([])
   const [activeTab, setActiveTab] = useState<KnowledgeWorkspaceTab>('REVIEW')
+  const [workspace, setWorkspace] = useState<AdminAiWorkspace>('KNOWLEDGE_REVIEW')
   const [status, setStatus] = useState<KnowledgeStatusFilter>('NEEDS_REVIEW')
   const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(true)
@@ -212,12 +215,19 @@ export function AdminAiKnowledgeManagement() {
     <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <PageHeader
-          title="AI 知识沉淀审核"
-          description="审核从 AI 对话中沉淀出的通用知识，确认脱敏、泛化和安全边界后再进入生产知识库；稳定方法论可二次审批晋升为 Hermes Skill。"
+          title="AI 管理"
+          description="配置平台模型，管理系统与用户 Skill，审核知识沉淀内容。"
         />
         <div className="flex flex-wrap gap-2">
+          <AdminAiModelConfigurationButton
+            trigger={(open) => (
+              <button className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={open} type="button">
+                配置平台模型
+              </button>
+            )}
+          />
           <button className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10" onClick={() => void loadAll()} type="button">
-            <RefreshCw className="mr-2 inline h-4 w-4" />刷新
+            刷新
           </button>
           <button
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
@@ -225,7 +235,7 @@ export function AdminAiKnowledgeManagement() {
             onClick={() => void runAction('process', processAiKnowledgeCaptures, '捕获队列处理完成')}
             type="button"
           >
-            <DatabaseZap className="mr-2 inline h-4 w-4" />处理捕获队列
+            处理捕获队列
           </button>
         </div>
       </div>
@@ -242,21 +252,28 @@ export function AdminAiKnowledgeManagement() {
       )}
 
       <div className="mt-6 grid gap-3 md:grid-cols-4">
-        <StatCard icon={FileText} label="待审核知识" value={stats?.totals.needsReview ?? 0} />
-        <StatCard icon={ShieldCheck} label="已批准知识" value={stats?.totals.approved ?? 0} />
-        <StatCard icon={Sparkles} label="24h 命中" value={stats?.totals.recentHits ?? 0} />
-        <StatCard icon={PackageCheck} label="已安装 Skill" value={stats?.totals.installedSkills ?? 0} />
-      </div>
-      <div className="mt-6"><AdminSkillReviewPanel /></div>
-
-      <div className="ai-chat-input-scroll mt-6 flex gap-2 overflow-x-auto border-b border-black/10 pb-3 dark:border-white/10" role="tablist" aria-label="AI 知识库工作台">
-        <WorkspaceTab active={activeTab === 'REVIEW'} icon={History} label="待审核会话" onClick={() => setActiveTab('REVIEW')} />
-        <WorkspaceTab active={activeTab === 'AUTO_APPROVED'} icon={Sparkles} label="自动入库" onClick={() => setActiveTab('AUTO_APPROVED')} />
-        <WorkspaceTab active={activeTab === 'ENTRIES'} icon={Library} label="知识库条目" onClick={() => setActiveTab('ENTRIES')} />
-        <WorkspaceTab active={activeTab === 'SKILLS'} icon={Hammer} label="Skill Candidate" onClick={() => setActiveTab('SKILLS')} />
-        <WorkspaceTab active={activeTab === 'MAINTENANCE'} icon={Wrench} label="待维护" onClick={() => setActiveTab('MAINTENANCE')} />
+        <StatCard label="待审核知识" value={stats?.totals.needsReview ?? 0} />
+        <StatCard label="已批准知识" value={stats?.totals.approved ?? 0} />
+        <StatCard label="24h 命中" value={stats?.totals.recentHits ?? 0} />
+        <StatCard label="已安装 Skill" value={stats?.totals.installedSkills ?? 0} />
       </div>
 
+      <div className="mt-6 flex gap-1 border-b border-black/10 dark:border-white/10" role="tablist" aria-label="AI 知识库与 Skill 工作台">
+        <PrimaryTab active={workspace === 'SKILL_MANAGEMENT'} label="Skill 管理" onClick={() => setWorkspace('SKILL_MANAGEMENT')} />
+        <PrimaryTab active={workspace === 'SKILL_REVIEW'} label="Skill 审核" onClick={() => { setWorkspace('SKILL_REVIEW'); setActiveTab('SKILLS') }} />
+        <PrimaryTab active={workspace === 'KNOWLEDGE_REVIEW'} label="知识审核" onClick={() => { setWorkspace('KNOWLEDGE_REVIEW'); if (activeTab === 'SKILLS') setActiveTab('REVIEW') }} />
+      </div>
+
+      {workspace === 'SKILL_MANAGEMENT' ? <div className="mt-6"><AdminSkillManagementPanel /></div> : (
+      <>
+      {workspace === 'SKILL_REVIEW' ? <div className="mt-6"><AdminSkillReviewPanel /></div> : (
+      <div className="ai-chat-input-scroll mt-4 flex gap-2 overflow-x-auto border-b border-black/10 pb-3 dark:border-white/10" role="tablist" aria-label="知识审核分类">
+        <WorkspaceTab active={activeTab === 'REVIEW'} label="待审核会话" onClick={() => setActiveTab('REVIEW')} />
+        <WorkspaceTab active={activeTab === 'AUTO_APPROVED'} label="自动入库" onClick={() => setActiveTab('AUTO_APPROVED')} />
+        <WorkspaceTab active={activeTab === 'ENTRIES'} label="知识库条目" onClick={() => setActiveTab('ENTRIES')} />
+        <WorkspaceTab active={activeTab === 'MAINTENANCE'} label="待维护" onClick={() => setActiveTab('MAINTENANCE')} />
+      </div>
+      )}
       <div className={`mt-6 grid gap-6 ${activeTab === 'REVIEW' ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : activeTab === 'SKILLS' ? 'xl:grid-cols-[minmax(0,1fr)_380px]' : ''}`}>
         <div className="space-y-6">
           {activeTab === 'REVIEW' ? (
@@ -490,15 +507,15 @@ export function AdminAiKnowledgeManagement() {
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2 lg:w-36 lg:flex-col">
                   <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={busy === entry.id || entry.status === 'APPROVED'} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'APPROVED', '管理员审核通过'), '知识条目已批准')} type="button">
-                    <CheckCircle2 className="mr-1.5 inline h-4 w-4" />批准
+                    批准
                   </button>
                   {activeTab === 'AUTO_APPROVED' ? (
                     <button className="rounded-lg border border-amber-500/20 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60 dark:text-amber-200 dark:hover:bg-amber-950/30" disabled={busy === entry.id} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'ARCHIVED', '管理员归档自动入库知识'), '自动入库知识已归档')} type="button">
-                      <Archive className="mr-1.5 inline h-4 w-4" />归档
+                      归档
                     </button>
                   ) : null}
                   <button className="rounded-lg border border-red-500/20 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:text-red-200 dark:hover:bg-red-950/30" disabled={busy === entry.id || entry.status === 'REJECTED'} onClick={() => void runAction(entry.id, () => reviewAiKnowledge(entry.id, 'REJECTED', '未达到沉淀标准或存在风险'), '知识条目已拒绝')} type="button">
-                    <XCircle className="mr-1.5 inline h-4 w-4" />拒绝
+                    拒绝
                   </button>
                 </div>
               </div>
@@ -534,7 +551,7 @@ export function AdminAiKnowledgeManagement() {
                       onClick={() => void runAction('maintenance-run', runAiKnowledgeMaintenance, '维护扫描已完成')}
                       type="button"
                     >
-                      <Wrench className="mr-1.5 inline h-4 w-4" />运行扫描
+                      运行扫描
                     </button>
                   </div>
                 </div>
@@ -623,7 +640,7 @@ export function AdminAiKnowledgeManagement() {
               <textarea className="min-h-24 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm outline-none focus:border-brand-600 dark:border-white/10" onChange={(event) => setSkillDescription(event.target.value)} placeholder="描述这个 Skill 解决什么稳定问题" value={skillDescription} />
               <div className="rounded-lg bg-[var(--app-panel-muted-bg)] p-3 text-xs text-slate-500  dark:text-slate-400">已选择 {selectedEntries.length} 条：{selectedEntries.map((entry) => entry.title).join('、') || '暂无'}</div>
               <button className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={selectedIds.length === 0 || !skillName || !skillDescription || selectedIds.some((id) => !visiblePromotableIds.has(id)) || busy === 'candidate'} onClick={() => void runAction('candidate', createCandidate, 'Skill 候选已创建，等待二次审核')} type="button">
-                <Hammer className="mr-2 inline h-4 w-4" />生成候选 Skill
+                生成候选 Skill
               </button>
             </div>
           </SurfacePanel>
@@ -695,11 +712,17 @@ export function AdminAiKnowledgeManagement() {
         </aside>
         ) : null}
       </div>
+      </>
+      )}
     </section>
   )
 }
 
-function WorkspaceTab({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof FileText; label: string; onClick: () => void }) {
+function PrimaryTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button aria-selected={active} className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${active ? 'border-brand-600 text-brand-800 dark:text-brand-200' : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`} onClick={onClick} role="tab" type="button">{label}</button>
+}
+
+function WorkspaceTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
       aria-selected={active}
@@ -708,7 +731,6 @@ function WorkspaceTab({ active, icon: Icon, label, onClick }: { active: boolean;
       role="tab"
       type="button"
     >
-      <Icon className="h-4 w-4" />
       {label}
     </button>
   )
@@ -725,7 +747,7 @@ function TagList({ items, label }: { items: string[]; label: string }) {
   )
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: typeof FileText; label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <SurfacePanel className="p-4">
       <div className="flex items-center justify-between gap-3">
@@ -733,7 +755,6 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof FileText; label: 
           <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
           <p className="mt-2 text-3xl font-semibold">{value}</p>
         </div>
-        <Icon className="h-7 w-7 text-brand-700 dark:text-brand-300" />
       </div>
     </SurfacePanel>
   )

@@ -44,7 +44,7 @@ export const adminNavItems: NavItem[] = [
   { label: '学习管理', path: '/admin/learning' },
   { label: '积分商城', path: '/admin/mall' },
   { label: '审计日志', path: '/admin/audit-logs' },
-  { label: 'AI 知识库', path: '/admin/ai-knowledge' },
+  { label: 'AI 管理', path: '/admin/ai-knowledge' },
   { label: '系统设置', path: '/admin/settings' },
 ]
 

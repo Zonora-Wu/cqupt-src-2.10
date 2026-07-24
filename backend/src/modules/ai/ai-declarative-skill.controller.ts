@@ -40,6 +40,16 @@ export class AiDeclarativeSkillController {
   @Post('ai/skills/:id/deactivate')
   deactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) { return this.skills.setActive(id, false, user) }
 
+  @Patch('admin/ai-skills/:id/presentation')
+  @RequirePermissions('ai:manage_skills')
+  updatePresentation(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.skills.updatePresentation(id, body, user)
+  }
+
   @Post('ai/skills/:id/pin/:sessionId')
   pin(@Param('id') id: string, @Param('sessionId') sessionId: string, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.skills.pin(id, sessionId, user)
