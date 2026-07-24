@@ -49,6 +49,28 @@ test('password reset code uses an isolated purpose', async () => {
   assert.equal(createdCodes[0]?.userId, 'user-1')
 })
 
+test('an unregistered email is rejected before sending a reset code', async () => {
+  let emailSent = false
+  const prisma = {
+    user: {
+      findUnique: async () => null,
+    },
+  }
+  const humanVerification = { verify: async () => undefined }
+  const email = { sendVerificationCode: async () => { emailSent = true } }
+  const service = new AuthService(prisma as never, null as never, humanVerification as never, email as never, null as never)
+
+  await assert.rejects(
+    service.sendPasswordResetCode(
+      'missing@example.com',
+      { payload: 'verified', provider: 'altcha' },
+      { ipAddress: '127.0.0.1' },
+    ),
+    /该邮箱未绑定可用账号/,
+  )
+  assert.equal(emailSent, false)
+})
+
 test('resetting password revokes sessions and consumes the code', async () => {
   let passwordHash = ''
   let refreshTokensRevoked = false

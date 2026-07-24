@@ -173,7 +173,7 @@ export class AuthService {
     const genericMessage = '若该邮箱已绑定可用账号，验证码将发送至该邮箱'
     if (!user || user.status !== UserStatus.ACTIVE || !user.emailVerifiedAt) {
       await waitForPasswordResetResponse(startedAt)
-      return { message: genericMessage }
+      throw new BadRequestException('该邮箱未绑定可用账号，请检查邮箱或联系管理员')
     }
 
     const code = generateEmailCode()
