@@ -1,5 +1,5 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
-import { AiCallPurpose, AiSpace, AuditAction, RoleCode } from '@prisma/client'
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
+import { AiCallPurpose, AiModelPurpose, AiModelSource, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
@@ -30,6 +30,9 @@ import {
 } from './ai.types'
 import { AiToolsService } from './ai.tools.service'
 import { buildReportAnalysisPreparation } from './ai.report-draft.service'
+import { AiModelService } from './ai-model.service'
+import { AiResolvedModel } from './ai-model.types'
+import { AiRuntimeControlService } from './ai-runtime-control.service'
 
 const DEFAULT_OPENAI_BASE_URL = 'http://localhost:5000/v1'
 const DEFAULT_OPENAI_MODEL = 'hermes-agent'
@@ -87,6 +90,8 @@ export class AiService {
     @Inject(AiDataRequestService) private readonly dataRequests: AiDataRequestService,
     @Inject(AiKnowledgeService) private readonly knowledge: AiKnowledgeService,
     @Inject(AiProblemSessionService) private readonly problemSessions: AiProblemSessionService,
+    @Inject(AiModelService) private readonly models: AiModelService,
+    @Inject(AiRuntimeControlService) private readonly runtime: AiRuntimeControlService,
   ) {}
 
   async checkAgentHealth() {
@@ -145,41 +150,59 @@ export class AiService {
     meta: ClientRequestMeta,
   ): Promise<AiReportAnalysisResponse> {
     this.assertCanUseMode('student', user)
+    const resolvedModel = await this.models.resolve(user)
     const quotaBefore = await this.buildQuotaSummary(user.id)
-    if (!quotaBefore.enabled) throw new ForbiddenException('邮宝额度已停用，请联系管理员')
-    if (quotaBefore.remaining <= 0) throw new ForbiddenException('本月邮宝 token 额度已用尽，请联系管理员调整额度')
+    if (resolvedModel.source === AiModelSource.PLATFORM && !quotaBefore.enabled) throw new ForbiddenException('邮宝额度已停用，请联系管理员')
+    if (resolvedModel.source === AiModelSource.PLATFORM && quotaBefore.remaining <= 0) throw new ForbiddenException('本月邮宝 token 额度已用尽，请联系管理员调整额度')
 
     const systemPrompt = buildVulnerabilityReportAssessmentPrompt()
-    const result = await this.requestOpenAi('chat/completions', {
-      body: {
-        messages: [
-          { content: systemPrompt, role: 'system' },
-          { content: prepared.contextText, role: 'user' },
-        ],
-        model: getOpenAiModel(),
-        temperature: 0.2,
-        user: user.id,
-      },
-      method: 'POST',
-      timeoutMs: getAttachmentRequestTimeoutMs(),
+    const run = await this.runtime.start({
+      model: resolvedModel,
+      purpose: AiCallPurpose.REPORT_SUMMARY,
+      snapshot: { fileSha256: prepared.fileSha256, source: resolvedModel.source },
+      userId: user.id,
     })
+    let result: Awaited<ReturnType<AiService['requestOpenAi']>>
+    try {
+      result = await this.requestOpenAi('chat/completions', {
+        body: {
+          messages: [
+            { content: systemPrompt, role: 'system' },
+            { content: prepared.contextText, role: 'user' },
+          ],
+          model: resolvedModel.model,
+          temperature: 0.2,
+          user: user.id,
+        },
+        method: 'POST',
+        platformPurpose: AiModelPurpose.STRUCTURED_ANALYSIS,
+        resolvedModel,
+        runId: run.id,
+        timeoutMs: getAttachmentRequestTimeoutMs(),
+      })
+    } catch (error) {
+      await this.runtime.finish(run.id, { errorCode: this.runtime.isCancelled(run.id) ? 'USER_CANCELLED' : 'UPSTREAM_FAILURE', usageConfirmed: false })
+      throw error
+    }
     const rawContent = extractOpenAiContent(result.body)
     const assessment = parseAiReportAssessment(rawContent, {
       imageEvidenceDetected: prepared.imageEvidenceDetected,
       omittedFields: prepared.omittedFields,
     })
     const tokensUsed = extractTokenUsage(result.body) ?? 0
+    const effectiveModel = result.model
+    await this.runtime.finish(run.id, { outputTokens: tokensUsed || undefined, usageConfirmed: tokensUsed > 0 })
 
     await this.prisma.$transaction([
       this.prisma.aiCallLog.create({
         data: {
           aiSpace: AiSpace.STUDENT,
           ipAddress: meta.ipAddress,
-          modelName: getOpenAiModel(),
+          modelName: effectiveModel.model,
           outputSummary: `PDF 漏洞报告评审完成，评分 ${assessment.score}`,
           purpose: AiCallPurpose.REPORT_SUMMARY,
           sanitizedInputSummary: `PDF 漏洞报告评审；上下文 ${prepared.contextText.length} 字；脱敏 ${prepared.redactionCount} 处；省略字段 ${prepared.omittedFields.length} 个`,
-          tokensUsed: tokensUsed || undefined,
+          tokensUsed: resolvedModel.source === AiModelSource.PLATFORM ? tokensUsed || undefined : undefined,
           userAgent: meta.userAgent,
           userId: user.id,
         },
@@ -198,8 +221,10 @@ export class AiService {
             omittedFields: prepared.omittedFields,
             redactionCount: prepared.redactionCount,
             score: assessment.score,
-            tokensUsed,
-            upstreamModel: getOpenAiModel(),
+            modelSource: effectiveModel.source,
+            providerId: effectiveModel.providerId,
+            tokensUsed: resolvedModel.source === AiModelSource.PLATFORM ? tokensUsed : 0,
+            upstreamModel: effectiveModel.model,
             ...(prepared.sourceReportId ? { sourceReportId: prepared.sourceReportId } : {}),
           },
           requestPath: meta.requestPath,
@@ -273,11 +298,13 @@ export class AiService {
   async chat(input: NormalizedAiChatInput, user: AuthenticatedRequestUser, meta: ClientRequestMeta): Promise<AiChatResponse> {
     this.assertCanUseMode(input.mode, user)
 
+    const resolvedModel = await this.models.resolve(user, input.modelProfileId)
+    await this.assertAndBindSessionModel(input.sessionId, user.id, resolvedModel)
     const quotaBefore = await this.buildQuotaSummary(user.id)
-    if (!quotaBefore.enabled) {
+    if (resolvedModel.source === AiModelSource.PLATFORM && !quotaBefore.enabled) {
       throw new ForbiddenException('邮宝额度已停用，请联系管理员')
     }
-    if (quotaBefore.remaining <= 0) {
+    if (resolvedModel.source === AiModelSource.PLATFORM && quotaBefore.remaining <= 0) {
       throw new ForbiddenException('本月邮宝 token 额度已用尽，请联系管理员调整额度')
     }
 
@@ -587,13 +614,25 @@ export class AiService {
     let dataRequestsMade: ReturnType<AiDataRequestService['parse']> = []
     let dataRequestResults: Awaited<ReturnType<AiDataRequestService['execute']>> = []
     let totalTokens = 0
+    let effectiveModel = resolvedModel
+    const agentRun = await this.runtime.start({
+      model: resolvedModel,
+      purpose: AiCallPurpose.CHAT,
+      snapshot: {
+          modelProfileId: input.modelProfileId ?? null,
+          providerId: resolvedModel.providerId,
+          skillIds: input.skillIds ?? [],
+          source: resolvedModel.source,
+      },
+      userId: user.id,
+    })
 
     // 4. Tool calling loop — 最多 MAX_TOOL_ROUNDS 轮
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         const payload: OpenAiChatPayload = {
           messages,
-          model: getOpenAiModel(),
+          model: resolvedModel.model,
           tool_choice: round === 0 ? 'auto' : 'auto',
           tools: tools.length > 0 ? tools : undefined,
           user: user.id,
@@ -602,10 +641,14 @@ export class AiService {
         const result = await this.requestOpenAi('chat/completions', {
           body: payload,
           method: 'POST',
+          platformPurpose: getInteractiveModelPurpose(input.mode),
+          resolvedModel,
+          runId: agentRun.id,
           timeoutMs: hasAttachmentContext ? getAttachmentRequestTimeoutMs() : getRequestTimeoutMs(),
         })
 
         const choice = result.body?.choices?.[0]
+        effectiveModel = result.model
         totalTokens += extractTokenUsage(result.body) ?? 0
 
         // 4a. Agent 返回了 tool_calls
@@ -623,7 +666,24 @@ export class AiService {
             toolCallsMade.push(toolCall)
 
             // 执行 tool
+            await this.prisma.aiAgentToolCall.create({
+              data: {
+                argumentHash: createHash('sha256').update(JSON.stringify(toolArgs)).digest('hex'),
+                callId: tc.id,
+                runId: agentRun.id,
+                status: 'RUNNING',
+                toolName: tc.function.name,
+              },
+            })
             const toolResultStr = await this.toolsService.executeTool(toolCall, user)
+            await this.prisma.aiAgentToolCall.update({
+              where: { runId_callId: { callId: tc.id, runId: agentRun.id } },
+              data: {
+                completedAt: new Date(),
+                resultSummary: createHash('sha256').update(toolResultStr).digest('hex'),
+                status: 'COMPLETED',
+              },
+            })
 
             // 添加 tool 结果消息
             messages.push({
@@ -657,6 +717,7 @@ export class AiService {
         break
       }
     } catch (error) {
+      if (this.runtime.isCancelled(agentRun.id)) throw new BadRequestException('AI Run 已取消')
       agentDegradedReason = getAgentErrorMessage(error)
       fallbackResponse = buildAgentFailureResponse(agentDegradedReason)
       finalContent = fallbackResponse.content
@@ -679,6 +740,11 @@ export class AiService {
       : this.dataRequests.filterStructuredOutput(parsedStructured.cards, parsedStructured.actions, context, dataRequestResults)
     const structured = completeStructuredFromBackend(safeMessage, filteredStructured, context, dataRequestResults)
     const displayContent = fallbackResponse ? fallbackResponse.content : stripJsonBlock(finalContent) || finalContent
+    await this.runtime.finish(agentRun.id, {
+      errorCode: agentDegradedReason ? 'UPSTREAM_FAILURE' : undefined,
+      outputTokens: totalTokens || undefined,
+      usageConfirmed: totalTokens > 0,
+    })
 
     // 7. 写审计日志
     await this.prisma.$transaction(async (tx) => {
@@ -693,11 +759,11 @@ export class AiService {
           aiSpace: getAiSpace(input.mode),
           hermesRunId: undefined,
           ipAddress: meta.ipAddress,
-          modelName: getOpenAiModel(),
+          modelName: effectiveModel.model,
           outputSummary: displayContent.slice(0, 1000),
           purpose: AiCallPurpose.CHAT,
           sanitizedInputSummary: safeMessage.slice(0, 1000),
-          tokensUsed: totalTokens || undefined,
+          tokensUsed: resolvedModel.source === AiModelSource.PLATFORM ? totalTokens || undefined : undefined,
           userAgent: meta.userAgent,
           userId: user.id,
         },
@@ -726,11 +792,13 @@ export class AiService {
               strategy: skillRoute.strategy,
             },
             status: 200,
-            tokensUsed: totalTokens || 0,
+            modelSource: effectiveModel.source,
+            providerId: effectiveModel.providerId,
+            tokensUsed: resolvedModel.source === AiModelSource.PLATFORM ? totalTokens || 0 : 0,
             dataRequests: dataRequestsMade.map((request) => ({ id: request.id, tool: request.tool })),
             dataRequestResults: dataRequestResults.map((result) => ({ id: result.id, ok: result.ok, tool: result.tool })),
             toolCalls: toolCallsMade.map((tc) => tc.name),
-            upstreamModel: getOpenAiModel(),
+            upstreamModel: effectiveModel.model,
           },
           requestPath: meta.requestPath,
           result: 'success',
@@ -954,6 +1022,25 @@ export class AiService {
     return resolveKnowledgeUsagePolicy(isRecord(row?.value) ? row.value : undefined)
   }
 
+  private async assertAndBindSessionModel(sessionId: string | undefined, userId: string, model: AiResolvedModel) {
+    if (!sessionId) return
+    const session = await this.prisma.aiProblemSession.findFirst({
+      where: { id: sessionId, userId },
+      select: { id: true, modelBindingKey: true },
+    })
+    if (!session) throw new NotFoundException('问题会话不存在')
+    const bindingKey = `${model.source}:${model.providerId}:${model.credentialId ?? 'platform'}:${model.model}`
+    if (session.modelBindingKey && session.modelBindingKey !== bindingKey) {
+      throw new BadRequestException('当前会话已绑定其他模型，请新建对话后切换模型')
+    }
+    if (!session.modelBindingKey) {
+      await this.prisma.aiProblemSession.update({
+        where: { id: session.id },
+        data: { modelBindingKey: bindingKey, modelName: model.model, modelSource: model.source },
+      })
+    }
+  }
+
   private assertCanUseMode(mode: NormalizedAiChatInput['mode'], user: AuthenticatedRequestUser) {
     const requiredPermission = getModePermission(mode)
     if (!user.permissions.includes(requiredPermission)) {
@@ -969,45 +1056,71 @@ export class AiService {
     }
   }
 
-  private async requestOpenAi(path: string, options: { body?: unknown; method: 'GET' | 'POST'; timeoutMs: number }) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs)
-    const headers: Record<string, string> = options.body === undefined ? {} : { 'Content-Type': 'application/json' }
-    const apiKey = getOpenAiApiKey()
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`
+  private async requestOpenAi(path: string, options: {
+    body?: unknown
+    method: 'GET' | 'POST'
+    platformPurpose?: AiModelPurpose
+    resolvedModel?: AiResolvedModel
+    runId?: string
+    timeoutMs: number
+  }) {
+    const selected = options.resolvedModel
+    const candidates = selected?.source === AiModelSource.PLATFORM && options.platformPurpose
+      ? await this.models.resolvePlatformCandidates(options.platformPurpose)
+      : [selected ?? {
+          apiKey: getOpenAiApiKey(),
+          baseUrl: getOpenAiBaseUrl(),
+          model: getOpenAiModel(),
+          providerId: 'platform-env',
+          source: AiModelSource.PLATFORM,
+        }]
+    let lastError: unknown
+
+    for (const candidate of candidates) {
+      const controller = new AbortController()
+      if (options.runId) this.runtime.register(options.runId, controller)
+      const timeout = setTimeout(() => controller.abort(), options.timeoutMs)
+      const headers: Record<string, string> = options.body === undefined ? {} : { 'Content-Type': 'application/json' }
+      if (candidate.apiKey) headers.Authorization = `Bearer ${candidate.apiKey}`
+      try {
+        const bodyPayload = isRecord(options.body) && typeof options.body.model === 'string'
+          ? { ...options.body, model: candidate.model }
+          : options.body
+        const response = await fetch(new URL(path, candidate.baseUrl), {
+          body: bodyPayload === undefined ? undefined : JSON.stringify(bodyPayload),
+          headers,
+          method: options.method,
+          redirect: 'manual',
+          signal: controller.signal,
+        })
+        const body = await readResponseBody(response)
+        if (!response.ok) {
+          throw new ServiceUnavailableException(`模型服务返回 HTTP ${response.status}${formatUpstreamErrorDetail(body)}`)
+        }
+        await this.models.recordPlatformRouteResult(candidate.routeId, true)
+        return { body, model: candidate, status: response.status }
+      } catch (error) {
+        lastError = error
+        if (options.runId && this.runtime.isCancelled(options.runId)) break
+        await this.models.recordPlatformRouteResult(candidate.routeId, false)
+        if (candidate.source === AiModelSource.USER_BYOK) break
+      } finally {
+        if (options.runId) this.runtime.unregister(options.runId, controller)
+        clearTimeout(timeout)
+      }
     }
 
-    try {
-      const response = await fetch(new URL(path, getOpenAiBaseUrl()), {
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        headers,
-        method: options.method,
-        signal: controller.signal,
-      })
-      const body = await readResponseBody(response)
-
-      if (!response.ok) {
-        throw new ServiceUnavailableException(
-          `模型服务返回 HTTP ${response.status}${formatUpstreamErrorDetail(body)}`,
-        )
-      }
-
-      return {
-        body,
-        status: response.status,
-      }
-    } catch (error) {
-      const message = error instanceof Error && error.name === 'AbortError'
-        ? `模型服务在 ${formatDuration(options.timeoutMs)} 内没有返回结果，已终止本次请求。`
-        : error instanceof Error
-          ? error.message
-          : 'OpenAI-compatible Agent 暂不可用'
-      throw new ServiceUnavailableException(message)
-    } finally {
-      clearTimeout(timeout)
-    }
+    const message = lastError instanceof Error && lastError.name === 'AbortError'
+      ? `模型服务在 ${formatDuration(options.timeoutMs)} 内没有返回结果，已终止本次请求。`
+      : lastError instanceof Error ? lastError.message : 'OpenAI-compatible Agent 暂不可用'
+    throw new ServiceUnavailableException(message)
   }
+}
+
+function getInteractiveModelPurpose(mode: NormalizedAiChatInput['mode']) {
+  if (mode === 'admin') return AiModelPurpose.ADMIN_INTERACTIVE
+  if (mode === 'auditor') return AiModelPurpose.AUDITOR_INTERACTIVE
+  return AiModelPurpose.USER_INTERACTIVE
 }
 
 // ══════════════════════════════════════════════════════════════

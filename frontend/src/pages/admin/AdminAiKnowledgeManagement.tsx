@@ -4,6 +4,7 @@ import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { AdminSkillReviewPanel } from '../../components/ai/AdminSkillReviewPanel'
 import {
   createAiSkillCandidate,
   dismissAiKnowledgeMaintenanceTask,
@@ -246,6 +247,7 @@ export function AdminAiKnowledgeManagement() {
         <StatCard icon={Sparkles} label="24h 命中" value={stats?.totals.recentHits ?? 0} />
         <StatCard icon={PackageCheck} label="已安装 Skill" value={stats?.totals.installedSkills ?? 0} />
       </div>
+      <div className="mt-6"><AdminSkillReviewPanel /></div>
 
       <div className="ai-chat-input-scroll mt-6 flex gap-2 overflow-x-auto border-b border-black/10 pb-3 dark:border-white/10" role="tablist" aria-label="AI 知识库工作台">
         <WorkspaceTab active={activeTab === 'REVIEW'} icon={History} label="待审核会话" onClick={() => setActiveTab('REVIEW')} />

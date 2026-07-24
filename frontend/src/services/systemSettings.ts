@@ -41,6 +41,53 @@ export type AiQuotaSettings = {
   resetAt: string
 }
 
+export type AiUserModelPolicy = 'USER_PLATFORM_ONLY' | 'USER_BYOK_ONLY' | 'USER_HYBRID'
+
+export function getAiModelPolicy() {
+  return request<{ userMode: AiUserModelPolicy; updatedAt: string | null }>('/system-settings/ai-model-policy', { method: 'GET' })
+}
+
+export function updateAiModelPolicy(userMode: AiUserModelPolicy) {
+  return request<{ userMode: AiUserModelPolicy; updatedAt: string }>('/system-settings/ai-model-policy', {
+    body: { userMode },
+    method: 'PUT',
+  })
+}
+
+export type PlatformAiRoute = {
+  automaticFailover: boolean
+  baseUrl: string
+  circuitOpenUntil: string | null
+  credentialLastFour: string
+  credentialName: string
+  id: string
+  model: string
+  priority: number
+  providerId: string
+  purpose: 'USER_INTERACTIVE' | 'ADMIN_INTERACTIVE' | 'AUDITOR_INTERACTIVE' | 'BACKGROUND_TASK' | 'STRUCTURED_ANALYSIS' | 'SKILL_GENERATION'
+}
+
+export function getPlatformAiConfig() {
+  return request<{ routes: PlatformAiRoute[] }>('/system-settings/platform-ai', { method: 'GET' })
+}
+
+export function savePlatformAiRoute(data: {
+  apiKey: string
+  automaticFailover: boolean
+  baseUrl?: string
+  model: string
+  name: string
+  priority: number
+  providerId: string
+  purpose: PlatformAiRoute['purpose']
+}) {
+  return request('/system-settings/platform-ai', { body: data, method: 'PUT' })
+}
+
+export function deletePlatformAiRoute(id: string) {
+  return request<{ success: true }>(`/system-settings/platform-ai/${id}`, { method: 'DELETE' })
+}
+
 export type RegistrationMode = {
   open: boolean
 }

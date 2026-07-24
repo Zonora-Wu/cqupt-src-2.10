@@ -5,12 +5,13 @@ import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
-import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
+import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, getAiSkills, heartbeatAiProblemSession, leaveAiProblemSession, listAiProblemSessions, listAiUserModels, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiSkillLibraryItem, type AiTurnFeedbackRating, type AiUserModel, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { AlertMessage } from '../../components/ui/AlertMessage'
+import { AiSkillDialog } from '../../components/ai/AiSkillDialog'
 
 type ChatMessage = {
   assistantTurnId?: string
@@ -69,6 +70,11 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [userName, setUserName] = useState('我')
   const [aiAvatarUrl, setAiAvatarUrl] = useState<string | null>(null)
   const [aiQuota, setAiQuota] = useState<AiQuota | null>(null)
+  const [availableModels, setAvailableModels] = useState<AiUserModel[]>([])
+  const [selectedModelId, setSelectedModelId] = useState('')
+  const [availableSkills, setAvailableSkills] = useState<AiSkillLibraryItem[]>([])
+  const [selectedSkillId, setSelectedSkillId] = useState('')
+  const [skillDialogOpen, setSkillDialogOpen] = useState(false)
   const [dismissedQuotaWarning, setDismissedQuotaWarning] = useState<'20' | '5' | null>(null)
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null)
   const dockedInputRef = useRef<HTMLDivElement | null>(null)
@@ -93,6 +99,20 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [historyPanelWidth, setHistoryPanelWidth] = useState(loadHistoryPanelWidth)
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 0 : window.innerWidth)
   const [readOnlyHistory, setReadOnlyHistory] = useState(false)
+
+  useEffect(() => {
+    void listAiUserModels().then((models) => {
+      const enabled = models.filter((model) => model.enabled && model.credential.status === 'ACTIVE')
+      setAvailableModels(enabled)
+      setSelectedModelId(enabled.find((model) => model.isDefault)?.id ?? '')
+    }).catch(() => undefined)
+  }, [])
+
+  const reloadSkills = () => getAiSkills().then((result) => setAvailableSkills(result.skills.filter((skill) => ['ACTIVE_PRIVATE', 'PUBLISHED'].includes(skill.lifecycleStatus ?? 'PUBLISHED'))))
+  useEffect(() => {
+    const timer = window.setTimeout(() => void reloadSkills().catch(() => undefined), 0)
+    return () => window.clearTimeout(timer)
+  }, [])
   const [resolutionPrompt, setResolutionPrompt] = useState<AiProblemSession | null>(null)
   const [resolutionAction, setResolutionAction] = useState<'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null>(null)
   const [resolutionError, setResolutionError] = useState('')
@@ -509,6 +529,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         'student',
         undefined,
         activeSessionId,
+        selectedModelId || undefined,
+        selectedSkillId ? [selectedSkillId] : undefined,
       )
       if (result.sessionId) {
         problemSessionIdRef.current = result.sessionId
@@ -555,7 +577,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setSending(true)
     try {
       const activeSessionId = await ensureProblemSession(prompt)
-      const result = await sendAiChat(prompt, 'student', undefined, activeSessionId)
+      const result = await sendAiChat(prompt, 'student', undefined, activeSessionId, selectedModelId || undefined, selectedSkillId ? [selectedSkillId] : undefined)
       if (result.sessionId) problemSessionIdRef.current = result.sessionId
       if (result.quota) setAiQuota(result.quota)
       setMessages((current) =>
@@ -625,6 +647,32 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         layoutId="ai-assistant-input"
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
+        <div className="flex flex-wrap items-center justify-end gap-3 px-1 pb-1">
+          <label className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="sr-only">对话模型</span>
+            <select
+              className="max-w-48 bg-transparent py-1 text-right outline-none"
+              onChange={(event) => {
+                const nextModelId = event.target.value
+                if (nextModelId === selectedModelId) return
+                setSelectedModelId(nextModelId)
+                void startFreshProblemSession()
+              }}
+              value={selectedModelId}
+            >
+              <option value="">平台模型</option>
+              {availableModels.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="sr-only">对话 Skill</span>
+            <select className="max-w-48 bg-transparent py-1 text-right outline-none" onChange={(event) => setSelectedSkillId(event.target.value)} value={selectedSkillId}>
+              <option value="">自动选择 Skill</option>
+              {availableSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.title}</option>)}
+            </select>
+          </label>
+          <button className="text-xs font-medium text-brand-700 dark:text-brand-300" onClick={() => setSkillDialogOpen(true)} type="button">管理 Skill</button>
+        </div>
         <AnimatePresence initial={false}>
           {pendingAttachment && (
             <PendingAttachmentPreview
@@ -671,7 +719,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           <button
             aria-label="发送"
             className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
-            disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || aiQuota?.enabled === false || aiQuota?.remaining === 0}
+            disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || (!selectedModelId && (aiQuota?.enabled === false || aiQuota?.remaining === 0))}
             onClick={() => void sendMessage()}
             type="button"
           >
@@ -684,6 +732,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
   return (
     <>
+    {skillDialogOpen && <AiSkillDialog onClose={() => setSkillDialogOpen(false)} onChanged={() => void reloadSkills()} />}
     <AiHistoryPanel
       activeId={problemSession?.id ?? null}
       autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}

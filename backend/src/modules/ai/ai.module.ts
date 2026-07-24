@@ -14,9 +14,15 @@ import { AiReportDraftService } from './ai.report-draft.service'
 import { AiService } from './ai.service'
 import { AiSkillRouterService } from './ai.skill-router.service'
 import { AiToolsService } from './ai.tools.service'
+import { AiCredentialCrypto } from './ai-credential.crypto'
+import { AiModelController } from './ai-model.controller'
+import { AiModelService } from './ai-model.service'
+import { AiDeclarativeSkillController } from './ai-declarative-skill.controller'
+import { AiDeclarativeSkillService } from './ai-declarative-skill.service'
+import { AiRuntimeControlService } from './ai-runtime-control.service'
 
 @Module({
-  controllers: [AiController],
+  controllers: [AiController, AiModelController, AiDeclarativeSkillController],
   imports: [
     AiKnowledgeModule,
     AnnouncementsModule,
@@ -28,6 +34,6 @@ import { AiToolsService } from './ai.tools.service'
     RbacModule,
     VulnerabilitiesModule,
   ],
-  providers: [AiService, AiToolsService, AiSkillRouterService, AiDataRequestService, AiReportDraftService],
+  providers: [AiService, AiToolsService, AiSkillRouterService, AiDataRequestService, AiReportDraftService, AiCredentialCrypto, AiModelService, AiDeclarativeSkillService, AiRuntimeControlService],
 })
 export class AiModule {}

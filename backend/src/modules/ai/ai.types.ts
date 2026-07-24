@@ -40,15 +40,19 @@ export type AiToolResult = {
 export type AiChatBody = {
   context?: unknown
   message?: unknown
+  modelProfileId?: unknown
   mode?: unknown
   sessionId?: unknown
+  skillIds?: unknown
 }
 
 export type NormalizedAiChatInput = {
   context?: Record<string, unknown>
   message: string
+  modelProfileId?: string
   mode: 'student' | 'auditor' | 'admin'
   sessionId?: string
+  skillIds?: string[]
 }
 
 // ── OpenAI Chat 协议扩展 ──

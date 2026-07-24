@@ -1,0 +1,21 @@
+{
+  "upstream": "https://github.com/NousResearch/hermes-agent",
+  "commit": "7b65073dc919c9a930315b78f57520c0d772eed3",
+  "license": "MIT",
+  "reviewedSources": [
+    {
+      "upstreamFile": "agent/conversation_loop.py",
+      "localFiles": [
+        "../../ai.service.ts",
+        "../../ai-runtime-control.service.ts"
+      ],
+      "concepts": [
+        "bounded model and tool iteration",
+        "per-turn counters and exit reasons",
+        "interrupt-aware request execution",
+        "step-level runtime observability"
+      ]
+    }
+  ],
+  "copyStatus": "conceptual TypeScript adaptation; no Python source is embedded"
+}

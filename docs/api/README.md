@@ -465,6 +465,48 @@ POST /api/access/security-exam/submit
 
 AI 接口只允许前端调用后端 `/api/ai/*`，后端再代理 Hermes Agent。前端不能直连 `http://localhost:5000`。
 
+### 模型策略与 BYOK
+
+```text
+GET    /api/ai/providers
+GET    /api/ai/user-credentials
+POST   /api/ai/user-credentials
+PATCH  /api/ai/user-credentials/:id
+DELETE /api/ai/user-credentials/:id
+POST   /api/ai/user-credentials/:id/test
+GET    /api/ai/user-models
+POST   /api/ai/user-models
+POST   /api/ai/user-models/:id/default
+DELETE /api/ai/user-models/:id
+GET    /api/ai/runs/:id
+GET    /api/ai/runs/:id/events
+POST   /api/ai/runs/:id/cancel
+```
+
+用户 Key 保存后不提供明文读取接口。用户不能自定义 Provider Base URL。
+
+### 声明式 Skill
+
+```text
+GET    /api/ai/skills
+POST   /api/ai/skills
+POST   /api/ai/skills/upload
+PATCH  /api/ai/skills/:id
+DELETE /api/ai/skills/:id
+POST   /api/ai/skills/:id/submit
+POST   /api/ai/skills/:id/activate
+POST   /api/ai/skills/:id/deactivate
+POST   /api/ai/skills/:id/pin/:sessionId
+DELETE /api/ai/skills/:id/pin/:sessionId
+
+GET    /api/admin/ai-skill-reviews
+POST   /api/admin/ai-skill-reviews/:id/approve
+POST   /api/admin/ai-skill-reviews/:id/reject
+POST   /api/admin/ai-skill-reviews/:id/request-changes
+```
+
+Skill 公共发布只允许管理员人工审核，AI 不提供审核结论。
+
 当前 Agent 部署约定：
 
 ```text

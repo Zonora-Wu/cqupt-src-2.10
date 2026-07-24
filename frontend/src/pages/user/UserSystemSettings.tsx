@@ -15,6 +15,7 @@ import {
   type UserDevicePreferences,
 } from '../../services/userPreferences'
 import { transitionColorTheme } from '../../utils/themeTransition'
+import { AiModelSettingsPanel } from '../../components/ai/AiModelSettingsPanel'
 
 type UserSystemSettingsProps = {
   effectiveTheme: 'dark' | 'light'
@@ -23,10 +24,11 @@ type UserSystemSettingsProps = {
   userKey: string
 }
 
-type SettingsCategory = 'appearance' | 'language' | 'notifications' | 'about'
+type SettingsCategory = 'appearance' | 'ai' | 'language' | 'notifications' | 'about'
 
 const categories: { description: string; id: SettingsCategory; label: string }[] = [
   { id: 'appearance', label: '外观', description: '主题与显示模式' },
+  { id: 'ai', label: 'AI 模型', description: '自有模型与密钥' },
   { id: 'language', label: '语言', description: '界面显示语言' },
   { id: 'notifications', label: '通知', description: '消息提醒偏好' },
   { id: 'about', label: '关于', description: '版本与平台信息' },
@@ -194,6 +196,15 @@ export function UserSystemSettings({
                     当前业务页面主要为中文文案。这里先保存本地语言偏好，后续接入完整国际化后会自动读取该设置。
                   </p>
                 </div>
+              </SettingsCard>
+            )}
+
+            {activeCategory === 'ai' && (
+              <SettingsCard
+                description="配置你自己的 OpenAI-compatible 模型。密钥加密保存，保存后不可查看明文。"
+                title="自有 AI 模型"
+              >
+                <AiModelSettingsPanel onNotice={setMessage} />
               </SettingsCard>
             )}
 
