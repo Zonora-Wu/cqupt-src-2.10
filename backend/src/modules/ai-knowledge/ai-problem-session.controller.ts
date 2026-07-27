@@ -15,6 +15,7 @@ export class AiProblemSessionController {
   create(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.sessions.create(
       {
+        forceNew: body.forceNew === true,
         initialQuestion: typeof body.initialQuestion === 'string' ? body.initialQuestion : undefined,
         mode: normalizeMode(body.mode),
       },

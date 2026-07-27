@@ -80,7 +80,7 @@ export class AiModelService {
     const providerId = requiredText(input.providerId, '供应商', 50)
     const model = requiredText(input.model, '模型名称', 120)
     const name = requiredText(input.name, '凭据名称', 60)
-    const apiKey = requiredText(input.apiKey, 'API Key', 500)
+    const apiKey = validateProviderApiKey(requiredText(input.apiKey, 'API Key', 500), providerId)
     const preset = findProviderPreset(providerId)
     const requestedBaseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : ''
     const baseUrl = validateAdminBaseUrl(requestedBaseUrl || preset?.baseUrl || '')
@@ -176,7 +176,7 @@ export class AiModelService {
   async createCredential(input: CreateUserCredentialInput, user: AuthenticatedRequestUser) {
     const name = requiredText(input.name, '凭据名称', 40)
     const providerId = requiredText(input.providerId, '供应商', 50)
-    const apiKey = requiredText(input.apiKey, 'API Key', 500)
+    const apiKey = validateProviderApiKey(requiredText(input.apiKey, 'API Key', 500), providerId)
     const requestedBaseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : ''
     if (input.consentAccepted !== true) throw new BadRequestException('必须确认第三方数据授权')
     const preset = findProviderPreset(providerId)
@@ -389,6 +389,18 @@ function requiredText(value: unknown, label: string, max: number) {
   if (typeof value !== 'string' || !value.trim()) throw new BadRequestException(`请填写${label}`)
   if (value.trim().length > max) throw new BadRequestException(`${label}不能超过 ${max} 个字符`)
   return value.trim()
+}
+
+export function validateProviderApiKey(value: string, providerId: string) {
+  const normalized = value.trim()
+  const invalidLiteral = /^(?:internal server error|unauthorized|undefined|null|\[object object\])$/i
+  if (invalidLiteral.test(normalized) || /\s/.test(normalized)) {
+    throw new BadRequestException('API Key 格式不正确，请重新粘贴供应商控制台生成的完整 Key')
+  }
+  if (providerId === 'deepseek' && !normalized.startsWith('sk-')) {
+    throw new BadRequestException('DeepSeek API Key 应以 sk- 开头')
+  }
+  return normalized
 }
 
 function platformModel(): AiResolvedModel {

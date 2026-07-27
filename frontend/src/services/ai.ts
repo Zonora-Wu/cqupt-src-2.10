@@ -315,10 +315,10 @@ export function deleteAiUserModel(id: string) {
   return apiRequest<{ success: true }>(`/ai/user-models/${id}`, { auth: true, method: 'DELETE' })
 }
 
-export function createAiProblemSession(mode: AiChatMode = 'student', initialQuestion?: string) {
+export function createAiProblemSession(mode: AiChatMode = 'student', initialQuestion?: string, forceNew = false) {
   return apiRequest<AiProblemSession>('/ai/problem-sessions', {
     auth: true,
-    body: { initialQuestion, mode },
+    body: { forceNew, initialQuestion, mode },
     method: 'POST',
   })
 }

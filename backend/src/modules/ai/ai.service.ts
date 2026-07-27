@@ -1023,22 +1023,21 @@ export class AiService {
   }
 
   private async assertAndBindSessionModel(sessionId: string | undefined, userId: string, model: AiResolvedModel) {
-    if (!sessionId) return
+    if (!sessionId) return null
     const session = await this.prisma.aiProblemSession.findFirst({
       where: { id: sessionId, userId },
-      select: { id: true, modelBindingKey: true },
+      select: { id: true, modelBindingKey: true, modelName: true },
     })
     if (!session) throw new NotFoundException('问题会话不存在')
     const bindingKey = `${model.source}:${model.providerId}:${model.credentialId ?? 'platform'}:${model.model}`
-    if (session.modelBindingKey && session.modelBindingKey !== bindingKey) {
-      throw new BadRequestException('当前会话已绑定其他模型，请新建对话后切换模型')
+    if (session.modelBindingKey === bindingKey) {
+      return { changed: false, previousModel: session.modelName }
     }
-    if (!session.modelBindingKey) {
-      await this.prisma.aiProblemSession.update({
-        where: { id: session.id },
-        data: { modelBindingKey: bindingKey, modelName: model.model, modelSource: model.source },
-      })
-    }
+    await this.prisma.aiProblemSession.update({
+      where: { id: session.id },
+      data: { modelBindingKey: bindingKey, modelName: model.model, modelSource: model.source },
+    })
+    return { changed: Boolean(session.modelBindingKey), previousModel: session.modelName }
   }
 
   private assertCanUseMode(mode: NormalizedAiChatInput['mode'], user: AuthenticatedRequestUser) {

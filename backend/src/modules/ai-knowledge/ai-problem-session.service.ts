@@ -21,6 +21,7 @@ import { AiSkillLifecycleService } from './ai-skill-lifecycle.service'
 type AiProblemSessionMode = 'student' | 'auditor' | 'admin'
 
 type CreateProblemSessionInput = {
+  forceNew?: boolean
   initialQuestion?: string
   mode?: AiProblemSessionMode
 }
@@ -137,15 +138,22 @@ export class AiProblemSessionService {
   async create(input: CreateProblemSessionInput, user: AuthenticatedRequestUser) {
     const mode = normalizeMode(input.mode)
     const initialQuestion = redactSensitiveText(input.initialQuestion?.trim() || '新问题会话')
-    const existing = await this.prisma.aiProblemSession.findFirst({
-      orderBy: { updatedAt: 'desc' },
-      where: {
-        mode,
-        status: AiProblemSessionStatus.ACTIVE,
-        userId: user.id,
-      },
-    })
-    if (existing) return serializeProblemSession(existing)
+    if (!input.forceNew) {
+      const existing = await this.prisma.aiProblemSession.findFirst({
+        orderBy: { updatedAt: 'desc' },
+        where: {
+          mode,
+          status: AiProblemSessionStatus.ACTIVE,
+          userId: user.id,
+        },
+      })
+      if (existing) return serializeProblemSession(existing)
+    } else {
+      await this.prisma.aiProblemSession.updateMany({
+        data: { status: AiProblemSessionStatus.AWAITING_RESOLUTION },
+        where: { mode, status: AiProblemSessionStatus.ACTIVE, userId: user.id },
+      })
+    }
 
     const session = await this.prisma.aiProblemSession.create({
       data: {

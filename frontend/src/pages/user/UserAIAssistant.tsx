@@ -96,6 +96,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const consumedInitialPromptRef = useRef<string | null>(null)
   const consumedAdviceReportIdRef = useRef<string | null>(null)
   const problemSessionIdRef = useRef<string | null>(null)
+  const pendingNewConversationRef = useRef(false)
   const hasProblemContentRef = useRef(messages.length > 0)
   const [bottomInset, setBottomInset] = useState(156)
   const [showScrollDown, setShowScrollDown] = useState(false)
@@ -362,19 +363,10 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     return session.id
   }
 
-  const startFreshProblemSession = async () => {
-    const currentId = problemSessionIdRef.current
-    if (currentId && hasProblemContentRef.current) {
-      const prompt = await requestAiProblemSessionResolutionPrompt(currentId, 'NEW_CONVERSATION').catch(() => null)
-      if (prompt) {
-        setResolutionError('')
-        setResolutionPrompt(prompt)
-        return null
-      }
-      await leaveAiProblemSession(currentId).catch(() => undefined)
-    }
-    const session = await createAiProblemSession('student')
+  const createFreshProblemSession = async () => {
+    const session = await createAiProblemSession('student', undefined, true)
     problemSessionIdRef.current = session.id
+    pendingNewConversationRef.current = false
     setProblemSession(session)
     setReadOnlyHistory(false)
     setResolutionPrompt(null)
@@ -382,6 +374,30 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     localStorage.removeItem(storageKeyRef.current)
     await refreshHistorySessions()
     return session.id
+  }
+
+  const startFreshProblemSession = async () => {
+    const currentId = problemSessionIdRef.current
+    try {
+      if (currentId && hasProblemContentRef.current) {
+        const prompt = await requestAiProblemSessionResolutionPrompt(currentId, 'NEW_CONVERSATION').catch(() => null)
+        if (prompt) {
+          pendingNewConversationRef.current = true
+          setResolutionError('')
+          setResolutionPrompt(prompt)
+          return null
+        }
+        await leaveAiProblemSession(currentId).catch(() => undefined)
+      }
+      return await createFreshProblemSession()
+    } catch (error) {
+      pendingNewConversationRef.current = false
+      setReportNotice({
+        message: error instanceof Error ? error.message : '新对话创建失败，请稍后重试。',
+        title: '未能新建对话',
+      })
+      return null
+    }
   }
 
   const refreshHistorySessions = async () => {
@@ -418,6 +434,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setResolutionError('')
     try {
       const session = await resumeAiProblemSessionResolutionPrompt(id)
+      pendingNewConversationRef.current = false
       problemSessionIdRef.current = session.id
       setProblemSession(session)
       setResolutionPrompt(null)
@@ -435,9 +452,13 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setResolutionError('')
     try {
       const session = await snoozeAiProblemSessionResolutionPrompt(id)
-      problemSessionIdRef.current = session.id
-      setProblemSession(session)
-      setResolutionPrompt(null)
+      if (pendingNewConversationRef.current) {
+        await createFreshProblemSession()
+      } else {
+        problemSessionIdRef.current = session.id
+        setProblemSession(session)
+        setResolutionPrompt(null)
+      }
     } catch {
       setResolutionError('暂时无法设置提醒，请稍后重试。')
     } finally {
@@ -452,6 +473,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setResolutionError('')
     try {
       await resolveAiProblemSession(id)
+      pendingNewConversationRef.current = false
       problemSessionIdRef.current = null
       setReadOnlyHistory(false)
       setResolutionPrompt(null)
