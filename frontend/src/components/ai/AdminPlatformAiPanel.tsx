@@ -31,14 +31,14 @@ export function AdminPlatformAiPanel() {
 
   return (
     <div className="grid min-h-[520px] lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="border-b border-black/10 bg-slate-50/70 p-5 dark:border-white/10 dark:bg-white/[0.03] lg:border-b-0 lg:border-r">
+      <aside className="border-b border-black/10 bg-[var(--app-panel-muted-bg)] p-5 dark:border-white/10 lg:border-b-0 lg:border-r">
         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">调用顺序</p>
         <div className="mt-3 space-y-2">
           {[0, 1, 2].map((priority) => {
             const route = routes.find((item) => item.priority === priority)
             return (
               <button
-                className={`w-full rounded-lg border px-3 py-3 text-left transition ${form.priority === priority ? 'border-brand-600 bg-white shadow-sm dark:bg-white/[0.08]' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+                className={`w-full rounded-lg border px-3 py-3 text-left transition ${form.priority === priority ? 'border-brand-600 bg-[var(--app-surface)] shadow-sm' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
                 key={priority}
                 onClick={() => setForm({ ...form, priority })}
                 type="button"

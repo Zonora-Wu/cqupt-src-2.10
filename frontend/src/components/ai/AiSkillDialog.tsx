@@ -76,7 +76,7 @@ export function AiSkillDialog({
   return createPortal(
     <>
       <div className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/45 p-0 backdrop-blur-sm sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-        <section aria-modal="true" className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-950 sm:h-auto sm:max-h-[88vh] sm:rounded-lg sm:border sm:border-black/10 dark:sm:border-white/10" role="dialog">
+        <section aria-modal="true" className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-[var(--app-surface)] text-slate-950 shadow-2xl dark:text-white sm:h-auto sm:max-h-[88vh] sm:rounded-lg sm:border sm:border-black/10 dark:sm:border-white/10" role="dialog">
           <header className="flex items-start justify-between gap-4 border-b border-black/10 px-5 py-4 dark:border-white/10">
             <div><h2 className="text-lg font-semibold">Skill 管理</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">选择本次对话使用的 Skill，并将常用 Skill 固定到输入框上方。</p></div>
             <div className="flex items-center gap-2">
@@ -115,7 +115,7 @@ export function AiSkillDialog({
                 </div>
               ))}
             </div>
-            {!skills.length && <p className="py-10 text-center text-sm text-slate-500">暂无可用 Skill</p>}
+            {!skills.length && <p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">暂无可用 Skill</p>}
             {message && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{message}</p>}
           </div>
         </section>
@@ -133,7 +133,7 @@ function AddSkillDialog({ busy, onClose, onRun }: { busy: boolean; onClose: () =
 
   return (
     <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section aria-modal="true" className="w-full max-w-2xl rounded-lg bg-white shadow-2xl dark:bg-slate-950 dark:ring-1 dark:ring-white/10" role="dialog">
+      <section aria-modal="true" className="w-full max-w-2xl rounded-lg bg-[var(--app-surface)] text-slate-950 shadow-2xl ring-1 ring-black/10 dark:text-white dark:ring-white/10" role="dialog">
         <header className="flex items-center justify-between border-b border-black/10 px-5 py-4 dark:border-white/10">
           <h3 className="text-base font-semibold">添加 Skill</h3>
           <button aria-label="关闭" className={iconButton} onClick={onClose} type="button"><X className="h-5 w-5" /></button>
@@ -152,9 +152,9 @@ function AddSkillDialog({ busy, onClose, onRun }: { busy: boolean; onClose: () =
   )
 }
 
-const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-brand-600 dark:border-white/15'
+const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-[var(--app-surface)] px-3 py-2.5 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/25 dark:border-white/15 dark:text-white dark:placeholder:text-slate-500'
 const primaryButton = 'inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50'
-const secondaryButton = 'rounded-lg border border-black/10 px-3 py-2 text-sm font-medium dark:border-white/15'
+const secondaryButton = 'rounded-lg border border-black/10 px-3 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10'
 const smallButton = 'text-xs font-medium text-brand-700 dark:text-brand-300'
-const iconButton = 'grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-black/5 dark:hover:bg-white/10'
+const iconButton = 'grid h-9 w-9 place-items-center rounded-md text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white'
 const skillTileClass = (active: boolean) => `flex min-h-16 flex-wrap items-center gap-2 rounded-lg border p-3 text-left transition ${active ? 'border-brand-600 bg-brand-600/5 text-brand-800 dark:bg-brand-400/10 dark:text-brand-200' : 'border-black/10 hover:border-brand-600/40 dark:border-white/10'}`
