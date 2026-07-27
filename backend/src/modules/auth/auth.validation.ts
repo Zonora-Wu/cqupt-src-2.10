@@ -8,6 +8,12 @@ export type NormalizedRegisterInput = {
   unifiedCode: string
 }
 
+export type NormalizedResetPasswordInput = {
+  code: string
+  email: string
+  newPassword: string
+}
+
 export function normalizeRegisterBody(body: Record<string, unknown>): NormalizedRegisterInput {
   const password = requireText(body.password, '密码', 8, 128)
 
@@ -18,6 +24,21 @@ export function normalizeRegisterBody(body: Record<string, unknown>): Normalized
     password: validatePassword(password),
     unifiedCode: normalizeUnifiedCode(body.unifiedCode),
   }
+}
+
+export function normalizeResetPasswordBody(body: Record<string, unknown>): NormalizedResetPasswordInput {
+  return {
+    code: normalizeEmailCode(body.code),
+    email: normalizeEmail(body.email),
+    newPassword: validatePassword(requirePassword(body.newPassword, '新密码')),
+  }
+}
+
+function requirePassword(value: unknown, label: string) {
+  if (typeof value !== 'string') throw new BadRequestException(`${label}格式不正确`)
+  if (value.length < 8) throw new BadRequestException(`${label}至少需要 8 个字符`)
+  if (value.length > 128) throw new BadRequestException(`${label}不能超过 128 个字符`)
+  return value
 }
 
 export function normalizeEmail(value: unknown) {

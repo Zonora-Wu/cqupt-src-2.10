@@ -14,6 +14,7 @@ import {
 } from '../../services/auth'
 import { createHumanVerificationPayload } from '../../services/humanVerification'
 import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
+import { ForgotPasswordModal } from './ForgotPasswordModal'
 
 type LoginModalProps = {
   onClose: () => void
@@ -39,6 +40,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
   const [humanResetKey, setHumanResetKey] = useState(0)
   const [emailCodeSentTo, setEmailCodeSentTo] = useState('')
   const [message, setMessage] = useState<NoticeState | null>(null)
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
   const [logos, setLogos] = useState(() => getPlatformLogos())
   const normalizedEmail = email.trim().toLowerCase()
   const handleEmailHumanPayloadChange = useCallback((payload: string) => {
@@ -153,6 +155,10 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (forgotPasswordOpen) {
+    return <ForgotPasswordModal onBack={() => setForgotPasswordOpen(false)} onClose={onClose} />
   }
 
   return (
@@ -297,7 +303,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
         )}
 
         <footer className="mt-5 flex items-center justify-between border-t border-black/5 pt-5 text-sm dark:border-white/5">
-          <button className="text-slate-500 transition hover:text-slate-950 dark:text-white/40 dark:hover:text-white" type="button">
+          <button className="text-slate-500 transition hover:text-slate-950 dark:text-white/40 dark:hover:text-white" onClick={() => setForgotPasswordOpen(true)} type="button">
             忘记密码?
           </button>
           <button

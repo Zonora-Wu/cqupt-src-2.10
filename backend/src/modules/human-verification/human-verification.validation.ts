@@ -6,6 +6,7 @@ const purposes = new Set<HumanVerificationPurpose>([
   'LOGIN_EMAIL_CODE',
   'REGISTER_EMAIL_CODE',
   'REGISTER_SUBMIT',
+  'RESET_PASSWORD',
   'CHANGE_PASSWORD',
   'CHANGE_EMAIL_CODE',
   'CHANGE_EMAIL_SUBMIT',

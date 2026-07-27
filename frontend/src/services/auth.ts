@@ -126,6 +126,33 @@ export async function sendRegisterEmailCode(email: string, humanVerification: Hu
   })
 }
 
+export async function sendPasswordResetCode(email: string, humanVerification: HumanVerificationPayload['humanVerification']) {
+  if (!isValidEmail(email)) {
+    throw new Error('请输入正确的邮箱地址')
+  }
+  if (!humanVerification.payload) {
+    throw new Error('请先完成安全校验')
+  }
+  return apiRequest<BackendEmailCodeResponse>('/auth/password-reset/email-code', {
+    body: { email: email.trim(), humanVerification },
+    method: 'POST',
+  })
+}
+
+export async function resetPassword(payload: { code: string; email: string; newPassword: string }) {
+  if (!isValidEmail(payload.email)) throw new Error('请输入正确的邮箱地址')
+  if (!/^\d{6}$/.test(payload.code)) throw new Error('请输入 6 位邮箱验证码')
+  if (payload.newPassword.length < 8) throw new Error('新密码至少需要 8 个字符')
+  return apiRequest<{ message: string }>('/auth/password-reset', {
+    body: {
+      code: payload.code,
+      email: payload.email.trim(),
+      newPassword: payload.newPassword,
+    },
+    method: 'POST',
+  })
+}
+
 export async function registerAccount(payload: RegisterPayload): Promise<RegisterResult> {
   const unifiedCode = normalizeUnifiedCode(payload.unifiedCode)
   if (!isValidUnifiedCode(unifiedCode)) {

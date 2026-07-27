@@ -577,6 +577,7 @@ model EmailVerificationCode {
   purpose    String
   expiresAt  DateTime
   consumedAt DateTime?
+  attemptCount Int      @default(0)
   ipAddress  String?
   userAgent  String?
   createdAt  DateTime  @default(now())
@@ -616,6 +617,15 @@ model CaptchaToken {
 
   @@index([challengeId])
   @@index([purpose, expiresAt])
+}
+
+model HumanVerificationNonce {
+  nonceHash  String   @id
+  purpose    String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model RefreshToken {

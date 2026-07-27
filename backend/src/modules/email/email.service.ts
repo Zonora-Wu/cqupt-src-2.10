@@ -312,6 +312,8 @@ function getPurposeText(purpose: SendVerificationCodeInput['purpose']) {
       return '登录'
     case 'REGISTER':
       return '注册'
+    case 'RESET_PASSWORD':
+      return '找回密码'
   }
 }
 

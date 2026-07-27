@@ -1,15 +1,18 @@
 import {
   ArrowRight,
+  ChevronDown,
   Menu,
   Moon,
   Search,
   Sun,
   X,
 } from 'lucide-react'
+import { MotionConfig, motion, useReducedMotion } from 'motion/react'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
+import { SafetyParticipationFlow } from '../../components/guest/SafetyParticipationFlow'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { getPublicPageFromPath, publicPagePaths, type PublicPage } from '../../routes/routeConfig'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
@@ -52,32 +55,6 @@ const capabilities = [
   },
 ]
 
-const processItems = [
-  {
-    title: '注册账号',
-    description: '使用统一认证码完成注册，建立个人身份、邮箱和平台账号关系。',
-  },
-  {
-    title: '安全答题',
-    description: '先了解授权边界、禁止行为和报告规范，确认具备基本参与条件。',
-  },
-  {
-    title: '签署责任书',
-    description: '明确测试范围、责任要求和行为约束，确保后续实践在合规范围内进行。',
-  },
-  {
-    title: '提交漏洞',
-    description: '按模板提交影响说明、复现步骤、证据材料和修复建议，便于审核复核。',
-  },
-  {
-    title: '审核反馈',
-    description: '审核人员评估风险等级、有效性和修复价值，必要时要求补充材料。',
-  },
-  {
-    title: '积分与证书',
-    description: '有效报告进入奖励流程，形成积分、证书和可验证的个人贡献记录。',
-  },
-]
 const navPageMap: Record<string, PublicPage> = {
   首页: 'home',
   平台规则: 'rules',
@@ -92,6 +69,8 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const [homeCertificateNo, setHomeCertificateNo] = useState('')
   const [certificateSearchNo, setCertificateSearchNo] = useState('')
   const [certificateQueryNonce, setCertificateQueryNonce] = useState(0)
+  const [homeScrolled, setHomeScrolled] = useState(() => typeof window !== 'undefined' && window.scrollY > 24)
+  const reduceMotion = useReducedMotion()
   const location = useLocation()
   const navigate = useNavigate()
   const activePage = getPublicPageFromPath(location.pathname)
@@ -99,6 +78,17 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   useEffect(() => {
     applyColorTheme(theme)
   }, [theme])
+
+  useEffect(() => {
+    if (activePage !== 'home') return
+    const updateScrollState = () => setHomeScrolled(window.scrollY > 24)
+    const animationFrame = window.requestAnimationFrame(updateScrollState)
+    window.addEventListener('scroll', updateScrollState, { passive: true })
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener('scroll', updateScrollState)
+    }
+  }, [activePage])
 
   const openPage = (page: PublicPage) => {
     if (page === 'certificates') {
@@ -120,7 +110,12 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   return (
     <AppBackground>
-      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
+      <MotionConfig reducedMotion="user">
+      <nav className={`fixed left-0 right-0 top-0 z-50 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${
+        activePage === 'home' && !homeScrolled
+          ? 'border-b border-transparent bg-transparent shadow-none backdrop-blur-none'
+          : 'border-b border-black/[0.08] bg-[var(--app-header-bg)] shadow-sm shadow-black/[0.025] backdrop-blur-xl dark:border-white/[0.06]'
+      }`}>
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 md:px-8">
           <button className="flex items-center" onClick={() => openPage('home')} type="button">
             <BrandLogo />
@@ -129,7 +124,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <div className="hidden items-center gap-8 md:flex">
             {navItems.map((item) => (
               <button
-                className={`text-sm font-medium transition hover:text-brand-700 dark:hover:text-brand-300 ${
+                className={`relative py-2 text-sm font-medium transition after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-center after:scale-x-0 after:bg-brand-600 after:transition-transform hover:text-brand-700 hover:after:scale-x-100 dark:after:bg-brand-300 dark:hover:text-brand-300 ${
                   activePage === navPageMap[item]
                     ? 'text-brand-700 dark:text-brand-300'
                     : 'text-slate-600 dark:text-slate-400'
@@ -157,14 +152,14 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
             </button>
             <button
-              className="hidden rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 hover:text-slate-950 sm:inline-flex dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+              className="guest-hover-surface hidden rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-950 sm:inline-flex dark:border-white/10 dark:text-slate-300 dark:hover:text-white"
               onClick={onLogin}
               type="button"
             >
               登录
             </button>
             <button
-              className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_18px_rgba(var(--app-primary-rgb),0.35)] transition hover:bg-brand-700 sm:inline-flex"
+              className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_18px_rgba(var(--app-primary-rgb),0.25)] transition duration-200 hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-[0_8px_24px_rgba(var(--app-primary-rgb),0.3)] sm:inline-flex"
               onClick={onRegister}
               type="button"
             >
@@ -238,19 +233,56 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         )}
       {activePage === 'home' && (
           <PageTransition key="home">
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 text-center md:px-8 md:pt-48">
-        <div>
-          <h1 className="mx-auto max-w-4xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
+      <section className="relative z-10 flex min-h-[100svh] items-center justify-center overflow-hidden px-5 pb-20 pt-24 text-center md:px-8">
+        <div className="absolute inset-0 -z-10">
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:hidden md:object-center"
+            fetchPriority="high"
+            src="/assets/backgrounds/guest-home-hero-light.png"
+          />
+          <img
+            alt=""
+            aria-hidden="true"
+            className="hidden h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:block md:object-center"
+            fetchPriority="high"
+            src="/assets/backgrounds/guest-home-hero-dark.png"
+          />
+        </div>
+
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-auto w-full max-w-6xl"
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <motion.h1
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-auto max-w-4xl text-4xl font-semibold leading-tight md:text-6xl"
+            initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+            transition={{ delay: 0.08, duration: 0.68, ease: [0.22, 1, 0.36, 1] }}
+          >
             CQUPT-SRC 校园漏洞响应与
             <br className="hidden md:block" />
             安全学习平台
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-600 md:text-lg dark:text-slate-400">
+          </motion.h1>
+          <motion.p
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-600 md:text-lg dark:text-slate-300"
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+            transition={{ delay: 0.18, duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+          >
             连接漏洞响应、学习实践、证书激励与校园安全共建。打造下一代高校信息安全防线。
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          </motion.p>
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+            transition={{ delay: 0.28, duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
+          >
             <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-8 py-3 font-medium text-white shadow-[0_0_22px_rgba(var(--app-primary-rgb),0.42)] transition hover:bg-brand-700 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-8 py-3 font-medium text-white shadow-[0_0_22px_rgba(var(--app-primary-rgb),0.3)] transition duration-200 hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-[0_10px_28px_rgba(var(--app-primary-rgb),0.34)] sm:w-auto"
               onClick={onLogin}
               type="button"
             >
@@ -258,50 +290,76 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               <ArrowRight className="h-4 w-4" />
             </button>
             <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-8 py-3 font-medium text-slate-900 transition hover:bg-white sm:w-auto dark:border-white/10  dark:text-white dark:hover:bg-white/10"
+              className="guest-hover-surface inline-flex w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-8 py-3 font-medium text-slate-900 sm:w-auto dark:border-white/10 dark:text-white"
               onClick={() => openCertificateSearch()}
               type="button"
             >
               查询证书
               <Search className="h-4 w-4" />
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
+        <button
+          aria-label="向下浏览"
+          className="absolute bottom-7 left-1/2 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full text-slate-500 opacity-55 transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-slate-300 motion-safe:animate-[guest-scroll-hint_2.4s_ease-in-out_infinite]"
+          onClick={() => document.getElementById('home-content-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          type="button"
+        >
+          <ChevronDown className="h-5 w-5" />
+        </button>
       </section>
 
-      <DeferredContent fallback={<IntroCopySkeleton />} rootMargin="640px 0px">
-        <Suspense fallback={<IntroCopySkeleton />}>
-          <IntroCopySection />
-        </Suspense>
-      </DeferredContent>
+      <div className="scroll-mt-16" id="home-content-start">
+        <DeferredContent fallback={<IntroCopySkeleton />} rootMargin="640px 0px">
+          <Suspense fallback={<IntroCopySkeleton />}>
+            <IntroCopySection />
+          </Suspense>
+        </DeferredContent>
+      </div>
 
-      <section className="relative z-10 mx-auto max-w-6xl px-5 py-20 md:px-8">
-        <h2 className="mb-12 text-center text-3xl font-semibold">核心能力</h2>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <motion.section
+        className="relative z-10 mx-auto max-w-[1280px] px-5 py-24 md:px-8"
+        initial={reduceMotion ? false : { opacity: 0, y: 28 }}
+        transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+        viewport={{ amount: 0.14, once: true }}
+        whileInView={{ opacity: 1, y: 0 }}
+      >
+        <h2 className="mb-14 text-center text-3xl font-semibold">核心能力</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2">
           {capabilities.map((item, index) => {
             return (
               <article
-                className={`group relative overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06] ${
-                  index === 0 || index === 3 ? 'md:col-span-2' : ''
+                className={`guest-hover-surface guest-palette-item border-b border-black/10 px-4 py-9 md:px-8 dark:border-white/10 ${
+                  index % 2 === 0 ? 'md:border-r' : ''
                 }`}
                 key={item.title}
               >
-                <h3 className="mb-4 text-xl font-semibold">{item.title}</h3>
-                <p className="max-w-2xl leading-7 text-slate-600 dark:text-slate-400">{item.description}</p>
+                <div className="guest-palette-label font-mono text-xs font-semibold">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <h3 className="mb-4 mt-4 text-xl font-semibold">{item.title}</h3>
+                <p className="leading-7 text-slate-600 dark:text-slate-400">{item.description}</p>
               </article>
             )
           })}
         </div>
-      </section>
+      </motion.section>
 
-      <section className="relative z-10 border-y border-black/[0.08] bg-[var(--app-panel-muted-bg)] px-5 py-20 md:px-8 dark:border-white/[0.06]" id="certificate">
+      <motion.section
+        className="relative z-10 border-y border-black/[0.08] px-5 py-24 md:px-8 dark:border-white/[0.06]"
+        id="certificate"
+        initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+        transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+        viewport={{ amount: 0.2, once: true }}
+        whileInView={{ opacity: 1, y: 0 }}
+      >
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="mb-4 text-3xl font-semibold">证书真伪验证</h2>
           <p className="mx-auto mb-8 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
             输入证书编号，即刻验证由 CQUPT-SRC 颁发的漏洞贡献荣誉证书有效性。
           </p>
-          <div className="mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-2 backdrop-blur-xl focus-within:ring-2 focus-within:ring-brand-600/50 dark:border-white/10">
+          <div className="guest-hover-surface mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-2 backdrop-blur-xl focus-within:-translate-y-0.5 focus-within:border-brand-600/40 focus-within:shadow-[0_12px_32px_rgba(var(--app-primary-rgb),0.1)] focus-within:ring-2 focus-within:ring-brand-600/30 dark:border-white/10">
             <Search className="ml-3 mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
             <input
               className="min-w-0 flex-1 border-none bg-transparent py-3 font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
@@ -324,50 +382,9 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </div>
           <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">点击查询后会进入证书查询页并自动核验。仅展示证书真实性与脱敏信息，不公开漏洞细节。</p>
         </div>
-      </section>
+      </motion.section>
 
-      <section className="relative z-10 mx-auto max-w-6xl px-5 py-20 md:px-8">
-        <div>
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">安全参与流程</h2>
-            <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
-              从账号准入到漏洞提交，再到审核反馈和成果沉淀，平台将安全实践拆解为清晰的连续步骤，降低参与门槛，也保证行为边界可控。
-            </p>
-          </div>
-
-          <div className="mt-12 hidden overflow-x-auto pb-2 md:block">
-            <div className="grid min-w-[1040px] grid-cols-6 gap-4">
-              {processItems.map((item, index) => (
-                <article
-                  className="relative flex min-h-[210px] flex-col rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06]"
-                  key={item.title}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-medium text-brand-700 dark:text-brand-300">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-                  </div>
-                  <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-2.5 md:hidden">
-            {processItems.map((item, index) => (
-              <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3.5 dark:border-white/10 " key={item.title}>
-                <div className="font-mono text-sm text-brand-700 dark:text-brand-300">
-                  {String(index + 1).padStart(2, '0')}
-                </div>
-                <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+      <SafetyParticipationFlow />
 
       <footer className="relative z-10 border-t border-black/[0.08] bg-[var(--app-menu-bg)] px-5 py-9 md:px-8 dark:border-white/[0.06]">
         <div className="mx-auto max-w-[1440px]">
@@ -402,6 +419,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </PageTransition>
         )}
       </>
+      </MotionConfig>
     </AppBackground>
   )
 }

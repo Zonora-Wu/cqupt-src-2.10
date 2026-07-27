@@ -499,26 +499,35 @@ html {
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 1350ms;
-  animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+  animation-duration: 850ms;
+  animation-timing-function: ease;
   animation-fill-mode: both;
   mix-blend-mode: normal;
 }
 
 ::view-transition-old(root) {
-  animation: none;
+  animation-name: theme-view-old;
 }
 
 ::view-transition-new(root) {
   animation-name: theme-view-new;
 }
 
-@keyframes theme-view-new {
+@keyframes theme-view-old {
   from {
-    clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+    opacity: 1;
   }
   to {
-    clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+    opacity: 0;
+  }
+}
+
+@keyframes theme-view-new {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -529,27 +538,135 @@ html {
   opacity: 1;
   pointer-events: none;
   transform: translateZ(0);
-  transition:
-    opacity 1350ms cubic-bezier(0.19, 1, 0.22, 1),
-    clip-path 1350ms cubic-bezier(0.19, 1, 0.22, 1);
-  clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
-  will-change: opacity, clip-path;
+  transition: opacity 850ms ease;
+  will-change: opacity;
 }
 
 .theme-transition-overlay-exit {
   opacity: 0;
-  clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
 }
 
 .theme-toggle-button > svg {
   transform-origin: center;
   transition:
-    transform 720ms cubic-bezier(0.19, 1, 0.22, 1),
-    opacity 420ms ease;
+    transform 240ms ease,
+    opacity 240ms ease;
 }
 
 .theme-toggle-button:active > svg {
-  transform: rotate(35deg) scale(0.82);
+  transform: scale(0.9);
+}
+
+.guest-hover-surface {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease,
+    transform 220ms ease;
+}
+
+.guest-palette-item:nth-child(1),
+.guest-process-item:nth-child(1) {
+  --guest-accent: var(--color-brand-300);
+}
+
+.guest-palette-item:nth-child(2),
+.guest-process-item:nth-child(2) {
+  --guest-accent: var(--color-brand-400);
+}
+
+.guest-palette-item:nth-child(3),
+.guest-process-item:nth-child(3) {
+  --guest-accent: var(--color-brand-500);
+}
+
+.guest-palette-item:nth-child(4),
+.guest-process-item:nth-child(4) {
+  --guest-accent: var(--color-brand-600);
+}
+
+.guest-process-item:nth-child(5) {
+  --guest-accent: var(--color-brand-700);
+}
+
+.guest-process-item:nth-child(6) {
+  --guest-accent: var(--color-brand-800);
+}
+
+.guest-process-item:nth-child(7) {
+  --guest-accent: var(--color-brand-900);
+}
+
+.guest-palette-item,
+.guest-process-item {
+  border-top: 2px solid color-mix(in srgb, var(--guest-accent) 68%, transparent);
+}
+
+.guest-palette-label {
+  color: var(--guest-accent);
+}
+
+.dark .guest-palette-label {
+  color: color-mix(in srgb, var(--guest-accent) 58%, var(--app-dark-text));
+}
+
+.guest-palette-rule {
+  background: color-mix(in srgb, var(--guest-accent) 48%, transparent);
+}
+
+.chat-avatar-idea {
+  border-color: color-mix(in srgb, var(--color-brand-400) 42%, transparent);
+  background: color-mix(in srgb, var(--color-brand-400) 14%, var(--app-surface));
+  color: var(--color-brand-700);
+}
+
+.chat-avatar-boundary {
+  border-color: color-mix(in srgb, var(--app-info) 42%, transparent);
+  background: color-mix(in srgb, var(--app-info-soft) 72%, var(--app-surface));
+  color: var(--app-info-text);
+}
+
+.chat-avatar-learning {
+  border-color: color-mix(in srgb, var(--app-warning) 42%, transparent);
+  background: color-mix(in srgb, var(--app-warning-soft) 72%, var(--app-surface));
+  color: var(--app-warning-text);
+}
+
+.chat-avatar-build {
+  border-color: color-mix(in srgb, var(--color-brand-700) 42%, transparent);
+  background: color-mix(in srgb, var(--color-brand-700) 12%, var(--app-surface));
+  color: var(--color-brand-700);
+}
+
+.dark .chat-avatar-idea,
+.dark .chat-avatar-build {
+  color: color-mix(in srgb, var(--color-brand-400) 65%, var(--app-dark-text));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .guest-hover-surface:hover {
+    border-color: rgba(var(--app-primary-rgb), 0.3);
+    background: rgba(var(--app-primary-rgb), 0.055);
+    box-shadow: 0 12px 30px rgba(var(--app-primary-rgb), 0.08);
+    transform: translateY(-2px);
+  }
+
+  .guest-palette-item:hover,
+  .guest-process-item:hover {
+    border-top-color: var(--guest-accent);
+    background: color-mix(in srgb, var(--guest-accent) 7%, transparent);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--guest-accent) 10%, transparent);
+  }
+
+  .dark .guest-hover-surface:hover {
+    background: rgba(var(--app-primary-rgb), 0.09);
+  }
+
+  .dark .guest-palette-item:hover,
+  .dark .guest-process-item:hover {
+    background: color-mix(in srgb, var(--guest-accent) 11%, transparent);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -559,7 +676,8 @@ html {
   }
 
   .theme-transition-overlay,
-  .theme-toggle-button > svg {
+  .theme-toggle-button > svg,
+  .guest-hover-surface {
     transition: none;
   }
 }
@@ -755,4 +873,14 @@ html.auth-modal-open body {
 
 .user-compact-mode .gap-5 {
   gap: 1rem;
+}
+
+@keyframes guest-scroll-hint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(7px);
+  }
 }

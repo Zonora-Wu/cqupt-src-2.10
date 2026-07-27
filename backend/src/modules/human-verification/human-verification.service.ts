@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { createChallenge, sha, verifySolution, type Challenge, type Solution } from 'altcha/lib'
 import { createHash } from 'node:crypto'
 import { ClientRequestMeta } from '../auth/auth.types'
+import { PrismaService } from '../prisma/prisma.service'
 import { HumanVerificationInput, HumanVerificationPurpose } from './human-verification.types'
 
 const CHALLENGE_TTL_SECONDS = 2 * 60
@@ -15,6 +16,7 @@ const DEFAULT_PURPOSE_COSTS: Record<HumanVerificationPurpose, number> = {
   LOGIN_PASSWORD: 10_000,
   REGISTER_EMAIL_CODE: 32_000,
   REGISTER_SUBMIT: 32_000,
+  RESET_PASSWORD: 32_000,
 }
 
 type AltchaPayload = {
@@ -25,7 +27,7 @@ type AltchaPayload = {
 
 @Injectable()
 export class HumanVerificationService {
-  private readonly consumedNonces = new Map<string, number>()
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async createChallenge(purpose: HumanVerificationPurpose, meta: ClientRequestMeta) {
     const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS
@@ -81,8 +83,6 @@ export class HumanVerificationService {
       throw new UnauthorizedException('安全校验环境变化，请重新验证')
     }
 
-    this.assertNonceNotConsumed(decoded.challenge.parameters.nonce)
-
     const result = await verifySolution({
       challenge: decoded.challenge,
       deriveKey: sha.deriveKey,
@@ -97,29 +97,34 @@ export class HumanVerificationService {
       throw new UnauthorizedException('安全校验未通过，请重新验证')
     }
 
-    this.markNonceConsumed(decoded.challenge.parameters.nonce)
-  }
-
-  private assertNonceNotConsumed(nonce: string) {
-    this.cleanupConsumedNonces()
-    const consumedAt = this.consumedNonces.get(nonce)
-    if (consumedAt && Date.now() - consumedAt < CONSUMED_NONCE_TTL_MS) {
-      throw new UnauthorizedException('安全校验已使用，请重新验证')
-    }
-  }
-
-  private markNonceConsumed(nonce: string) {
-    this.consumedNonces.set(nonce, Date.now())
-  }
-
-  private cleanupConsumedNonces() {
-    const cutoff = Date.now() - CONSUMED_NONCE_TTL_MS
-    for (const [nonce, consumedAt] of this.consumedNonces) {
-      if (consumedAt < cutoff) {
-        this.consumedNonces.delete(nonce)
+    const nonceHash = createHash('sha256').update(decoded.challenge.parameters.nonce).digest('hex')
+    try {
+      await this.prisma.$transaction([
+        this.prisma.humanVerificationNonce.deleteMany({ where: { expiresAt: { lte: new Date() } } }),
+        this.prisma.humanVerificationNonce.create({
+          data: {
+            expiresAt: new Date(Date.now() + CONSUMED_NONCE_TTL_MS),
+            nonceHash,
+            purpose,
+          },
+        }),
+      ])
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new UnauthorizedException('安全校验已使用，请重新验证')
       }
+      throw error
     }
   }
+}
+
+function isUniqueConstraintError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  if ('code' in error && error.code === 'P2002') return true
+  if ('message' in error && typeof error.message === 'string' && error.message.includes('Unique constraint')) {
+    return true
+  }
+  return false
 }
 
 function decodeAltchaPayload(payload: string): AltchaPayload {

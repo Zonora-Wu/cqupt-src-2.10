@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, forwardRef, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
-import { AuditAction, AuthorizationLevel, RoleCode, User, UserStatus } from '@prisma/client'
+import { AuditAction, AuthorizationLevel, Prisma, RoleCode, User, UserStatus } from '@prisma/client'
 
 export type PendingRegistrationResponse = { pending: true; message: string }
-import { randomBytes, createHash, randomInt } from 'node:crypto'
+import { randomBytes, createHash, randomInt, timingSafeEqual } from 'node:crypto'
 import { getJwtExpiry, signJwt } from '../../common/crypto/jwt'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { EmailService } from '../email/email.service'
@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { RbacService } from '../rbac/rbac.service'
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
 import { ClientRequestMeta, LoginResponse } from './auth.types'
-import { NormalizedRegisterInput } from './auth.validation'
+import { NormalizedRegisterInput, NormalizedResetPasswordInput } from './auth.validation'
 
 const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
 const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000
@@ -20,6 +20,7 @@ const EMAIL_CODE_MAX_PER_WINDOW = 5
 const EMAIL_CODE_WINDOW_MS = 10 * 60 * 1000
 const PASSWORD_LOGIN_HUMAN_VERIFICATION_THRESHOLD = 3
 const PASSWORD_LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000
+const PASSWORD_RESET_MIN_RESPONSE_MS = 900
 
 @Injectable()
 export class AuthService {
@@ -159,6 +160,166 @@ export class AuthService {
     return {
       message: `验证码已发送至 ${normalizedEmail}`,
     }
+  }
+
+  async sendPasswordResetCode(email: string, humanInput: HumanVerificationInput, meta: ClientRequestMeta) {
+    const startedAt = Date.now()
+    const normalizedEmail = email.trim().toLowerCase()
+    await this.humanVerification.verify(humanInput, 'RESET_PASSWORD', meta)
+    const user = await this.prisma.user.findUnique({
+      select: { emailVerifiedAt: true, id: true, status: true },
+      where: { email: normalizedEmail },
+    })
+    const genericMessage = '若该邮箱已绑定可用账号，验证码将发送至该邮箱'
+    if (!user || user.status !== UserStatus.ACTIVE || !user.emailVerifiedAt) {
+      await waitForPasswordResetResponse(startedAt)
+      throw new BadRequestException('该邮箱未绑定可用账号，请检查邮箱或联系管理员')
+    }
+
+    const code = generateEmailCode()
+    const codeHash = createHash('sha256').update(code).digest('hex')
+    const verificationCodeId = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'RESET_PASSWORD:' + normalizedEmail}))`
+      try {
+        await this.assertEmailCodeRateLimit(normalizedEmail, 'RESET_PASSWORD', meta, tx)
+      } catch (error) {
+        if (error instanceof BadRequestException) return null
+        throw error
+      }
+      await tx.emailVerificationCode.updateMany({
+        data: { consumedAt: new Date() },
+        where: { consumedAt: null, email: normalizedEmail, purpose: 'RESET_PASSWORD' },
+      })
+      const created = await tx.emailVerificationCode.create({
+        data: {
+          codeHash,
+          email: normalizedEmail,
+          expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS),
+          ipAddress: meta.ipAddress,
+          purpose: 'RESET_PASSWORD',
+          userAgent: meta.userAgent,
+          userId: user.id,
+        },
+      })
+      return created.id
+    })
+    if (!verificationCodeId) {
+      await waitForPasswordResetResponse(startedAt)
+      return { message: genericMessage }
+    }
+    try {
+      await this.email.sendVerificationCode({
+        code,
+        expiresInMinutes: EMAIL_CODE_TTL_MS / 60_000,
+        purpose: 'RESET_PASSWORD',
+        to: normalizedEmail,
+      })
+    } catch (error) {
+      await this.prisma.$transaction([
+        this.prisma.emailVerificationCode.updateMany({
+          data: { consumedAt: new Date() },
+          where: { consumedAt: null, id: verificationCodeId },
+        }),
+        this.prisma.auditLog.create({
+          data: {
+            action: AuditAction.MANAGE_USER,
+            actorId: user.id,
+            ipAddress: meta.ipAddress,
+            metadata: { action: 'send_password_reset_code', error: sanitizeResetEmailError(error) },
+            requestPath: meta.requestPath,
+            result: 'failed',
+            targetId: user.id,
+            targetType: 'User',
+            userAgent: meta.userAgent,
+          },
+        }),
+      ])
+    }
+    await waitForPasswordResetResponse(startedAt)
+    return { message: genericMessage }
+  }
+
+  async resetPassword(input: NormalizedResetPasswordInput, meta: ClientRequestMeta) {
+    const user = await this.prisma.user.findUnique({
+      include: { role: true },
+      where: { email: input.email },
+    })
+    const verificationCode = user ? await this.prisma.emailVerificationCode.findFirst({
+      orderBy: { createdAt: 'desc' },
+      where: {
+        consumedAt: null,
+        email: input.email,
+        expiresAt: { gt: new Date() },
+        purpose: 'RESET_PASSWORD',
+        userId: user.id,
+      },
+    }) : null
+    if (!user || user.status !== UserStatus.ACTIVE || !verificationCode || verificationCode.attemptCount >= 5) {
+      throw new UnauthorizedException('邮箱验证码错误或已过期')
+    }
+    const codeHash = createHash('sha256').update(input.code).digest('hex')
+    if (!safeHashEqual(verificationCode.codeHash, codeHash)) {
+      await this.prisma.emailVerificationCode.updateMany({
+        data: { attemptCount: { increment: 1 } },
+        where: {
+          attemptCount: { lt: 5 },
+          consumedAt: null,
+          id: verificationCode.id,
+        },
+      })
+      throw new UnauthorizedException('邮箱验证码错误或已过期')
+    }
+
+    const changedAt = new Date()
+    const notificationIds: string[] = []
+    await this.prisma.$transaction(async (tx) => {
+      const claimedCode = await tx.emailVerificationCode.updateMany({
+        data: { attemptCount: { increment: 1 }, consumedAt: changedAt },
+        where: {
+          attemptCount: { lt: 5 },
+          consumedAt: null,
+          id: verificationCode.id,
+        },
+      })
+      if (claimedCode.count !== 1) {
+        throw new UnauthorizedException('邮箱验证码错误或已过期')
+      }
+      await tx.user.update({
+        data: { passwordHash: hashPassword(input.newPassword) },
+        where: { id: user.id },
+      })
+      await tx.refreshToken.updateMany({
+        data: { revokedAt: changedAt },
+        where: { revokedAt: null, userId: user.id },
+      })
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.MANAGE_USER,
+          actorId: user.id,
+          ipAddress: meta.ipAddress,
+          metadata: { action: 'self_reset_password', refreshTokensRevoked: true },
+          requestPath: meta.requestPath,
+          result: 'success',
+          targetId: user.id,
+          targetType: 'User',
+          userAgent: meta.userAgent,
+        },
+      })
+      notificationIds.push(await this.notifications.create(tx, {
+        channelId: 'system',
+        channelTitle: '账号安全通知',
+        content: `你的账号密码已于 ${formatSecurityTime(changedAt)} 通过找回密码功能重置。操作 IP：${maskIp(meta.ipAddress)}。如非本人操作，请立即联系管理员。`,
+        emailRequired: true,
+        entityId: `password-reset:${changedAt.toISOString()}`,
+        entityType: 'SecurityEvent',
+        eventKey: `security:${user.id}:password-reset:${changedAt.toISOString()}`,
+        iconType: 'bell',
+        recipientId: user.id,
+        route: roleSecurityRoute(user.role.code),
+      }))
+    })
+    await this.notifications.dispatchAfterCommit(notificationIds)
+    return { message: '密码已重置，请使用新密码登录。' }
   }
 
   async register(input: NormalizedRegisterInput, meta: ClientRequestMeta): Promise<LoginResponse | PendingRegistrationResponse> {
@@ -428,8 +589,13 @@ export class AuthService {
     })
   }
 
-  private async assertEmailCodeRateLimit(email: string, purpose: string, meta: ClientRequestMeta) {
-    const recentCode = await this.prisma.emailVerificationCode.findFirst({
+  private async assertEmailCodeRateLimit(
+    email: string,
+    purpose: string,
+    meta: ClientRequestMeta,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const recentCode = await client.emailVerificationCode.findFirst({
       where: {
         createdAt: { gte: new Date(Date.now() - EMAIL_CODE_RESEND_INTERVAL_MS) },
         email,
@@ -444,7 +610,7 @@ export class AuthService {
 
     const windowStart = new Date(Date.now() - EMAIL_CODE_WINDOW_MS)
     const [emailCount, ipCount] = await Promise.all([
-      this.prisma.emailVerificationCode.count({
+      client.emailVerificationCode.count({
         where: {
           createdAt: { gte: windowStart },
           email,
@@ -452,7 +618,7 @@ export class AuthService {
         },
       }),
       meta.ipAddress
-        ? this.prisma.emailVerificationCode.count({
+        ? client.emailVerificationCode.count({
             where: {
               createdAt: { gte: windowStart },
               ipAddress: meta.ipAddress,
@@ -532,6 +698,28 @@ function maskIp(ipAddress?: string) {
   }
   const parts = ipAddress.split('.')
   return parts.length === 4 ? `${parts[0]}.${parts[1]}.*.*` : '已隐藏'
+}
+
+function safeHashEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left, 'hex')
+  const rightBuffer = Buffer.from(right, 'hex')
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+async function waitForPasswordResetResponse(startedAt: number) {
+  if (process.env.NODE_ENV === 'test') return
+  const remaining = PASSWORD_RESET_MIN_RESPONSE_MS - (Date.now() - startedAt)
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining))
+}
+
+function sanitizeResetEmailError(error: unknown) {
+  return error instanceof Error ? error.name.slice(0, 80) : 'UnknownError'
+}
+
+function roleSecurityRoute(role: string) {
+  if (role === RoleCode.ADMIN) return '/admin/account-security'
+  if (role === RoleCode.AUDITOR) return '/auditor/profile'
+  return '/user/account-security'
 }
 
 function generateEmailCode() {
