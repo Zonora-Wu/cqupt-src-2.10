@@ -594,6 +594,10 @@ html {
   --guest-accent: var(--color-brand-800);
 }
 
+.guest-process-item:nth-child(7) {
+  --guest-accent: var(--color-brand-900);
+}
+
 .guest-palette-item,
 .guest-process-item {
   border-top: 2px solid color-mix(in srgb, var(--guest-accent) 68%, transparent);
@@ -609,6 +613,35 @@ html {
 
 .guest-palette-rule {
   background: color-mix(in srgb, var(--guest-accent) 48%, transparent);
+}
+
+.chat-avatar-idea {
+  border-color: color-mix(in srgb, var(--color-brand-400) 42%, transparent);
+  background: color-mix(in srgb, var(--color-brand-400) 14%, var(--app-surface));
+  color: var(--color-brand-700);
+}
+
+.chat-avatar-boundary {
+  border-color: color-mix(in srgb, var(--app-info) 42%, transparent);
+  background: color-mix(in srgb, var(--app-info-soft) 72%, var(--app-surface));
+  color: var(--app-info-text);
+}
+
+.chat-avatar-learning {
+  border-color: color-mix(in srgb, var(--app-warning) 42%, transparent);
+  background: color-mix(in srgb, var(--app-warning-soft) 72%, var(--app-surface));
+  color: var(--app-warning-text);
+}
+
+.chat-avatar-build {
+  border-color: color-mix(in srgb, var(--color-brand-700) 42%, transparent);
+  background: color-mix(in srgb, var(--color-brand-700) 12%, var(--app-surface));
+  color: var(--color-brand-700);
+}
+
+.dark .chat-avatar-idea,
+.dark .chat-avatar-build {
+  color: color-mix(in srgb, var(--color-brand-400) 65%, var(--app-dark-text));
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -1,6 +1,6 @@
-import { ArrowRight } from 'lucide-react'
 import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
+import { SafetyParticipationFlow } from '../../components/guest/SafetyParticipationFlow'
 
 const principles = [
   {
@@ -15,16 +15,6 @@ const principles = [
     title: '负责任披露',
     text: '漏洞细节只通过平台提交和沟通，未修复前不得公开发布到互联网、社群、博客或第三方平台。',
   },
-]
-
-const process = [
-  { title: '注册登录', text: '使用本人账号进入平台，完成必要身份校验。' },
-  { title: '安全答题', text: '理解授权边界、禁止行为和报告规范。' },
-  { title: '签署责任书', text: '确认测试范围、行为约束和个人责任。' },
-  { title: '提交漏洞', text: '按模板填写复现步骤、影响说明和修复建议。' },
-  { title: '审核反馈', text: '审核员确认有效性、风险等级和材料完整度。' },
-  { title: '修复复测', text: '资产责任单位修复后，由审核员复测归档。' },
-  { title: '积分证书', text: '有效贡献根据质量和价值获得积分或证书。' },
 ]
 
 const reportFocus = [
@@ -100,39 +90,7 @@ export function PlatformRules() {
         ))}
       </motion.section>
 
-      <RevealSection className="relative z-10 mx-auto mt-20 max-w-5xl">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight">参与流程</h2>
-          <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
-            从账号准入到成果沉淀，平台把安全实践拆解为连续步骤，让每一次提交都有明确边界、审核反馈和后续记录。
-          </p>
-        </div>
-
-        <div className="mt-10 hidden overflow-x-auto pb-2 md:block">
-          <div className="grid min-w-[980px] grid-cols-7 gap-3">
-            {process.map((item, index) => (
-              <article className="guest-hover-surface guest-process-item relative min-h-[190px] rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl dark:border-white/10" key={item.title}>
-                <div className="flex items-center gap-3">
-                  <span className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</span>
-                  {index < process.length - 1 && <ArrowRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
-                </div>
-                <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-3 md:hidden">
-          {process.map((item, index) => (
-            <article className="guest-hover-surface guest-process-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10" key={item.title}>
-              <div className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</div>
-              <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.text}</p>
-            </article>
-          ))}
-        </div>
-      </RevealSection>
+      <SafetyParticipationFlow className="mt-4" />
 
       <RevealSection className="mx-auto mt-20 max-w-5xl border-y border-black/10 py-12 dark:border-white/10">
         <div className="mx-auto max-w-3xl text-center">
@@ -174,7 +132,7 @@ export function PlatformRules() {
       </RevealSection>
 
       <RevealSection className="mx-auto mt-20 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <article className="rounded-lg border border-[var(--app-danger)]/25 bg-[var(--app-danger-soft)] p-7 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(220,38,38,0.08)] dark:border-[var(--app-danger)]/30">
+        <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10">
           <h2 className="text-3xl font-semibold tracking-tight">禁止行为</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             以下行为会导致报告驳回、扣除积分、撤销证书、限制账号，严重时将移交相关单位处理。
@@ -189,7 +147,7 @@ export function PlatformRules() {
           </ul>
         </article>
 
-        <article className="rounded-lg border border-[var(--app-info)]/25 bg-[var(--app-info-soft)] p-7 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(2,132,199,0.08)] dark:border-[var(--app-info)]/30">
+        <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10">
           <h2 className="text-3xl font-semibold tracking-tight">邮宝使用边界</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             邮宝可以辅助整理漏洞标题、复现步骤、影响说明和修复建议，也可以推荐学习路径、检查敏感信息。
