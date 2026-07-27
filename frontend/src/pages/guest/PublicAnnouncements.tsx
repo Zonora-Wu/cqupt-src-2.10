@@ -1,4 +1,5 @@
 import { ArrowLeft, Bell, CalendarDays, ChevronRight, Pin } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { listPublicAnnouncements } from '../../services/announcements'
@@ -29,9 +30,14 @@ export function PublicAnnouncements() {
 
   if (selectedAnnouncement) {
     return (
-      <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
+      <motion.main
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48"
+        initial={{ opacity: 0, y: 18 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      >
         <button
-          className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+          className="guest-hover-surface inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 dark:border-white/10 dark:text-slate-300"
           onClick={() => setSelectedAnnouncement(null)}
           type="button"
         >
@@ -40,7 +46,7 @@ export function PublicAnnouncements() {
         </button>
 
         <article className="mt-6 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
-          <aside className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10 ">
+          <aside className="guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-brand-600/10 px-2 py-1 text-xs font-medium text-brand-700 dark:text-brand-300">
                 {selectedAnnouncement.category}
@@ -63,27 +69,38 @@ export function PublicAnnouncements() {
             </p>
           </aside>
 
-          <section className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
+          <section className="rounded-lg border border-black/10 bg-[var(--app-surface)] p-7 dark:border-white/10">
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">公告原文</p>
             <div className="mt-5 whitespace-pre-line text-base leading-8 text-slate-700 dark:text-slate-300">
               {selectedAnnouncement.content}
             </div>
           </section>
         </article>
-      </main>
+      </motion.main>
     )
   }
 
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
-      <section className="mx-auto max-w-4xl text-center">
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-auto max-w-4xl text-center"
+        initial={{ opacity: 0, y: 22 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      >
         <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">平台动态与规则更新</h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
           查看 CQUPT-SRC 的公开通知、规则调整、学习活动与证书体系说明。涉及漏洞细节、敏感资产和审核信息的内容不会公开展示。
         </p>
-      </section>
+      </motion.section>
 
-      <section className="mt-16 grid gap-5">
+      <motion.section
+        animate="visible"
+        className="mt-16 grid gap-5"
+        initial="hidden"
+        transition={{ delayChildren: 0.16, staggerChildren: 0.08 }}
+        variants={{ hidden: {}, visible: {} }}
+      >
         {loading && (
           <div className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-8 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 ">
             正在加载公开公告...
@@ -96,9 +113,10 @@ export function PublicAnnouncements() {
 
         {!loading &&
           announcements.map((item) => (
-            <article
-              className="group rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl transition hover:bg-white dark:border-white/10  dark:hover:bg-white/[0.06]"
+            <motion.article
+              className="guest-hover-surface guest-palette-item group rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10"
               key={item.id}
+              variants={{ hidden: { opacity: 0, x: -18 }, visible: { opacity: 1, x: 0 } }}
             >
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div className="flex gap-4">
@@ -120,7 +138,7 @@ export function PublicAnnouncements() {
                   </div>
                 </div>
                 <button
-                  className="inline-flex items-center gap-1 self-start rounded-lg border border-black/10 px-3 py-2 text-sm text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                  className="guest-hover-surface inline-flex items-center gap-1 self-start rounded-lg border border-black/10 px-3 py-2 text-sm text-slate-700 dark:border-white/10 dark:text-slate-300"
                   onClick={() => setSelectedAnnouncement(item)}
                   type="button"
                 >
@@ -128,7 +146,7 @@ export function PublicAnnouncements() {
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-            </article>
+            </motion.article>
           ))}
 
         {!loading && announcements.length === 0 && !error && (
@@ -136,7 +154,7 @@ export function PublicAnnouncements() {
             暂无公开公告。
           </div>
         )}
-      </section>
+      </motion.section>
     </main>
   )
 }

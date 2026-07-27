@@ -1,4 +1,6 @@
 import { ArrowRight } from 'lucide-react'
+import { motion } from 'motion/react'
+import type { ReactNode } from 'react'
 
 const principles = [
   {
@@ -64,26 +66,41 @@ const reviewRules = [
 export function PlatformRules() {
   return (
     <main className="relative z-10 mx-auto max-w-6xl px-5 pb-24 pt-44 md:px-8 md:pt-48">
-      <section className="mx-auto max-w-4xl text-center">
+      <motion.section
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-auto max-w-4xl text-center"
+        initial={{ opacity: 0, y: 22 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      >
         <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
           规范参与，安全共建
         </h1>
         <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-400 md:text-lg">
           CQUPT-SRC 为校园网络安全实践提供合法、可追溯、可激励的参与通道。平台鼓励负责任披露：只验证问题是否存在，不扩大影响，不获取无关数据，不公开传播漏洞细节。
         </p>
-      </section>
+      </motion.section>
 
-      <section className="mx-auto mt-14 grid max-w-5xl gap-5 md:grid-cols-3">
+      <motion.section
+        animate="visible"
+        className="mx-auto mt-14 grid max-w-5xl gap-5 md:grid-cols-3"
+        initial="hidden"
+        transition={{ staggerChildren: 0.1 }}
+        variants={{ hidden: {}, visible: {} }}
+      >
         {principles.map((item, index) => (
-          <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 text-left backdrop-blur-xl dark:border-white/10 " key={item.title}>
-            <div className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
+          <motion.article
+            className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 text-left backdrop-blur-xl dark:border-white/10"
+            key={item.title}
+            variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
+          >
+            <div className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</div>
             <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
-          </article>
+          </motion.article>
         ))}
-      </section>
+      </motion.section>
 
-      <section className="relative z-10 mx-auto mt-20 max-w-5xl">
+      <RevealSection className="relative z-10 mx-auto mt-20 max-w-5xl">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight">参与流程</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
@@ -94,9 +111,9 @@ export function PlatformRules() {
         <div className="mt-10 hidden overflow-x-auto pb-2 md:block">
           <div className="grid min-w-[980px] grid-cols-7 gap-3">
             {process.map((item, index) => (
-              <article className="relative min-h-[190px] rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl dark:border-white/10 " key={item.title}>
+              <article className="guest-hover-surface guest-process-item relative min-h-[190px] rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 backdrop-blur-xl dark:border-white/10" key={item.title}>
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</span>
                   {index < process.length - 1 && <ArrowRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
                 </div>
                 <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
@@ -108,16 +125,16 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:hidden">
           {process.map((item, index) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10 " key={item.title}>
-              <div className="font-mono text-sm text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
+            <article className="guest-hover-surface guest-process-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 dark:border-white/10" key={item.title}>
+              <div className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</div>
               <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.text}</p>
             </article>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
-      <section className="mx-auto mt-20 max-w-5xl rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10">
+      <RevealSection className="mx-auto mt-20 max-w-5xl border-y border-black/10 py-12 dark:border-white/10">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight">一份合格报告应包含什么</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
@@ -127,8 +144,8 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {reportFocus.map(([title, text], index) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10" key={title}>
-              <div className="font-mono text-xs text-brand-700 dark:text-brand-300">{String(index + 1).padStart(2, '0')}</div>
+            <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-4 dark:border-white/10" key={title}>
+              <div className="guest-palette-label font-mono text-xs font-semibold">{String(index + 1).padStart(2, '0')}</div>
               <h3 className="mt-3 font-semibold">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{text}</p>
             </article>
@@ -154,10 +171,10 @@ export function PlatformRules() {
         <div className="mt-6 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:text-slate-400">
           证明材料应按平台支持格式提交。截图、请求示例或附件只保留验证漏洞所需内容，主动遮挡账号、Cookie、Token、验证码、个人信息和业务敏感数据。
         </div>
-      </section>
+      </RevealSection>
 
-      <section className="mx-auto mt-20 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
+      <RevealSection className="mx-auto mt-20 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <article className="rounded-lg border border-[var(--app-danger)]/25 bg-[var(--app-danger-soft)] p-7 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(220,38,38,0.08)] dark:border-[var(--app-danger)]/30">
           <h2 className="text-3xl font-semibold tracking-tight">禁止行为</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             以下行为会导致报告驳回、扣除积分、撤销证书、限制账号，严重时将移交相关单位处理。
@@ -172,7 +189,7 @@ export function PlatformRules() {
           </ul>
         </article>
 
-        <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 backdrop-blur-xl dark:border-white/10 ">
+        <article className="rounded-lg border border-[var(--app-info)]/25 bg-[var(--app-info-soft)] p-7 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(2,132,199,0.08)] dark:border-[var(--app-info)]/30">
           <h2 className="text-3xl font-semibold tracking-tight">邮宝使用边界</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
             邮宝可以辅助整理漏洞标题、复现步骤、影响说明和修复建议，也可以推荐学习路径、检查敏感信息。
@@ -181,9 +198,9 @@ export function PlatformRules() {
             邮宝回复仅作参考，不能替代人工审核；不得诱导邮宝生成未授权测试方法、攻击脚本、绕过方案或恶意利用流程。
           </p>
         </article>
-      </section>
+      </RevealSection>
 
-      <section className="mx-auto mt-20 max-w-5xl">
+      <RevealSection className="mx-auto mt-20 max-w-5xl">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight">审核、积分与证书</h2>
           <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
@@ -192,20 +209,34 @@ export function PlatformRules() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {reviewRules.map(([title, text]) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10 " key={title}>
+            <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-6 dark:border-white/10" key={title}>
               <h3 className="text-lg font-semibold">{title}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{text}</p>
             </article>
           ))}
         </div>
-      </section>
+      </RevealSection>
 
-      <section className="mx-auto mt-20 max-w-4xl border-y border-black/10 py-10 text-center dark:border-white/10">
+      <RevealSection className="mx-auto mt-20 max-w-4xl border-y border-black/10 py-10 text-center dark:border-white/10">
         <h2 className="text-3xl font-semibold tracking-tight">用户承诺</h2>
         <p className="mx-auto mt-5 max-w-3xl leading-8 text-slate-600 dark:text-slate-400">
           使用 CQUPT-SRC 即表示你承诺遵守法律法规、学校管理规定和平台规则，仅在授权范围内进行安全测试，不利用漏洞破坏、牟利或传播敏感信息，共同维护校园网络安全环境。
         </p>
-      </section>
+      </RevealSection>
     </main>
+  )
+}
+
+function RevealSection({ children, className }: { children: ReactNode; className: string }) {
+  return (
+    <motion.section
+      className={className}
+      initial={{ opacity: 0, y: 28 }}
+      transition={{ duration: 0.68, ease: [0.22, 1, 0.36, 1] }}
+      viewport={{ amount: 0.12, once: true }}
+      whileInView={{ opacity: 1, y: 0 }}
+    >
+      {children}
+    </motion.section>
   )
 }

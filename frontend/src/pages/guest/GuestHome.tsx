@@ -7,7 +7,7 @@ import {
   Sun,
   X,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'motion/react'
+import { MotionConfig, motion, useReducedMotion } from 'motion/react'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
@@ -135,6 +135,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   return (
     <AppBackground>
+      <MotionConfig reducedMotion="user">
       <nav className={`fixed left-0 right-0 top-0 z-50 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${
         activePage === 'home' && !homeScrolled
           ? 'border-b border-transparent bg-transparent shadow-none backdrop-blur-none'
@@ -262,14 +263,14 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <img
             alt=""
             aria-hidden="true"
-            className="h-full w-full object-cover object-[center_68%] saturate-[0.72] dark:hidden md:object-center"
+            className="h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:hidden md:object-center"
             fetchPriority="high"
             src="/assets/backgrounds/guest-home-hero-light.png"
           />
           <img
             alt=""
             aria-hidden="true"
-            className="hidden h-full w-full object-cover object-[center_68%] saturate-[0.72] dark:block md:object-center"
+            className="hidden h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:block md:object-center"
             fetchPriority="high"
             src="/assets/backgrounds/guest-home-hero-dark.png"
           />
@@ -350,16 +351,16 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         whileInView={{ opacity: 1, y: 0 }}
       >
         <h2 className="mb-14 text-center text-3xl font-semibold">核心能力</h2>
-        <div className="grid grid-cols-1 border-t border-black/10 md:grid-cols-2 dark:border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2">
           {capabilities.map((item, index) => {
             return (
               <article
-                className={`guest-hover-surface border-b border-black/10 px-4 py-9 md:px-8 dark:border-white/10 ${
+                className={`guest-hover-surface guest-palette-item border-b border-black/10 px-4 py-9 md:px-8 dark:border-white/10 ${
                   index % 2 === 0 ? 'md:border-r' : ''
                 }`}
                 key={item.title}
               >
-                <div className="font-mono text-xs font-medium text-brand-700 dark:text-brand-300">
+                <div className="guest-palette-label font-mono text-xs font-semibold">
                   {String(index + 1).padStart(2, '0')}
                 </div>
                 <h3 className="mb-4 mt-4 text-xl font-semibold">{item.title}</h3>
@@ -371,7 +372,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
       </motion.section>
 
       <motion.section
-        className="relative z-10 border-y border-black/[0.08] bg-[var(--app-panel-muted-bg)] px-5 py-24 md:px-8 dark:border-white/[0.06]"
+        className="relative z-10 border-y border-black/[0.08] px-5 py-24 md:px-8 dark:border-white/[0.06]"
         id="certificate"
         initial={reduceMotion ? false : { opacity: 0, y: 24 }}
         transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
@@ -424,17 +425,17 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </div>
 
           <div className="mt-12 hidden overflow-x-auto pb-2 md:block">
-            <div className="grid min-w-[1040px] grid-cols-6 border-y border-black/10 dark:border-white/10">
+            <div className="grid min-w-[1040px] grid-cols-6 border-b border-black/10 dark:border-white/10">
               {processItems.map((item, index) => (
                 <article
-                  className={`guest-hover-surface relative flex min-h-[210px] flex-col px-5 py-7 ${index < processItems.length - 1 ? 'border-r border-black/10 dark:border-white/10' : ''}`}
+                  className={`guest-hover-surface guest-process-item relative flex min-h-[210px] flex-col px-5 py-7 ${index < processItems.length - 1 ? 'border-r border-black/10 dark:border-white/10' : ''}`}
                   key={item.title}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-medium text-brand-700 dark:text-brand-300">
+                    <span className="guest-palette-label font-mono text-sm font-semibold">
                       {String(index + 1).padStart(2, '0')}
                     </span>
-                    <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                    <span className="guest-palette-rule h-px flex-1" />
                   </div>
                   <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
                   <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
@@ -443,10 +444,10 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             </div>
           </div>
 
-          <div className="mt-8 border-t border-black/10 md:hidden dark:border-white/10">
+          <div className="mt-8 md:hidden">
             {processItems.map((item, index) => (
-              <article className="guest-hover-surface border-b border-black/10 px-3 py-6 dark:border-white/10" key={item.title}>
-                <div className="font-mono text-sm text-brand-700 dark:text-brand-300">
+              <article className="guest-hover-surface guest-process-item border-b border-black/10 px-3 py-6 dark:border-white/10" key={item.title}>
+                <div className="guest-palette-label font-mono text-sm font-semibold">
                   {String(index + 1).padStart(2, '0')}
                 </div>
                 <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
@@ -490,6 +491,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </PageTransition>
         )}
       </>
+      </MotionConfig>
     </AppBackground>
   )
 }

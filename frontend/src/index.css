@@ -566,6 +566,51 @@ html {
     transform 220ms ease;
 }
 
+.guest-palette-item:nth-child(1),
+.guest-process-item:nth-child(1) {
+  --guest-accent: var(--color-brand-300);
+}
+
+.guest-palette-item:nth-child(2),
+.guest-process-item:nth-child(2) {
+  --guest-accent: var(--color-brand-400);
+}
+
+.guest-palette-item:nth-child(3),
+.guest-process-item:nth-child(3) {
+  --guest-accent: var(--color-brand-500);
+}
+
+.guest-palette-item:nth-child(4),
+.guest-process-item:nth-child(4) {
+  --guest-accent: var(--color-brand-600);
+}
+
+.guest-process-item:nth-child(5) {
+  --guest-accent: var(--color-brand-700);
+}
+
+.guest-process-item:nth-child(6) {
+  --guest-accent: var(--color-brand-800);
+}
+
+.guest-palette-item,
+.guest-process-item {
+  border-top: 2px solid color-mix(in srgb, var(--guest-accent) 68%, transparent);
+}
+
+.guest-palette-label {
+  color: var(--guest-accent);
+}
+
+.dark .guest-palette-label {
+  color: color-mix(in srgb, var(--guest-accent) 58%, var(--app-dark-text));
+}
+
+.guest-palette-rule {
+  background: color-mix(in srgb, var(--guest-accent) 48%, transparent);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .guest-hover-surface:hover {
     border-color: rgba(var(--app-primary-rgb), 0.3);
@@ -574,8 +619,20 @@ html {
     transform: translateY(-2px);
   }
 
+  .guest-palette-item:hover,
+  .guest-process-item:hover {
+    border-top-color: var(--guest-accent);
+    background: color-mix(in srgb, var(--guest-accent) 7%, transparent);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--guest-accent) 10%, transparent);
+  }
+
   .dark .guest-hover-surface:hover {
     background: rgba(var(--app-primary-rgb), 0.09);
+  }
+
+  .dark .guest-palette-item:hover,
+  .dark .guest-process-item:hover {
+    background: color-mix(in srgb, var(--guest-accent) 11%, transparent);
   }
 }
 
