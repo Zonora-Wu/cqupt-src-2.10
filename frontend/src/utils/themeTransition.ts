@@ -4,7 +4,7 @@ export type ColorTheme = 'dark' | 'light'
 
 const THEME_STORAGE_KEY = 'cqupt-theme'
 const FALLBACK_TRANSITION_CLASS = 'theme-color-transition'
-const TRANSITION_DURATION = 1350
+const TRANSITION_DURATION = 850
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => {
@@ -32,19 +32,13 @@ export function applyColorTheme(theme: ColorTheme) {
 }
 
 export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLElement>) {
+  void event
   const root = document.documentElement
 
   if (root.dataset.motion === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     applyColorTheme(theme)
     return
   }
-
-  const x = event?.clientX ?? window.innerWidth - 40
-  const y = event?.clientY ?? 40
-  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
-  root.style.setProperty('--theme-transition-x', `${x}px`)
-  root.style.setProperty('--theme-transition-y', `${y}px`)
-  root.style.setProperty('--theme-transition-radius', `${Math.ceil(radius)}px`)
 
   const viewTransition = (document as ViewTransitionDocument).startViewTransition?.(() => {
     applyColorTheme(theme)
@@ -54,9 +48,6 @@ export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLE
     root.classList.add(FALLBACK_TRANSITION_CLASS)
     viewTransition.finished.finally(() => {
       root.classList.remove(FALLBACK_TRANSITION_CLASS)
-      root.style.removeProperty('--theme-transition-x')
-      root.style.removeProperty('--theme-transition-y')
-      root.style.removeProperty('--theme-transition-radius')
     })
     return
   }
@@ -75,8 +66,5 @@ export function transitionColorTheme(theme: ColorTheme, event?: MouseEvent<HTMLE
   window.setTimeout(() => {
     overlay.remove()
     root.classList.remove(FALLBACK_TRANSITION_CLASS)
-    root.style.removeProperty('--theme-transition-x')
-    root.style.removeProperty('--theme-transition-y')
-    root.style.removeProperty('--theme-transition-radius')
   }, TRANSITION_DURATION + 80)
 }

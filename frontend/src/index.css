@@ -499,26 +499,35 @@ html {
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 1350ms;
-  animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+  animation-duration: 850ms;
+  animation-timing-function: ease;
   animation-fill-mode: both;
   mix-blend-mode: normal;
 }
 
 ::view-transition-old(root) {
-  animation: none;
+  animation-name: theme-view-old;
 }
 
 ::view-transition-new(root) {
   animation-name: theme-view-new;
 }
 
-@keyframes theme-view-new {
+@keyframes theme-view-old {
   from {
-    clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+    opacity: 1;
   }
   to {
-    clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
+    opacity: 0;
+  }
+}
+
+@keyframes theme-view-new {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -529,27 +538,45 @@ html {
   opacity: 1;
   pointer-events: none;
   transform: translateZ(0);
-  transition:
-    opacity 1350ms cubic-bezier(0.19, 1, 0.22, 1),
-    clip-path 1350ms cubic-bezier(0.19, 1, 0.22, 1);
-  clip-path: circle(var(--theme-transition-radius, 160vmax) at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
-  will-change: opacity, clip-path;
+  transition: opacity 850ms ease;
+  will-change: opacity;
 }
 
 .theme-transition-overlay-exit {
   opacity: 0;
-  clip-path: circle(0 at var(--theme-transition-x, 100%) var(--theme-transition-y, 0));
 }
 
 .theme-toggle-button > svg {
   transform-origin: center;
   transition:
-    transform 720ms cubic-bezier(0.19, 1, 0.22, 1),
-    opacity 420ms ease;
+    transform 240ms ease,
+    opacity 240ms ease;
 }
 
 .theme-toggle-button:active > svg {
-  transform: rotate(35deg) scale(0.82);
+  transform: scale(0.9);
+}
+
+.guest-hover-surface {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease,
+    transform 220ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .guest-hover-surface:hover {
+    border-color: rgba(var(--app-primary-rgb), 0.3);
+    background: rgba(var(--app-primary-rgb), 0.055);
+    box-shadow: 0 12px 30px rgba(var(--app-primary-rgb), 0.08);
+    transform: translateY(-2px);
+  }
+
+  .dark .guest-hover-surface:hover {
+    background: rgba(var(--app-primary-rgb), 0.09);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -559,7 +586,8 @@ html {
   }
 
   .theme-transition-overlay,
-  .theme-toggle-button > svg {
+  .theme-toggle-button > svg,
+  .guest-hover-surface {
     transition: none;
   }
 }
@@ -755,4 +783,14 @@ html.auth-modal-open body {
 
 .user-compact-mode .gap-5 {
   gap: 1rem;
+}
+
+@keyframes guest-scroll-hint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(7px);
+  }
 }
