@@ -186,6 +186,9 @@ OPENAI_MODEL=hermes-agent
 OPENAI_REQUEST_TIMEOUT_MS=300000
 OPENAI_ATTACHMENT_REQUEST_TIMEOUT_MS=300000
 
+# BYOK 与平台模型凭据加密。生产必须固定保存，不能在每次发布时重新生成。
+AI_CREDENTIAL_ENCRYPTION_KEY=CHANGE_ME_32_BYTE_BASE64_OR_64_CHAR_HEX
+
 # 平台 Skill Candidate 受控安装目录。
 # 不要指向容器私有 data/skills。
 CQUPT_HERMES_SKILLS_ROOT=/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src
@@ -196,6 +199,7 @@ CQUPT_HERMES_SKILLS_ROOT=/home/cocking/cqupt-src-hermes-linux/platform-skills/cq
 - `FRONTEND_ORIGIN` 必须和真实访问域名一致，否则浏览器跨域会失败。
 - `DATABASE_URL` 指向生产库；不要把本地 `15432` 配置带到生产。
 - `OPENAI_BASE_URL` 只给后端使用，前端不配置模型地址。
+- `AI_CREDENTIAL_ENCRYPTION_KEY` 用于 AES-256-GCM 加密用户和管理员模型凭据。密钥丢失或更换后，已有凭据无法解密，必须重新填写。
 - `CQUPT_HERMES_SKILLS_ROOT` 使用宿主可写目录，并通过 Hermes Compose bind mount 到容器 `/opt/data/skills/cqupt-src`。
 
 ### 6.2 Frontend
@@ -282,6 +286,27 @@ curl -s http://127.0.0.1:5000/v1/models
 
 ## 9. 构建与迁移
 
+部署包含 BYOK/Skill Runtime 的版本前，先备份数据库：
+
+```bash
+set -a
+. /opt/cqupt-src/shared/backend.env
+set +a
+
+mkdir -p /opt/cqupt-src/shared/backups
+pg_dump "$DATABASE_URL" \
+  --format=custom \
+  --file="/opt/cqupt-src/shared/backups/pre-ai-runtime-$(date +%Y%m%d-%H%M%S).dump"
+```
+
+确认后端环境中已经固定配置 `AI_CREDENTIAL_ENCRYPTION_KEY`，再应用迁移。该功能涉及以下仓库迁移：
+
+```text
+20260723143000_ai_runtime_byok
+20260724153000_user_provider_credential_base_url
+20260724190000_ai_skill_user_presentation
+```
+
 后端：
 
 ```bash
@@ -292,8 +317,22 @@ set +a
 
 npm run prisma:validate
 npm run prisma:generate
+npm exec -- prisma migrate status --schema ../database/prisma/schema.prisma
 npm run prisma:migrate:deploy
 npm run build
+```
+
+迁移完成后至少验证：
+
+```bash
+curl -fsS http://127.0.0.1:3001/api/health
+curl -fsS http://127.0.0.1:3001/api/ai/health
+
+npm exec -- tsx --test \
+  test/ai-credential-crypto.test.ts \
+  test/ai-declarative-skill.test.ts \
+  test/ai-runtime-failover.test.ts \
+  test/ai-session-model-switch.test.ts
 ```
 
 首次部署或需要重置演示数据时执行 seed：
