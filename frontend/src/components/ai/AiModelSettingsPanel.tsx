@@ -76,7 +76,7 @@ export function AiModelSettingsPanel({ onChanged, onNotice }: { onChanged?: () =
 
   return (
     <div className="grid min-h-[540px] lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="border-b border-black/10 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-white/[0.03] lg:border-b-0 lg:border-r">
+      <aside className="border-b border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">服务凭据</p>
           <button className="rounded-md border border-brand-600/25 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-600/10 dark:text-brand-300" onClick={() => {
@@ -86,7 +86,7 @@ export function AiModelSettingsPanel({ onChanged, onNotice }: { onChanged?: () =
         </div>
         <div className="mt-3 space-y-2">
           <button
-            className={`w-full rounded-lg border px-3 py-3 text-left transition ${!addingCredential && platformSelected ? 'border-brand-600 bg-white shadow-sm dark:bg-white/[0.08]' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+            className={`w-full rounded-lg border px-3 py-3 text-left transition ${!addingCredential && platformSelected ? 'border-brand-600 bg-[var(--app-surface)] shadow-sm' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
             onClick={() => {
               setAddingCredential(false)
               setPlatformSelected(true)
@@ -101,7 +101,7 @@ export function AiModelSettingsPanel({ onChanged, onNotice }: { onChanged?: () =
           </button>
           {credentials.map((credential) => (
             <button
-              className={`w-full rounded-lg border px-3 py-3 text-left transition ${!addingCredential && form.credentialId === credential.id ? 'border-brand-600 bg-white shadow-sm dark:bg-white/[0.08]' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+              className={`w-full rounded-lg border px-3 py-3 text-left transition ${!addingCredential && form.credentialId === credential.id ? 'border-brand-600 bg-[var(--app-surface)] shadow-sm' : 'border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               key={credential.id}
               onClick={() => {
                 setAddingCredential(false)
@@ -117,7 +117,7 @@ export function AiModelSettingsPanel({ onChanged, onNotice }: { onChanged?: () =
               <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{credential.provider.name} · ****{credential.lastFour}</span>
             </button>
           ))}
-          {credentials.length === 0 && <p className="rounded-lg border border-dashed border-black/10 px-3 py-5 text-center text-xs text-slate-500 dark:border-white/10">尚未添加凭据</p>}
+          {credentials.length === 0 && <p className="rounded-lg border border-dashed border-black/10 px-3 py-5 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">尚未添加凭据</p>}
         </div>
       </aside>
 
@@ -181,7 +181,7 @@ export function AiModelSettingsPanel({ onChanged, onNotice }: { onChanged?: () =
             run={run}
           />
         ) : (
-          <div className="py-12 text-center text-sm text-slate-500">尚未添加自有模型</div>
+          <div className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">尚未添加自有模型</div>
         )}
       </div>
     </div>
@@ -235,21 +235,21 @@ function CredentialEditor({
         <p className="text-sm font-semibold">可用模型</p>
         {credentialModels.map((model) => (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-black/10 px-3 py-3 dark:border-white/10" key={model.id}>
-            <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{model.displayName}</p><p className="truncate text-xs text-slate-500">{model.model}</p></div>
+            <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{model.displayName}</p><p className="truncate text-xs text-slate-500 dark:text-slate-400">{model.model}</p></div>
             {model.isDefault ? <span className="text-xs font-medium text-brand-700 dark:text-brand-300">默认</span> : <button className={secondaryButton} disabled={busy} onClick={() => run(() => setDefaultAiUserModel(model.id), '默认模型已更新')} type="button">设为默认</button>}
             <button className={dangerButton} disabled={busy} onClick={() => run(() => deleteAiUserModel(model.id), '模型已删除')} type="button">删除</button>
           </div>
         ))}
-        {credentialModels.length === 0 && <p className="rounded-lg border border-dashed border-black/10 px-4 py-8 text-center text-sm text-slate-500 dark:border-white/10">该凭据尚未添加模型</p>}
+        {credentialModels.length === 0 && <p className="rounded-lg border border-dashed border-black/10 px-4 py-8 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">该凭据尚未添加模型</p>}
       </div>
     </div>
   )
 }
 
-const inputClass = 'w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-600 dark:border-white/15 dark:bg-white/[0.07]'
+const inputClass = 'w-full rounded-lg border border-black/10 bg-[var(--app-surface)] px-3 py-2.5 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/25 dark:border-white/15 dark:text-white dark:placeholder:text-slate-500'
 const primaryButton = 'rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50'
-const secondaryButton = 'rounded-lg border border-black/10 px-3 py-2 text-xs font-medium dark:border-white/15'
-const dangerButton = 'rounded-lg px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400'
+const secondaryButton = 'rounded-lg border border-black/10 px-3 py-2 text-xs font-medium transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10'
+const dangerButton = 'rounded-lg px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-500/10 dark:text-red-400'
 
 function Field({ label, onChange, type = 'text', value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
   return <label className="block space-y-1.5 text-sm"><span className="font-medium">{label}</span><input className={inputClass} onChange={(event) => onChange(event.target.value)} type={type} value={value} /></label>

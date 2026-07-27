@@ -407,7 +407,7 @@ export function AdminAiKnowledgeManagement() {
                       {conversation.similarKnowledgeMatches?.length ? (
                         <div className="mt-2 grid gap-2 md:grid-cols-2">
                           {conversation.similarKnowledgeMatches.map((match) => (
-                            <div className="rounded-lg border border-amber-500/20 bg-white/55 p-2 text-xs dark:bg-black/15" key={match.id}>
+                            <div className="rounded-lg border border-amber-500/20 bg-[var(--app-surface)]/70 p-2 text-xs dark:bg-black/15" key={match.id}>
                               <p className="font-medium text-slate-900 dark:text-slate-100">{match.title}</p>
                               <p className="mt-1 text-slate-600 dark:text-slate-300">相似度 {formatPercent(match.similarity)} · {statusLabels[match.status] ?? match.status} · 命中 {match.hitCount}</p>
                             </div>

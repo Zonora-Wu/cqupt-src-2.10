@@ -44,7 +44,7 @@ export function AiConfigurationDialog({
       <section
         aria-labelledby="ai-configuration-title"
         aria-modal="true"
-        className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-950 sm:h-auto sm:max-h-[88vh] sm:max-w-5xl sm:rounded-lg sm:border sm:border-black/10 dark:sm:border-white/10"
+        className="flex h-full w-full flex-col overflow-hidden bg-[var(--app-surface)] text-slate-950 shadow-2xl dark:text-white sm:h-auto sm:max-h-[88vh] sm:max-w-5xl sm:rounded-lg sm:border sm:border-black/10 dark:sm:border-white/10"
         role="dialog"
       >
         <header className="flex shrink-0 items-start justify-between gap-5 border-b border-black/10 px-5 py-4 dark:border-white/10 sm:px-6">

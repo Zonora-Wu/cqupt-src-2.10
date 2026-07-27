@@ -52,7 +52,7 @@ export function ProviderPresetForm({ onChange, providers, providersLoading = fal
           {orderedProviders.map((provider) => (
             <button
               aria-pressed={value.providerId === provider.id}
-              className={`min-h-11 rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${value.providerId === provider.id ? 'border-brand-600 bg-brand-600/5 text-brand-800 dark:bg-brand-400/10 dark:text-brand-200' : 'border-black/10 bg-white hover:border-brand-600/40 hover:bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]'}`}
+              className={`min-h-11 rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${value.providerId === provider.id ? 'border-brand-600 bg-brand-600/5 text-brand-800 dark:bg-brand-400/10 dark:text-brand-200' : 'border-black/10 bg-[var(--app-surface)] hover:border-brand-600/40 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.07]'}`}
               key={provider.id}
               onClick={() => selectProvider(provider)}
               type="button"
@@ -62,7 +62,7 @@ export function ProviderPresetForm({ onChange, providers, providersLoading = fal
           ))}
         </div>
         {providersLoading && <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">正在加载供应商...</p>}
-        {!providersLoading && providers.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-black/10 px-4 py-5 text-center text-sm text-slate-500 dark:border-white/10">供应商目录加载失败，请关闭弹窗后重试。</p>}
+        {!providersLoading && providers.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-black/10 px-4 py-5 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">供应商目录加载失败，请关闭弹窗后重试。</p>}
       </section>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -85,7 +85,7 @@ export function ProviderPresetForm({ onChange, providers, providersLoading = fal
   )
 }
 
-const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-600 dark:border-white/15 dark:bg-white/[0.07]'
+const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-[var(--app-surface)] px-3 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/25 dark:border-white/15 dark:text-white dark:placeholder:text-slate-500'
 
 function Field({ autoComplete, label, onChange, placeholder, type = 'text', value }: { autoComplete?: string; label: string; onChange: (value: string) => void; placeholder: string; type?: string; value: string }) {
   return <label className="text-xs font-medium text-slate-700 dark:text-slate-200">{label}<input autoComplete={autoComplete} className={inputClass} data-1p-ignore={type === 'password' ? 'true' : undefined} data-lpignore={type === 'password' ? 'true' : undefined} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={type} value={value} /></label>
