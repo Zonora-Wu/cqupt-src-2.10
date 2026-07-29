@@ -46,12 +46,16 @@ export function SafetyParticipationFlow({ className = '' }: { className?: string
         </p>
       </div>
 
-      <div className="mt-12 hidden overflow-x-auto pb-2 [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden">
-        <div className="grid min-w-[1040px] grid-cols-6 border-b border-black/10 dark:border-white/10">
+      <div className="mt-12 hidden md:block">
+        <div className="grid grid-cols-3 border-b border-black/10 xl:grid-cols-6 dark:border-white/10">
           {processItems.map((item, index) => (
             <SpotlightCard
               className={`guest-hover-surface guest-process-item relative flex min-h-[210px] flex-col px-5 py-7 ${
-                index < processItems.length - 1 ? 'border-r border-black/10 dark:border-white/10' : ''
+                index < 3 ? 'border-b border-black/10 xl:border-b-0 dark:border-white/10' : ''
+              } ${
+                index % 3 !== 2 ? 'border-r border-black/10 dark:border-white/10' : ''
+              } ${
+                index < processItems.length - 1 ? 'xl:border-r xl:border-black/10 xl:dark:border-white/10' : ''
               }`}
               key={item.title}
               spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"

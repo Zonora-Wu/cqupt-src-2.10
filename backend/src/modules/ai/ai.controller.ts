@@ -12,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { SecurityRateLimitService } from '../../common/security/security-rate-limit.service'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { UploadedPdfFile } from '../attachments/attachment.types'
@@ -48,6 +49,7 @@ export class AiController {
   constructor(
     @Inject(AiService) private readonly ai: AiService,
     @Inject(AiReportDraftService) private readonly reportDrafts: AiReportDraftService,
+    @Inject(SecurityRateLimitService) private readonly rateLimit: SecurityRateLimitService,
   ) {}
 
   @Get('health')
@@ -66,11 +68,12 @@ export class AiController {
   }
 
   @Post('chat')
-  chat(
+  async chat(
     @Body() body: AiChatBody,
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
+    await this.rateLimit.consume('ai-chat-user', user.id, 40, 60_000)
     const input = normalizeAiChatBody(body)
     return this.ai.chat(input, user, getRequestMeta(req))
   }
@@ -88,7 +91,8 @@ export class AiController {
   @Post('report-drafts')
   @RequirePermissions('ai:use_student')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
-  extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined) {
+  async extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
+    await this.rateLimit.consume('ai-pdf-user', user.id, 10, 10 * 60_000)
     return this.reportDrafts.extractVulnerabilityDrafts(file)
   }
 
@@ -101,6 +105,7 @@ export class AiController {
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
+    await this.rateLimit.consume('ai-report-analysis-user', user.id, 10, 10 * 60_000)
     const normalizedDraftId = typeof draftId === 'string' ? draftId.trim() : ''
     if (!normalizedDraftId) throw new BadRequestException('请选择要分析的漏洞')
     const prepared = await this.reportDrafts.prepareVulnerabilityAnalysis(file, normalizedDraftId)
@@ -119,7 +124,8 @@ export class AiController {
 
   @Post('attachments/text')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
-  extractAttachmentText(@UploadedFile() file: UploadedPdfFile | undefined) {
+  async extractAttachmentText(@UploadedFile() file: UploadedPdfFile | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
+    await this.rateLimit.consume('ai-pdf-user', user.id, 10, 10 * 60_000)
     return this.reportDrafts.extractAttachmentText(file)
   }
 

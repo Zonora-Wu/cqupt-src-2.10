@@ -21,3 +21,20 @@ Nginx 配置目录。
 - 安全响应头
 - 上传大小限制
 - 前端 BrowserRouter 路由回退：`try_files $uri $uri/ /index.html;`
+
+## 安全响应头
+
+Web 容器的 `server` 块必须包含：
+
+```nginx
+include /etc/nginx/snippets/security-headers.conf;
+```
+
+仓库模板位于 `deploy/nginx/security-headers.conf`。镜像构建时将其复制到
+`/etc/nginx/snippets/security-headers.conf`。Nginx Proxy Manager 不应覆盖或删除这些响应头。
+
+验证：
+
+```bash
+curl -sSI https://test.cquptsrc.asia/ | grep -Ei 'content-security-policy|strict-transport-security|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
+```

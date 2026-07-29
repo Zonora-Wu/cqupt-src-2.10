@@ -173,7 +173,7 @@ export class AuthService {
     const genericMessage = '若该邮箱已绑定可用账号，验证码将发送至该邮箱'
     if (!user || user.status !== UserStatus.ACTIVE || !user.emailVerifiedAt) {
       await waitForPasswordResetResponse(startedAt)
-      throw new BadRequestException('该邮箱未绑定可用账号，请检查邮箱或联系管理员')
+      return { message: genericMessage }
     }
 
     const code = generateEmailCode()
@@ -482,6 +482,57 @@ export class AuthService {
     return this.completeLogin(user, meta)
   }
 
+  async refreshSession(refreshToken: string, meta: ClientRequestMeta): Promise<LoginResponse> {
+    if (!refreshToken) throw new UnauthorizedException('登录状态已失效，请重新登录')
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex')
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: { include: { role: true } } },
+    })
+    const now = new Date()
+    if (!stored || stored.expiresAt <= now || stored.user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('登录状态已失效，请重新登录')
+    }
+    if (stored.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        data: { revokedAt: now },
+        where: { userId: stored.userId, revokedAt: null },
+      })
+      throw new UnauthorizedException('检测到重复使用的登录凭据，请重新登录')
+    }
+
+    const nextRefreshToken = randomBytes(48).toString('base64url')
+    const nextHash = createHash('sha256').update(nextRefreshToken).digest('hex')
+    const nextExpiresAt = new Date(getJwtExpiry(process.env.JWT_REFRESH_EXPIRES_IN, 7 * 24 * 60 * 60) * 1000)
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.refreshToken.updateMany({
+        data: { revokedAt: now },
+        where: { id: stored.id, revokedAt: null, expiresAt: { gt: now } },
+      })
+      if (claimed.count !== 1) throw new UnauthorizedException('登录状态已失效，请重新登录')
+      await tx.refreshToken.create({
+        data: {
+          expiresAt: nextExpiresAt,
+          ipAddress: meta.ipAddress,
+          tokenHash: nextHash,
+          userAgent: meta.userAgent,
+          userId: stored.userId,
+        },
+      })
+    })
+
+    return this.buildLoginResponse(stored.user, nextRefreshToken)
+  }
+
+  async logoutSession(refreshToken: string, _meta: ClientRequestMeta) {
+    if (!refreshToken) return
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex')
+    await this.prisma.refreshToken.updateMany({
+      data: { revokedAt: new Date() },
+      where: { tokenHash, revokedAt: null },
+    })
+  }
+
   private async completeLogin(user: User & { role: { code: string } }, meta: ClientRequestMeta): Promise<LoginResponse> {
     if (user.status !== UserStatus.ACTIVE) {
       await this.writeLoginAudit(user.id, 'blocked', meta)
@@ -536,6 +587,15 @@ export class AuthService {
     })
     await this.notifications.dispatchAfterCommit(notificationIds)
 
+    return this.buildLoginResponse(user, refreshToken, permissions)
+  }
+
+  private async buildLoginResponse(
+    user: User & { role: { code: string } },
+    refreshToken: string,
+    knownPermissions?: string[],
+  ): Promise<LoginResponse> {
+    const permissions = knownPermissions ?? await this.rbac.getUserPermissionCodes(user.id)
     const accessToken = signJwt(
       {
         sub: user.id,

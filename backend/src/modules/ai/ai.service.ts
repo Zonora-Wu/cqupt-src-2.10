@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiModelPurpose, AiModelSource, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { createHash } from 'node:crypto'
+import { assertPublicOutboundUrl } from '../../common/security/outbound-url'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
 import { AiProblemSessionService } from '../ai-knowledge/ai-problem-session.service'
@@ -1085,7 +1086,11 @@ export class AiService {
         const bodyPayload = isRecord(options.body) && typeof options.body.model === 'string'
           ? { ...options.body, model: candidate.model }
           : options.body
-        const response = await fetch(new URL(path, candidate.baseUrl), {
+        const target = new URL(path, candidate.baseUrl)
+        if (candidate.source === AiModelSource.USER_BYOK || candidate.routeId) {
+          await assertPublicOutboundUrl(target)
+        }
+        const response = await fetch(target, {
           body: bodyPayload === undefined ? undefined : JSON.stringify(bodyPayload),
           headers,
           method: options.method,
