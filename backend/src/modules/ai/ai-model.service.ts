@@ -9,6 +9,7 @@ import {
 import { AiCredentialStatus, AiModelPurpose, AiModelSource, AiUserModelPolicy, RoleCode } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
+import { assertPublicOutboundUrl, validatePublicHttpsUrl } from '../../common/security/outbound-url'
 import { AiCredentialCrypto } from './ai-credential.crypto'
 import { AI_PROVIDER_CATALOG_SOURCE_COMMIT, AI_PROVIDER_PRESETS, findProviderPreset } from './ai-provider.catalog'
 import {
@@ -83,7 +84,7 @@ export class AiModelService {
     const apiKey = validateProviderApiKey(requiredText(input.apiKey, 'API Key', 500), providerId)
     const preset = findProviderPreset(providerId)
     const requestedBaseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : ''
-    const baseUrl = validateAdminBaseUrl(requestedBaseUrl || preset?.baseUrl || '')
+    const baseUrl = await validatePublicHttpsUrl(requestedBaseUrl || preset?.baseUrl || '')
     const encrypted = this.crypto.encrypt(apiKey)
 
     return this.prisma.$transaction(async (tx) => {
@@ -184,7 +185,7 @@ export class AiModelService {
     if (await this.prisma.userProviderCredential.count({ where: { userId: user.id } }) >= MAX_CREDENTIALS) {
       throw new BadRequestException(`每个用户最多保存 ${MAX_CREDENTIALS} 个凭据`)
     }
-    const baseUrl = validateProviderBaseUrl(requestedBaseUrl || preset.baseUrl)
+    const baseUrl = await validatePublicHttpsUrl(requestedBaseUrl || preset.baseUrl)
     await this.ensureProviderPreset(providerId)
     const encrypted = this.crypto.encrypt(apiKey)
     return this.prisma.userProviderCredential.create({
@@ -316,7 +317,9 @@ export class AiModelService {
 
   async testCredential(id: string, userId: string) {
     const credential = await this.requireCredential(id, userId, true)
-    const response = await fetch(new URL('models', credential.baseUrl), {
+    const target = new URL('models', credential.baseUrl)
+    await assertPublicOutboundUrl(target)
+    const response = await fetch(target, {
       headers: { Authorization: `Bearer ${this.crypto.decrypt(credential)}` },
       redirect: 'manual',
       signal: AbortSignal.timeout(12_000),
@@ -359,30 +362,6 @@ export class AiModelService {
     if (!model) throw new NotFoundException('模型不存在')
     return model
   }
-}
-
-function validateAdminBaseUrl(value: string) {
-  return validateProviderBaseUrl(value)
-}
-
-function validateProviderBaseUrl(value: string) {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' || isPrivateHostname(url.hostname)) {
-      throw new Error('protocol')
-    }
-    return url.href.endsWith('/') ? url.href : `${url.href}/`
-  } catch {
-    throw new BadRequestException('中转站 Base URL 必须是 HTTPS 地址')
-  }
-}
-
-function isPrivateHostname(hostname: string) {
-  const value = hostname.toLowerCase().replace(/^\[|\]$/g, '')
-  if (value === 'localhost' || value === '::1' || value.endsWith('.local')) return true
-  if (/^127\./.test(value) || /^10\./.test(value) || /^192\.168\./.test(value)) return true
-  const match = value.match(/^172\.(\d+)\./)
-  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31)
 }
 
 function requiredText(value: unknown, label: string, max: number) {

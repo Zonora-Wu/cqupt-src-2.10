@@ -49,8 +49,8 @@ export class ChatService {
   }
 
   async searchContact(unifiedCode: string, user: AuthenticatedRequestUser, ipAddress?: string) {
-    this.rateLimit.consume(`chat-search:user:${user.id}`, 10, 60_000)
-    if (ipAddress) this.rateLimit.consume(`chat-search:ip:${ipAddress}`, 30, 60_000)
+    await this.rateLimit.consume(`chat-search:user:${user.id}`, 10, 60_000)
+    if (ipAddress) await this.rateLimit.consume(`chat-search:ip:${ipAddress}`, 30, 60_000)
     const normalized = unifiedCode.trim()
     if (!/^[A-Za-z0-9]{4,64}$/.test(normalized)) throw new NotFoundException('未找到可聊天用户')
     const target = await this.prisma.user.findFirst({
@@ -158,8 +158,8 @@ export class ChatService {
         await this.audit(tx, user, AuditAction.CHAT_MESSAGE_BLOCKED, 'ChatConversation', id, 'blocked', meta, { contentHash: sha256(input.content), sensitiveWordId: sensitive.id })
         return { blocked: true as const, message: null }
       }
-      this.rateLimit.consume(`chat-send:short:${user.id}`, 10, 10_000)
-      this.rateLimit.consume(`chat-send:minute:${user.id}`, 60, 60_000)
+      await this.rateLimit.consume(`chat-send:short:${user.id}`, 10, 10_000)
+      await this.rateLimit.consume(`chat-send:minute:${user.id}`, 60, 60_000)
       await this.consumeStrangerQuota(tx, conversation, user)
       const message = await tx.chatMessage.create({ data: { conversationId: id, senderId: user.id, clientMessageId: input.clientMessageId, content: input.content }, include: { sender: { include: { role: true } } } })
       await tx.chatConversation.update({ where: { id }, data: { updatedAt: new Date() } })

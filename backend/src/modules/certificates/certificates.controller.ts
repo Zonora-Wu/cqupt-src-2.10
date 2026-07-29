@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common'
+import { SecurityRateLimitService } from '../../common/security/security-rate-limit.service'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -34,7 +35,10 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 
 @Controller('certificates')
 export class CertificatesController {
-  constructor(@Inject(CertificatesService) private readonly certificates: CertificatesService) {}
+  constructor(
+    @Inject(CertificatesService) private readonly certificates: CertificatesService,
+    @Inject(SecurityRateLimitService) private readonly rateLimit: SecurityRateLimitService,
+  ) {}
 
   @Get('manage')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -89,12 +93,17 @@ export class CertificatesController {
     res.setHeader('Content-Type', preview.contentType)
     res.setHeader('Content-Length', preview.body.length)
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(preview.fileName)}`)
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; object-src 'none'; frame-ancestors 'self'")
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.send(preview.body)
   }
 
   @Get('public/:certificateNo')
-  publicVerify(@Param('certificateNo') certificateNo: string) {
+  async publicVerify(@Param('certificateNo') certificateNo: string, @Req() req: RequestLike) {
+    const meta = getRequestMeta(req)
+    await this.rateLimit.consume('certificate-public-ip', meta.ipAddress, 30, 10 * 60_000)
+    await this.rateLimit.consume('certificate-public-number', certificateNo.trim().toUpperCase(), 10, 10 * 60_000)
     return this.certificates.publicVerify(certificateNo)
   }
 }

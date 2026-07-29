@@ -6,7 +6,7 @@ import { GuestHome } from './pages/guest/GuestHome'
 import { PublicOnly, RequireRole } from './routes/guards'
 import { getDefaultPathForRole } from './routes/routeConfig'
 import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
-import { clearSavedSession, getCurrentUser, getSavedSession, type AuthUser } from './services/auth'
+import { clearSavedSession, getCurrentUser, getSavedSession, logout, type AuthUser } from './services/auth'
 import { getPublicPlatformAppearance } from './services/systemSettings'
 import { applyBrandTheme } from './utils/brandTheme'
 import { applyPlatformBranding } from './utils/platformBranding'
@@ -38,7 +38,7 @@ function App() {
 function AppShell() {
   const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getSavedSession()?.user ?? null)
-  const [isCheckingSession, setIsCheckingSession] = useState(() => Boolean(getSavedSession()?.accessToken))
+  const [isCheckingSession, setIsCheckingSession] = useState(() => Boolean(getSavedSession()?.user))
   const [isAppearanceReady, setIsAppearanceReady] = useState(false)
   const [isInitialVisualReady, setIsInitialVisualReady] = useState(false)
   const [sessionNotice, setSessionNotice] = useState('')
@@ -233,10 +233,11 @@ function AppShell() {
   )
 
   function handleLogout() {
-    clearSavedSession()
-    setCurrentUser(null)
-    setAuthModal(null)
-    navigate('/', { replace: true })
+    void logout().finally(() => {
+      setCurrentUser(null)
+      setAuthModal(null)
+      navigate('/', { replace: true })
+    })
   }
 }
 

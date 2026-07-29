@@ -25,11 +25,13 @@ type ApiBlobRequestOptions = {
 }
 
 type StoredSession = {
-  accessToken?: string
+  user?: unknown
 }
 
 const AUTH_SESSION_KEY = 'cqupt-src-auth-session'
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3001/api').replace(/\/$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '')
+let refreshPromise: Promise<string | null> | null = null
+let memoryAccessToken: string | null = null
 
 export class ApiError extends Error {
   data: unknown
@@ -101,13 +103,14 @@ async function rawApiRequest(
   options: ApiRequestOptions & {
     rawBody?: BodyInit
   },
+  retryAfterRefresh = true,
 ) {
   const headers: Record<string, string> = {
     ...options.headers,
   }
 
   if (options.auth) {
-    const accessToken = getAccessToken()
+    const accessToken = getAccessToken() ?? await refreshAccessToken()
     if (!accessToken) {
       invalidateSession()
       throw new ApiError(options.unauthenticatedMessage ?? '登录状态已失效，请重新登录', { status: 401 })
@@ -115,15 +118,47 @@ async function rawApiRequest(
     headers.Authorization = `Bearer ${accessToken}`
   }
 
+  let response: Response
   try {
-    return await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       body: options.rawBody,
+      credentials: 'include',
       headers,
       method: options.method,
     })
   } catch {
     throw new ApiError('无法连接后端服务，请确认后端已启动', { status: null })
   }
+  if (options.auth && response.status === 401 && retryAfterRefresh) {
+    const nextAccessToken = await refreshAccessToken()
+    if (nextAccessToken) {
+      return rawApiRequest(path, options, false)
+    }
+  }
+  return response
+}
+
+async function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+    credentials: 'include',
+    method: 'POST',
+  })
+    .then(async (response) => {
+      if (!response.ok) return null
+      const data = await parseResponse(response)
+      if (!data || typeof data !== 'object' || typeof (data as { accessToken?: unknown }).accessToken !== 'string') return null
+      const accessToken = (data as { accessToken: string }).accessToken
+      memoryAccessToken = accessToken
+      const current = readStoredSession()
+      if (current) window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(current))
+      return accessToken
+    })
+    .catch(() => null)
+    .finally(() => {
+      refreshPromise = null
+    })
+  return refreshPromise
 }
 
 async function parseResponse(response: Response) {
@@ -151,12 +186,18 @@ function assertOk(response: Response, data: unknown, authenticatedRequest: boole
 }
 
 export function getAccessToken() {
+  return memoryAccessToken
+}
+
+export function setAccessToken(accessToken: string | null) {
+  memoryAccessToken = accessToken
+}
+
+function readStoredSession() {
   const raw = window.localStorage.getItem(AUTH_SESSION_KEY)
   if (!raw) return null
-
   try {
-    const session = JSON.parse(raw) as StoredSession
-    return session.accessToken ?? null
+    return JSON.parse(raw) as StoredSession
   } catch {
     window.localStorage.removeItem(AUTH_SESSION_KEY)
     return null
@@ -164,6 +205,7 @@ export function getAccessToken() {
 }
 
 function invalidateSession() {
+  memoryAccessToken = null
   window.localStorage.removeItem(AUTH_SESSION_KEY)
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT))
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { SecurityModule } from './common/security/security.module'
 import { validateEnv } from './config/env'
 import { ObjectStorageModule } from './integrations/object-storage/object-storage.module'
 import { AccessModule } from './modules/access/access.module'
@@ -33,6 +34,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
       isGlobal: true,
       validate: validateEnv,
     }),
+    SecurityModule,
     PrismaModule,
     ObjectStorageModule,
     HealthModule,

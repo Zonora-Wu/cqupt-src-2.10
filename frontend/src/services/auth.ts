@@ -1,4 +1,4 @@
-import { ApiError, apiRequest } from './apiClient'
+import { ApiError, apiRequest, setAccessToken } from './apiClient'
 import { type HumanVerificationPayload } from './humanVerification'
 
 export type EmailLoginPayload = {
@@ -30,8 +30,7 @@ export type AuthUser = {
 }
 
 export type AuthSession = {
-  accessToken: string
-  refreshToken: string
+  accessToken?: string
   user: AuthUser
 }
 
@@ -49,7 +48,6 @@ type BackendUser = {
 
 type BackendLoginResponse = {
   accessToken: string
-  refreshToken: string
   user: BackendUser
 }
 
@@ -200,7 +198,7 @@ export async function loginWithEmailCode(payload: EmailLoginPayload) {
 
 export async function getCurrentUser() {
   const session = getSavedSession()
-  if (!session?.accessToken) {
+  if (!session?.user) {
     return null
   }
 
@@ -210,7 +208,6 @@ export async function getCurrentUser() {
       method: 'GET',
     })
     const nextSession = {
-      ...session,
       user: normalizeUser(user),
     }
 
@@ -239,7 +236,16 @@ export function getSavedSession() {
 }
 
 export function clearSavedSession() {
+  setAccessToken(null)
   window.localStorage.removeItem(AUTH_SESSION_KEY)
+}
+
+export async function logout() {
+  try {
+    await apiRequest<{ success: boolean }>('/auth/logout', { method: 'POST' })
+  } finally {
+    clearSavedSession()
+  }
 }
 
 export function isValidEmail(email: string) {
@@ -257,7 +263,6 @@ export function isValidUnifiedCode(value: string) {
 function normalizeLoginResponse(response: BackendLoginResponse): AuthSession {
   return {
     accessToken: response.accessToken,
-    refreshToken: response.refreshToken,
     user: normalizeUser(response.user),
   }
 }
@@ -281,6 +286,7 @@ function normalizeRole(role: BackendRole): AuthUser['role'] {
 }
 
 function saveSession(session: AuthSession) {
-  window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session))
+  setAccessToken(session.accessToken ?? null)
+  window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: session.user }))
   return session
 }
