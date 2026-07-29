@@ -50,7 +50,7 @@ log_warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
 log_error()   { echo -e "${RED}✘ $1${NC}" >&2; }
 
 # ---- 工具检查 ----
-for cmd in docker node npm; do
+for cmd in curl docker node npm; do
   if ! command -v "$cmd" &>/dev/null; then
     log_error "$cmd 未安装，请先安装后再运行此脚本"
     exit 1
@@ -58,6 +58,48 @@ for cmd in docker node npm; do
 done
 
 mkdir -p "$STATE_DIR"
+
+read_state_pid() {
+  local service="$1"
+  node -e "
+    try {
+      const state = require(process.argv[1])
+      process.stdout.write(String(state[process.argv[2]]?.pid ?? ''))
+    } catch {}
+  " "$STATE_FILE" "$service" 2>/dev/null || true
+}
+
+state_process_is_running() {
+  local service="$1"
+  local pid
+  pid="$(read_state_pid "$service")"
+  [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+if [[ -f "$STATE_FILE" ]]; then
+  if curl -fsS --max-time 2 http://localhost:3001/api/health >/dev/null \
+    && curl -fsS --max-time 2 http://localhost:5173 >/dev/null; then
+    log_success "本地开发环境已运行，无需重复启动"
+    echo "  前端          http://localhost:5173"
+    echo "  后端 API      http://localhost:3001/api/health"
+    exit 0
+  fi
+  if state_process_is_running backend || state_process_is_running frontend; then
+    log_error "状态文件仍有存活进程，但服务未全部就绪。请先执行：bash stop-local.sh --keep-postgres --keep-redis --keep-minio"
+    exit 1
+  fi
+  log_warn "发现失效的进程状态文件，将重新启动"
+  rm -f "$STATE_FILE"
+fi
+
+if curl -fsS --max-time 2 http://localhost:3001/api/health >/dev/null 2>&1; then
+  log_error "端口 3001 已被未记录的后端占用，请先确认并停止该进程"
+  exit 1
+fi
+if curl -fsS --max-time 2 http://localhost:5173 >/dev/null 2>&1; then
+  log_error "端口 5173 已被未记录的前端占用，请先确认并停止该进程"
+  exit 1
+fi
 
 echo ""
 echo -e "${GREEN}=== CQUPT-SRC 本地开发环境启动 ===${NC}"
@@ -132,12 +174,31 @@ LOG_DIR="$STATE_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 log_info "启动后端开发服务器（端口 3001）..."
-(cd "$BACKEND_DIR" && npm run dev > "$LOG_DIR/backend.log" 2>&1) &
+(cd "$BACKEND_DIR" && exec ./node_modules/.bin/tsx watch src/main.ts > "$LOG_DIR/backend.log" 2>&1) &
 BACKEND_PID=$!
 
 log_info "启动前端开发服务器（端口 5173）..."
-(cd "$FRONTEND_DIR" && npm run dev > "$LOG_DIR/frontend.log" 2>&1) &
+(cd "$FRONTEND_DIR" && exec ./node_modules/.bin/vite --strictPort > "$LOG_DIR/frontend.log" 2>&1) &
 FRONTEND_PID=$!
+
+# ---- 仅清理本次脚本启动的进程 ----
+CLEANED=false
+cleanup() {
+  local status=$?
+  if [[ "$CLEANED" == true ]]; then
+    return
+  fi
+  CLEANED=true
+  trap - EXIT INT TERM
+  echo ""
+  log_info "正在停止本次启动的开发服务器..."
+  kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+  wait "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+  rm -f "$STATE_FILE"
+  log_success "前后端进程已停止（Docker 容器仍在运行）"
+  exit "$status"
+}
+trap cleanup EXIT INT TERM
 
 # ---- 保存进程状态 ----
 cat > "$STATE_FILE" <<EOF
@@ -155,16 +216,42 @@ EOF
 
 # ---- 等待服务就绪 ----
 log_info "等待后端启动..."
+BACKEND_READY=false
 for i in $(seq 1 30); do
+  if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+    log_error "后端进程已退出，请查看日志：$LOG_DIR/backend.log"
+    exit 1
+  fi
   if curl -sf http://localhost:3001/api/health &>/dev/null; then
     log_success "后端已就绪"
+    BACKEND_READY=true
     break
-  fi
-  if [[ $i -eq 30 ]]; then
-    log_warn "后端未在 60s 内响应，请查看日志：$LOG_DIR/backend.log"
   fi
   sleep 2
 done
+if [[ "$BACKEND_READY" == false ]]; then
+  log_error "后端未在 60s 内响应，请查看日志：$LOG_DIR/backend.log"
+  exit 1
+fi
+
+log_info "等待前端启动..."
+FRONTEND_READY=false
+for i in $(seq 1 30); do
+  if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+    log_error "前端进程已退出，请查看日志：$LOG_DIR/frontend.log"
+    exit 1
+  fi
+  if curl -sf http://localhost:5173 &>/dev/null; then
+    log_success "前端已就绪"
+    FRONTEND_READY=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$FRONTEND_READY" == false ]]; then
+  log_error "前端未在 30s 内响应，请查看日志：$LOG_DIR/frontend.log"
+  exit 1
+fi
 
 echo ""
 echo -e "${GREEN}=== 启动完成 ===${NC}"
@@ -186,15 +273,10 @@ echo -e "${CYAN}停止所有服务：${NC}"
 echo "  bash stop-local.sh"
 echo ""
 
-# ---- 保持前台运行，Ctrl+C 时自动清理 ----
-cleanup() {
-  echo ""
-  log_info "正在停止开发服务器..."
-  kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
-  log_success "前后端进程已停止（Docker 容器仍在运行）"
-  exit 0
-}
-trap cleanup INT TERM
-
 log_info "按 Ctrl+C 停止前后端开发服务器（Docker 容器将继续运行）"
-wait "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+if wait -n "$BACKEND_PID" "$FRONTEND_PID"; then
+  log_warn "开发服务器已退出"
+else
+  log_error "开发服务器异常退出，请检查日志"
+  exit 1
+fi

@@ -3,12 +3,17 @@ import { getPlatformLogos, subscribePlatformBranding } from '../../utils/platfor
 
 type BrandLogoProps = {
   className?: string
+  onDarkSurface?: boolean
 }
 
-export function BrandLogo({ className = 'h-10 w-auto object-contain' }: BrandLogoProps) {
+export function BrandLogo({ className = 'h-10 w-auto object-contain', onDarkSurface = false }: BrandLogoProps) {
   const [logos, setLogos] = useState(() => getPlatformLogos())
 
   useEffect(() => subscribePlatformBranding(setLogos), [])
+
+  if (onDarkSurface) {
+    return <img alt="CQUPT-SRC" className={className} src={logos.navigationLogoUrlDark} />
+  }
 
   return (
     <>

@@ -10,7 +10,6 @@ import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
 import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
-import { AlertMessage } from '../../components/ui/AlertMessage'
 import { AiSkillDialog } from '../../components/ai/AiSkillDialog'
 import { AiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
@@ -107,6 +106,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [problemSession, setProblemSession] = useState<AiProblemSession | null>(null)
   const [historySessions, setHistorySessions] = useState<AiProblemSession[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [newConversationBusy, setNewConversationBusy] = useState(false)
   const [historyCollapsed, setHistoryCollapsed] = useState(false)
   const [historyAutoCollapsed, setHistoryAutoCollapsed] = useState(false)
   const [historyPanelWidth, setHistoryPanelWidth] = useState(loadHistoryPanelWidth)
@@ -377,6 +377,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   }
 
   const startFreshProblemSession = async () => {
+    if (newConversationBusy) return null
+    setNewConversationBusy(true)
     const currentId = problemSessionIdRef.current
     try {
       if (currentId && hasProblemContentRef.current) {
@@ -397,6 +399,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         title: '未能新建对话',
       })
       return null
+    } finally {
+      setNewConversationBusy(false)
     }
   }
 
@@ -769,7 +773,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
             />
           )}
         </AnimatePresence>
-        <div className="flex items-end gap-2">
+        <div className="flex items-center gap-2">
           <input
             accept="application/pdf,.pdf"
             className="hidden"
@@ -779,7 +783,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           />
           <button
             aria-label="选择 PDF 附件"
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-900 disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-black/5 hover:text-slate-900 disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
             disabled={uploadingAttachment || sending}
             onClick={() => reportFileInputRef.current?.click()}
             type="button"
@@ -799,7 +803,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           />
           <button
             aria-label="发送"
-            className="rounded-lg bg-brand-600 p-2 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
             disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || (!usingOwnModel && (aiQuota?.enabled === false || aiQuota?.remaining === 0))}
             onClick={() => void sendMessage()}
             type="button"
@@ -814,6 +818,12 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   return (
     <>
     <FloatingNotice message={modelNotice} onClose={() => setModelNotice('')} variant="success" />
+    <FloatingNotice
+      message={reportNotice?.message ?? ''}
+      onClose={() => setReportNotice(null)}
+      title={reportNotice?.title}
+      variant="error"
+    />
     {skillDialogOpen && (
       <AiSkillDialog
         activeSkillIds={selectedSkillIds}
@@ -833,6 +843,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}
       collapsed={historyIsCollapsed}
       loading={historyLoading}
+      newConversationBusy={newConversationBusy}
       sessions={historySessions}
       width={historyPanelWidth}
       onCollapsedChange={handleHistoryCollapsedChange}
@@ -849,6 +860,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       <MobileHistoryBar
         activeId={problemSession?.id ?? null}
         loading={historyLoading}
+        newConversationBusy={newConversationBusy}
         sessions={historySessions}
         onNew={() => void startFreshProblemSession()}
         onOpen={(id) => void openHistorySession(id)}
@@ -858,6 +870,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         <ProblemSessionResolutionCard
           busy={resolutionAction}
           error={resolutionError}
+          newConversationPending={pendingNewConversationRef.current}
           onContinue={() => void continueProblemSession()}
           onSnooze={() => void snoozeProblemSession()}
           onResolve={() => void resolveProblemSession()}
@@ -1008,7 +1021,6 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           if (pendingReportSelection) void analyzeSelectedReportDraft(pendingReportSelection.file, draft)
         }}
       />
-      {reportNotice && <AlertMessage message={reportNotice.message} onClose={() => setReportNotice(null)} title={reportNotice.title} variant="error" />}
     </section>
     </>
   )
@@ -1107,6 +1119,7 @@ function AiHistoryPanel({
   autoCollapsed,
   collapsed,
   loading,
+  newConversationBusy,
   sessions,
   width,
   onCollapsedChange,
@@ -1118,6 +1131,7 @@ function AiHistoryPanel({
   autoCollapsed: boolean
   collapsed: boolean
   loading: boolean
+  newConversationBusy: boolean
   sessions: AiProblemSession[]
   width: number
   onCollapsedChange: (collapsed: boolean) => void
@@ -1161,13 +1175,14 @@ function AiHistoryPanel({
         </div>
         <div className="flex items-center gap-1">
           <button
-            aria-label="新对话"
+            aria-label={newConversationBusy ? '正在新建对话' : '新对话'}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-slate-600 transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+            disabled={newConversationBusy}
             onClick={onNew}
-            title="新对话"
+            title={newConversationBusy ? '正在处理' : '新对话'}
             type="button"
           >
-            <MessageSquarePlus className="h-4 w-4" />
+            <MessageSquarePlus className={`h-4 w-4 ${newConversationBusy ? 'animate-pulse' : ''}`} />
           </button>
           <button
             aria-label="折叠历史对话"
@@ -1236,6 +1251,7 @@ function AiHistoryPanel({
 function MobileHistoryBar({
   activeId,
   loading,
+  newConversationBusy,
   sessions,
   showAtDesktop = false,
   onNew,
@@ -1243,6 +1259,7 @@ function MobileHistoryBar({
 }: {
   activeId: string | null
   loading: boolean
+  newConversationBusy: boolean
   sessions: AiProblemSession[]
   showAtDesktop?: boolean
   onNew: () => void
@@ -1253,11 +1270,12 @@ function MobileHistoryBar({
       <div className="flex items-center gap-2">
         <button
           className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
+          disabled={newConversationBusy}
           onClick={onNew}
           type="button"
         >
-          <MessageSquarePlus className="h-4 w-4" />
-          新对话
+          <MessageSquarePlus className={`h-4 w-4 ${newConversationBusy ? 'animate-pulse' : ''}`} />
+          {newConversationBusy ? '处理中' : '新对话'}
         </button>
         <div className="ai-chat-input-scroll flex min-w-0 flex-1 gap-2 overflow-x-auto">
           {loading ? <span className="shrink-0 rounded-lg bg-[var(--app-panel-muted-bg)] px-3 py-2 text-xs text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">加载中</span> : null}
@@ -1300,37 +1318,43 @@ function formatHistoryTime(value: string) {
 function ProblemSessionResolutionCard({
   busy,
   error,
+  newConversationPending,
   onContinue,
   onSnooze,
   onResolve,
 }: {
   busy: 'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null
   error: string
+  newConversationPending: boolean
   onContinue: () => void
   onSnooze: () => void
   onResolve: () => void
 }) {
-  return (
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div className="pointer-events-none fixed left-1/2 top-20 z-[2147483646] w-[min(760px,calc(100vw-32px))] -translate-x-1/2">
     <motion.aside
       animate={{ opacity: 1, y: 0 }}
-      className="mb-5 flex flex-col gap-4 rounded-lg border border-brand-600/20 bg-[var(--app-panel-bg)] px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+      className="pointer-events-auto flex flex-col gap-4 rounded-lg border border-brand-600/20 bg-[var(--app-panel-bg)] px-4 py-3 shadow-xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between"
       initial={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="flex min-w-0 items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300"><Bot className="h-4 w-4" /></div>
         <div>
-          <h2 className="text-sm font-semibold text-slate-950 dark:text-white">这个问题解决了吗？</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">确认后才进入总结和沉淀审核；稍后再问会在 7 天内不再提醒。</p>
+          <h2 className="text-sm font-semibold text-slate-950 dark:text-white">{newConversationPending ? '开始新对话前，当前问题解决了吗？' : '这个问题解决了吗？'}</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{newConversationPending ? '当前对话会保留在历史中；可确认已解决，或稍后处理并直接新建。' : '确认后才进入总结和沉淀审核；稍后再问会在 7 天内不再提醒。'}</p>
           {error ? <p className="mt-1 text-xs leading-5 text-red-600 dark:text-red-300">{error}</p> : null}
         </div>
       </div>
       <div className="grid shrink-0 grid-cols-3 gap-2 sm:flex">
         <button className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={busy !== null} onClick={onResolve} type="button">{busy === 'RESOLVE' ? '处理中' : '已解决'}</button>
-        <button className="rounded-lg border border-black/10 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy !== null} onClick={onSnooze} type="button">{busy === 'SNOOZE' ? '设置中' : '稍后再问'}</button>
+        <button className="rounded-lg border border-black/10 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy !== null} onClick={onSnooze} type="button">{busy === 'SNOOZE' ? '设置中' : newConversationPending ? '稍后处理并新建' : '稍后再问'}</button>
         <button className="rounded-lg border border-black/10 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-60 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10" disabled={busy !== null} onClick={onContinue} type="button">{busy === 'CONTINUE' ? '继续中' : '继续'}</button>
       </div>
     </motion.aside>
+    </div>,
+    document.body,
   )
 }
 
@@ -2079,7 +2103,7 @@ function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessmen
                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                   提交后将进入平台漏洞审核流程。请确认该漏洞在授权范围内，复现步骤和影响描述真实准确，且未包含越权测试内容。
                 </p>
-                <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm ">
+                <div className="mt-4 rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-3 text-sm dark:border-white/10">
                   <p className="font-medium text-slate-900 dark:text-white">{confirming.draft.title || '未填写标题'}</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{confirming.draft.assetName || '未填写影响资产'}</p>
                 </div>
@@ -2317,7 +2341,7 @@ function LearningResourceCard({ action, card }: { card: AiCard & { type: 'LEARNI
   }
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 ">
+    <div className="flex h-full flex-col rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-4 shadow-sm backdrop-blur-xl dark:border-white/10">
       <div className="flex flex-1 items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
           <GraduationCap className="h-4 w-4" />
@@ -2394,7 +2418,7 @@ function MallProductCard({
         ? 'border-red-300/50 bg-red-50/80 dark:border-red-700/40 dark:bg-red-950/20'
         : 'border-black/10 bg-[var(--app-panel-bg)] dark:border-white/10'
     }`}>
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100 ">
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-[var(--app-panel-muted-bg)]">
         {card.imageUrl ? (
           <img
             alt={card.name}
@@ -2431,15 +2455,15 @@ function MallProductCard({
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-[var(--app-panel-muted-bg)] px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">库存</span>
             <strong className="block truncate">{displayedStock} 件</strong>
           </div>
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-[var(--app-panel-muted-bg)] px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">积分</span>
             <strong className="block truncate">{displayedBalance.toLocaleString('zh-CN')}</strong>
           </div>
-          <div className="rounded-lg bg-white/80 px-2.5 py-2 text-slate-600 ring-1 ring-black/5  dark:text-slate-300 dark:ring-white/10">
+          <div className="rounded-lg bg-[var(--app-panel-muted-bg)] px-2.5 py-2 text-slate-600 ring-1 ring-black/5 dark:text-slate-300 dark:ring-white/10">
             <span className="block whitespace-nowrap text-[10px] text-slate-400">限购</span>
             <strong className="block truncate">{card.perUserLimit ? `${card.perUserLimit} 件` : '不限'}</strong>
           </div>
@@ -2473,7 +2497,7 @@ function MallProductCard({
         )}
 
         {redeemState === 'loading' && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
             正在兑换...
           </span>
@@ -2553,7 +2577,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             card.needsSupplement
               ? 'bg-amber-600 text-white hover:bg-amber-700'
-              : 'border border-black/10 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10  dark:text-slate-300 dark:hover:bg-white/[0.08]'
+              : 'border border-black/10 bg-[var(--app-panel-bg)] text-slate-700 hover:bg-[var(--app-panel-muted-bg)] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.08]'
           }`}
           href={`/vulnerabilities/${card.id}`}
         >

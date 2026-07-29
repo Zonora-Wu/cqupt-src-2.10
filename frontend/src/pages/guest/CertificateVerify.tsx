@@ -2,6 +2,7 @@ import { CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
+import { BorderGlow } from '../../components/ui/BorderGlow'
 import { publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
 
 type CertificateVerifyProps = {
@@ -71,10 +72,11 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
 
       <motion.section
         animate={{ opacity: 1, y: 0 }}
-        className="guest-palette-item mx-auto mt-14 w-full max-w-3xl rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10"
+        className="mx-auto mt-14 w-full max-w-3xl"
         initial={{ opacity: 0, y: 24 }}
         transition={{ delay: 0.16, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
       >
+        <BorderGlow className="rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 backdrop-blur-xl dark:border-white/10">
         <label className="mb-3 block text-sm font-medium text-slate-700 dark:text-slate-300">证书编号</label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -105,6 +107,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
           <span>公开查询仅展示脱敏信息，不公开漏洞细节或证书 PDF。</span>
           <span className="font-mono">查询成功后显示该证书累计公开查询次数</span>
         </div>
+        </BorderGlow>
       </motion.section>
 
       <AnimatePresence>

@@ -7,6 +7,7 @@ import {
   getAiSkills,
   isUsableAiSkill,
   submitAiSkill,
+  updateAiSkill,
   uploadAiSkill,
   type AiSkillLibraryItem,
 } from '../../services/ai'
@@ -32,6 +33,7 @@ export function AiSkillDialog({
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [viewingSkill, setViewingSkill] = useState<AiSkillLibraryItem | null>(null)
 
   const reload = () => getAiSkills().then((result) => setSkills(result.skills.filter(isUsableAiSkill)))
   useEffect(() => {
@@ -96,8 +98,11 @@ export function AiSkillDialog({
               </button>
               {skills.map((skill) => (
                 <div className={skillTileClass(activeSkillIds.includes(skill.id))} key={skill.id}>
-                  <button className="min-w-0 flex-1 text-left" onClick={() => toggleActive(skill.id)} type="button">
+                  <button className="min-w-0 flex-1 text-left" onClick={() => setViewingSkill(skill)} type="button">
                     <span className="block truncate text-sm font-semibold">{skill.title}</span>
+                  </button>
+                  <button className={smallButton} onClick={() => toggleActive(skill.id)} type="button">
+                    {activeSkillIds.includes(skill.id) ? '已使用' : '使用'}
                   </button>
                   <button
                     className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium ${pinnedSkillIds.includes(skill.id) ? 'bg-brand-600 text-white' : 'bg-black/5 text-slate-600 dark:bg-white/10 dark:text-slate-300'}`}
@@ -106,12 +111,6 @@ export function AiSkillDialog({
                   >
                     {pinnedSkillIds.includes(skill.id) ? '已固定' : '固定'}
                   </button>
-                  {skill.owned && (
-                    <div className="mt-1 flex w-full gap-2 border-t border-black/10 pt-2 dark:border-white/10">
-                      {['ACTIVE_PRIVATE', 'CHANGES_REQUESTED', 'REJECTED'].includes(skill.lifecycleStatus ?? '') && <button className={smallButton} disabled={busy} onClick={() => void run(() => submitAiSkill(skill.id), '已提交人工审核')} type="button">申请公开</button>}
-                      <button className="text-xs font-medium text-red-600 dark:text-red-400" disabled={busy} onClick={() => void run(() => deleteAiSkill(skill.id), 'Skill 已归档')} type="button">删除</button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -121,8 +120,46 @@ export function AiSkillDialog({
         </section>
       </div>
       {addOpen && <AddSkillDialog busy={busy} onClose={() => setAddOpen(false)} onRun={run} />}
+      {viewingSkill && <SkillContentDialog busy={busy} onClose={() => setViewingSkill(null)} onRun={run} skill={viewingSkill} />}
     </>,
     document.body,
+  )
+}
+
+function SkillContentDialog({ busy, onClose, onRun, skill }: { busy: boolean; onClose: () => void; onRun: (action: () => Promise<unknown>, success: string) => Promise<boolean>; skill: AiSkillLibraryItem }) {
+  const [title, setTitle] = useState(skill.title)
+  const [content, setContent] = useState(skill.content)
+  const editable = skill.owned === true && ['DRAFT', 'ACTIVE_PRIVATE', 'CHANGES_REQUESTED', 'REJECTED'].includes(skill.lifecycleStatus ?? '')
+  const canSubmit = skill.owned === true && ['ACTIVE_PRIVATE', 'CHANGES_REQUESTED', 'REJECTED'].includes(skill.lifecycleStatus ?? '')
+  return (
+    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section aria-modal="true" className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--app-surface)] text-slate-950 shadow-2xl ring-1 ring-black/10 dark:text-white dark:ring-white/10" role="dialog">
+        <header className="flex items-start justify-between gap-4 border-b border-black/10 px-5 py-4 dark:border-white/10">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold">{skill.title}</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{editable ? '我的私有 Skill · 可编辑' : '平台公开 Skill · 只读查看'}</p>
+          </div>
+          <button aria-label="关闭" className={iconButton} onClick={onClose} type="button"><X className="h-5 w-5" /></button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {editable ? (
+            <>
+              <label className="block text-xs font-medium">名称<input className={inputClass} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
+              <label className="mt-4 block text-xs font-medium">SKILL.md 内容<textarea className={`${inputClass} min-h-72 resize-y font-mono text-xs leading-6`} onChange={(event) => setContent(event.target.value)} value={content} /></label>
+            </>
+          ) : <pre className="whitespace-pre-wrap break-words rounded-lg border border-black/10 bg-black/[0.025] p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">{skill.content}</pre>}
+        </div>
+        {skill.owned && (
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 px-5 py-4 dark:border-white/10">
+            <button className="text-sm font-medium text-red-600 transition hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300" disabled={busy} onClick={async () => { if (await onRun(() => deleteAiSkill(skill.id), 'Skill 已归档')) onClose() }} type="button">删除 Skill</button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {canSubmit && <button className={secondaryButton} disabled={busy} onClick={async () => { if (await onRun(() => submitAiSkill(skill.id), '已提交人工审核')) onClose() }} type="button">申请公开</button>}
+              {editable && <button className={primaryButton} disabled={busy || !title.trim() || !content.trim()} onClick={async () => { if (await onRun(() => updateAiSkill(skill.id, { content: content.trim(), title: title.trim() }), 'Skill 已更新')) onClose() }} type="button">保存修改</button>}
+            </div>
+          </footer>
+        )}
+      </section>
+    </div>
   )
 }
 

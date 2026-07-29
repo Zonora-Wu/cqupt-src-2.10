@@ -89,13 +89,64 @@ export class AiDeclarativeSkillService {
 
   async update(id: string, input: Record<string, unknown>, user: AuthenticatedRequestUser) {
     const skill = await this.requireOwner(id, user)
-    if (!(new Set<AiSkillLifecycleStatus>([AiSkillLifecycleStatus.DRAFT, AiSkillLifecycleStatus.ACTIVE_PRIVATE, AiSkillLifecycleStatus.CHANGES_REQUESTED, AiSkillLifecycleStatus.REJECTED])).has(skill.lifecycleStatus)) {
+    const isPublishedSystemSkill = user.role === RoleCode.ADMIN
+      && user.permissions.includes('ai:manage_skills')
+      && skill.lifecycleStatus === AiSkillLifecycleStatus.PUBLISHED
+      && (!skill.createdBy || skill.createdBy.role.code === RoleCode.ADMIN)
+    if (!isPublishedSystemSkill && !(new Set<AiSkillLifecycleStatus>([AiSkillLifecycleStatus.DRAFT, AiSkillLifecycleStatus.ACTIVE_PRIVATE, AiSkillLifecycleStatus.CHANGES_REQUESTED, AiSkillLifecycleStatus.REJECTED])).has(skill.lifecycleStatus)) {
       throw new BadRequestException('审核中或已发布版本不能直接修改')
     }
     const title = input.title === undefined ? skill.title : requiredText(input.title, 'Skill 名称', 80)
     const content = input.content === undefined ? skill.content : requiredText(input.content, 'Skill 内容', 30_000)
-    const requestedTools = validateRequestedTools(input.requestedTools)
+    const requestedTools = input.requestedTools === undefined
+      ? skill.toolGrants.map((grant) => grant.toolName)
+      : validateRequestedTools(input.requestedTools)
     return this.prisma.$transaction(async (tx) => {
+      if (isPublishedSystemSkill) {
+        const latestVersion = (await tx.aiSkillRevision.aggregate({
+          where: { skillId: id },
+          _max: { version: true },
+        }))._max.version ?? skill.version
+        const nextVersion = Math.max(latestVersion, skill.version) + 1
+        const contentSha256 = sha256(content)
+        await tx.aiSkillRevision.create({
+          data: {
+            content,
+            contentSha256,
+            operation: AiSkillLifecycleOperation.UPDATE,
+            skillId: id,
+            version: nextVersion,
+          },
+        })
+        await tx.aiSkillFile.upsert({
+          where: { skillId_path: { skillId: id, path: 'SKILL.md' } },
+          create: {
+            content,
+            mimeType: 'text/markdown',
+            path: 'SKILL.md',
+            sha256: contentSha256,
+            sizeBytes: Buffer.byteLength(content),
+            skillId: id,
+          },
+          update: {
+            content,
+            sha256: contentSha256,
+            sizeBytes: Buffer.byteLength(content),
+          },
+        })
+        return tx.aiSkill.update({
+          where: { id },
+          data: {
+            content,
+            contentSha256,
+            lastPublishedAt: new Date(),
+            metadata: mergeRequestedTools(skill.metadata, requestedTools),
+            title,
+            version: nextVersion,
+          },
+          include: { toolGrants: true },
+        })
+      }
       await tx.aiSkillToolGrant.deleteMany({ where: { skillId: id } })
       return tx.aiSkill.update({
         where: { id },
@@ -261,6 +312,10 @@ export class AiDeclarativeSkillService {
   private async requireOwner(id: string, user: AuthenticatedRequestUser) {
     const skill = await this.prisma.aiSkill.findFirst({
       where: user.role === RoleCode.ADMIN ? { id } : { id, createdById: user.id },
+      include: {
+        createdBy: { select: { role: { select: { code: true } } } },
+        toolGrants: true,
+      },
     })
     if (!skill) throw new NotFoundException('Skill 不存在或无权操作')
     return skill
@@ -372,6 +427,12 @@ function optionalBoolean(value: unknown, label: string) {
 
 function fileFromText(path: string, content: string) {
   return { content, path, sha256: sha256(content), sizeBytes: Buffer.byteLength(content) }
+}
+function mergeRequestedTools(metadata: unknown, requestedTools: string[]) {
+  const current = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {}
+  return { ...current, requestedTools }
 }
 function sha256(value: string) { return createHash('sha256').update(value).digest('hex') }
 function uniqueSlug(value: string) { return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'skill' }

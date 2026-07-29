@@ -56,7 +56,7 @@ export const SkillComposerEditor = forwardRef<SkillComposerEditorHandle, SkillCo
     const chip = document.createElement('span')
     chip.contentEditable = 'false'
     chip.dataset.skillId = skill.id
-    chip.className = 'mx-0.5 inline-flex items-center gap-1 rounded-md border border-brand-600/25 bg-brand-600/10 px-2 py-0.5 align-baseline text-xs font-semibold text-brand-800 dark:text-brand-200'
+    chip.className = 'mx-0.5 inline-flex items-center gap-1 rounded-md border border-brand-600/25 bg-brand-600/10 px-2 py-0.5 align-middle text-xs font-semibold text-brand-800 dark:text-brand-200'
     chip.append(document.createTextNode(skill.title))
     const remove = document.createElement('span')
     remove.dataset.removeSkill = skill.id
