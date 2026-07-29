@@ -1,6 +1,7 @@
 import { BookOpen, ChevronDown, Code, ExternalLink, FileText, Lightbulb, Shield } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { SpotlightCard } from '../../components/ui/SpotlightCard'
 
 const PROPOSAL_URL = 'https://lanshanteam.feishu.cn/wiki/GRR6wRh6IinV7QkxIbAc23krnSb'
 
@@ -115,18 +116,21 @@ export function AboutPlatform() {
         />
         <div className="mt-12 grid gap-0 border-b border-black/10 md:grid-cols-3 dark:border-white/10">
           {platformReasons.map((item, index) => (
-            <article
+            <SpotlightCard
               className={`guest-hover-surface guest-palette-item px-5 py-8 md:px-7 ${
                 index < platformReasons.length - 1 ? 'md:border-r md:border-black/10 md:dark:border-white/10' : ''
               }`}
               key={item.title}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
             >
-              <span className="guest-palette-label font-mono text-xs font-semibold">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <h3 className="mt-4 text-xl font-semibold">{item.title}</h3>
-              <p className="mt-3 leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
-            </article>
+              <div className="relative z-10">
+                <span className="guest-palette-label font-mono text-xs font-semibold">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="mt-4 text-xl font-semibold">{item.title}</h3>
+                <p className="mt-3 leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
+              </div>
+            </SpotlightCard>
           ))}
         </div>
       </RevealSection>
@@ -138,20 +142,23 @@ export function AboutPlatform() {
         />
         <div className="mt-12 grid border-b border-black/10 md:grid-cols-2 dark:border-white/10">
           {buildingPrinciples.map((item, index) => (
-            <article
+            <SpotlightCard
               className={`guest-hover-surface guest-palette-item px-5 py-8 md:px-8 ${
                 index % 2 === 0 ? 'md:border-r md:border-black/10 md:dark:border-white/10' : ''
               } ${
                 index < buildingPrinciples.length - 2 ? 'border-b border-black/10 dark:border-white/10' : ''
               }`}
               key={item.title}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
             >
-              <div className="guest-palette-label font-mono text-sm font-semibold">
-                {String(index + 1).padStart(2, '0')}
+              <div className="relative z-10">
+                <div className="guest-palette-label font-mono text-sm font-semibold">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
               </div>
-              <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
-            </article>
+            </SpotlightCard>
           ))}
         </div>
       </RevealSection>

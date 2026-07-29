@@ -1,4 +1,8 @@
 import {
+  AiKnowledgeRoleScope,
+  AiSkillLifecycleOperation,
+  AiSkillLifecycleStatus,
+  AiSpace,
   PrismaClient,
   AnnouncementRange,
   AnnouncementStatus,
@@ -9,6 +13,7 @@ import {
   PointDirection,
   RoleCode,
 } from '@prisma/client'
+import { createHash } from 'node:crypto'
 import { hashPassword } from '../common/crypto/password'
 import { permissionDefinitions, rolePermissionMap } from '../modules/rbac/permissions'
 
@@ -80,6 +85,129 @@ const seedUsers = [
     authorizationSourceCode: 'manual_admin',
   },
 ]
+
+const seedSystemSkills = [
+  {
+    slug: 'caveman',
+    title: 'Caveman 精简表达',
+    description: '在不损失技术准确性的前提下压缩回答，减少重复、铺垫和无效修饰。',
+    examples: ['请简短回答', '使用 caveman 模式', '减少输出长度但保留技术细节'],
+    content: `---
+name: caveman
+description: 在不损失技术准确性的前提下压缩回答，减少重复、铺垫和无效修饰。
+version: 1.0.0
+examples:
+  - 请简短回答
+  - 使用 caveman 模式
+  - 减少输出长度但保留技术细节
+requested_tools: []
+---
+
+# Caveman 精简表达
+
+## 目标
+
+用尽量少的文字保留完整、准确、可执行的信息。压缩表达，不压缩事实、条件、风险和关键步骤。
+
+## 表达规则
+
+1. 使用用户当前主要语言。
+2. 先给结论，再给必要依据和操作。
+3. 删除寒暄、重复总结、空泛评价、无意义铺垫和不必要的自我描述。
+4. 优先使用短句和扁平列表；简单问题直接回答。
+5. 技术术语、API 名称、函数名、命令、路径、错误文本和代码必须保持准确，不得为了缩短而改写。
+6. 不创造难懂缩写，不使用会造成歧义的省略。
+7. 用户要求详细解释、正式文档或完整方案时，保证结构和必要细节，不强行压缩成果正文。
+
+## 清晰度优先
+
+以下情况暂停极简表达，使用完整、明确的句子：
+
+- 安全警告、权限边界和隐私风险。
+- 删除、覆盖、迁移等不可逆操作。
+- 有严格先后顺序的多步骤操作。
+- 省略连接词可能改变技术含义。
+- 用户表示没有理解或要求进一步说明。
+
+## 输出约束
+
+- 不宣布正在使用本 Skill。
+- 不输出额外的“精简版总结”。
+- 不修改代码块、配置、命令和错误原文。
+- 不因追求简短而隐藏未确认项；无法确认时明确写“未确认”。`,
+  },
+  {
+    slug: 'grill-me',
+    title: 'Grill Me 需求访谈',
+    description: '通过逐轮关键问题澄清产品、设计或技术需求，并在信息充分后形成可执行结论。',
+    examples: ['帮我完善这个功能需求', '先问我关键问题再设计', '检查这个方案还有哪些缺口'],
+    content: `---
+name: grill-me
+description: 通过逐轮关键问题澄清产品、设计或技术需求，并在信息充分后形成可执行结论。
+version: 1.0.0
+examples:
+  - 帮我完善这个功能需求
+  - 先问我关键问题再设计
+  - 检查这个方案还有哪些缺口
+requested_tools: []
+---
+
+# Grill Me 需求访谈
+
+## 目标
+
+通过克制、连续的访谈发现需求中的缺口、冲突和隐含假设。信息充分前不急于输出完整方案；信息充分后主动收敛为可执行需求。
+
+## 访谈规则
+
+1. 先复述已经确认的目标，只保留影响决策的信息。
+2. 每轮只问一个最关键的问题；同一问题确有紧密关联的选项时可以合并，但不得一次堆积大量问题。
+3. 优先询问会改变架构、权限、数据、安全、成本或验收结果的问题。
+4. 不重复已经回答的问题。结合当前对话维护“已确认”和“未确认”信息。
+5. 用户回答含糊时，指出具体歧义，并给出二到三个互斥选项。
+6. 推荐项放在第一位，说明关键取舍；不得用推荐代替用户决定高风险事项。
+7. 发现前后矛盾时立即指出，要求确认最终采用哪一项。
+8. 不询问能够从现有上下文直接确定、对结果没有影响或可以安全采用行业默认值的问题。
+
+## 检查维度
+
+按需求实际情况检查，不要求机械地全部询问：
+
+- 目标用户和核心痛点。
+- 使用入口、主流程和完成条件。
+- 角色、权限和数据可见范围。
+- 数据来源、保存期限和敏感信息处理。
+- 异常、空状态、撤销、重试和并发行为。
+- 移动端、桌面端、无障碍和深浅色模式。
+- 外部服务、成本、配额、超时和降级。
+- 审计、通知、合规和安全边界。
+- 兼容性、迁移范围和验收标准。
+
+## 收敛条件
+
+满足以下条件后停止追问：
+
+- 目标和用户已明确。
+- 主流程、关键异常和权限边界已明确。
+- 不再存在会改变方案方向的未确认项。
+- 已具备可验证的验收标准。
+
+用户说“按建议”“接受建议”“直接给方案”或“结束访谈”时，也应停止非关键追问；仍存在高风险缺口时，只保留一个明确警告。
+
+## 最终输出
+
+访谈结束后按以下结构输出：
+
+1. 已确认需求。
+2. 核心流程。
+3. 权限与数据边界。
+4. 异常和风险处理。
+5. 验收标准。
+6. 未确认项；没有则写“无”。
+
+不要声称已经修改代码、创建文件或执行测试。用户明确要求进入实施阶段后，再交由平台后续流程处理。`,
+  },
+] as const
 
 const seedAnnouncements = [
   {
@@ -570,6 +698,55 @@ async function main() {
   const studentUser = await prisma.user.findUnique({ where: { unifiedCode: '2025001' } })
   if (!studentUser) {
     throw new Error('Missing student seed user')
+  }
+
+  for (const skillDefinition of seedSystemSkills) {
+    const contentSha256 = createHash('sha256').update(skillDefinition.content).digest('hex')
+    const skill = await prisma.aiSkill.upsert({
+      where: { slug: skillDefinition.slug },
+      create: {
+        active: true,
+        aiSpace: AiSpace.STUDENT,
+        content: skillDefinition.content,
+        contentSha256,
+        lifecycleStatus: AiSkillLifecycleStatus.PUBLISHED,
+        metadata: {
+          description: skillDefinition.description,
+          examples: [...skillDefinition.examples],
+          requestedTools: [],
+        },
+        roleScope: AiKnowledgeRoleScope.STUDENT,
+        slug: skillDefinition.slug,
+        source: 'DECLARATIVE_SYSTEM',
+        title: skillDefinition.title,
+        version: 1,
+        visibleToUsers: true,
+      },
+      update: {},
+    })
+    await prisma.aiSkillRevision.upsert({
+      where: { skillId_version: { skillId: skill.id, version: 1 } },
+      create: {
+        content: skillDefinition.content,
+        contentSha256,
+        operation: AiSkillLifecycleOperation.CREATE,
+        skillId: skill.id,
+        version: 1,
+      },
+      update: {},
+    })
+    await prisma.aiSkillFile.upsert({
+      where: { skillId_path: { skillId: skill.id, path: 'SKILL.md' } },
+      create: {
+        content: skillDefinition.content,
+        mimeType: 'text/markdown',
+        path: 'SKILL.md',
+        sha256: contentSha256,
+        sizeBytes: Buffer.byteLength(skillDefinition.content),
+        skillId: skill.id,
+      },
+      update: {},
+    })
   }
 
   for (const announcement of seedAnnouncements) {

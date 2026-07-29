@@ -33,11 +33,13 @@ done
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 log_info()    { echo -e "${CYAN}▶ $1${NC}"; }
 log_success() { echo -e "${GREEN}✔ $1${NC}"; }
 log_warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
+log_error()   { echo -e "${RED}✘ $1${NC}" >&2; }
 
 echo ""
 echo -e "${GREEN}=== CQUPT-SRC 本地开发环境关闭 ===${NC}"
@@ -60,12 +62,78 @@ if [[ -f "$STATE_FILE" ]]; then
 
   rm -f "$STATE_FILE"
 else
-  log_warn "未找到进程状态文件，尝试按名称查找残留进程..."
+  log_warn "未找到进程状态文件，将按开发端口清理残留进程"
 fi
 
-# ---- 清理残留的 tsx/vite 进程 ----
-pkill -f "tsx watch.*$REPO_ROOT" 2>/dev/null && log_info "已清理残留 tsx 进程" || true
-pkill -f "vite.*$REPO_ROOT"      2>/dev/null && log_info "已清理残留 vite 进程" || true
+# ---- 释放前后端固定端口 ----
+port_listener_pids() {
+  local port="$1"
+  lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+}
+
+process_cwd() {
+  local pid="$1"
+  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
+}
+
+stop_required_port() {
+  local port="$1"
+  local label="$2"
+  local listener_pid
+  local targets=""
+
+  for listener_pid in $(port_listener_pids "$port"); do
+    local current="$listener_pid"
+    while [[ "$current" =~ ^[0-9]+$ ]] && [[ "$current" -gt 1 ]]; do
+      local args cwd parent
+      args="$(ps -o args= -p "$current" 2>/dev/null || true)"
+      cwd="$(process_cwd "$current")"
+      if [[ "$cwd" != "$REPO_ROOT"* ]] || [[ ! "$args" =~ (vite|tsx[[:space:]]+watch|src/main\.ts|npm[[:space:]]+run[[:space:]]+dev) ]]; then
+        break
+      fi
+      targets="$targets $current"
+      parent="$(ps -o ppid= -p "$current" 2>/dev/null | tr -d ' ' || true)"
+      current="$parent"
+    done
+  done
+
+  if [[ -n "${targets// /}" ]]; then
+    log_info "停止占用 $port 的$label进程..."
+    # shellcheck disable=SC2086
+    kill $targets 2>/dev/null || true
+  fi
+
+  for _ in $(seq 1 20); do
+    [[ -z "$(port_listener_pids "$port")" ]] && {
+      log_success "$label端口 $port 已释放"
+      return 0
+    }
+    sleep 0.25
+  done
+
+  local remaining
+  remaining="$(port_listener_pids "$port" | tr '\n' ' ')"
+  if [[ -n "${remaining// /}" ]]; then
+    log_warn "$label端口 $port 仍被占用，强制停止监听进程：$remaining"
+    # shellcheck disable=SC2086
+    kill -KILL $remaining 2>/dev/null || true
+    sleep 0.5
+  fi
+
+  if [[ -n "$(port_listener_pids "$port")" ]]; then
+    log_error "$label端口 $port 释放失败，请检查权限"
+    return 1
+  fi
+  log_success "$label端口 $port 已释放"
+}
+
+if ! command -v lsof &>/dev/null; then
+  log_error "缺少 lsof，无法保证释放开发端口"
+  exit 1
+fi
+
+stop_required_port 3001 "后端"
+stop_required_port 5173 "前端"
 
 # ---- 停止 Docker 容器 ----
 stop_container() {

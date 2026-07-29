@@ -14,11 +14,16 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { SafetyParticipationFlow } from '../../components/guest/SafetyParticipationFlow'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
+import { BorderGlow } from '../../components/ui/BorderGlow'
+import { SpotlightCard } from '../../components/ui/SpotlightCard'
 import { getPublicPageFromPath, publicPagePaths, type PublicPage } from '../../routes/routeConfig'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const IntroCopySection = lazy(() =>
   import('../../components/guest/IntroCopySection').then((module) => ({ default: module.IntroCopySection })),
+)
+const BeamsBackground = lazy(() =>
+  import('../../components/guest/BeamsBackground').then((module) => ({ default: module.BeamsBackground })),
 )
 const AboutPlatform = lazy(() => import('./AboutPlatform').then((module) => ({ default: module.AboutPlatform })))
 const CertificateVerify = lazy(() =>
@@ -74,6 +79,8 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const activePage = getPublicPageFromPath(location.pathname)
+  const heroNavigation = activePage === 'home' && !homeScrolled
+  const heroDarkSurface = heroNavigation && theme === 'dark'
 
   useEffect(() => {
     applyColorTheme(theme)
@@ -109,25 +116,35 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   }
 
   return (
-    <AppBackground>
+    <AppBackground
+      className={activePage === 'home'
+        ? '[--app-bg:#ffffff] [--app-header-bg:#ffffff] [--app-menu-bg:#ffffff] [--app-panel-bg:#ffffff] dark:[--app-bg:var(--app-bg-dark)] dark:[--app-header-bg:var(--app-header-bg-dark)] dark:[--app-menu-bg:var(--app-menu-bg-dark)] dark:[--app-panel-bg:var(--app-panel-bg-dark)]'
+        : ''}
+    >
       <MotionConfig reducedMotion="user">
       <nav className={`fixed left-0 right-0 top-0 z-50 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${
-        activePage === 'home' && !homeScrolled
+        heroNavigation
           ? 'border-b border-transparent bg-transparent shadow-none backdrop-blur-none'
           : 'border-b border-black/[0.08] bg-[var(--app-header-bg)] shadow-sm shadow-black/[0.025] backdrop-blur-xl dark:border-white/[0.06]'
       }`}>
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 md:px-8">
           <button className="flex items-center" onClick={() => openPage('home')} type="button">
-            <BrandLogo />
+            <BrandLogo onDarkSurface={heroDarkSurface} />
           </button>
 
           <div className="hidden items-center gap-8 md:flex">
             {navItems.map((item) => (
               <button
-                className={`relative py-2 text-sm font-medium transition after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-center after:scale-x-0 after:bg-brand-600 after:transition-transform hover:text-brand-700 hover:after:scale-x-100 dark:after:bg-brand-300 dark:hover:text-brand-300 ${
-                  activePage === navPageMap[item]
+                className={`relative py-2 text-sm font-medium transition after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-center after:scale-x-0 after:transition-transform hover:after:scale-x-100 ${
+                  heroDarkSurface
+                    ? 'text-slate-300 after:bg-white/70 hover:text-white'
+                    : heroNavigation
+                    ? activePage === navPageMap[item]
+                      ? 'text-slate-950 after:bg-slate-700 hover:text-black'
+                      : 'text-slate-600 after:bg-slate-500 hover:text-slate-950'
+                    : activePage === navPageMap[item]
                     ? 'text-brand-700 dark:text-brand-300'
-                    : 'text-slate-600 dark:text-slate-400'
+                    : 'text-slate-600 after:bg-brand-600 hover:text-brand-700 dark:text-slate-400 dark:after:bg-brand-300 dark:hover:text-brand-300'
                 }`}
                 key={item}
                 onClick={() => openPage(navPageMap[item])}
@@ -141,7 +158,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <div className="flex items-center gap-3">
             <button
               aria-label="切换主题"
-              className="theme-toggle-button hidden rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 md:inline-flex dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+              className={`theme-toggle-button hidden rounded-lg p-2 transition md:inline-flex ${heroDarkSurface ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'}`}
               onClick={(event) => {
                 const nextTheme = theme === 'dark' ? 'light' : 'dark'
                 transitionColorTheme(nextTheme, event)
@@ -152,7 +169,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
             </button>
             <button
-              className="guest-hover-surface hidden rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-950 sm:inline-flex dark:border-white/10 dark:text-slate-300 dark:hover:text-white"
+              className={`guest-hover-surface hidden rounded-lg border px-4 py-2 text-sm font-medium sm:inline-flex ${heroDarkSurface ? 'border-white/20 text-slate-200 hover:text-white' : 'border-black/10 text-slate-700 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:text-white'}`}
               onClick={onLogin}
               type="button"
             >
@@ -167,7 +184,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             </button>
             <button
               aria-label="打开菜单"
-              className="rounded-lg p-2 text-slate-700 transition hover:bg-black/5 md:hidden dark:text-slate-300 dark:hover:bg-white/10"
+              className={`rounded-lg p-2 transition md:hidden ${heroDarkSurface ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-700 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
               onClick={() => setMobileOpen((value) => !value)}
               type="button"
             >
@@ -235,20 +252,19 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <PageTransition key="home">
       <section className="relative z-10 flex min-h-[100svh] items-center justify-center overflow-hidden px-5 pb-20 pt-24 text-center md:px-8">
         <div className="absolute inset-0 -z-10">
-          <img
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:hidden md:object-center"
-            fetchPriority="high"
-            src="/assets/backgrounds/guest-home-hero-light.png"
-          />
-          <img
-            alt=""
-            aria-hidden="true"
-            className="hidden h-full w-full object-cover object-[center_68%] saturate-[0.62] dark:block md:object-center"
-            fetchPriority="high"
-            src="/assets/backgrounds/guest-home-hero-dark.png"
-          />
+          <Suspense fallback={<div className={theme === 'dark' ? 'h-full w-full bg-black' : 'h-full w-full bg-white'} />}>
+            <BeamsBackground
+              beamHeight={25}
+              beamNumber={8}
+              beamWidth={2.2}
+              lightColor="#ffffff"
+              noiseIntensity={1.25}
+              rotation={310}
+              scale={0.1}
+              speed={reduceMotion ? 0 : 2.8}
+              theme={theme}
+            />
+          </Suspense>
         </div>
 
         <motion.div
@@ -259,7 +275,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         >
           <motion.h1
             animate={{ opacity: 1, y: 0 }}
-            className="mx-auto max-w-4xl text-4xl font-semibold leading-tight md:text-6xl"
+            className={`mx-auto max-w-4xl text-4xl font-semibold leading-tight md:text-6xl ${theme === 'dark' ? 'text-white' : 'text-slate-950'}`}
             initial={reduceMotion ? false : { opacity: 0, y: 14 }}
             transition={{ delay: 0.08, duration: 0.68, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -269,7 +285,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           </motion.h1>
           <motion.p
             animate={{ opacity: 1, y: 0 }}
-            className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-600 md:text-lg dark:text-slate-300"
+            className={`mx-auto mt-6 max-w-2xl text-base leading-8 md:text-lg ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}
             initial={reduceMotion ? false : { opacity: 0, y: 12 }}
             transition={{ delay: 0.18, duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -302,7 +318,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
         <button
           aria-label="向下浏览"
-          className="absolute bottom-7 left-1/2 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full text-slate-500 opacity-55 transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-slate-300 motion-safe:animate-[guest-scroll-hint_2.4s_ease-in-out_infinite]"
+          className={`absolute bottom-7 left-1/2 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full opacity-55 transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 motion-safe:animate-[guest-scroll-hint_2.4s_ease-in-out_infinite] ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}
           onClick={() => document.getElementById('home-content-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           type="button"
         >
@@ -329,18 +345,21 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
         <div className="grid grid-cols-1 md:grid-cols-2">
           {capabilities.map((item, index) => {
             return (
-              <article
+              <SpotlightCard
                 className={`guest-hover-surface guest-palette-item border-b border-black/10 px-4 py-9 md:px-8 dark:border-white/10 ${
                   index % 2 === 0 ? 'md:border-r' : ''
                 }`}
                 key={item.title}
+                spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
               >
-                <div className="guest-palette-label font-mono text-xs font-semibold">
-                  {String(index + 1).padStart(2, '0')}
+                <div className="relative z-10">
+                  <div className="guest-palette-label font-mono text-xs font-semibold">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
+                  <h3 className="mb-4 mt-4 text-xl font-semibold">{item.title}</h3>
+                  <p className="leading-7 text-slate-600 dark:text-slate-400">{item.description}</p>
                 </div>
-                <h3 className="mb-4 mt-4 text-xl font-semibold">{item.title}</h3>
-                <p className="leading-7 text-slate-600 dark:text-slate-400">{item.description}</p>
-              </article>
+              </SpotlightCard>
             )
           })}
         </div>
@@ -359,7 +378,10 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
           <p className="mx-auto mb-8 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
             输入证书编号，即刻验证由 CQUPT-SRC 颁发的漏洞贡献荣誉证书有效性。
           </p>
-          <div className="guest-hover-surface mx-auto flex max-w-xl items-center rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-2 backdrop-blur-xl focus-within:-translate-y-0.5 focus-within:border-brand-600/40 focus-within:shadow-[0_12px_32px_rgba(var(--app-primary-rgb),0.1)] focus-within:ring-2 focus-within:ring-brand-600/30 dark:border-white/10">
+          <BorderGlow
+            className="mx-auto max-w-xl rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-2 backdrop-blur-xl focus-within:-translate-y-0.5 focus-within:border-brand-600/40 focus-within:shadow-[0_12px_32px_rgba(var(--app-primary-rgb),0.1)] focus-within:ring-2 focus-within:ring-brand-600/30 dark:border-white/10"
+            contentClassName="flex items-center"
+          >
             <Search className="ml-3 mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
             <input
               className="min-w-0 flex-1 border-none bg-transparent py-3 font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
@@ -379,7 +401,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             >
               查询
             </button>
-          </div>
+          </BorderGlow>
           <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">点击查询后会进入证书查询页并自动核验。仅展示证书真实性与脱敏信息，不公开漏洞细节。</p>
         </div>
       </motion.section>

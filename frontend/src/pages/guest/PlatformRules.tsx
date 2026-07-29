@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { SafetyParticipationFlow } from '../../components/guest/SafetyParticipationFlow'
+import { SpotlightCard } from '../../components/ui/SpotlightCard'
 
 const principles = [
   {
@@ -15,6 +16,12 @@ const principles = [
     title: '负责任披露',
     text: '漏洞细节只通过平台提交和沟通，未修复前不得公开发布到互联网、社群、博客或第三方平台。',
   },
+]
+
+const principleAccentClasses = [
+  '[--guest-accent:var(--color-brand-300)]',
+  '[--guest-accent:var(--color-brand-400)]',
+  '[--guest-accent:var(--color-brand-500)]',
 ]
 
 const reportFocus = [
@@ -78,15 +85,21 @@ export function PlatformRules() {
         variants={{ hidden: {}, visible: {} }}
       >
         {principles.map((item, index) => (
-          <motion.article
-            className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 text-left backdrop-blur-xl dark:border-white/10"
+          <motion.div
             key={item.title}
             variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
           >
-            <div className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</div>
-            <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
-          </motion.article>
+            <SpotlightCard
+              className={`guest-hover-surface guest-palette-item h-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-6 text-left backdrop-blur-xl dark:border-white/10 ${principleAccentClasses[index]}`}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
+            >
+              <div className="relative z-10">
+                <div className="guest-palette-label font-mono text-sm font-semibold">{String(index + 1).padStart(2, '0')}</div>
+                <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
+                <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{item.text}</p>
+              </div>
+            </SpotlightCard>
+          </motion.div>
         ))}
       </motion.section>
 
@@ -102,27 +115,39 @@ export function PlatformRules() {
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {reportFocus.map(([title, text], index) => (
-            <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-4 dark:border-white/10" key={title}>
-              <div className="guest-palette-label font-mono text-xs font-semibold">{String(index + 1).padStart(2, '0')}</div>
-              <h3 className="mt-3 font-semibold">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{text}</p>
-            </article>
+            <SpotlightCard
+              className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-4 dark:border-white/10"
+              key={title}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
+            >
+              <div className="relative z-10">
+                <div className="guest-palette-label font-mono text-xs font-semibold">{String(index + 1).padStart(2, '0')}</div>
+                <h3 className="mt-3 font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{text}</p>
+              </div>
+            </SpotlightCard>
           ))}
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
-          {reportSections.map((section) => (
-            <article className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-5 dark:border-white/10" key={section.title}>
-              <h3 className="text-lg font-semibold">{section.title}</h3>
-              <ul className="mt-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
-                {section.items.map((item) => (
-                  <li className="flex items-center justify-between gap-3 border-b border-black/5 pb-2 last:border-b-0 last:pb-0 dark:border-white/5" key={item}>
-                    <span>{item}</span>
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600/70 dark:bg-brand-300/80" />
-                  </li>
-                ))}
-              </ul>
-            </article>
+          {reportSections.map((section, index) => (
+            <SpotlightCard
+              className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-5 dark:border-white/10"
+              key={section.title}
+              spotlightColor={`color-mix(in srgb, var(--color-brand-${index + 4}00) 16%, transparent)`}
+            >
+              <div className="relative z-10">
+                <h3 className="text-lg font-semibold">{section.title}</h3>
+                <ul className="mt-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                  {section.items.map((item) => (
+                    <li className="flex items-center justify-between gap-3 border-b border-black/5 pb-2 last:border-b-0 last:pb-0 dark:border-white/5" key={item}>
+                      <span>{item}</span>
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600/70 dark:bg-brand-300/80" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </SpotlightCard>
           ))}
         </div>
 
@@ -132,30 +157,40 @@ export function PlatformRules() {
       </RevealSection>
 
       <RevealSection className="mx-auto mt-20 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10">
-          <h2 className="text-3xl font-semibold tracking-tight">禁止行为</h2>
-          <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
-            以下行为会导致报告驳回、扣除积分、撤销证书、限制账号，严重时将移交相关单位处理。
-          </p>
-          <ul className="mt-6 space-y-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
-            {forbidden.map((item) => (
-              <li className="grid grid-cols-[0.75rem_1fr] gap-3" key={item}>
-                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </article>
+        <SpotlightCard
+          className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10"
+          spotlightColor="color-mix(in srgb, var(--guest-accent) 18%, transparent)"
+        >
+          <div className="relative z-10">
+            <h2 className="text-3xl font-semibold tracking-tight">禁止行为</h2>
+            <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
+              以下行为会导致报告驳回、扣除积分、撤销证书、限制账号，严重时将移交相关单位处理。
+            </p>
+            <ul className="mt-6 space-y-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
+              {forbidden.map((item) => (
+                <li className="grid grid-cols-[0.75rem_1fr] gap-3" key={item}>
+                  <span className="mt-2 h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SpotlightCard>
 
-        <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10">
-          <h2 className="text-3xl font-semibold tracking-tight">邮宝使用边界</h2>
-          <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
-            邮宝可以辅助整理漏洞标题、复现步骤、影响说明和修复建议，也可以推荐学习路径、检查敏感信息。
-          </p>
-          <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
-            邮宝回复仅作参考，不能替代人工审核；不得诱导邮宝生成未授权测试方法、攻击脚本、绕过方案或恶意利用流程。
-          </p>
-        </article>
+        <SpotlightCard
+          className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-7 dark:border-white/10"
+          spotlightColor="color-mix(in srgb, var(--guest-accent) 18%, transparent)"
+        >
+          <div className="relative z-10">
+            <h2 className="text-3xl font-semibold tracking-tight">邮宝使用边界</h2>
+            <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
+              邮宝可以辅助整理漏洞标题、复现步骤、影响说明和修复建议，也可以推荐学习路径、检查敏感信息。
+            </p>
+            <p className="mt-4 leading-8 text-slate-600 dark:text-slate-400">
+              邮宝回复仅作参考，不能替代人工审核；不得诱导邮宝生成未授权测试方法、攻击脚本、绕过方案或恶意利用流程。
+            </p>
+          </div>
+        </SpotlightCard>
       </RevealSection>
 
       <RevealSection className="mx-auto mt-20 max-w-5xl">
@@ -167,10 +202,16 @@ export function PlatformRules() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {reviewRules.map(([title, text]) => (
-            <article className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-6 dark:border-white/10" key={title}>
-              <h3 className="text-lg font-semibold">{title}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{text}</p>
-            </article>
+            <SpotlightCard
+              className="guest-hover-surface guest-palette-item rounded-lg border border-black/10 p-6 dark:border-white/10"
+              key={title}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
+            >
+              <div className="relative z-10">
+                <h3 className="text-lg font-semibold">{title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-400">{text}</p>
+              </div>
+            </SpotlightCard>
           ))}
         </div>
       </RevealSection>

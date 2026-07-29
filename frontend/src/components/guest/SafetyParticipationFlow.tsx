@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
+import { SpotlightCard } from '../ui/SpotlightCard'
 
 const processItems = [
   {
@@ -45,40 +46,46 @@ export function SafetyParticipationFlow({ className = '' }: { className?: string
         </p>
       </div>
 
-      <div className="mt-12 hidden overflow-x-auto pb-2 md:block">
+      <div className="mt-12 hidden overflow-x-auto pb-2 [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden">
         <div className="grid min-w-[1040px] grid-cols-6 border-b border-black/10 dark:border-white/10">
           {processItems.map((item, index) => (
-            <article
+            <SpotlightCard
               className={`guest-hover-surface guest-process-item relative flex min-h-[210px] flex-col px-5 py-7 ${
                 index < processItems.length - 1 ? 'border-r border-black/10 dark:border-white/10' : ''
               }`}
               key={item.title}
+              spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
             >
-              <div className="flex items-center gap-3">
-                <span className="guest-palette-label font-mono text-sm font-semibold">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="guest-palette-rule h-px flex-1" />
+              <div className="relative z-10 flex h-full flex-col">
+                <div className="flex items-center gap-3">
+                  <span className="guest-palette-label font-mono text-sm font-semibold">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span className="guest-palette-rule h-px flex-1" />
+                </div>
+                <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
               </div>
-              <h3 className="mt-5 text-base font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
-            </article>
+            </SpotlightCard>
           ))}
         </div>
       </div>
 
       <div className="mt-8 md:hidden">
         {processItems.map((item, index) => (
-          <article
+          <SpotlightCard
             className="guest-hover-surface guest-process-item border-b border-black/10 px-3 py-6 dark:border-white/10"
             key={item.title}
+            spotlightColor="color-mix(in srgb, var(--guest-accent) 20%, transparent)"
           >
-            <div className="guest-palette-label font-mono text-sm font-semibold">
-              {String(index + 1).padStart(2, '0')}
+            <div className="relative z-10">
+              <div className="guest-palette-label font-mono text-sm font-semibold">
+                {String(index + 1).padStart(2, '0')}
+              </div>
+              <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
             </div>
-            <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
-            <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-400">{item.description}</p>
-          </article>
+          </SpotlightCard>
         ))}
       </div>
     </motion.section>
