@@ -73,6 +73,7 @@ export function KaliLaptopShowcase() {
   const [dragRotation, setDragRotation] = useState({ x: 0, y: 0 })
   const [lidOpen, setLidOpen] = useState(false)
   const theme = useSceneTheme()
+  const sceneActive = useSceneActivity(sceneRef)
 
   useEffect(() => {
     let frame = 0
@@ -144,6 +145,7 @@ export function KaliLaptopShowcase() {
           camera={{ fov: 28, position: [0, 1.18, 9.4] }}
           className="h-full w-full"
           dpr={[1, 1.75]}
+          frameloop={sceneActive ? 'always' : 'never'}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace
@@ -191,6 +193,31 @@ function useSceneTheme(): SceneTheme {
   }, [])
 
   return theme
+}
+
+function useSceneActivity(sceneRef: React.RefObject<HTMLDivElement | null>) {
+  const [active, setActive] = useState(() => document.visibilityState !== 'hidden')
+
+  useEffect(() => {
+    const element = sceneRef.current
+    if (!element || !('IntersectionObserver' in window)) return
+    let inViewport = false
+
+    const update = () => setActive(inViewport && document.visibilityState !== 'hidden')
+    const observer = new IntersectionObserver(([entry]) => {
+      inViewport = Boolean(entry?.isIntersecting)
+      update()
+    })
+    observer.observe(element)
+    document.addEventListener('visibilitychange', update)
+
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [sceneRef])
+
+  return active
 }
 
 function getBaseCanvasBounds(): CanvasBounds {
@@ -301,6 +328,11 @@ function LaptopScene({
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!model) return
+    return () => disposeClonedLaptopMaterials(model)
+  }, [model])
 
   useEffect(() => {
     if (!model) return
@@ -478,6 +510,7 @@ function findKeyboardKey(object: THREE.Object3D): THREE.Object3D | null {
 
 function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   const model = source.clone(true)
+  const clonedMaterials = new Map<THREE.Material, THREE.Material>()
   const lid = findLaptopLid(model)
   const box = new THREE.Box3().setFromObject(model)
   const size = new THREE.Vector3()
@@ -493,6 +526,9 @@ function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   model.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return
     object.frustumCulled = false
+    object.material = Array.isArray(object.material)
+      ? object.material.map((material) => cloneMaterialOnce(material, clonedMaterials))
+      : cloneMaterialOnce(object.material, clonedMaterials)
 
     const materials = Array.isArray(object.material) ? object.material : [object.material]
     materials.forEach((material) => {
@@ -504,6 +540,24 @@ function normalizeLaptopModel(source: THREE.Group): LaptopModel {
   })
 
   return { lid, root: model }
+}
+
+function cloneMaterialOnce(material: THREE.Material, clones: Map<THREE.Material, THREE.Material>) {
+  const existing = clones.get(material)
+  if (existing) return existing
+  const clone = material.clone()
+  clones.set(material, clone)
+  return clone
+}
+
+function disposeClonedLaptopMaterials(model: THREE.Group) {
+  const materials = new Set<THREE.Material>()
+  model.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return
+    const objectMaterials = Array.isArray(object.material) ? object.material : [object.material]
+    objectMaterials.forEach((material) => materials.add(material))
+  })
+  materials.forEach((material) => material.dispose())
 }
 
 function findLaptopLid(model: THREE.Group) {

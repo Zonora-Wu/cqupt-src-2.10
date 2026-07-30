@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 
 type BeamsProps = {
@@ -148,6 +148,8 @@ export function BeamsBackground({
   rotation = 0,
   theme = 'dark',
 }: BeamsProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isActive = useCanvasActivity(containerRef)
   const beamMaterial = useMemo(
     () => extendMaterial(THREE.MeshStandardMaterial, {
       header: `
@@ -211,10 +213,11 @@ if (uLightTheme > 0.5) {
     }),
     [noiseIntensity, scale, speed, theme],
   )
+  useEffect(() => () => beamMaterial.dispose(), [beamMaterial])
 
   return (
-    <div className={`h-full w-full transition-colors duration-[850ms] ${theme === 'light' ? 'bg-white' : 'bg-black'}`}>
-      <Canvas className="h-full w-full" dpr={[1, 2]} frameloop="always">
+    <div className={`h-full w-full transition-colors duration-[850ms] ${theme === 'light' ? 'bg-white' : 'bg-black'}`} ref={containerRef}>
+      <Canvas className="h-full w-full" dpr={[1, 2]} frameloop={isActive && speed !== 0 ? 'always' : 'demand'}>
         <group rotation={[0, 0, THREE.MathUtils.degToRad(rotation)]}>
           <PlaneNoise material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
           <DirLight color={lightColor} position={[0, 3, 10]} />
@@ -225,6 +228,30 @@ if (uLightTheme > 0.5) {
       </Canvas>
     </div>
   )
+}
+
+function useCanvasActivity(containerRef: React.RefObject<HTMLDivElement | null>) {
+  const [active, setActive] = useState(() => document.visibilityState !== 'hidden')
+
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element || !('IntersectionObserver' in window)) return
+    let inViewport = false
+    const update = () => setActive(inViewport && document.visibilityState !== 'hidden')
+    const observer = new IntersectionObserver(([entry]) => {
+      inViewport = Boolean(entry?.isIntersecting)
+      update()
+    })
+
+    observer.observe(element)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [containerRef])
+
+  return active
 }
 
 function createStackedPlanesBufferGeometry(number: number, width: number, height: number, spacing: number, heightSegments: number) {

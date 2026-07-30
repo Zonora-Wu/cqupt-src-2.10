@@ -262,7 +262,7 @@ function waitForWindowLoad() {
 }
 
 async function waitForCurrentImages() {
-  const images = Array.from(document.images)
+  const images = Array.from(document.images).filter(isInitiallyVisibleImage)
   await Promise.all(images.map(async (image) => {
     if (!image.complete) await new Promise<void>((resolve) => {
       image.addEventListener('error', () => resolve(), { once: true })
@@ -270,6 +270,12 @@ async function waitForCurrentImages() {
     })
     await image.decode?.().catch(() => undefined)
   }))
+}
+
+function isInitiallyVisibleImage(image: HTMLImageElement) {
+  if (image.loading === 'lazy') return false
+  const rect = image.getBoundingClientRect()
+  return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth
 }
 
 function nextPaint() {
