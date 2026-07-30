@@ -31,7 +31,7 @@ cd ~/projcets/cqupt-src-test
 
 | 模块 | 技术 |
 |---|---|
-| 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS 4 + Three.js (@react-three/fiber + drei) |
+            | 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS 4 + Three.js (@react-three/fiber + drei) |
 | 后端 | NestJS 11 + TypeScript + Express |
 | 数据库 | PostgreSQL + Prisma |
 | 队列/缓存 | Redis（缓存与分布式锁），后端 Worker 使用 NestJS Injectable + setInterval 调度（非 BullMQ） |

@@ -75,6 +75,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
   const [certificateSearchNo, setCertificateSearchNo] = useState('')
   const [certificateQueryNonce, setCertificateQueryNonce] = useState(0)
   const [homeScrolled, setHomeScrolled] = useState(() => typeof window !== 'undefined' && window.scrollY > 24)
+  const homeScrolledRef = useRef(homeScrolled)
   const reduceMotion = useReducedMotion()
   const location = useLocation()
   const navigate = useNavigate()
@@ -88,7 +89,12 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
 
   useEffect(() => {
     if (activePage !== 'home') return
-    const updateScrollState = () => setHomeScrolled(window.scrollY > 24)
+    const updateScrollState = () => {
+      const next = window.scrollY > 24
+      if (next === homeScrolledRef.current) return
+      homeScrolledRef.current = next
+      setHomeScrolled(next)
+    }
     const animationFrame = window.requestAnimationFrame(updateScrollState)
     window.addEventListener('scroll', updateScrollState, { passive: true })
     return () => {
