@@ -174,9 +174,9 @@ function useRafPointer(enabled: boolean) {
 
 function readInteractiveCopyPreference() {
   try {
-    return localStorage.getItem(INTERACTIVE_COPY_KEY) !== 'disabled'
+    return localStorage.getItem(INTERACTIVE_COPY_KEY) === 'enabled'
   } catch {
-    return true
+    return false
   }
 }
 
