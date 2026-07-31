@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
 import { InteractivePretextParagraph } from '../ui/InteractivePretextParagraph'
 
 const INTERACTIVE_COPY_KEY = 'cqupt-src-intro-copy-interactive'
+type PointerPoint = { x: number; y: number }
+type PointerSubscriber = (pointer: PointerPoint | null) => void
+type SubscribePointer = (subscriber: PointerSubscriber) => () => void
 
 const introParagraphs = [
   {
@@ -24,9 +27,9 @@ const introParagraphs = [
   },
 ]
 
-export function IntroCopySection() {
+export const IntroCopySection = memo(function IntroCopySection() {
   const [interactiveEnabled, setInteractiveEnabled] = useState(() => readInteractiveCopyPreference())
-  const { clearPointer, handlePointerLeave, handlePointerMove, pointer } = useRafPointer(interactiveEnabled)
+  const { clearPointer, handlePointerLeave, handlePointerMove, subscribePointer } = useRafPointer(interactiveEnabled)
 
   const toggleInteractive = () => {
     setInteractiveEnabled((current) => {
@@ -53,14 +56,14 @@ export function IntroCopySection() {
               className={paragraph.zhClass}
               interactiveEnabled={interactiveEnabled}
               locale="zh-CN"
-              pointer={pointer}
+              subscribePointer={subscribePointer}
               text={paragraph.zh}
             />
             <IntroParagraph
               className={paragraph.enClass}
               interactiveEnabled={interactiveEnabled}
               locale="en-US"
-              pointer={pointer}
+              subscribePointer={subscribePointer}
               text={paragraph.en}
             />
           </div>
@@ -81,46 +84,53 @@ export function IntroCopySection() {
       />
     </section>
   )
-}
+})
 
-function IntroParagraph({
+const IntroParagraph = memo(function IntroParagraph({
   className,
   interactiveEnabled,
   locale,
-  pointer,
+  subscribePointer,
   text,
 }: {
   className: string
   interactiveEnabled: boolean
   locale: string
-  pointer: { x: number; y: number } | null
+  subscribePointer: SubscribePointer
   text: string
 }) {
   if (!interactiveEnabled) {
     return <p className={className}>{text}</p>
   }
 
-  return <InteractivePretextParagraph className={className} locale={locale} pointer={pointer} text={text} />
-}
+  return <InteractivePretextParagraph className={className} locale={locale} subscribePointer={subscribePointer} text={text} />
+})
 
 function useRafPointer(enabled: boolean) {
   const frameRef = useRef<number | null>(null)
-  const pendingPointerRef = useRef<{ x: number; y: number } | null>(null)
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
+  const pendingPointerRef = useRef<PointerPoint | null>(null)
+  const pointerRef = useRef<PointerPoint | null>(null)
+  const subscribersRef = useRef(new Set<PointerSubscriber>())
+
+  const publish = useCallback((pointer: PointerPoint | null) => {
+    pointerRef.current = pointer
+    subscribersRef.current.forEach((subscriber) => subscriber(pointer))
+  }, [])
 
   const clearPointer = useCallback(() => {
+    if (!pendingPointerRef.current && !pointerRef.current) return
     pendingPointerRef.current = null
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current)
       frameRef.current = null
     }
-    setPointer(null)
-  }, [])
+    publish(null)
+  }, [publish])
 
   const flushPointer = useCallback(() => {
     frameRef.current = null
-    setPointer(pendingPointerRef.current)
-  }, [])
+    publish(pendingPointerRef.current)
+  }, [publish])
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLElement>) => {
@@ -136,6 +146,12 @@ function useRafPointer(enabled: boolean) {
   const handlePointerLeave = useCallback(() => {
     clearPointer()
   }, [clearPointer])
+
+  const subscribePointer = useCallback<SubscribePointer>((subscriber) => {
+    subscribersRef.current.add(subscriber)
+    subscriber(pointerRef.current)
+    return () => subscribersRef.current.delete(subscriber)
+  }, [])
 
   useEffect(() => {
     if (!enabled) {
@@ -153,7 +169,7 @@ function useRafPointer(enabled: boolean) {
     }
   }, [clearPointer, enabled])
 
-  return { clearPointer, handlePointerLeave, handlePointerMove, pointer }
+  return { clearPointer, handlePointerLeave, handlePointerMove, subscribePointer }
 }
 
 function readInteractiveCopyPreference() {

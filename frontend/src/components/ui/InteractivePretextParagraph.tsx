@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type PointerPoint = {
   x: number
@@ -13,42 +13,28 @@ type CharacterBox = {
   width: number
 }
 
-type CharacterOffset = {
-  force: number
-  x: number
-  y: number
-}
-
 type InteractivePretextParagraphProps = {
   className: string
   locale?: string
-  pointer?: PointerPoint | null
+  subscribePointer: (subscriber: (pointer: PointerPoint | null) => void) => () => void
   text: string
 }
 
 const EFFECT_RADIUS = 86
 const MAX_OFFSET = 24
+const RESTING_TRANSFORM = 'translate3d(0px, 0px, 0) scale(1)'
 
 export function InteractivePretextParagraph({
   className,
-  pointer: pagePointer,
+  subscribePointer,
   text,
 }: InteractivePretextParagraphProps) {
   const containerRef = useRef<HTMLParagraphElement | null>(null)
   const hiddenTextRef = useRef<HTMLSpanElement | null>(null)
+  const characterRefs = useRef<Array<HTMLSpanElement | null>>([])
+  const transformsRef = useRef<string[]>([])
   const [characters, setCharacters] = useState<CharacterBox[]>([])
-  const [isEnabled, setIsEnabled] = useState(true)
-
-  const characterOffsets = useMemo(() => {
-    const pointer = getLocalPointer(containerRef.current, pagePointer)
-    if (!pointer) return characters.map(() => zeroOffset())
-
-    return characters.map((character) => {
-      const centerX = character.left + character.width / 2
-      const centerY = character.top + character.height / 2
-      return getCharacterOffset(pointer, centerX, centerY)
-    })
-  }, [characters, pagePointer])
+  const [isEnabled, setIsEnabled] = useState(readInteractionCapability)
 
   useEffect(() => {
     const motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -71,21 +57,21 @@ export function InteractivePretextParagraph({
     const hiddenText = hiddenTextRef.current
     if (!container || !hiddenText) return
 
+    let measureFrame: number | null = null
     const measure = () => {
+      measureFrame = null
       const textNode = hiddenText.firstChild
       if (!textNode) return
 
       const containerRect = container.getBoundingClientRect()
       const measuredCharacters: CharacterBox[] = []
+      const range = document.createRange()
 
       for (let index = 0; index < text.length; index += 1) {
-        const range = document.createRange()
         range.setStart(textNode, index)
         range.setEnd(textNode, index + 1)
 
         const rect = range.getClientRects()[0]
-        range.detach()
-
         if (!rect) continue
 
         measuredCharacters.push({
@@ -96,21 +82,61 @@ export function InteractivePretextParagraph({
           width: rect.width,
         })
       }
+      range.detach()
 
-      setCharacters(measuredCharacters)
+      setCharacters((current) => sameCharacterLayout(current, measuredCharacters) ? current : measuredCharacters)
+    }
+    const scheduleMeasure = () => {
+      if (measureFrame !== null) return
+      measureFrame = window.requestAnimationFrame(measure)
     }
 
     measure()
-    const resizeObserver = new ResizeObserver(measure)
+    const resizeObserver = new ResizeObserver(scheduleMeasure)
     resizeObserver.observe(container)
     resizeObserver.observe(hiddenText)
 
     if ('fonts' in document) {
-      document.fonts.ready.then(measure)
+      void document.fonts.ready.then(scheduleMeasure)
     }
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      if (measureFrame !== null) window.cancelAnimationFrame(measureFrame)
+    }
   }, [text])
+
+  const updateTransforms = useCallback((pagePointer: PointerPoint | null) => {
+    const container = containerRef.current
+    if (!container) return
+    const pointer = getLocalPointer(container, pagePointer)
+
+    if (
+      !pointer
+      || pointer.x < -EFFECT_RADIUS
+      || pointer.y < -EFFECT_RADIUS
+      || pointer.x > container.clientWidth + EFFECT_RADIUS
+      || pointer.y > container.clientHeight + EFFECT_RADIUS
+    ) {
+      resetTransforms(characterRefs.current, transformsRef.current)
+      return
+    }
+
+    characters.forEach((character, index) => {
+      const element = characterRefs.current[index]
+      if (!element) return
+      const transform = getCharacterTransform(
+        pointer,
+        character.left + character.width / 2,
+        character.top + character.height / 2,
+      )
+      if (transformsRef.current[index] === transform) return
+      transformsRef.current[index] = transform
+      element.style.transform = transform
+    })
+  }, [characters])
+
+  useEffect(() => subscribePointer(updateTransforms), [subscribePointer, updateTransforms])
 
   if (!isEnabled) {
     return <p className={className}>{text}</p>
@@ -128,16 +154,18 @@ export function InteractivePretextParagraph({
 
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 block [text-indent:0]">
         {characters.map((character, index) => {
-          const offset = characterOffsets[index] ?? zeroOffset()
-
           return (
             <span
               className="absolute inline-block whitespace-pre rounded-sm will-change-transform"
               key={`${index}-${character.character}`}
+              ref={(element) => {
+                characterRefs.current[index] = element
+                if (element) transformsRef.current[index] = RESTING_TRANSFORM
+              }}
               style={{
                 left: character.left,
                 top: character.top,
-                transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${1 + offset.force * 0.025})`,
+                transform: RESTING_TRANSFORM,
                 transition: 'transform 70ms ease-out',
               }}
             >
@@ -160,21 +188,40 @@ function getLocalPointer(element: HTMLElement | null, pointer: PointerPoint | nu
   }
 }
 
-function getCharacterOffset(pointer: PointerPoint, centerX: number, centerY: number): CharacterOffset {
+function getCharacterTransform(pointer: PointerPoint, centerX: number, centerY: number) {
   const dx = centerX - pointer.x
   const dy = centerY - pointer.y
   const distance = Math.max(Math.hypot(dx, dy), 1)
 
-  if (distance > EFFECT_RADIUS) return { x: 0, y: 0, force: 0 }
+  if (distance > EFFECT_RADIUS) return RESTING_TRANSFORM
 
   const force = ((EFFECT_RADIUS - distance) / EFFECT_RADIUS) ** 2
-  return {
-    force,
-    x: (dx / distance) * MAX_OFFSET * force,
-    y: (dy / distance) * MAX_OFFSET * force,
-  }
+  const x = (dx / distance) * MAX_OFFSET * force
+  const y = (dy / distance) * MAX_OFFSET * force
+  return `translate3d(${x}px, ${y}px, 0) scale(${1 + force * 0.025})`
 }
 
-function zeroOffset(): CharacterOffset {
-  return { force: 0, x: 0, y: 0 }
+function resetTransforms(elements: Array<HTMLSpanElement | null>, transforms: string[]) {
+  elements.forEach((element, index) => {
+    if (!element || transforms[index] === RESTING_TRANSFORM) return
+    transforms[index] = RESTING_TRANSFORM
+    element.style.transform = RESTING_TRANSFORM
+  })
+}
+
+function sameCharacterLayout(current: CharacterBox[], next: CharacterBox[]) {
+  if (current.length !== next.length) return false
+  return current.every((character, index) => {
+    const candidate = next[index]
+    return candidate
+      && character.character === candidate.character
+      && character.height === candidate.height
+      && character.left === candidate.left
+      && character.top === candidate.top
+      && character.width === candidate.width
+  })
+}
+
+function readInteractionCapability() {
+  return window.innerWidth >= 768 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
