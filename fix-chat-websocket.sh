@@ -47,7 +47,7 @@ else
   last_nonempty_line="$(awk 'NF { line = $0 } END { print line }' "$original")"
   [[ "$last_nonempty_line" == '}' ]] || fail "Expected final server-block brace in: $NGINX_CONF"
 
-  awk 'NF { last = NR } { lines[NR] = $0 } END { for (index = 1; index < last; index++) print lines[index] }' "$original" > "$updated"
+  awk 'NF { last = NR } { lines[NR] = $0 } END { for (line_no = 1; line_no < last; line_no++) print lines[line_no] }' "$original" > "$updated"
   cat >> "$updated" <<EOF
 
     location /socket.io/ {
