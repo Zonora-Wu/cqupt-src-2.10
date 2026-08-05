@@ -2,7 +2,7 @@ import { Archive, Bell, ChevronLeft, Download, LockKeyhole, MessageCirclePlus, S
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSavedSession } from '../../services/auth'
 import { ApiError } from '../../services/apiClient'
-import { addSensitiveWord, closeChatConversation, createDirectConversation, createGroupConversation, downloadChatExport, executeChatCleanup, getChatBootstrap, getChatMessages, getChatStorage, getSensitiveWords, markChatRead, previewChatCleanup, removeSensitiveWord, searchChatContact, sendChatMessage } from '../../services/chat'
+import { addSensitiveWord, closeChatConversation, createDirectConversation, createGroupConversation, downloadChatExport, executeChatCleanup, getChatBootstrap, getChatMessages, getChatMessagesAfter, getChatStorage, getSensitiveWords, markChatRead, previewChatCleanup, removeSensitiveWord, searchChatContact, sendChatMessage } from '../../services/chat'
 import type { ChatContact, ChatConversation, ChatMessage } from '../../services/chat'
 import { useChatSocket } from '../../hooks/useChatSocket'
 
@@ -22,6 +22,21 @@ export function ChatCenter({ onBackToNotifications }: { onBackToNotifications?: 
   const [groupOpen, setGroupOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<ChatMessage[]>([])
+
+  function replaceMessages(next: ChatMessage[]) {
+    messagesRef.current = next
+    setMessages(next)
+    return next
+  }
+
+  function appendMessages(incoming: ChatMessage[]) {
+    const known = new Set(messagesRef.current.map((message) => message.id))
+    const next = [...messagesRef.current, ...incoming.filter((message) => !known.has(message.id))]
+    messagesRef.current = next
+    setMessages(next)
+    return next
+  }
 
   const load = useCallback(async (preserveActive = true) => {
     const data = await getChatBootstrap()
@@ -36,26 +51,56 @@ export function ChatCenter({ onBackToNotifications }: { onBackToNotifications?: 
   const handleSocket = useCallback((_event: string, payload: unknown) => {
     if (_event === 'message.created') {
       const value = payload as { conversationId?: string; message?: ChatMessage }
-      if (value.conversationId === activeId && value.message) setMessages((previous) => previous.some((item) => item.id === value.message?.id) ? previous : [...previous, value.message!])
+      if (value.conversationId === activeId && value.message) {
+        appendMessages([value.message])
+        if (value.message.senderId !== currentUser?.id && document.visibilityState === 'visible') {
+          void markChatRead(activeId, value.message.id).then(() => load(true)).catch(() => {})
+        }
+      }
+    }
+    if (_event === 'chat.connection.restored' && activeId) {
+      const latestKnown = messagesRef.current.at(-1)
+      const request = latestKnown ? getChatMessagesAfter(activeId, latestKnown.id) : getChatMessages(activeId).then((data) => data.messages)
+      void request.then((recovered) => {
+        const next = latestKnown ? appendMessages(recovered) : replaceMessages(recovered)
+        const latest = next.at(-1)
+        if (latest && document.visibilityState === 'visible') return markChatRead(activeId, latest.id)
+        return undefined
+      }).catch(() => getChatMessages(activeId).then((data) => replaceMessages(data.messages)).catch(() => {}))
     }
     if (_event === 'chat.restrictionChanged') {
       const value = payload as { disabled?: boolean; expiresAt?: string | null; reason?: string }
       setRestriction(value.disabled ? { expiresAt: value.expiresAt ?? null, reason: value.reason ?? '管理员已限制聊天功能' } : null)
     }
     void load(true).catch(() => {})
-  }, [activeId, load])
+  }, [activeId, currentUser?.id, load])
   useChatSocket(handleSocket)
 
   const active = conversations.find((item) => item.id === activeId) ?? null
   useEffect(() => {
-    if (!activeId) { setMessages([]); return }
+    if (!activeId) { replaceMessages([]); return }
+    replaceMessages([])
     getChatMessages(activeId).then((data) => {
-      setMessages(data.messages)
+      replaceMessages(data.messages)
       const latest = data.messages.at(-1)
       if (latest) void markChatRead(activeId, latest.id).catch(() => {})
     }).catch((reason: unknown) => setError(messageOf(reason)))
   }, [activeId])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    if (!activeId) return
+    const markVisibleMessagesRead = () => {
+      if (document.visibilityState !== 'visible') return
+      const latest = messages.at(-1)
+      if (latest) void markChatRead(activeId, latest.id).then(() => load(true)).catch(() => {})
+    }
+    document.addEventListener('visibilitychange', markVisibleMessagesRead)
+    window.addEventListener('focus', markVisibleMessagesRead)
+    return () => {
+      document.removeEventListener('visibilitychange', markVisibleMessagesRead)
+      window.removeEventListener('focus', markVisibleMessagesRead)
+    }
+  }, [activeId, load, messages])
 
   const totalUnread = useMemo(() => conversations.reduce((total, item) => total + item.unread, 0), [conversations])
   async function chooseConversation(id: string) { setActiveId(id) }
@@ -66,7 +111,7 @@ export function ChatCenter({ onBackToNotifications }: { onBackToNotifications?: 
     try {
       const result = await sendChatMessage(active.id, content, crypto.randomUUID())
       if (result.blocked) throw new Error('消息包含敏感词，已被拦截')
-      if (result.message) setMessages((previous) => previous.some((item) => item.id === result.message?.id) ? previous : [...previous, result.message!])
+      if (result.message) appendMessages([result.message])
       await load(true)
     } catch (reason) { setError(messageOf(reason)) } finally { setSending(false) }
   }

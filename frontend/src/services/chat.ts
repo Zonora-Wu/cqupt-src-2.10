@@ -25,7 +25,23 @@ export const getChatBootstrap = () => apiRequest<ChatBootstrap>('/chat/bootstrap
 export const searchChatContact = (unifiedCode: string) => apiRequest<ChatContact>('/chat/contacts/search?unifiedCode=' + encodeURIComponent(unifiedCode), { auth: true, method: 'GET' })
 export const createDirectConversation = (targetUserId: string) => apiRequest<ChatConversation>('/chat/conversations/direct', { auth: true, body: { targetUserId }, method: 'POST' })
 export const createGroupConversation = (title: string, memberIds: string[]) => apiRequest<ChatConversation>('/chat/conversations/group', { auth: true, body: { title, memberIds }, method: 'POST' })
-export const getChatMessages = (id: string, before?: string) => apiRequest<{ hasMore: boolean; messages: ChatMessage[] }>(`/chat/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`, { auth: true, method: 'GET' })
+type ChatMessagePage = { hasMore: boolean; messages: ChatMessage[] }
+
+export const getChatMessages = (id: string, before?: string) => apiRequest<ChatMessagePage>(`/chat/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`, { auth: true, method: 'GET' })
+
+export async function getChatMessagesAfter(id: string, after: string) {
+  const collected: ChatMessage[] = []
+  let cursor = after
+  let hasMore = true
+  while (hasMore) {
+    const page = await apiRequest<ChatMessagePage>(`/chat/conversations/${id}/messages?after=${encodeURIComponent(cursor)}&limit=100`, { auth: true, method: 'GET' })
+    if (page.messages.length === 0) break
+    collected.push(...page.messages)
+    cursor = page.messages.at(-1)!.id
+    hasMore = page.hasMore
+  }
+  return collected
+}
 export const sendChatMessage = (id: string, content: string, clientMessageId: string) => apiRequest<{ blocked: boolean; message: ChatMessage | null }>(`/chat/conversations/${id}/messages`, { auth: true, body: { content, clientMessageId }, method: 'POST' })
 export const markChatRead = (id: string, messageId: string) => apiRequest<{ ok: boolean }>(`/chat/conversations/${id}/read`, { auth: true, body: { messageId }, method: 'POST' })
 export const getAdminConversations = () => apiRequest<ChatConversation[]>('/chat/admin/conversations', { auth: true, method: 'GET' })

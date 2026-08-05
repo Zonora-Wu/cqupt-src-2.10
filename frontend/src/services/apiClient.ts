@@ -1,4 +1,5 @@
 export const AUTH_SESSION_EXPIRED_EVENT = 'cqupt-src-auth-session-expired'
+export const AUTH_ACCESS_TOKEN_CHANGED_EVENT = 'cqupt-src-auth-access-token-changed'
 
 type HttpMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT'
 
@@ -138,7 +139,7 @@ async function rawApiRequest(
   return response
 }
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   if (refreshPromise) return refreshPromise
   refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
     credentials: 'include',
@@ -149,7 +150,7 @@ async function refreshAccessToken() {
       const data = await parseResponse(response)
       if (!data || typeof data !== 'object' || typeof (data as { accessToken?: unknown }).accessToken !== 'string') return null
       const accessToken = (data as { accessToken: string }).accessToken
-      memoryAccessToken = accessToken
+      setAccessToken(accessToken)
       const current = readStoredSession()
       if (current) window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(current))
       return accessToken
@@ -190,7 +191,9 @@ export function getAccessToken() {
 }
 
 export function setAccessToken(accessToken: string | null) {
+  if (memoryAccessToken === accessToken) return
   memoryAccessToken = accessToken
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(AUTH_ACCESS_TOKEN_CHANGED_EVENT))
 }
 
 function readStoredSession() {
@@ -205,7 +208,7 @@ function readStoredSession() {
 }
 
 function invalidateSession() {
-  memoryAccessToken = null
+  setAccessToken(null)
   window.localStorage.removeItem(AUTH_SESSION_KEY)
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT))
 }

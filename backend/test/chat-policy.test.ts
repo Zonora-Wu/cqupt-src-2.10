@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SecurityRateLimitService } from '../src/common/security/security-rate-limit.service'
 import { ChatRateLimitService } from '../src/modules/chat/chat-rate-limit.service'
+import { getUnreadBaseline, isMessageCursorAfter } from '../src/modules/chat/chat.service'
 import { normalizeChatText, normalizeGroupBody, normalizeMessageBody } from '../src/modules/chat/chat.validation'
 
 test('normalizes message text before sensitive-word matching', () => {
@@ -30,4 +31,18 @@ test('enforces message rate window', async () => {
   await limiter.consume('sender', 3, 60_000)
   await assert.rejects(limiter.consume('sender', 3, 60_000), /操作过于频繁/)
   await securityLimiter.onModuleDestroy()
+})
+
+test('read cursor only advances by message timestamp and id', () => {
+  const current = { createdAt: new Date('2026-08-05T10:00:00.000Z'), id: 'message-002' }
+  assert.equal(isMessageCursorAfter({ createdAt: new Date('2026-08-05T10:00:01.000Z'), id: 'message-001' }, current), true)
+  assert.equal(isMessageCursorAfter({ createdAt: new Date('2026-08-05T10:00:00.000Z'), id: 'message-003' }, current), true)
+  assert.equal(isMessageCursorAfter({ createdAt: new Date('2026-08-05T10:00:00.000Z'), id: 'message-001' }, current), false)
+})
+
+test('unread baseline starts at join time until a read cursor exists', () => {
+  const joinedAt = new Date('2026-08-05T09:00:00.000Z')
+  const lastReadAt = new Date('2026-08-05T10:00:00.000Z')
+  assert.equal(getUnreadBaseline({ joinedAt, lastReadAt: null }, new Date('2026-08-01T00:00:00.000Z')), joinedAt)
+  assert.equal(getUnreadBaseline({ joinedAt, lastReadAt }, new Date('2026-08-01T00:00:00.000Z')), lastReadAt)
 })

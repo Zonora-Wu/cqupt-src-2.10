@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { AuditAction, ChatConversationStatus, ChatConversationType, ChatMemberRole, Prisma, RoleCode, UserStatus } from '@prisma/client'
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -22,12 +22,13 @@ export class ChatService {
   ) {}
 
   async bootstrap(user: AuthenticatedRequestUser) {
-    const [global, conversations, staff, restriction] = await Promise.all([
+    const [globalConversation, conversations, staff, restriction] = await Promise.all([
       this.ensureGlobal(user),
       this.listConversations(user),
       this.listStaffContacts(),
       this.getActiveRestriction(user.id),
     ])
+    const global = await this.ensureGlobalReadBaseline(globalConversation, user.id)
     const globalItem = await this.mapConversation(global, user.id)
     const unique = new Map(conversations.map((item) => [item.id, item]))
     unique.set(globalItem.id, globalItem)
@@ -125,19 +126,28 @@ export class ChatService {
     return Promise.all(conversations.map((conversation) => this.mapConversation(conversation, user.id)))
   }
 
-  async listMessages(id: string, user: AuthenticatedRequestUser, before?: string, limit = 50) {
+  async listMessages(id: string, user: AuthenticatedRequestUser, before?: string, limit = 50, after?: string) {
+    if (before && after) throw new BadRequestException('不能同时使用向前和向后游标')
     const conversation = await this.getAccessibleConversation(id, user.id)
-    const cursor = before ? await this.prisma.chatMessage.findFirst({ where: { id: before, conversationId: id }, select: { id: true, createdAt: true } }) : null
+    const cursorId = before ?? after
+    const cursor = cursorId ? await this.prisma.chatMessage.findFirst({ where: { id: cursorId, conversationId: id }, select: { id: true, createdAt: true } }) : null
+    if (cursorId && !cursor) throw new BadRequestException('消息游标无效')
+    const cursorWhere = cursor
+      ? after
+        ? { OR: [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }] }
+        : { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] }
+      : {}
     const messages = await this.prisma.chatMessage.findMany({
-      where: { conversationId: id, ...(cursor ? { createdAt: { lt: cursor.createdAt } } : {}) },
+      where: { conversationId: id, ...cursorWhere },
       include: { sender: { include: { role: true } } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: after ? 'asc' : 'desc' }, { id: after ? 'asc' : 'desc' }],
       take: limit + 1,
     })
     const hasMore = messages.length > limit
-    const page = (hasMore ? messages.slice(0, limit) : messages).reverse()
+    const limited = hasMore ? messages.slice(0, limit) : messages
+    const page = after ? limited : limited.reverse()
     if (user.role === RoleCode.ADMIN && !this.isMember(conversation, user.id)) {
-      await this.prisma.auditLog.create({ data: this.auditData(user, AuditAction.CHAT_RECORDS_VIEWED, 'ChatConversation', id, 'success', {}, { before: before ?? null, limit }) })
+      await this.prisma.auditLog.create({ data: this.auditData(user, AuditAction.CHAT_RECORDS_VIEWED, 'ChatConversation', id, 'success', {}, { after: after ?? null, before: before ?? null, limit }) })
     }
     return { hasMore, messages: page.map(mapMessage) }
   }
@@ -166,10 +176,12 @@ export class ChatService {
       return { blocked: false as const, message: mapMessage(message) }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     if (!result.blocked && result.message) {
-      this.realtime.toConversation(id, 'message.created', { conversationId: id, message: result.message })
       const recipients = await this.prisma.chatConversation.findUnique({ where: { id }, include: { members: { where: { removedAt: null }, select: { userId: true } } } })
-      for (const member of recipients?.members ?? []) this.realtime.toUser(member.userId, 'message.created', { conversationId: id, message: result.message })
-      if (recipients?.type === ChatConversationType.GLOBAL) this.realtime.toGlobal('message.created', { conversationId: id, message: result.message })
+      if (recipients?.type === ChatConversationType.GLOBAL) {
+        this.realtime.toGlobal('message.created', { conversationId: id, message: result.message })
+      } else {
+        for (const member of recipients?.members ?? []) this.realtime.toUser(member.userId, 'message.created', { conversationId: id, message: result.message })
+      }
     }
     return result
   }
@@ -178,13 +190,16 @@ export class ChatService {
     const conversation = await this.getAccessibleConversation(id, user.id)
     const message = await this.prisma.chatMessage.findFirst({ where: { id: messageId, conversationId: id }, select: { id: true, createdAt: true } })
     if (!message) throw new NotFoundException('消息不存在')
-    await this.prisma.chatConversationMember.upsert({
-      where: { conversationId_userId: { conversationId: id, userId: user.id } },
-      create: { conversationId: id, userId: user.id, role: ChatMemberRole.MEMBER, lastReadMessageId: message.id, lastReadAt: message.createdAt },
-      update: { lastReadMessageId: message.id, lastReadAt: message.createdAt, removedAt: conversation.type === ChatConversationType.GLOBAL ? null : undefined },
-    })
-    this.realtime.toConversation(id, 'message.read', { conversationId: id, userId: user.id, messageId: message.id, readAt: message.createdAt })
-    return { ok: true }
+    const advanced = await this.advanceReadCursor(conversation.type, id, user.id, message)
+    if (advanced) {
+      const payload = { conversationId: id, userId: user.id, messageId: message.id, readAt: message.createdAt }
+      if (conversation.type === ChatConversationType.GLOBAL) {
+        this.realtime.toGlobal('message.read', payload)
+      } else {
+        for (const member of conversation.members) this.realtime.toUser(member.userId, 'message.read', payload)
+      }
+    }
+    return { advanced, ok: true }
   }
 
   async updateConversation(id: string, input: { reason: string; title?: string }, user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
@@ -387,6 +402,68 @@ export class ChatService {
     }
   }
 
+  private async ensureGlobalReadBaseline(
+    conversation: Prisma.ChatConversationGetPayload<{ include: typeof conversationInclude }>,
+    userId: string,
+  ) {
+    const latest = conversation.messages[0] ?? null
+    await this.prisma.chatConversationMember.upsert({
+      where: { conversationId_userId: { conversationId: conversation.id, userId } },
+      create: {
+        conversationId: conversation.id,
+        lastReadAt: latest?.createdAt ?? conversation.createdAt,
+        lastReadMessageId: latest?.id,
+        role: ChatMemberRole.MEMBER,
+        userId,
+      },
+      update: {},
+    })
+    return this.prisma.chatConversation.findUniqueOrThrow({ where: { id: conversation.id }, include: conversationInclude })
+  }
+
+  private async advanceReadCursor(
+    conversationType: ChatConversationType,
+    conversationId: string,
+    userId: string,
+    target: { createdAt: Date; id: string },
+  ) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const member = await tx.chatConversationMember.findUnique({
+            where: { conversationId_userId: { conversationId, userId } },
+            include: { lastReadMessage: { select: { createdAt: true, id: true } } },
+          })
+          if (!member) {
+            if (conversationType !== ChatConversationType.GLOBAL) throw new ForbiddenException('无权更新此会话的已读状态')
+            await tx.chatConversationMember.create({
+              data: { conversationId, lastReadAt: target.createdAt, lastReadMessageId: target.id, role: ChatMemberRole.MEMBER, userId },
+            })
+            return true
+          }
+
+          const current = member.lastReadMessage
+            ?? (member.lastReadAt ? { createdAt: member.lastReadAt, id: member.lastReadMessageId ?? '' } : null)
+          if (current && !isMessageCursorAfter(target, current)) return false
+
+          await tx.chatConversationMember.update({
+            where: { id: member.id },
+            data: {
+              lastReadAt: target.createdAt,
+              lastReadMessageId: target.id,
+              removedAt: conversationType === ChatConversationType.GLOBAL ? null : undefined,
+            },
+          })
+          return true
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      } catch (error) {
+        if (attempt < 2 && isReadCursorRetryable(error)) continue
+        throw error
+      }
+    }
+    return false
+  }
+
   private async getAccessibleConversation(id: string, userId: string) {
     const conversation = await this.prisma.chatConversation.findUnique({ where: { id }, include: conversationInclude })
     if (!conversation) throw new NotFoundException('会话不存在')
@@ -418,7 +495,19 @@ export class ChatService {
   private async mapConversation(conversation: Prisma.ChatConversationGetPayload<{ include: typeof conversationInclude }>, userId: string) {
     const member = conversation.members.find((item) => item.userId === userId)
     const last = conversation.messages[0] ?? null
-    const unread = await this.prisma.chatMessage.count({ where: { conversationId: conversation.id, ...(member?.lastReadAt ? { createdAt: { gt: member.lastReadAt } } : {}), senderId: { not: userId } } })
+    const unreadSince = getUnreadBaseline(member, conversation.createdAt)
+    const unreadCursor = member?.lastReadAt && member.lastReadMessageId
+      ? { createdAt: member.lastReadAt, id: member.lastReadMessageId }
+      : null
+    const unread = await this.prisma.chatMessage.count({
+      where: {
+        conversationId: conversation.id,
+        senderId: { not: userId },
+        ...(unreadCursor
+          ? { OR: [{ createdAt: { gt: unreadCursor.createdAt } }, { createdAt: unreadCursor.createdAt, id: { gt: unreadCursor.id } }] }
+          : { createdAt: { gt: unreadSince } }),
+      },
+    })
     const other = conversation.type === ChatConversationType.DIRECT ? conversation.members.find((item) => item.userId !== userId)?.user : null
     const strangerRemaining = conversation.type === ChatConversationType.DIRECT && conversation.directInitiatorId === userId && !conversation.acceptedAt ? Math.max(0, 3 - conversation.strangerMessageCount) : null
     return {
@@ -502,4 +591,23 @@ function sha256(value: string) {
 
 function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
+
+function isReadCursorRetryable(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2002' || error.code === 'P2034')
+}
+
+export function isMessageCursorAfter(
+  target: { createdAt: Date; id: string },
+  current: { createdAt: Date; id: string },
+) {
+  const timeDifference = target.createdAt.getTime() - current.createdAt.getTime()
+  return timeDifference > 0 || (timeDifference === 0 && target.id > current.id)
+}
+
+export function getUnreadBaseline(
+  member: { joinedAt: Date; lastReadAt: Date | null } | undefined,
+  conversationCreatedAt: Date,
+) {
+  return member?.lastReadAt ?? member?.joinedAt ?? conversationCreatedAt
 }

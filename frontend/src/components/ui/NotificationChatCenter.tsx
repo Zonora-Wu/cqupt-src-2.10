@@ -8,6 +8,7 @@ import {
   createDirectConversation,
   getChatBootstrap,
   getChatMessages,
+  getChatMessagesAfter,
   markChatRead,
   searchChatContact,
   sendChatMessage,
@@ -47,21 +48,64 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const [notificationReadVersion, setNotificationReadVersion] = useState(0)
   const [serverNotificationUnread, setServerNotificationUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<ChatMessage[]>([])
+  const loadedConversationIdRef = useRef('')
 
-  const refresh = useCallback(async () => {
-    const [notices, chat] = await Promise.all([getNotifications(), getChatBootstrap()])
+  const replaceMessages = useCallback((next: ChatMessage[]) => {
+    messagesRef.current = next
+    setMessages(next)
+    return next
+  }, [])
+
+  const appendMessages = useCallback((incoming: ChatMessage[]) => {
+    if (incoming.length === 0) return messagesRef.current
+    const known = new Set(messagesRef.current.map((message) => message.id))
+    const next = [...messagesRef.current, ...incoming.filter((message) => !known.has(message.id))]
+    messagesRef.current = next
+    setMessages(next)
+    return next
+  }, [])
+
+  const refreshNotifications = useCallback(async () => {
+    const notices = await getNotifications()
     setChannels(notices.channels)
     setServerNotificationUnread(notices.unread.bell)
+    return notices
+  }, [])
+
+  const refreshChat = useCallback(async () => {
+    const chat = await getChatBootstrap()
     setConversations(chat.conversations)
     setStaff(chat.staff)
-    setSelection((current) => current ?? defaultSelection(notices.channels, chat.conversations))
+    return chat
   }, [])
 
   useEffect(() => {
-    void refresh()
-      .catch((reason) => setError(messageOf(reason)))
-      .finally(() => setLoading(false))
-  }, [refresh])
+    let active = true
+    void Promise.allSettled([getNotifications(), getChatBootstrap()]).then(([noticeResult, chatResult]) => {
+      if (!active) return
+      if (noticeResult.status === 'fulfilled') {
+        setChannels(noticeResult.value.channels)
+        setServerNotificationUnread(noticeResult.value.unread.bell)
+      }
+      if (chatResult.status === 'fulfilled') {
+        setConversations(chatResult.value.conversations)
+        setStaff(chatResult.value.staff)
+      }
+      const noticeChannels = noticeResult.status === 'fulfilled' ? noticeResult.value.channels : []
+      const chatConversations = chatResult.status === 'fulfilled' ? chatResult.value.conversations : []
+      setSelection((current) => current ?? defaultSelection(noticeChannels, chatConversations))
+      if (noticeResult.status === 'rejected' && chatResult.status === 'rejected') {
+        setError(`通知和聊天加载失败：${messageOf(noticeResult.reason)}`)
+      } else if (noticeResult.status === 'rejected') {
+        setError(`系统通知加载失败：${messageOf(noticeResult.reason)}`)
+      } else if (chatResult.status === 'rejected') {
+        setError(`聊天暂不可用，系统通知仍可查看：${messageOf(chatResult.reason)}`)
+      }
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [])
 
   const activeChat = selection?.kind === 'chat'
     ? conversations.find((item) => item.id === selection.id) ?? null
@@ -72,29 +116,56 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     if (!activeChat) {
-      setMessages([])
+      loadedConversationIdRef.current = ''
+      replaceMessages([])
       return
     }
 
+    loadedConversationIdRef.current = activeChat.id
+    replaceMessages([])
+    let cancelled = false
     void getChatMessages(activeChat.id)
       .then((data) => {
-        setMessages(data.messages)
+        if (cancelled) return
+        replaceMessages(data.messages)
         const latest = data.messages.at(-1)
         if (latest) {
           void markChatRead(activeChat.id, latest.id)
             .then(() => {
               window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
-              return refresh()
+              return refreshChat()
             })
             .catch(() => {})
         }
       })
       .catch((reason) => setError(messageOf(reason)))
-  }, [activeChat?.id])
+    return () => { cancelled = true }
+  }, [activeChat?.id, refreshChat, replaceMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, selection])
+
+  useEffect(() => {
+    if (!activeChat) return
+    const markVisibleMessagesRead = () => {
+      if (document.visibilityState !== 'visible') return
+      const latest = messages.at(-1)
+      if (!latest) return
+      void markChatRead(activeChat.id, latest.id)
+        .then(() => {
+          window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+          return refreshChat()
+        })
+        .catch(() => {})
+    }
+    document.addEventListener('visibilitychange', markVisibleMessagesRead)
+    window.addEventListener('focus', markVisibleMessagesRead)
+    return () => {
+      document.removeEventListener('visibilitychange', markVisibleMessagesRead)
+      window.removeEventListener('focus', markVisibleMessagesRead)
+    }
+  }, [activeChat?.id, messages, refreshChat])
 
   useEffect(() => {
     if (!activeChannel) return
@@ -114,13 +185,55 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
     if (event === 'message.created') {
       const data = payload as { conversationId?: string; message?: ChatMessage }
       if (selection?.kind === 'chat' && data.conversationId === selection.id && data.message) {
-        setMessages((previous) => previous.some((item) => item.id === data.message?.id)
-          ? previous
-          : [...previous, data.message!])
+        appendMessages([data.message])
+        if (data.message.senderId !== currentUser?.id && document.visibilityState === 'visible') {
+          void markChatRead(selection.id, data.message.id)
+            .then(() => {
+              window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+              return refreshChat()
+            })
+            .catch(() => {})
+        } else {
+          void refreshChat().catch(() => {})
+        }
+      } else {
+        void refreshChat().catch(() => {})
       }
+      return
     }
-    void refresh().catch(() => {})
-  }, [refresh, selection])
+    if (event === 'notification.created') {
+      void refreshNotifications().catch(() => {})
+      return
+    }
+    if (event === 'chat.connection.restored') {
+      const recoverMessages = async () => {
+        if (selection?.kind !== 'chat' || loadedConversationIdRef.current !== selection.id) return
+        const latestKnown = messagesRef.current.at(-1)
+        const recovered = latestKnown
+          ? await getChatMessagesAfter(selection.id, latestKnown.id)
+          : (await getChatMessages(selection.id)).messages
+        const next = latestKnown ? appendMessages(recovered) : replaceMessages(recovered)
+        const latest = next.at(-1)
+        if (latest && document.visibilityState === 'visible') {
+          await markChatRead(selection.id, latest.id)
+          window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+        }
+      }
+      void Promise.allSettled([
+        refreshNotifications(),
+        refreshChat(),
+        recoverMessages().catch(async () => {
+          if (selection?.kind !== 'chat') return
+          const data = await getChatMessages(selection.id)
+          replaceMessages(data.messages)
+          const latest = data.messages.at(-1)
+          if (latest && document.visibilityState === 'visible') return markChatRead(selection.id, latest.id)
+        }),
+      ])
+      return
+    }
+    void refreshChat().catch(() => {})
+  }, [appendMessages, currentUser?.id, refreshChat, refreshNotifications, replaceMessages, selection])
 
   useChatSocket(onSocket)
 
@@ -141,11 +254,9 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
       const result = await sendChatMessage(activeChat.id, content, crypto.randomUUID())
       if (result.blocked) throw new Error('消息包含敏感词，已被拦截')
       if (result.message) {
-        setMessages((previous) => previous.some((item) => item.id === result.message?.id)
-          ? previous
-          : [...previous, result.message!])
+        appendMessages([result.message])
       }
-      await refresh()
+      await refreshChat()
     } catch (reason) {
       setError(messageOf(reason))
     } finally {
@@ -157,7 +268,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
     try {
       const conversation = await createDirectConversation(contact.id)
       setContactOpen(false)
-      await refresh()
+      await refreshChat()
       setSelection({ id: conversation.id, kind: 'chat' })
     } catch (reason) {
       setError(messageOf(reason))

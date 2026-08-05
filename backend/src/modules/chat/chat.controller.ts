@@ -42,8 +42,8 @@ export class ChatController {
   }
 
   @Get('conversations/:id/messages')
-  messages(@Param('id') id: string, @Query('before') before: string | undefined, @Query('limit') limit: string | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
-    return this.chat.listMessages(id, user, normalizeBefore(before), normalizeCursor(limit))
+  messages(@Param('id') id: string, @Query('before') before: string | undefined, @Query('after') after: string | undefined, @Query('limit') limit: string | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.chat.listMessages(id, user, normalizeBefore(before), normalizeCursor(limit), normalizeBefore(after))
   }
 
   @Post('conversations/:id/messages')
