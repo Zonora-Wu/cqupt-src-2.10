@@ -31,6 +31,7 @@ export function InteractivePretextParagraph({
 }: InteractivePretextParagraphProps) {
   const containerRef = useRef<HTMLParagraphElement | null>(null)
   const hiddenTextRef = useRef<HTMLSpanElement | null>(null)
+  const containerRectRef = useRef<DOMRect | null>(null)
   const characterRefs = useRef<Array<HTMLSpanElement | null>>([])
   const transformsRef = useRef<string[]>([])
   const [characters, setCharacters] = useState<CharacterBox[]>([])
@@ -58,12 +59,14 @@ export function InteractivePretextParagraph({
     if (!container || !hiddenText) return
 
     let measureFrame: number | null = null
+    let rectFrame: number | null = null
     const measure = () => {
       measureFrame = null
       const textNode = hiddenText.firstChild
       if (!textNode) return
 
       const containerRect = container.getBoundingClientRect()
+      containerRectRef.current = containerRect
       const measuredCharacters: CharacterBox[] = []
       const range = document.createRange()
 
@@ -90,11 +93,19 @@ export function InteractivePretextParagraph({
       if (measureFrame !== null) return
       measureFrame = window.requestAnimationFrame(measure)
     }
+    const scheduleRectUpdate = () => {
+      if (rectFrame !== null) return
+      rectFrame = window.requestAnimationFrame(() => {
+        rectFrame = null
+        containerRectRef.current = container.getBoundingClientRect()
+      })
+    }
 
     measure()
     const resizeObserver = new ResizeObserver(scheduleMeasure)
     resizeObserver.observe(container)
     resizeObserver.observe(hiddenText)
+    window.addEventListener('scroll', scheduleRectUpdate, { passive: true })
 
     if ('fonts' in document) {
       void document.fonts.ready.then(scheduleMeasure)
@@ -102,21 +113,24 @@ export function InteractivePretextParagraph({
 
     return () => {
       resizeObserver.disconnect()
+      window.removeEventListener('scroll', scheduleRectUpdate)
       if (measureFrame !== null) window.cancelAnimationFrame(measureFrame)
+      if (rectFrame !== null) window.cancelAnimationFrame(rectFrame)
     }
   }, [text])
 
   const updateTransforms = useCallback((pagePointer: PointerPoint | null) => {
     const container = containerRef.current
     if (!container) return
-    const pointer = getLocalPointer(container, pagePointer)
+    const containerRect = containerRectRef.current
+    const pointer = getLocalPointer(containerRect, pagePointer)
 
     if (
       !pointer
       || pointer.x < -EFFECT_RADIUS
       || pointer.y < -EFFECT_RADIUS
-      || pointer.x > container.clientWidth + EFFECT_RADIUS
-      || pointer.y > container.clientHeight + EFFECT_RADIUS
+      || pointer.x > containerRect.width + EFFECT_RADIUS
+      || pointer.y > containerRect.height + EFFECT_RADIUS
     ) {
       resetTransforms(characterRefs.current, transformsRef.current)
       return
@@ -132,6 +146,7 @@ export function InteractivePretextParagraph({
       )
       if (transformsRef.current[index] === transform) return
       transformsRef.current[index] = transform
+      element.style.willChange = transform === RESTING_TRANSFORM ? 'auto' : 'transform'
       element.style.transform = transform
     })
   }, [characters])
@@ -156,7 +171,7 @@ export function InteractivePretextParagraph({
         {characters.map((character, index) => {
           return (
             <span
-              className="absolute inline-block whitespace-pre rounded-sm will-change-transform"
+              className="absolute inline-block whitespace-pre rounded-sm"
               key={`${index}-${character.character}`}
               ref={(element) => {
                 characterRefs.current[index] = element
@@ -178,10 +193,9 @@ export function InteractivePretextParagraph({
   )
 }
 
-function getLocalPointer(element: HTMLElement | null, pointer: PointerPoint | null) {
-  if (!element || !pointer) return null
+function getLocalPointer(rect: DOMRect | null, pointer: PointerPoint | null) {
+  if (!rect || !pointer) return null
 
-  const rect = element.getBoundingClientRect()
   return {
     x: pointer.x - rect.left,
     y: pointer.y - rect.top,
@@ -205,6 +219,7 @@ function resetTransforms(elements: Array<HTMLSpanElement | null>, transforms: st
   elements.forEach((element, index) => {
     if (!element || transforms[index] === RESTING_TRANSFORM) return
     transforms[index] = RESTING_TRANSFORM
+    element.style.willChange = 'auto'
     element.style.transform = RESTING_TRANSFORM
   })
 }

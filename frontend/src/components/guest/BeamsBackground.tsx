@@ -2,6 +2,7 @@ import { PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { AdaptiveFrameScheduler, getGraphicsPerformanceProfile } from '../graphics/AdaptiveFrameScheduler'
 
 type BeamsProps = {
   beamHeight?: number
@@ -150,6 +151,7 @@ export function BeamsBackground({
 }: BeamsProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const isActive = useCanvasActivity(containerRef)
+  const performanceProfile = useMemo(getGraphicsPerformanceProfile, [])
   const beamMaterial = useMemo(
     () => extendMaterial(THREE.MeshStandardMaterial, {
       header: `
@@ -217,7 +219,12 @@ if (uLightTheme > 0.5) {
 
   return (
     <div className={`h-full w-full transition-colors duration-[850ms] ${theme === 'light' ? 'bg-white' : 'bg-black'}`} ref={containerRef}>
-      <Canvas className="h-full w-full" dpr={[1, 2]} frameloop={isActive && speed !== 0 ? 'always' : 'demand'}>
+      <Canvas
+        className="h-full w-full"
+        dpr={[1, performanceProfile.maxDpr]}
+        frameloop={isActive && speed !== 0 && performanceProfile.targetFps === 60 ? 'always' : 'demand'}
+      >
+        <AdaptiveFrameScheduler active={isActive && speed !== 0} fps={performanceProfile.targetFps} />
         <group rotation={[0, 0, THREE.MathUtils.degToRad(rotation)]}>
           <PlaneNoise material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
           <DirLight color={lightColor} position={[0, 3, 10]} />

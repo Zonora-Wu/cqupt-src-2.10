@@ -571,7 +571,7 @@ function TrendMetric({
       type="button"
     >
       <span className="inline-flex items-center gap-1.5">
-        <span className={`h-1.5 rounded-full transition-all duration-300 ${active ? 'w-5' : 'w-3'}`} style={{ backgroundColor: color }} />
+        <span className={`h-1.5 rounded-full transition-[width] duration-200 ${active ? 'w-5' : 'w-3'}`} style={{ backgroundColor: color }} />
         {label}
       </span>
       <span className="ml-2 font-semibold text-slate-800 dark:text-slate-100">{value}</span>

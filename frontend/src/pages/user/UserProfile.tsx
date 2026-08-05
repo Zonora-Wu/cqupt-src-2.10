@@ -208,7 +208,7 @@ export function UserProfile({ onAvatarChange, user }: UserProfileProps) {
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                 <div
-                  className="h-full rounded-full bg-brand-600 transition-all dark:bg-brand-300"
+                  className="h-full rounded-full bg-brand-600 transition-[width,background-color] duration-200 dark:bg-brand-300"
                   style={{ width: `${Math.min(100, Math.max(0, aiQuota?.usedPercent ?? 0))}%` }}
                 />
               </div>

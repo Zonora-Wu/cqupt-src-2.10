@@ -1,9 +1,10 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { ENVIRONMENT_MAP_URL, LAPTOP_MODEL_URL } from './laptopShowcaseAssets'
+import { AdaptiveFrameScheduler, getGraphicsPerformanceProfile } from '../graphics/AdaptiveFrameScheduler'
 
 const ENVIRONMENT_ROTATION_Y_DEGREES = 20
 const MODEL_VERTICAL_OFFSET = -0.3
@@ -74,6 +75,7 @@ export function KaliLaptopShowcase() {
   const [lidOpen, setLidOpen] = useState(false)
   const theme = useSceneTheme()
   const sceneActive = useSceneActivity(sceneRef)
+  const performanceProfile = useMemo(getGraphicsPerformanceProfile, [])
 
   useEffect(() => {
     let frame = 0
@@ -144,8 +146,8 @@ export function KaliLaptopShowcase() {
         <Canvas
           camera={{ fov: 28, position: [0, 1.18, 9.4] }}
           className="h-full w-full"
-          dpr={[1, 1.75]}
-          frameloop={sceneActive ? 'always' : 'never'}
+          dpr={[1, performanceProfile.maxDpr]}
+          frameloop={sceneActive && performanceProfile.targetFps === 60 ? 'always' : 'demand'}
           gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace
@@ -153,6 +155,7 @@ export function KaliLaptopShowcase() {
             gl.toneMappingExposure = theme === 'dark' ? 1.05 : 0.92
           }}
         >
+          <AdaptiveFrameScheduler active={sceneActive} fps={performanceProfile.targetFps} />
           <ExrEnvironment exposure={theme === 'dark' ? 1.05 : 0.92} />
           <LaptopScene
             baseCanvasHeight={canvasBounds.baseHeight}
