@@ -1640,7 +1640,7 @@ export function AdminSystemSettings() {
                   <SettingRow
                     control={
                       <div className="flex items-center justify-end gap-3">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-brand-600 text-white dark:border-white/10">
+                        <div className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-black/10 dark:border-white/10 ${aiAvatarUrl ? 'bg-transparent' : 'bg-brand-600 text-white'}`}>
                           {aiAvatarUrl ? (
                             <img alt="邮宝头像" className="h-full w-full object-cover" src={aiAvatarUrl} />
                           ) : (

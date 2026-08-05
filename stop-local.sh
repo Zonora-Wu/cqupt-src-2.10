@@ -68,12 +68,48 @@ fi
 # ---- 释放前后端固定端口 ----
 port_listener_pids() {
   local port="$1"
-  lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+  if command -v ss &>/dev/null; then
+    ss -H -ltnp "sport = :$port" 2>/dev/null \
+      | grep -oE 'pid=[0-9]+' \
+      | cut -d= -f2 \
+      | sort -u || true
+    return 0
+  fi
+  lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u || true
+}
+
+port_is_listening() {
+  local port="$1"
+  if command -v ss &>/dev/null; then
+    [[ -n "$(ss -H -ltn "sport = :$port" 2>/dev/null)" ]]
+    return
+  fi
+  [[ -n "$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null)" ]]
 }
 
 process_cwd() {
   local pid="$1"
+  if [[ -e "/proc/$pid/cwd" ]]; then
+    readlink -f "/proc/$pid/cwd" 2>/dev/null || true
+    return
+  fi
   lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
+}
+
+stop_listener_groups() {
+  local signal="$1"
+  shift
+  local own_group pid process_group
+  own_group="$(ps -o pgid= -p "$$" | tr -d ' ')"
+
+  for pid in "$@"; do
+    process_group="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+    if [[ "$process_group" =~ ^[0-9]+$ ]] && [[ "$process_group" -gt 1 ]] && [[ "$process_group" != "$own_group" ]]; then
+      kill "-$signal" -- "-$process_group" 2>/dev/null || true
+    else
+      kill "-$signal" "$pid" 2>/dev/null || true
+    fi
+  done
 }
 
 stop_required_port() {
@@ -104,31 +140,41 @@ stop_required_port() {
   fi
 
   for _ in $(seq 1 20); do
-    [[ -z "$(port_listener_pids "$port")" ]] && {
+    if ! port_is_listening "$port"; then
       log_success "$label端口 $port 已释放"
       return 0
-    }
+    fi
     sleep 0.25
   done
 
   local remaining
   remaining="$(port_listener_pids "$port" | tr '\n' ' ')"
   if [[ -n "${remaining// /}" ]]; then
-    log_warn "$label端口 $port 仍被占用，强制停止监听进程：$remaining"
+    log_warn "$label端口 $port 仍被占用，停止监听进程组：$remaining"
     # shellcheck disable=SC2086
-    kill -KILL $remaining 2>/dev/null || true
-    sleep 0.5
+    stop_listener_groups TERM $remaining
+    for _ in $(seq 1 8); do
+      if ! port_is_listening "$port"; then break; fi
+      sleep 0.25
+    done
+
+    remaining="$(port_listener_pids "$port" | tr '\n' ' ')"
+    if [[ -n "${remaining// /}" ]]; then
+      # shellcheck disable=SC2086
+      stop_listener_groups KILL $remaining
+      sleep 0.5
+    fi
   fi
 
-  if [[ -n "$(port_listener_pids "$port")" ]]; then
+  if port_is_listening "$port"; then
     log_error "$label端口 $port 释放失败，请检查权限"
     return 1
   fi
   log_success "$label端口 $port 已释放"
 }
 
-if ! command -v lsof &>/dev/null; then
-  log_error "缺少 lsof，无法保证释放开发端口"
+if ! command -v ss &>/dev/null && ! command -v lsof &>/dev/null; then
+  log_error "缺少 ss 或 lsof，无法保证释放开发端口"
   exit 1
 fi
 

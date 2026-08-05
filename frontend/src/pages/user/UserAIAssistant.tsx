@@ -2597,7 +2597,7 @@ function AssistantAvatar({ avatarUrl, thinking = false }: { avatarUrl: string | 
   return (
     <motion.div
       animate={thinking ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-white shadow-sm ring-1 ring-brand-600/20"
+      className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-white shadow-sm ring-1 ring-brand-600/20 ${avatarUrl ? 'bg-transparent' : 'bg-brand-600'}`}
       transition={thinking ? { duration: 1.2, ease: 'easeInOut', repeat: Infinity } : undefined}
     >
       {avatarUrl ? (
