@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Settings2, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { getAccountProfile } from '../../services/account'
@@ -69,6 +69,8 @@ const inputModuleClass = (active: boolean) => `inline-flex h-9 shrink-0 items-ce
 }`
 
 export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitialAdviceConsumed, onInitialPromptConsumed }: UserAIAssistantProps = {}) {
+  const reduceMotion = usePlatformReducedMotion()
+  const animateNewMessagesRef = useRef(false)
   const storageKeyRef = useRef(getConversationStorageKey())
   const skillPreferenceKeyRef = useRef(getSkillPreferenceStorageKey())
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredMessages(storageKeyRef.current))
@@ -142,6 +144,10 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [resolutionAction, setResolutionAction] = useState<'RESOLVE' | 'SNOOZE' | 'CONTINUE' | null>(null)
   const [resolutionError, setResolutionError] = useState('')
   const hasStarted = messages.length > 0
+
+  useEffect(() => {
+    animateNewMessagesRef.current = true
+  }, [])
 
   useEffect(() => {
     saveHistoryPanelWidth(historyPanelWidth)
@@ -759,7 +765,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       <motion.div
         className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[var(--app-bg)]/90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
-        transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
       >
         <AnimatePresence initial={false}>
           {pendingAttachment && (
@@ -783,7 +789,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           />
           <button
             aria-label="选择 PDF 附件"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-black/5 hover:text-slate-900 disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition duration-150 hover:bg-black/5 hover:text-slate-900 active:scale-[0.97] disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
             disabled={uploadingAttachment || sending}
             onClick={() => reportFileInputRef.current?.click()}
             type="button"
@@ -803,7 +809,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           />
           <button
             aria-label="发送"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition duration-150 hover:bg-brand-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
             disabled={readOnlyHistory || (!input.trim() && !pendingAttachment) || sending || uploadingAttachment || (!usingOwnModel && (aiQuota?.enabled === false || aiQuota?.remaining === 0))}
             onClick={() => void sendMessage()}
             type="button"
@@ -816,7 +822,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   )
 
   return (
-    <>
+    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'never'} transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}>
     <FloatingNotice message={modelNotice} onClose={() => setModelNotice('')} variant="success" />
     <FloatingNotice
       message={reportNotice?.message ?? ''}
@@ -881,10 +887,10 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           <motion.div
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-1 flex-col items-center justify-center pb-10 text-center"
-            exit={{ opacity: 0, y: -18, transition: { duration: 0.28, ease: 'easeOut' } }}
-            initial={{ opacity: 0, y: 18 }}
+            exit={{ opacity: 0, y: -10, transition: { duration: 0.18, ease: 'easeOut' } }}
+            initial={{ opacity: 0, y: 10 }}
             key="ai-empty"
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
           >
             <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">邮宝</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
@@ -902,10 +908,10 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           <motion.div
             animate={{ opacity: 1, y: 0 }}
             className="flex-1 space-y-5 overflow-y-auto"
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 10 }}
             key="ai-chat"
             style={{ paddingBottom: bottomInset }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
           >
             {messages.map((message, index) => {
               const isUser = message.role === 'user'
@@ -913,9 +919,9 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
                 <motion.div
                   animate={{ opacity: 1, y: 0 }}
                   className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={animateNewMessagesRef.current && index === messages.length - 1 ? { opacity: 0, y: 6 } : false}
                   key={`${message.role}-${index}`}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
                 >
                   {!isUser && <AssistantAvatar avatarUrl={aiAvatarUrl} />}
                   <div className={isUser ? 'max-w-[760px]' : 'w-full max-w-[1040px]'}>
@@ -975,11 +981,11 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           <motion.div
             animate={{ opacity: 1, y: 0 }}
             className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[1360px] px-5 pb-6 transition-[padding-left] duration-300 ease-out md:px-8"
-            initial={{ opacity: 0, y: 28 }}
+            initial={{ opacity: 0, y: 12 }}
             key="ai-docked-input"
             ref={dockedInputRef}
             style={historyContentInset ? { paddingLeft: `${historyContentInset + 32}px` } : undefined}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
           >
             <AnimatePresence>
               {showScrollDown && (
@@ -993,7 +999,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
                 >
                   <button
                     aria-label="滚动到底部"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-panel-bg)] text-slate-500 shadow-lg backdrop-blur-md transition hover:bg-white hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-panel-bg)] text-slate-500 shadow-lg backdrop-blur-md transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white"
                     onClick={() => {
                       scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
                     }}
@@ -1022,7 +1028,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         }}
       />
     </section>
-    </>
+    </MotionConfig>
   )
 }
 
@@ -2595,17 +2601,16 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
 
 function AssistantAvatar({ avatarUrl, thinking = false }: { avatarUrl: string | null; thinking?: boolean }) {
   return (
-    <motion.div
-      animate={thinking ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+    <div
       className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-white shadow-sm ring-1 ring-brand-600/20 ${avatarUrl ? 'bg-transparent' : 'bg-brand-600'}`}
-      transition={thinking ? { duration: 1.2, ease: 'easeInOut', repeat: Infinity } : undefined}
+      aria-busy={thinking || undefined}
     >
       {avatarUrl ? (
         <img alt="邮宝头像" className="h-full w-full object-cover" src={avatarUrl} />
       ) : (
         <Bot className="h-5 w-5" />
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -2628,14 +2633,16 @@ function UserChatAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: s
 }
 
 function TypingIndicator() {
+  const reduceMotion = usePlatformReducedMotion()
+
   return (
     <span className="inline-flex items-center gap-1">
       {[0.25, 0.35, 0.45].map((delay) => (
         <motion.span
-          animate={{ opacity: [0.2, 1, 0.2] }}
+          animate={reduceMotion ? { opacity: 0.65 } : { opacity: [0.2, 1, 0.2] }}
           className="inline-block h-1.5 w-1.5 rounded-full bg-current"
           key={delay}
-          transition={{ duration: 1.2, ease: 'easeInOut', repeat: Infinity, delay }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 1.2, ease: 'easeInOut', repeat: Infinity, delay }}
         />
       ))}
     </span>
@@ -2758,6 +2765,28 @@ function saveHistoryPanelWidth(width: number) {
   } catch {
     // localStorage unavailable - keep the current in-memory width
   }
+}
+
+function usePlatformReducedMotion() {
+  const readPreference = () => typeof window !== 'undefined' && (
+    document.documentElement.dataset.motion === 'reduced'
+    || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+  const [reduced, setReduced] = useState(readPreference)
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setReduced(readPreference())
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributeFilter: ['data-motion'], attributes: true })
+    media.addEventListener('change', update)
+    return () => {
+      observer.disconnect()
+      media.removeEventListener('change', update)
+    }
+  }, [])
+
+  return reduced
 }
 
 function loadStoredMessages(key: string): ChatMessage[] {

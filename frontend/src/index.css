@@ -874,6 +874,23 @@ html[data-motion="reduced"] *::after {
   transition-duration: 0.01ms !important;
 }
 
+.user-route-transition {
+  opacity: 1;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@starting-style {
+  .user-route-transition {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-route-transition {
+    transition-duration: 0.01ms;
+  }
+}
+
 html.auth-modal-open {
   overscroll-behavior: contain;
 }

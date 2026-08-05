@@ -357,44 +357,46 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
       {activeMenu !== '首页' ? (
         <Suspense fallback={<FullScreenLoader label="正在加载页面" />}>
-          {activeMenu === '提交漏洞' ? (
-            <UserSubmitVulnerability />
-          ) : activeMenu === '我的漏洞' ? (
-            <UserMyVulnerabilities />
-          ) : activeMenu === '学习中心' ? (
-            <UserLearningCenter />
-          ) : activeMenu === 'AI助手' ? (
-            <UserAIAssistant
-              initialAdviceReportId={pendingAiAdviceReportId}
-              initialPrompt={pendingAiPrompt}
-              onInitialAdviceConsumed={() => setPendingAiAdviceReportId(null)}
-              onInitialPromptConsumed={() => setPendingAiPrompt(null)}
-            />
-          ) : activeMenu === '积分商城' ? (
-            <UserPointsMall />
-          ) : activeMenu === '我的证书' ? (
-            <UserCertificates />
-          ) : activeMenu === '排行榜' ? (
-            <UserLeaderboard />
-          ) : activeMenu === '平台公告' ? (
-            <UserAnnouncements />
-          ) : activeMenu === '个人中心' ? (
-            <UserProfile onAvatarChange={setNavAvatarUrl} user={user} />
-          ) : activeMenu === '账号安全' ? (
-            <UserAccountSecurity />
-          ) : activeMenu === '系统设置' ? (
-            <UserSystemSettings
-              effectiveTheme={theme}
-              onPreferencesChange={updatePreferences}
-              preferences={preferences}
-              userKey={preferenceKey}
-            />
-          ) : (
-            <UserNotifications />
-          )}
+          <div className="user-route-transition" key={location.pathname}>
+            {activeMenu === '提交漏洞' ? (
+              <UserSubmitVulnerability />
+            ) : activeMenu === '我的漏洞' ? (
+              <UserMyVulnerabilities />
+            ) : activeMenu === '学习中心' ? (
+              <UserLearningCenter />
+            ) : activeMenu === 'AI助手' ? (
+              <UserAIAssistant
+                initialAdviceReportId={pendingAiAdviceReportId}
+                initialPrompt={pendingAiPrompt}
+                onInitialAdviceConsumed={() => setPendingAiAdviceReportId(null)}
+                onInitialPromptConsumed={() => setPendingAiPrompt(null)}
+              />
+            ) : activeMenu === '积分商城' ? (
+              <UserPointsMall />
+            ) : activeMenu === '我的证书' ? (
+              <UserCertificates />
+            ) : activeMenu === '排行榜' ? (
+              <UserLeaderboard />
+            ) : activeMenu === '平台公告' ? (
+              <UserAnnouncements />
+            ) : activeMenu === '个人中心' ? (
+              <UserProfile onAvatarChange={setNavAvatarUrl} user={user} />
+            ) : activeMenu === '账号安全' ? (
+              <UserAccountSecurity />
+            ) : activeMenu === '系统设置' ? (
+              <UserSystemSettings
+                effectiveTheme={theme}
+                onPreferencesChange={updatePreferences}
+                preferences={preferences}
+                userKey={preferenceKey}
+              />
+            ) : (
+              <UserNotifications />
+            )}
+          </div>
         </Suspense>
       ) : (
-        <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+        <section className="user-route-transition relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8" key={location.pathname}>
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.45fr)_390px]">
             <SurfacePanel
               className="h-full overflow-hidden p-0"
@@ -421,7 +423,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
                   <div className="mt-auto pt-12">
                     <div
-                      className={`group flex w-full items-center justify-between gap-4 rounded-lg border px-5 py-4 text-left shadow-sm transition-all duration-500 ease-out ${
+                      className={`group flex w-full items-center justify-between gap-4 rounded-lg border px-5 py-4 text-left shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-[220ms] ease-[cubic-bezier(0.23,1,0.32,1)] ${
                         aiFocused
                           ? 'translate-y-1 border-brand-600/35 bg-white/90 shadow-lg shadow-brand-600/10 ring-4 ring-brand-600/10 dark:border-brand-300/25 dark:bg-white/[0.08] dark:ring-brand-300/10'
                           : 'border-black/10 bg-[var(--app-panel-muted-bg)] hover:border-brand-600/25 hover:bg-white/85 dark:border-white/10  dark:hover:bg-white/[0.07]'
@@ -446,7 +448,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                         />
                       </span>
                       <button
-                        className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-700 transition hover:bg-brand-600/10 dark:text-brand-300 dark:hover:bg-brand-300/10"
+                        className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-700 transition duration-150 hover:bg-brand-600/10 active:scale-[0.97] dark:text-brand-300 dark:hover:bg-brand-300/10"
                         onClick={(event) => {
                           event.stopPropagation()
                           submitHomeAiPrompt()
@@ -459,7 +461,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                     </div>
 
                     <div
-                      className={`grid items-stretch gap-4 overflow-hidden border-t border-black/10 transition-all duration-500 ease-out md:grid-cols-3 dark:border-white/10 ${
+                      className={`grid items-stretch gap-4 overflow-hidden border-t border-black/10 transition-[max-height,margin,transform,opacity,border-color,padding] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] md:grid-cols-3 dark:border-white/10 ${
                         aiFocused
                           ? 'mt-0 max-h-0 translate-y-8 border-transparent pt-0 opacity-0'
                           : 'mt-6 max-h-56 translate-y-0 pt-6 opacity-100'
