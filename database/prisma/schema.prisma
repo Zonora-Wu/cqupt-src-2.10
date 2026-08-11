@@ -399,6 +399,7 @@ model User {
   grade                 String?
   identityText          String?
   avatarUrl             String?
+  aiAssistantTutorialCompletedAt DateTime?
   authorizationLevel    AuthorizationLevel  @default(BASIC)
   authorizationSourceId String?
   status                UserStatus          @default(PENDING)

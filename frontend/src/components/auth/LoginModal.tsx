@@ -340,6 +340,7 @@ function SsoLoginFields({
       <label className="group relative block">
         <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
         <input
+          autoComplete="username"
           className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
           inputMode="numeric"
           maxLength={7}
@@ -353,7 +354,9 @@ function SsoLoginFields({
       <div className="group relative">
         <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
         <input
+          autoComplete="current-password"
           className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          maxLength={128}
           onChange={(event) => onPasswordChange(event.target.value)}
           placeholder="密码"
           type={showPassword ? 'text' : 'password'}
@@ -396,6 +399,7 @@ function EmailLoginFields({
         <input
           autoComplete="email"
           className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+          maxLength={120}
           onChange={(event) => onEmailChange(event.target.value)}
           placeholder="邮箱"
           type="email"

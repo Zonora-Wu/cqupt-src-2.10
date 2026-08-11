@@ -172,7 +172,9 @@ function FieldInput({
       <span className="mt-2 flex items-center gap-3 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm transition focus-within:border-brand-600/60 focus-within:ring-1 focus-within:ring-brand-600/40 dark:border-white/10 dark:focus-within:border-brand-300/60 dark:focus-within:ring-brand-300/50">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400 dark:text-white/35 [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
         <input
+          autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-white/30"
+          maxLength={80}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           type="text"

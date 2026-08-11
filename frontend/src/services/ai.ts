@@ -183,6 +183,7 @@ export type AiProblemSessionTurn = {
     }
     knowledgeHitIds?: string[]
     knowledgeSources?: AiChatResponse['knowledgeSources']
+    skills?: Array<{ id: string; title: string }>
     usedKnowledge?: boolean
   } | null
   role: 'assistant' | 'user' | string

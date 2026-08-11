@@ -263,7 +263,9 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
                 <div className="group relative">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-white/35" />
                   <input
+                    autoComplete="new-password"
                     className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
+                    maxLength={128}
                     onChange={(event) => updateField('password', event.target.value)}
                     placeholder="密码"
                     required
@@ -367,9 +369,10 @@ function Input({
         {icon}
       </span>
       <input
+        autoComplete={type === 'password' ? 'new-password' : type === 'email' ? 'email' : 'off'}
         className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-300/60 dark:focus:ring-brand-300/50"
         inputMode={inputMode}
-        maxLength={maxLength}
+        maxLength={maxLength ?? (type === 'password' ? 128 : type === 'email' ? 120 : 80)}
         onChange={(event) => onChange?.(event.target.value)}
         pattern={pattern}
         placeholder={placeholder}

@@ -114,6 +114,7 @@ export function PaginationBar({
           <span>跳至</span>
           <input
             className="h-8 w-16 rounded-md border border-black/10 bg-[var(--app-panel-bg)] px-2 text-center text-xs text-slate-700 outline-none transition focus:border-brand-600/60 dark:border-white/10 dark:text-slate-200"
+            max={totalPages}
             min={1}
             onChange={(event) => setJumpPage(event.target.value)}
             onKeyDown={(event) => {

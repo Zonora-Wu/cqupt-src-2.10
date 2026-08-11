@@ -92,6 +92,7 @@ export function IssueCertificateModal({ certificate, onClose, onIssued }: IssueC
             <span className="ml-2 text-xs text-slate-400">已按平台证书模板填充，可在发放前微调</span>
             <textarea
               className="mt-2 min-h-28 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={1000}
               onChange={(event) => setContribution(event.target.value)}
               value={contribution}
             />

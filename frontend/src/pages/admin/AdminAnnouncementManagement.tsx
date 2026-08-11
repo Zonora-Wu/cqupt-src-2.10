@@ -665,7 +665,7 @@ function EditAnnouncementModal({
         <div className="mt-6 grid gap-4">
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</span>
-            <input className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="请输入公告标题" value={form.title} />
+            <input autoComplete="off" className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" maxLength={120} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="请输入公告标题" value={form.title} />
           </label>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -676,12 +676,12 @@ function EditAnnouncementModal({
 
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告摘要</span>
-            <textarea className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} placeholder="用于公告列表展示的简短说明" value={form.summary} />
+            <textarea className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" maxLength={500} onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} placeholder="用于公告列表展示的简短说明" value={form.summary} />
           </label>
 
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告正文</span>
-            <textarea className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} placeholder="请输入公告正文，支持分段" value={form.content} />
+            <textarea className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white" maxLength={20000} onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} placeholder="请输入公告正文，支持分段" value={form.content} />
           </label>
 
           <AlertMessage message="公告中如涉及漏洞细节、测试边界或敏感数据，请确认内容已脱敏且符合平台公开规则。" variant="warning" />

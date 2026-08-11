@@ -433,7 +433,9 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                       <span className="flex-1 min-w-0 flex items-center gap-3">
                         <Bot className="h-5 w-5 shrink-0 text-brand-700 dark:text-brand-300" />
                         <input
+                          autoComplete="off"
                           className="w-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-400"
+                          maxLength={4000}
                           onChange={(event) => setAiPrompt(event.target.value)}
                           onFocus={() => setAiFocused(true)}
                           onKeyDown={(event) => {

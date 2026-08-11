@@ -623,6 +623,7 @@ function SupplementMaterialsModal({
             </span>
             <textarea
               className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-3.5 py-2.5 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/30 dark:border-white/10  dark:text-slate-200 dark:placeholder:text-slate-600"
+              maxLength={2000}
               onChange={(e) => onNoteChange(e.target.value)}
               placeholder="请描述你补充的内容，以及针对审核员反馈做出的修改或说明…"
               rows={5}

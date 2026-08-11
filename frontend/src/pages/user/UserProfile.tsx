@@ -538,6 +538,7 @@ function ChangeEmailModal({
               <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码（发至当前邮箱）</span>
               <input
                 autoFocus
+                autoComplete="one-time-code"
                 className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 "
                 maxLength={6}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -550,7 +551,9 @@ function ChangeEmailModal({
               <div className="group relative">
                 <AtSign className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
                 <input
+                  autoComplete="email"
                   className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                  maxLength={120}
                   onChange={(e) => setNewEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && confirmChange()}
                   placeholder="name@example.com"
@@ -754,7 +757,9 @@ function ChangePasswordModal({
               <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
               <input
                 autoFocus
+                autoComplete="current-password"
                 className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                maxLength={128}
                 onChange={(e) => setOldPassword(e.target.value)}
                 placeholder="输入当前密码"
                 type={showOldPassword ? 'text' : 'password'}
@@ -788,6 +793,7 @@ function ChangePasswordModal({
               <div className="flex gap-2">
                 <input
                   autoFocus
+                  autoComplete="one-time-code"
                   className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  disabled:opacity-50"
                   disabled={!codeSent}
                   maxLength={6}
@@ -818,7 +824,9 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
+            autoComplete="new-password"
             className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-11 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            maxLength={128}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="新密码（至少 8 位，字母+数字）"
             type={showNewPassword ? 'text' : 'password'}
@@ -837,7 +845,9 @@ function ChangePasswordModal({
         <div className="group relative">
           <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition group-focus-within:text-brand-700 dark:text-white/30 dark:group-focus-within:text-brand-200" />
           <input
+            autoComplete="new-password"
             className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+            maxLength={128}
             onChange={(e) => setConfirmPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="确认新密码"

@@ -1,8 +1,8 @@
-import { ArrowDown, ArrowUp, Bot, Check, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Settings2, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bot, Check, CircleHelp, Copy, ExternalLink, Gift, GraduationCap, GripVertical, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Paperclip, RotateCcw, Settings2, Shield, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { getAccountProfile } from '../../services/account'
+import { completeAiAssistantTutorial, getAccountProfile } from '../../services/account'
 import { getSavedSession } from '../../services/auth'
 import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabilityForm'
 import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, getAiSkills, heartbeatAiProblemSession, isUsableAiSkill, leaveAiProblemSession, listAiProblemSessions, listAiUserModels, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiSkillLibraryItem, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
@@ -14,6 +14,7 @@ import { AiSkillDialog } from '../../components/ai/AiSkillDialog'
 import { AiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
 import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { SkillComposerEditor, type SkillComposerEditorHandle } from '../../components/ai/SkillComposerEditor'
+import { AiAssistantTutorial } from '../../components/ai/AiAssistantTutorial'
 
 type ChatMessage = {
   assistantTurnId?: string
@@ -23,12 +24,18 @@ type ChatMessage = {
   knowledgeHitIds?: string[]
   knowledgeSources?: AiChatResponse['knowledgeSources']
   role: 'assistant' | 'user'
+  skills?: ChatSkillReference[]
   cards?: AiCard[]
   actions?: AiPendingAction[]
   reportDrafts?: AiVulnerabilityDraft[]
   reportAssessment?: AiReportAssessment
   sessionId?: string
   usedKnowledge?: boolean
+}
+
+type ChatSkillReference = {
+  id: string
+  title: string
 }
 
 type UserAIAssistantProps = {
@@ -62,6 +69,7 @@ const HISTORY_PANEL_WIDTH_STORAGE_KEY = 'cqupt-src-ai-history-panel-width'
 const HISTORY_PANEL_MIN_CHAT_WIDTH = 860
 const HISTORY_PANEL_GAP = 32
 const DESKTOP_HISTORY_BREAKPOINT = 1024
+const AI_TUTORIAL_STORAGE_PREFIX = 'cqupt-src-ai-assistant-tutorial-complete'
 const inputModuleClass = (active: boolean) => `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition ${
   active
     ? 'border-brand-600 bg-brand-600 text-white'
@@ -114,6 +122,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const [historyPanelWidth, setHistoryPanelWidth] = useState(loadHistoryPanelWidth)
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 0 : window.innerWidth)
   const [readOnlyHistory, setReadOnlyHistory] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const tutorialStorageKeyRef = useRef(getAiTutorialStorageKey())
 
   const reloadModelSelection = () => listAiUserModels()
     .then((models) => setUsingOwnModel(models.some((model) => model.isDefault && model.enabled && model.credential.status === 'ACTIVE')))
@@ -187,6 +197,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
   useEffect(() => {
     let active = true
+    let tutorialTimer: number | undefined
 
     Promise.allSettled([getAccountProfile(), getAiAppearance(), getAiQuota()]).then(([profileResult, appearanceResult, quotaResult]) => {
       if (!active) return
@@ -194,6 +205,15 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       if (profileResult.status === 'fulfilled') {
         setUserAvatarUrl(profileResult.value.account.avatarUrl ?? null)
         setUserName(profileResult.value.account.name || '我')
+        const locallyCompleted = hasCompletedAiTutorial(tutorialStorageKeyRef.current)
+        const remotelyCompleted = Boolean(profileResult.value.account.aiAssistantTutorialCompletedAt)
+        if (!remotelyCompleted && locallyCompleted) {
+          void completeAiAssistantTutorial().catch(() => undefined)
+        } else if (!remotelyCompleted) {
+          tutorialTimer = window.setTimeout(() => { if (active) setTutorialOpen(true) }, 500)
+        }
+      } else if (!hasCompletedAiTutorial(tutorialStorageKeyRef.current)) {
+        tutorialTimer = window.setTimeout(() => { if (active) setTutorialOpen(true) }, 500)
       }
 
       if (appearanceResult.status === 'fulfilled') {
@@ -207,8 +227,16 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
     return () => {
       active = false
+      if (tutorialTimer !== undefined) window.clearTimeout(tutorialTimer)
     }
   }, [])
+
+  const closeTutorial = (focusComposer: boolean) => {
+    markAiTutorialCompleted(tutorialStorageKeyRef.current)
+    setTutorialOpen(false)
+    void completeAiAssistantTutorial().catch(() => undefined)
+    if (focusComposer) window.setTimeout(() => composerEditorRef.current?.focus(), 0)
+  }
 
   useEffect(() => {
     let active = true
@@ -534,8 +562,13 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
     const effectiveContent = content || '请阅读附件内容，并给出整理、修改或下一步建议。'
     const userAttachment = attachment ? { name: attachment.file.name, size: attachment.file.size } : undefined
+    const usedSkills = attachment ? [] : selectedSkillIds
+      .map((skillId) => availableSkills.find((skill) => skill.id === skillId))
+      .filter((skill): skill is AiSkillLibraryItem => Boolean(skill))
+      .slice(0, 3)
+      .map((skill) => ({ id: skill.id, title: skill.title }))
 
-    setMessages((current) => [...current, { attachment: userAttachment, role: 'user', content: effectiveContent }])
+    setMessages((current) => [...current, { attachment: userAttachment, role: 'user', content: effectiveContent, skills: usedSkills }])
     setInput('')
     composerEditorRef.current?.clearText()
     setPendingAttachment(null)
@@ -703,12 +736,13 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
           onChanged={() => void reloadModelSelection()}
           onNotice={setModelNotice}
           trigger={(open) => (
-            <button className={inputModuleClass(false)} onClick={open} type="button">
+            <button className={inputModuleClass(false)} data-ai-tutorial="model" onClick={open} type="button">
               <Settings2 className="h-4 w-4" />
               模型配置
             </button>
           )}
         />
+        <div className="flex min-w-0 flex-1 items-center gap-2" data-ai-tutorial="skills">
         <button className={inputModuleClass(false)} onClick={() => setSkillDialogOpen(true)} type="button">Skill 管理</button>
         <div
           className="min-w-0 flex-1 overflow-x-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -763,10 +797,12 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
             })}
           </div>
         </div>
+        </div>
       </div>
       <motion.div
         className="w-full rounded-lg border border-black/10 bg-[var(--app-bg)]/90 p-2 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[var(--app-bg)]/90 dark:shadow-black/25"
         layoutId="ai-assistant-input"
+        data-ai-tutorial="composer"
         transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
       >
         <AnimatePresence initial={false}>
@@ -793,6 +829,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
             aria-label="选择 PDF 附件"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition duration-150 hover:bg-black/5 hover:text-slate-900 active:scale-[0.97] disabled:cursor-wait disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
             disabled={uploadingAttachment || sending}
+            data-ai-tutorial="attachment"
             onClick={() => reportFileInputRef.current?.click()}
             type="button"
           >
@@ -846,6 +883,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
         pinnedSkillIds={pinnedSkillIds}
       />
     )}
+    {tutorialOpen ? <AiAssistantTutorial onClose={closeTutorial} /> : null}
     <AiHistoryPanel
       activeId={problemSession?.id ?? null}
       autoCollapsed={historyAutoCollapsed || shouldAutoCollapseHistory}
@@ -865,6 +903,15 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       }`}
       style={historyContentInset ? { paddingLeft: `${historyContentInset + 32}px` } : undefined}
     >
+      <button
+        aria-label="使用教程"
+        className="fixed right-5 top-20 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-500 shadow-sm backdrop-blur-xl transition-[background-color,color,transform] duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white md:right-8"
+        onClick={() => setTutorialOpen(true)}
+        title="使用教程"
+        type="button"
+      >
+        <CircleHelp className="h-4 w-4" />
+      </button>
       <MobileHistoryBar
         activeId={problemSession?.id ?? null}
         loading={historyLoading}
@@ -929,7 +976,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
                   <div className={isUser ? 'max-w-[760px]' : 'w-full max-w-[1040px]'}>
                     {isUser ? (
                       <>
-                        <UserMessageBubble attachment={message.attachment} content={message.content} />
+                        <UserMessageBubble attachment={message.attachment} content={message.content} skills={message.skills} />
                         <MessageCopyButton align="right" content={message.content} />
                       </>
                     ) : (
@@ -1176,7 +1223,7 @@ function AiHistoryPanel({
             style={{ width }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2" data-ai-tutorial="history-desktop">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <History className="h-4 w-4 text-brand-700 dark:text-brand-300" />
           历史对话
@@ -1241,6 +1288,7 @@ function AiHistoryPanel({
             aria-label="展开历史对话"
             animate={{ opacity: 1, scale: 1, x: 0 }}
             className="fixed left-4 top-20 z-30 hidden h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-600 shadow-lg backdrop-blur-xl transition hover:bg-white hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:bg-[var(--app-panel-muted-bg)] dark:hover:text-white lg:inline-flex"
+            data-ai-tutorial="history-desktop"
             exit={{ opacity: 0, scale: 0.94, x: -8, transition: { duration: 0.18 } }}
             initial={{ opacity: 0, scale: 0.94, x: -8 }}
             onClick={() => onCollapsedChange(false)}
@@ -1274,7 +1322,7 @@ function MobileHistoryBar({
   onOpen: (id: string) => void
 }) {
   return (
-    <div className={`mb-4 ${showAtDesktop ? '' : 'lg:hidden'}`}>
+    <div className={`mb-4 ${showAtDesktop ? '' : 'lg:hidden'}`} data-ai-tutorial="history-mobile">
       <div className="flex items-center gap-2">
         <button
           className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 text-sm font-medium text-slate-700 backdrop-blur-md dark:border-white/10 dark:bg-white/10 dark:text-slate-200"
@@ -1366,9 +1414,19 @@ function ProblemSessionResolutionCard({
   )
 }
 
-function UserMessageBubble({ attachment, content }: { attachment?: ChatAttachment; content: string }) {
+function UserMessageBubble({ attachment, content, skills }: { attachment?: ChatAttachment; content: string; skills?: ChatSkillReference[] }) {
   return (
     <div className="space-y-2 rounded-lg bg-brand-600 px-4 py-3 text-sm leading-7 text-white shadow-sm">
+      {skills && skills.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-white/15 pb-2 text-[11px] leading-5 text-white/75">
+          <span>使用 Skill</span>
+          {skills.map((skill) => (
+            <span className="max-w-48 truncate rounded-md bg-white/12 px-2 py-0.5 font-medium text-white" key={skill.id} title={skill.title}>
+              {skill.title}
+            </span>
+          ))}
+        </div>
+      )}
       {attachment && (
         <AttachmentCard
           name={attachment.name}
@@ -1534,7 +1592,7 @@ function IconActionButton({
   return (
     <button
       aria-label={ariaLabel}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-[color,background-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${
         active
           ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
           : 'text-slate-400 hover:bg-[var(--app-panel-muted-bg)] hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200'
@@ -1646,29 +1704,33 @@ function AssistantMessageBubble({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10">
       {content && (
-        <div className="px-4 py-3">
+        <div className="max-w-[832px] px-4 py-3">
           <RichAssistantContent content={content} />
         </div>
       )}
 
-      {hasReportDrafts && <ReportDraftCards assessment={reportAssessment} drafts={reportDrafts ?? []} getAttachmentFile={getReportAttachmentFile} />}
+      {hasReportDrafts && (
+        <div className={`px-4 pb-4 ${content ? '' : 'pt-4'}`}>
+          <ReportDraftCards assessment={reportAssessment} drafts={reportDrafts ?? []} getAttachmentFile={getReportAttachmentFile} />
+        </div>
+      )}
       {reportAssessment && !hasReportDrafts && (
-        <div className="px-4 pb-4">
-          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10">
+        <div className={`px-4 pb-4 ${content ? '' : 'pt-4'}`}>
+          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-4 dark:border-white/10 dark:bg-slate-900">
             <ReportAssessmentPanel assessment={reportAssessment} />
           </div>
         </div>
       )}
 
       {hasCards && (
-        <div className="px-4 pb-4">
-          <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
+        <div className={`px-4 pb-4 ${content || hasReportDrafts || reportAssessment ? '' : 'pt-4'}`}>
+          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
             <div className="mb-3 flex items-center justify-end">
               <p className="text-[11px] text-slate-400">可直接操作</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {cards?.map((card, ci) => (
                 <AiCardRenderer
                   action={findCardAction(card, actions)}
@@ -1685,20 +1747,18 @@ function AssistantMessageBubble({
       )}
 
       {(usedKnowledge || visibleSources.length > 0) && (
-        <div className="border-t border-black/5 px-4 py-2 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-slate-600 dark:text-slate-300">参考平台知识库</span>
-            {visibleSources.map((source) => (
-              <span
-                className="rounded-md border border-black/10 px-2 py-0.5 dark:border-white/10"
-                key={source.id}
-                title={`置信度 ${Math.round(source.confidence * 100)}%`}
-              >
+        <details className="group max-w-[832px] border-t border-black/5 px-4 py-2 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+          <summary className="inline-flex cursor-pointer list-none items-center rounded-md px-1 py-1 font-medium text-slate-500 transition-colors hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 dark:text-slate-400 dark:hover:text-slate-200">
+            参考 {visibleSources.length || 1} 条平台知识
+          </summary>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 border-l-2 border-black/10 pl-3 dark:border-white/10">
+            {visibleSources.length > 0 ? visibleSources.map((source) => (
+              <span className="rounded-md bg-black/[0.035] px-2 py-1 dark:bg-white/[0.06]" key={source.id} title={`置信度 ${Math.round(source.confidence * 100)}%`}>
                 {source.title}
               </span>
-            ))}
+            )) : <span>本次回答使用了平台知识库内容</span>}
           </div>
-        </div>
+        </details>
       )}
     </div>
   )
@@ -1708,7 +1768,7 @@ function RichAssistantContent({ content }: { content: string }) {
   const parts = splitMarkdownCodeBlocks(content)
 
   return (
-    <div className="space-y-3 text-sm leading-7 text-slate-700 dark:text-slate-200">
+    <div className="space-y-4 break-words text-[15px] leading-7 text-slate-700 dark:text-slate-200">
       {parts.map((part, index) =>
         part.type === 'code' ? (
           <CodeBlock code={part.content} key={`code-${index}`} language={part.language} />
@@ -1721,47 +1781,88 @@ function RichAssistantContent({ content }: { content: string }) {
 }
 
 function FormattedTextBlock({ text }: { text: string }) {
-  const lines = text.split('\n')
+  const blocks = parseMarkdownTextBlocks(text)
+
   return (
-    <div className="space-y-1.5">
-      {lines.map((rawLine, index) => {
-        const line = rawLine.trim()
-        if (!line) return <div className="h-1" key={index} />
-
-        if (/^#{1,3}\s+/.test(line)) {
-          const title = line.replace(/^#{1,3}\s+/, '')
-          return (
-            <p className="pt-1 text-sm font-semibold text-slate-900 dark:text-white" key={index}>
-              {renderInlineCode(title)}
-            </p>
-          )
-        }
-
-        if (/^[-*]\s+/.test(line)) {
-          return (
-            <div className="flex gap-2 pl-1" key={index}>
-              <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-              <p className="min-w-0 flex-1">{renderInlineCode(line.replace(/^[-*]\s+/, ''))}</p>
-            </div>
-          )
-        }
-
-        if (/^\d+[.)、]\s*/.test(line)) {
-          const marker = line.match(/^\d+[.)、]/)?.[0] ?? '1.'
-          return (
-            <div className="flex gap-2 pl-1" key={index}>
-              <span className="mt-1.5 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-50 px-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
-                {marker.replace(/[.)、]/, '')}
-              </span>
-              <p className="min-w-0 flex-1">{renderInlineCode(line.replace(/^\d+[.)、]\s*/, ''))}</p>
-            </div>
-          )
-        }
-
-        return <p key={index}>{renderInlineCode(line)}</p>
-      })}
+    <div className="space-y-4">
+      {blocks.map((block, index) => <MarkdownTextBlock block={block} key={`${block.type}-${index}`} />)}
     </div>
   )
+}
+
+type MarkdownTextBlock =
+  | { level: number; text: string; type: 'heading' }
+  | { text: string; type: 'paragraph' }
+  | { items: string[]; type: 'bullet-list' }
+  | { items: Array<{ marker: string; text: string }>; type: 'ordered-list' }
+  | { text: string; type: 'quote' }
+  | { headers: string[]; rows: string[][]; type: 'table' }
+  | { type: 'divider' }
+
+function MarkdownTextBlock({ block }: { block: MarkdownTextBlock }) {
+  if (block.type === 'heading') {
+    const headingClass = block.level === 1
+      ? 'pt-2 text-lg font-semibold leading-7 text-slate-950 dark:text-white'
+      : block.level === 2
+        ? 'pt-1.5 text-base font-semibold leading-7 text-slate-950 dark:text-white'
+        : 'pt-1 text-[15px] font-semibold leading-7 text-slate-900 dark:text-slate-100'
+    return <div className={headingClass}>{renderInlineMarkdown(block.text)}</div>
+  }
+
+  if (block.type === 'paragraph') {
+    return <p className="whitespace-pre-line">{renderInlineMarkdown(block.text)}</p>
+  }
+
+  if (block.type === 'bullet-list') {
+    return (
+      <ul className="space-y-2 pl-1">
+        {block.items.map((item, index) => (
+          <li className="flex min-w-0 gap-3" key={`${item}-${index}`}>
+            <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600 dark:bg-brand-400" />
+            <span className="min-w-0 flex-1">{renderInlineMarkdown(item)}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  if (block.type === 'ordered-list') {
+    return (
+      <ol className="space-y-2.5 pl-0">
+        {block.items.map((item, index) => (
+          <li className="flex min-w-0 gap-3" key={`${item.marker}-${index}`}>
+            <span className="mt-0.5 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-brand-50 px-1.5 text-xs font-semibold tabular-nums text-brand-700 dark:bg-brand-900/35 dark:text-brand-300">
+              {item.marker}
+            </span>
+            <span className="min-w-0 flex-1">{renderInlineMarkdown(item.text)}</span>
+          </li>
+        ))}
+      </ol>
+    )
+  }
+
+  if (block.type === 'quote') {
+    return <blockquote className="border-l-2 border-brand-500/60 bg-brand-50/45 py-2 pl-3 pr-3 text-slate-600 dark:bg-brand-900/10 dark:text-slate-300">{renderInlineMarkdown(block.text)}</blockquote>
+  }
+
+  if (block.type === 'table') {
+    return (
+      <div className="max-w-full overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
+        <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+          <thead className="bg-black/[0.035] text-slate-800 dark:bg-white/[0.06] dark:text-slate-100">
+            <tr>{block.headers.map((cell, index) => <th className="border-b border-black/10 px-3 py-2.5 font-semibold dark:border-white/10" key={`${cell}-${index}`}>{renderInlineMarkdown(cell)}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
+            {block.rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>{block.headers.map((_, cellIndex) => <td className="px-3 py-2.5 align-top" key={cellIndex}>{renderInlineMarkdown(row[cellIndex] ?? '')}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  return <hr className="border-0 border-t border-black/10 dark:border-white/10" />
 }
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
@@ -1782,7 +1883,8 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       <div className="flex items-center justify-between border-b border-neutral-700 bg-neutral-900 px-3 py-2">
         <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500">{language || 'code'}</span>
         <button
-          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-[11px] font-medium text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200"
+          aria-label={copied ? '代码已复制' : '复制代码'}
+          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-700 px-2 py-1 text-[11px] font-medium text-neutral-400 transition-[color,background-color,transform] duration-150 hover:bg-neutral-800 hover:text-neutral-200 active:scale-[0.97]"
           onClick={handleCopy}
           type="button"
         >
@@ -1848,18 +1950,146 @@ function splitMarkdownCodeBlocks(content: string) {
   return parts.filter((part) => part.content.trim().length > 0)
 }
 
-function renderInlineCode(text: string) {
-  const segments = text.split(/(`[^`]+`)/g)
-  return segments.map((segment, index) => {
-    if (segment.startsWith('`') && segment.endsWith('`')) {
-      return (
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.92em] text-brand-700 dark:bg-white/10 dark:text-brand-300" key={index}>
-          {segment.slice(1, -1)}
-        </code>
-      )
+function parseMarkdownTextBlocks(text: string): MarkdownTextBlock[] {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const blocks: MarkdownTextBlock[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index].trim()
+    if (!line) {
+      index += 1
+      continue
     }
-    return <span key={index}>{segment}</span>
-  })
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/)
+    if (heading) {
+      blocks.push({ level: heading[1].length, text: heading[2], type: 'heading' })
+      index += 1
+      continue
+    }
+
+    if (/^(?:-{3,}|_{3,}|\*{3,})$/.test(line)) {
+      blocks.push({ type: 'divider' })
+      index += 1
+      continue
+    }
+
+    if (line.startsWith('>')) {
+      const quoteLines: string[] = []
+      while (index < lines.length && lines[index].trim().startsWith('>')) {
+        quoteLines.push(lines[index].trim().replace(/^>\s?/, ''))
+        index += 1
+      }
+      blocks.push({ text: quoteLines.join('\n'), type: 'quote' })
+      continue
+    }
+
+    if (/^[-*+]\s+/.test(line)) {
+      const items: string[] = []
+      while (index < lines.length && /^[-*+]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^[-*+]\s+/, ''))
+        index += 1
+      }
+      blocks.push({ items, type: 'bullet-list' })
+      continue
+    }
+
+    if (/^\d+[.)、]\s*/.test(line)) {
+      const items: Array<{ marker: string; text: string }> = []
+      while (index < lines.length && /^\d+[.)、]\s*/.test(lines[index].trim())) {
+        const itemLine = lines[index].trim()
+        const match = itemLine.match(/^(\d+)[.)、]\s*(.*)$/)
+        if (match) items.push({ marker: match[1], text: match[2] })
+        index += 1
+      }
+      blocks.push({ items, type: 'ordered-list' })
+      continue
+    }
+
+    if (line.includes('|') && index + 1 < lines.length && isMarkdownTableDivider(lines[index + 1])) {
+      const headers = splitMarkdownTableRow(line)
+      const rows: string[][] = []
+      index += 2
+      while (index < lines.length && lines[index].trim().includes('|') && lines[index].trim()) {
+        rows.push(splitMarkdownTableRow(lines[index]))
+        index += 1
+      }
+      blocks.push({ headers, rows, type: 'table' })
+      continue
+    }
+
+    const paragraphLines = [line]
+    index += 1
+    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines, index)) {
+      paragraphLines.push(lines[index].trim())
+      index += 1
+    }
+    blocks.push({ text: paragraphLines.join('\n'), type: 'paragraph' })
+  }
+
+  return blocks
+}
+
+function isMarkdownBlockStart(lines: string[], index: number) {
+  const line = lines[index].trim()
+  return /^(?:#{1,3}\s+|[-*+]\s+|\d+[.)、]\s*|>|-{3,}$|_{3,}$|\*{3,}$)/.test(line)
+    || (line.includes('|') && index + 1 < lines.length && isMarkdownTableDivider(lines[index + 1]))
+}
+
+function isMarkdownTableDivider(line: string) {
+  const cells = splitMarkdownTableRow(line)
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()))
+}
+
+function splitMarkdownTableRow(line: string) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+}
+
+function renderInlineMarkdown(text: string) {
+  const tokenRegex = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\[[^\]\n]+\]\([^\s)]+\))/g
+  const nodes: ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+
+  while ((match = tokenRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(<span key={`text-${key++}`}>{text.slice(lastIndex, match.index)}</span>)
+    const token = match[0]
+
+    if (token.startsWith('`')) {
+      nodes.push(
+        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.92em] text-brand-700 dark:bg-white/10 dark:text-brand-300" key={`code-${key++}`}>
+          {token.slice(1, -1)}
+        </code>,
+      )
+    } else if (token.startsWith('**') || token.startsWith('__')) {
+      nodes.push(<strong className="font-semibold text-slate-900 dark:text-white" key={`strong-${key++}`}>{token.slice(2, -2)}</strong>)
+    } else {
+      const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
+      const href = link ? getSafeMarkdownHref(link[2]) : null
+      nodes.push(href ? (
+        <a className="font-medium text-brand-700 underline decoration-brand-600/30 underline-offset-4 transition-colors hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200" href={href} key={`link-${key++}`} rel="noreferrer noopener" target={href.startsWith('/') ? undefined : '_blank'}>
+          {link?.[1]}
+        </a>
+      ) : <span key={`text-${key++}`}>{link?.[1] ?? token}</span>)
+    }
+    lastIndex = tokenRegex.lastIndex
+  }
+
+  if (lastIndex < text.length) nodes.push(<span key={`text-${key}`}>{text.slice(lastIndex)}</span>)
+  return nodes
+}
+
+function getSafeMarkdownHref(rawHref: string) {
+  const href = rawHref.trim()
+  if (href.startsWith('/') && !href.startsWith('//')) return href
+  try {
+    const url = new URL(href)
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? href : null
+  } catch {
+    return null
+  }
 }
 
 function findCardAction(card: AiCard, actions?: AiPendingAction[]) {
@@ -1986,8 +2216,8 @@ function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessmen
   }
 
   return (
-    <div className="px-4 pb-4">
-      <div className="rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-3 shadow-sm dark:border-white/10 ">
+    <div>
+      <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
         {assessment && <ReportAssessmentPanel assessment={assessment} />}
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -2008,7 +2238,9 @@ function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessmen
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-brand-700 dark:text-brand-300">漏洞 {index + 1}</p>
                     <input
+                      autoComplete="off"
                       className="mt-1 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
+                      maxLength={200}
                       onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
                       placeholder="漏洞标题"
                       value={draft.title}
@@ -2187,7 +2419,9 @@ function DraftTextInput({ label, onChange, value }: { label: string; onChange: (
     <label className="block">
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
       <input
+        autoComplete="off"
         className="mt-1 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
+        maxLength={500}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
@@ -2201,6 +2435,7 @@ function DraftTextArea({ label, onChange, value }: { label: string; onChange: (v
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
       <textarea
         className="mt-1 min-h-24 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-500 dark:border-white/10 dark:text-white"
+        maxLength={12000}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
@@ -2740,6 +2975,19 @@ function saveSkillPreferences(key: string, value: { activeSkillIds: string[]; pi
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+function getAiTutorialStorageKey() {
+  const user = getSavedSession()?.user
+  return `${AI_TUTORIAL_STORAGE_PREFIX}:${user?.id || user?.unifiedCode || 'anonymous'}`
+}
+
+function hasCompletedAiTutorial(key: string) {
+  try { return localStorage.getItem(key) === 'true' } catch { return false }
+}
+
+function markAiTutorialCompleted(key: string) {
+  try { localStorage.setItem(key, 'true') } catch { /* backend remains source of truth */ }
+}
+
 function clampHistoryPanelWidth(width: number) {
   return Math.min(HISTORY_PANEL_MAX_WIDTH, Math.max(HISTORY_PANEL_MIN_WIDTH, width))
 }
@@ -2823,6 +3071,7 @@ function messagesFromProblemSession(session: AiProblemSession): ChatMessage[] {
       knowledgeSources: turn.metadata?.knowledgeSources,
       role: turn.role === 'user' ? 'user' : 'assistant',
       sessionId: session.id,
+      skills: turn.role === 'user' ? turn.metadata?.skills : undefined,
       usedKnowledge: turn.metadata?.usedKnowledge,
     }))
 }

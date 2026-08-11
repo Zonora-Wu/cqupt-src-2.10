@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
 import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { BorderGlow } from '../../components/ui/BorderGlow'
-import { publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
+import { CERTIFICATE_NO_MAX_LENGTH, CERTIFICATE_NO_PATTERN, normalizeCertificateNoInput, publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
 
 type CertificateVerifyProps = {
   initialCertificateNo?: string
@@ -17,12 +17,12 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   const [notice, setNotice] = useState<{ message: string; variant: FloatingNoticeVariant } | null>(null)
 
   const searchCertificate = useCallback(async (nextCertificateNo: string) => {
-    const normalized = nextCertificateNo.trim()
+    const normalized = normalizeCertificateNoInput(nextCertificateNo)
     setResult(null)
     setNotice(null)
 
-    if (!normalized) {
-      setNotice({ message: '请输入证书编号后再查询。', variant: 'warning' })
+    if (!CERTIFICATE_NO_PATTERN.test(normalized)) {
+      setNotice({ message: '证书编号格式应为 CQUPT-SRC-CERT-年份-6位编号。', variant: 'warning' })
       return
     }
 
@@ -42,7 +42,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   }, [])
 
   useEffect(() => {
-    const normalized = initialCertificateNo.trim()
+    const normalized = normalizeCertificateNoInput(initialCertificateNo)
     if (!normalized) return
     setCertificateNo(normalized)
     void searchCertificate(normalized)
@@ -83,18 +83,22 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:text-white dark:placeholder:text-slate-600"
-              onChange={(event) => setCertificateNo(event.target.value)}
+              autoCapitalize="characters"
+              autoComplete="off"
+              maxLength={CERTIFICATE_NO_MAX_LENGTH}
+              onChange={(event) => setCertificateNo(normalizeCertificateNoInput(event.target.value))}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void searchCertificate(certificateNo)
               }}
               placeholder="CQUPT-SRC-CERT-2026-XXXXXX"
+              spellCheck={false}
               type="text"
               value={certificateNo}
             />
           </div>
           <button
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-[0_10px_24px_rgba(var(--app-primary-rgb),0.24)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={loading}
+            disabled={loading || !CERTIFICATE_NO_PATTERN.test(certificateNo)}
             onClick={() => void searchCertificate(certificateNo)}
             type="button"
           >

@@ -378,6 +378,7 @@ export class AiService {
         question: safeMessage,
         sessionId: input.sessionId,
         user,
+        userMetadata: buildUserTurnSkillMetadata(skillRoute),
       })
       return {
         ...actionProposal,
@@ -454,6 +455,7 @@ export class AiService {
         question: safeMessage,
         sessionId: input.sessionId,
         user,
+        userMetadata: buildUserTurnSkillMetadata(skillRoute),
       })
 
       return {
@@ -554,6 +556,7 @@ export class AiService {
         question: safeMessage,
         sessionId: input.sessionId,
         user,
+        userMetadata: buildUserTurnSkillMetadata(skillRoute),
       })
 
       return {
@@ -817,6 +820,7 @@ export class AiService {
       question: safeMessage,
       sessionId: input.sessionId,
       user,
+      userMetadata: buildUserTurnSkillMetadata(skillRoute),
     })
 
     // 7. 兜底：action 存在但 card 缺失时，从上下文补全
@@ -1317,6 +1321,16 @@ function serializeSkillRoute(decision: Awaited<ReturnType<AiSkillRouterService['
     available: decision.available.map((skill) => skill.name),
     blocked: decision.blocked.map((skill) => skill.name),
     strategy: decision.strategy,
+  }
+}
+
+function buildUserTurnSkillMetadata(decision: Awaited<ReturnType<AiSkillRouterService['route']>>) {
+  if (decision.selected.length === 0) return undefined
+  return {
+    skills: decision.selected.slice(0, 3).map((skill) => ({
+      id: skill.id,
+      title: skill.title,
+    })),
   }
 }
 

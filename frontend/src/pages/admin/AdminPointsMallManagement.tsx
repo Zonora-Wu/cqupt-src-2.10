@@ -902,7 +902,9 @@ function ProductModal({
                   <div className="flex-1 border-t border-black/10 dark:border-white/10" />
                 </div>
                 <input
+                  autoComplete="url"
                   className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                  maxLength={2000}
                   onChange={(e) => updateField('imageUrl', e.target.value)}
                   placeholder="https://example.com/image.png"
                   value={form.imageUrl === '' ? '' : form.imageUrl}
@@ -916,7 +918,9 @@ function ProductModal({
             <label className="block">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">商品名称</span>
               <input
+                autoComplete="off"
                 className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                maxLength={80}
                 onChange={(e) => updateField('name', e.target.value)}
                 placeholder="请输入商品名称"
                 value={form.name}
@@ -936,6 +940,7 @@ function ProductModal({
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">兑换积分</span>
               <input
                 className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                max={100000}
                 min={0}
                 onChange={(e) => updateField('pointsCost', Number(e.target.value))}
                 type="number"
@@ -949,6 +954,7 @@ function ProductModal({
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">库存数量</span>
               <input
                 className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                max={100000}
                 min={0}
                 onChange={(e) => updateField('stock', Number(e.target.value))}
                 type="number"
@@ -999,6 +1005,7 @@ function ProductModal({
                   <input
                     autoFocus
                     className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                    max={99}
                     min={1}
                     onChange={(e) => updateField('perUserLimit', Math.max(1, Number(e.target.value)))}
                     onKeyDown={(e) => e.key === 'Enter' && setShowCustomLimit(false)}
@@ -1020,6 +1027,8 @@ function ProductModal({
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">排序权重</span>
               <input
                 className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+                max={999999}
+                min={-999999}
                 onChange={(e) => updateField('sortOrder', Number(e.target.value))}
                 type="number"
                 value={form.sortOrder}
@@ -1030,7 +1039,9 @@ function ProductModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">领取地点</span>
             <input
+              autoComplete="off"
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              maxLength={120}
               onChange={(e) => updateField('pickupLocation', e.target.value)}
               value={form.pickupLocation}
             />
@@ -1040,6 +1051,7 @@ function ProductModal({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">商品说明 <span className="font-normal text-slate-400">（可选）</span></span>
             <textarea
               className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              maxLength={1000}
               onChange={(e) => updateField('description', e.target.value)}
               value={form.description}
             />
@@ -1049,6 +1061,7 @@ function ProductModal({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">领取说明</span>
             <textarea
               className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:placeholder:text-white/30 dark:focus:border-brand-200/60 dark:focus:ring-brand-200/50"
+              maxLength={1000}
               onChange={(e) => updateField('pickupInstructions', e.target.value)}
               value={form.pickupInstructions}
             />

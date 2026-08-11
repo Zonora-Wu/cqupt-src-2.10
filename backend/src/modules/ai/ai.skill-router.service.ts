@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { NormalizedAiChatInput } from './ai.types'
 
 export type AiSkillRouteItem = {
+  id?: string
   name: string
   title: string
   aiSpace: AiSpace | 'CORE'
@@ -17,6 +18,7 @@ export type AiSkillRouteDecision = {
   available: AiSkillRouteItem[]
   blocked: AiSkillRouteItem[]
   mode: NormalizedAiChatInput['mode']
+  selected: AiSkillRouteItem[]
   strategy: 'explicit_backend_role_routing'
 }
 
@@ -158,6 +160,7 @@ export class AiSkillRouterService {
     }) : []
     const dynamicAvailable = dynamicSkills.map((skill) => ({
       aiSpace: skill.aiSpace,
+      id: skill.id,
       name: `hermes:${skill.slug ?? skill.id}`,
       prompt: skill.content,
       reason: `知识沉淀 Skill v${skill.version}`,
@@ -182,6 +185,7 @@ export class AiSkillRouterService {
       available,
       blocked: blocked.map(toRouteItem),
       mode: input.mode,
+      selected: selectedDynamic,
       strategy: 'explicit_backend_role_routing',
     }
   }

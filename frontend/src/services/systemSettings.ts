@@ -258,7 +258,7 @@ export async function updateAiQuotaSettings(data: {
 }
 
 export async function getRegistrationMode() {
-  return apiRequest<RegistrationMode>('/system-settings/registration-mode', { method: 'GET' })
+  return apiRequest<RegistrationMode>('/system-settings/registration-mode', { auth: true, method: 'GET' })
 }
 
 export async function setRegistrationMode(open: boolean) {

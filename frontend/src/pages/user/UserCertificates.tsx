@@ -249,7 +249,10 @@ export function UserCertificates() {
             </div>
             <div className="mt-5 flex gap-2">
               <input
+                autoCapitalize="characters"
+                autoComplete="off"
                 className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white dark:placeholder:text-white/30"
+                maxLength={26}
                 onChange={(event) => setQueryCode(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void searchCertificate()

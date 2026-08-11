@@ -503,6 +503,7 @@ export function AuditorReviewQueue() {
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">审核意见</span>
                     <textarea
                       className="mt-2 min-h-28 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+                      maxLength={2000}
                       onChange={(event) => setReviewNote(event.target.value)}
                       placeholder="请填写审核依据、复现结论、补充要求或驳回原因"
                       value={reviewNote}
@@ -961,6 +962,7 @@ function AuditorAIAssistant() {
           <div className="flex items-end gap-2">
             <textarea
               className="min-h-16 flex-1 resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={4000}
               placeholder="询问漏洞价值、复现材料、修复建议或审核结论风险..."
             />
             <button
@@ -1223,8 +1225,10 @@ function EditAuditorAnnouncementModal({
           <label className="block">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</span>
             <input
+              autoComplete="off"
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.title}
+              maxLength={120}
               placeholder="请输入公告标题"
             />
           </label>
@@ -1238,6 +1242,7 @@ function EditAuditorAnnouncementModal({
             <textarea
               className="mt-2 min-h-20 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.summary}
+              maxLength={500}
               placeholder="用于公告列表展示的简短说明"
             />
           </label>
@@ -1246,6 +1251,7 @@ function EditAuditorAnnouncementModal({
             <textarea
               className="mt-2 min-h-56 w-full resize-y rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
               defaultValue={announcement.content}
+              maxLength={20000}
               placeholder="请输入公告正文，支持分段"
             />
           </label>
@@ -1591,6 +1597,7 @@ function RetestActionDialog({
           </label>
           <textarea
             className="mt-1.5 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 "
+            maxLength={2000}
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="请填写复测说明（至少 4 个字）"
             rows={3}

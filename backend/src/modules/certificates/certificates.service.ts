@@ -10,6 +10,7 @@ import { S3StorageService } from '../../integrations/object-storage/s3-storage.s
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
+import { normalizePublicCertificateNo } from './certificate.validation'
 import { generateCertificatePdf } from './certificate-pdf.generator'
 import { NormalizedIssueCertificateInput, NormalizedRevokeCertificateInput } from './certificate.types'
 
@@ -443,8 +444,9 @@ export class CertificatesService {
   }
 
   async publicVerify(certificateNo: string) {
+    const normalizedCertificateNo = normalizePublicCertificateNo(certificateNo)
     const certificate = await this.prisma.certificate.findUnique({
-      where: { certificateNo },
+      where: { certificateNo: normalizedCertificateNo },
       select: {
         id: true,
         publicVerify: true,

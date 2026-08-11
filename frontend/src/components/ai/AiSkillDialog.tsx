@@ -144,8 +144,8 @@ function SkillContentDialog({ busy, onClose, onRun, skill }: { busy: boolean; on
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {editable ? (
             <>
-              <label className="block text-xs font-medium">名称<input className={inputClass} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
-              <label className="mt-4 block text-xs font-medium">SKILL.md 内容<textarea className={`${inputClass} min-h-72 resize-y font-mono text-xs leading-6`} onChange={(event) => setContent(event.target.value)} value={content} /></label>
+              <label className="block text-xs font-medium">名称<input autoComplete="off" className={inputClass} maxLength={80} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
+              <label className="mt-4 block text-xs font-medium">SKILL.md 内容<textarea className={`${inputClass} min-h-72 resize-y font-mono text-xs leading-6`} maxLength={30000} onChange={(event) => setContent(event.target.value)} value={content} /></label>
             </>
           ) : <pre className="whitespace-pre-wrap break-words rounded-lg border border-black/10 bg-black/[0.025] p-4 font-mono text-xs leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">{skill.content}</pre>}
         </div>
@@ -176,8 +176,8 @@ function AddSkillDialog({ busy, onClose, onRun }: { busy: boolean; onClose: () =
           <button aria-label="关闭" className={iconButton} onClick={onClose} type="button"><X className="h-5 w-5" /></button>
         </header>
         <div className="p-5">
-          <label className="block text-xs font-medium">名称<input className={inputClass} placeholder="必填，填写 Skill 名称" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <label className="mt-4 block text-xs font-medium">SKILL.md 内容<textarea className={`${inputClass} min-h-52 resize-y`} placeholder="必填，填写声明式 Skill 内容" value={content} onChange={(event) => setContent(event.target.value)} /></label>
+          <label className="block text-xs font-medium">名称<input autoComplete="off" className={inputClass} maxLength={80} placeholder="必填，填写 Skill 名称" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <label className="mt-4 block text-xs font-medium">SKILL.md 内容<textarea className={`${inputClass} min-h-52 resize-y`} maxLength={30000} placeholder="必填，填写声明式 Skill 内容" value={content} onChange={(event) => setContent(event.target.value)} /></label>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <button className={secondaryButton} disabled={busy} onClick={() => fileRef.current?.click()} type="button">上传 SKILL.md / ZIP</button>
             <input accept=".md,.zip" className="hidden" ref={fileRef} type="file" onChange={async (event) => { const file = event.target.files?.[0]; if (file && await onRun(() => uploadAiSkill(file), 'Skill 包已导入')) onClose() }} />

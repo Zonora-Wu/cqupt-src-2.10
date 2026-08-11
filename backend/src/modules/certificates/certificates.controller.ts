@@ -6,7 +6,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { CertificatesService } from './certificates.service'
 import { IssueCertificateBody, RevokeCertificateBody } from './certificate.types'
-import { normalizeIssueCertificateBody, normalizeRevokeCertificateBody } from './certificate.validation'
+import { normalizeIssueCertificateBody, normalizePublicCertificateNo, normalizeRevokeCertificateBody } from './certificate.validation'
 
 type RequestLike = {
   ip?: string
@@ -102,8 +102,9 @@ export class CertificatesController {
   @Get('public/:certificateNo')
   async publicVerify(@Param('certificateNo') certificateNo: string, @Req() req: RequestLike) {
     const meta = getRequestMeta(req)
+    const normalizedCertificateNo = normalizePublicCertificateNo(certificateNo)
     await this.rateLimit.consume('certificate-public-ip', meta.ipAddress, 30, 10 * 60_000)
-    await this.rateLimit.consume('certificate-public-number', certificateNo.trim().toUpperCase(), 10, 10 * 60_000)
-    return this.certificates.publicVerify(certificateNo)
+    await this.rateLimit.consume('certificate-public-number', normalizedCertificateNo, 10, 10 * 60_000)
+    return this.certificates.publicVerify(normalizedCertificateNo)
   }
 }

@@ -1961,6 +1961,7 @@ export function AdminSystemSettings() {
                     <p className="text-sm font-semibold">直接导入题库 JSON</p>
                     <textarea
                       className="mt-3 min-h-40 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] p-3 font-mono text-xs outline-none focus:border-brand-600/60 dark:border-white/10 "
+                      maxLength={100000}
                       onChange={(event) => setQuestionBankJson(event.target.value)}
                       placeholder='{"questions":[{"type":"SINGLE_CHOICE","stem":"提交漏洞前应先确认什么？","options":[{"key":"A","text":"是否在授权范围内"},{"key":"B","text":"是否能造成最大影响"}],"answerKeys":["A"],"explanation":"测试必须在授权范围内进行。"}]}'
                       value={questionBankJson}
@@ -2286,7 +2287,7 @@ function SecurityQuestionEditorDialog({
                 {draft.options.map((option) => (
                   <div className="flex items-center gap-2" key={option.key}>
                     <button aria-label={`设为 ${option.key} 正确答案`} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition ${draft.answerKeys.includes(option.key) ? 'border-brand-600 bg-brand-600 text-white' : 'border-black/10 text-slate-500 hover:border-brand-600/50 dark:border-white/10 dark:text-slate-400'}`} onClick={() => setAnswer(option.key)} type="button">{option.key}</button>
-                    <input className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm outline-none focus:border-brand-600/60 dark:border-white/10" disabled={draft.type === 'TRUE_FALSE'} onChange={(event) => updateOption(option.key, event.target.value)} value={option.text} />
+                    <input autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2 text-sm outline-none focus:border-brand-600/60 dark:border-white/10" disabled={draft.type === 'TRUE_FALSE'} maxLength={500} onChange={(event) => updateOption(option.key, event.target.value)} value={option.text} />
                     {draft.type !== 'TRUE_FALSE' && <button aria-label={`删除选项 ${option.key}`} className="rounded-lg p-2 text-slate-400 transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40" disabled={draft.options.length <= 2} onClick={() => removeOption(option.key)} type="button"><X className="h-4 w-4" /></button>}
                   </div>
                 ))}
@@ -2372,6 +2373,7 @@ function ResponsibilityAgreementEditorDialog({
           <label className="block">
             <span className="text-sm font-semibold text-slate-900 dark:text-white">责任书标题</span>
             <input
+              autoComplete="off"
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm outline-none transition focus:border-brand-600/60 dark:border-white/10"
               maxLength={120}
               onChange={(event) => onChangeTitle(event.target.value)}
@@ -2669,8 +2671,10 @@ function TextField({ value, onChange, type = 'text' }: { value: string; onChange
   const controlled = onChange !== undefined
   return (
     <input
+      autoComplete={type === 'password' ? 'new-password' : 'off'}
       className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
       defaultValue={controlled ? undefined : value}
+      maxLength={type === 'password' ? 128 : 500}
       onChange={controlled ? (e) => onChange(e.target.value) : undefined}
       type={type}
       value={controlled ? value : undefined}
@@ -3145,6 +3149,8 @@ function SmallNumberInput({ label, onChange, value }: { label: string; onChange:
       <span className="text-[10px] text-slate-500">{label}</span>
       <input
         className="mt-1 w-full rounded border border-black/10 bg-[var(--app-panel-bg)] px-2 py-1 font-mono text-xs outline-none dark:border-white/10 dark:bg-black/20"
+        max={10000}
+        min={-10000}
         onChange={(event) => onChange(Number(event.target.value) || 0)}
         type="number"
         value={value}

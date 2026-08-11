@@ -17,6 +17,7 @@ import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { BorderGlow } from '../../components/ui/BorderGlow'
 import { SpotlightCard } from '../../components/ui/SpotlightCard'
 import { getPublicPageFromPath, publicPagePaths, type PublicPage } from '../../routes/routeConfig'
+import { CERTIFICATE_NO_MAX_LENGTH, CERTIFICATE_NO_PATTERN, normalizeCertificateNoInput } from '../../services/certificates'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 
 const IntroCopySection = lazy(() =>
@@ -391,17 +392,21 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
             <Search className="ml-3 mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
             <input
               className="min-w-0 flex-1 border-none bg-transparent py-3 font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-600"
+              autoCapitalize="characters"
+              autoComplete="off"
+              maxLength={CERTIFICATE_NO_MAX_LENGTH}
               placeholder="输入证书编号 (e.g. CQUPT-SRC-CERT-2026-A1B2C3)"
-              onChange={(event) => setHomeCertificateNo(event.target.value)}
+              onChange={(event) => setHomeCertificateNo(normalizeCertificateNoInput(event.target.value))}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') openCertificateSearch(homeCertificateNo)
               }}
               type="text"
+              spellCheck={false}
               value={homeCertificateNo}
             />
             <button
               className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!homeCertificateNo.trim()}
+              disabled={!CERTIFICATE_NO_PATTERN.test(homeCertificateNo)}
               onClick={() => openCertificateSearch(homeCertificateNo)}
               type="button"
             >

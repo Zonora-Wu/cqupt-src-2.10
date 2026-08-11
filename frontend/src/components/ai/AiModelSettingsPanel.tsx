@@ -252,5 +252,5 @@ const secondaryButton = 'rounded-lg border border-black/10 px-3 py-2 text-xs fon
 const dangerButton = 'rounded-lg px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-500/10 dark:text-red-400'
 
 function Field({ label, onChange, type = 'text', value }: { label: string; onChange: (value: string) => void; type?: string; value: string }) {
-  return <label className="block space-y-1.5 text-sm"><span className="font-medium">{label}</span><input className={inputClass} onChange={(event) => onChange(event.target.value)} type={type} value={value} /></label>
+  return <label className="block space-y-1.5 text-sm"><span className="font-medium">{label}</span><input autoComplete={type === 'password' ? 'new-password' : 'off'} className={inputClass} maxLength={type === 'password' ? 512 : 2000} onChange={(event) => onChange(event.target.value)} type={type} value={value} /></label>
 }

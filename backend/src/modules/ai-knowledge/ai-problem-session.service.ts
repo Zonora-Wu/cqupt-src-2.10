@@ -421,6 +421,7 @@ export class AiProblemSessionService {
     question: string
     sessionId?: string
     user: AuthenticatedRequestUser
+    userMetadata?: Prisma.InputJsonValue
   }) {
     if (!input.sessionId) return null
     const session = await this.getOwnedSession(input.sessionId, input.user.id)
@@ -444,6 +445,7 @@ export class AiProblemSessionService {
         data: {
           contentHash: stableHash(`${session.id}:user:${question}:${Date.now()}`),
           hasAttachment: input.hasAttachment,
+          metadata: input.userMetadata,
           role: 'user',
           sanitizedText: question,
           sessionId: session.id,

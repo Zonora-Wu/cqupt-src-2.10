@@ -20,6 +20,15 @@ export function normalizeRevokeCertificateBody(body: RevokeCertificateBody): Nor
   }
 }
 
+export function normalizePublicCertificateNo(value: unknown) {
+  if (typeof value !== 'string') throw new BadRequestException('证书编号格式不正确')
+  const certificateNo = value.trim().toUpperCase()
+  if (!/^CQUPT-SRC-CERT-\d{4}-[A-Z0-9]{6}$/.test(certificateNo)) {
+    throw new BadRequestException('证书编号格式应为 CQUPT-SRC-CERT-年份-6位编号')
+  }
+  return certificateNo
+}
+
 function requireText(value: unknown, label: string, minLength: number, maxLength: number) {
   if (typeof value !== 'string') {
     throw new BadRequestException(`${label}格式不正确`)
@@ -48,4 +57,3 @@ function normalizeBoolean(value: unknown, defaultValue: boolean) {
 
   return value
 }
-

@@ -50,6 +50,11 @@ export class AccountController {
     return this.account.getProfile(user)
   }
 
+  @Post('onboarding/ai-assistant-tutorial/complete')
+  completeAiAssistantTutorial(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.account.completeAiAssistantTutorial(user.id)
+  }
+
   @Post('profile/basics')
   updateProfileBasics(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.account.updateProfileBasics(user, normalizeUpdateProfileBasicsBody(body), getRequestMeta(req))

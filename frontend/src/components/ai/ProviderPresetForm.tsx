@@ -88,7 +88,7 @@ export function ProviderPresetForm({ onChange, providers, providersLoading = fal
 const inputClass = 'mt-1.5 w-full rounded-lg border border-black/10 bg-[var(--app-surface)] px-3 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600/25 dark:border-white/15 dark:text-white dark:placeholder:text-slate-500'
 
 function Field({ autoComplete, label, onChange, placeholder, type = 'text', value }: { autoComplete?: string; label: string; onChange: (value: string) => void; placeholder: string; type?: string; value: string }) {
-  return <label className="text-xs font-medium text-slate-700 dark:text-slate-200">{label}<input autoComplete={autoComplete} className={inputClass} data-1p-ignore={type === 'password' ? 'true' : undefined} data-lpignore={type === 'password' ? 'true' : undefined} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={type} value={value} /></label>
+  return <label className="text-xs font-medium text-slate-700 dark:text-slate-200">{label}<input autoComplete={autoComplete ?? 'off'} className={inputClass} data-1p-ignore={type === 'password' ? 'true' : undefined} data-lpignore={type === 'password' ? 'true' : undefined} maxLength={type === 'password' ? 512 : 2000} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={type} value={value} /></label>
 }
 
 function regionOrder(region: AiProviderPreset['region']) {

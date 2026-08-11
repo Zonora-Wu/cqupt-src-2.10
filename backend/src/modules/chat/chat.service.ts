@@ -407,16 +407,15 @@ export class ChatService {
     userId: string,
   ) {
     const latest = conversation.messages[0] ?? null
-    await this.prisma.chatConversationMember.upsert({
-      where: { conversationId_userId: { conversationId: conversation.id, userId } },
-      create: {
+    await this.prisma.chatConversationMember.createMany({
+      data: [{
         conversationId: conversation.id,
         lastReadAt: latest?.createdAt ?? conversation.createdAt,
         lastReadMessageId: latest?.id,
         role: ChatMemberRole.MEMBER,
         userId,
-      },
-      update: {},
+      }],
+      skipDuplicates: true,
     })
     return this.prisma.chatConversation.findUniqueOrThrow({ where: { id: conversation.id }, include: conversationInclude })
   }

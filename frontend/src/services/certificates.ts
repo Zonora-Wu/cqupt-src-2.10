@@ -134,14 +134,19 @@ async function fetchCertificatePdfBlob(certificateId: string) {
 }
 
 export async function publicVerifyCertificate(certificateNo: string) {
-  const normalized = certificateNo.trim()
-  if (!normalized) {
-    throw new Error('请输入证书编号')
-  }
+  const normalized = normalizeCertificateNoInput(certificateNo)
+  if (!CERTIFICATE_NO_PATTERN.test(normalized)) throw new Error('证书编号格式应为 CQUPT-SRC-CERT-年份-6位编号')
 
   return apiRequest<PublicCertificateVerifyResult>(`/certificates/public/${encodeURIComponent(normalized)}`, {
     method: 'GET',
   })
+}
+
+export const CERTIFICATE_NO_MAX_LENGTH = 26
+export const CERTIFICATE_NO_PATTERN = /^CQUPT-SRC-CERT-\d{4}-[A-Z0-9]{6}$/
+
+export function normalizeCertificateNoInput(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, CERTIFICATE_NO_MAX_LENGTH)
 }
 
 async function request<T>(

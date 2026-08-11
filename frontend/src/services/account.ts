@@ -4,6 +4,7 @@ import { type HumanVerificationPayload } from './humanVerification'
 export type AccountProfile = {
   account: {
     authorizationLevel: 'BASIC' | 'TRUSTED' | 'STAFF'
+    aiAssistantTutorialCompletedAt: string | null
     avatarUrl: string | null
     college: string
     createdAt: string
@@ -76,6 +77,10 @@ export type UpdateProfileBasicsResponse = UpdateProfileBasicsPayload & {
 
 export function getAccountProfile() {
   return request<AccountProfile>('/account/profile', { method: 'GET' })
+}
+
+export function completeAiAssistantTutorial() {
+  return request<{ completedAt: string }>('/account/onboarding/ai-assistant-tutorial/complete', { method: 'POST' })
 }
 
 export function updateProfileBasics(payload: UpdateProfileBasicsPayload) {

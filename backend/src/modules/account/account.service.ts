@@ -86,6 +86,7 @@ export class AccountService {
     return {
       account: {
         authorizationLevel: profile.authorizationLevel,
+        aiAssistantTutorialCompletedAt: profile.aiAssistantTutorialCompletedAt,
         avatarUrl: profile.avatarUrl ?? null,
         college: profile.college ?? '',
         createdAt: profile.createdAt,
@@ -126,6 +127,19 @@ export class AccountService {
       },
       aiQuota,
     }
+  }
+
+  async completeAiAssistantTutorial(userId: string) {
+    const existing = await this.prisma.user.findFirst({
+      select: { aiAssistantTutorialCompletedAt: true },
+      where: { deletedAt: null, id: userId },
+    })
+    if (!existing) throw new NotFoundException('用户不存在')
+    const completedAt = existing.aiAssistantTutorialCompletedAt ?? new Date()
+    if (!existing.aiAssistantTutorialCompletedAt) {
+      await this.prisma.user.update({ data: { aiAssistantTutorialCompletedAt: completedAt }, where: { id: userId } })
+    }
+    return { completedAt }
   }
 
   async updateProfileBasics(user: AuthenticatedRequestUser, input: UpdateProfileBasicsInput, meta: ClientRequestMeta) {

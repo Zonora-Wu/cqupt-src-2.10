@@ -738,7 +738,9 @@ function LearningResourceModal({
               <div className="flex-1 border-t border-black/10 dark:border-white/10" />
             </div>
             <input
+              autoComplete="url"
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={1000}
               onChange={(event) => updateField('coverUrl', event.target.value)}
               placeholder="https://example.com/cover.png"
               value={form.coverUrl}
@@ -777,6 +779,7 @@ function LearningResourceModal({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">说明</span>
             <textarea
               className="mt-2 min-h-32 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={1000}
               onChange={(event) => updateField('description', event.target.value)}
               placeholder="说明资源用途、适合对象、使用边界和注意事项"
               value={form.description}
@@ -820,7 +823,9 @@ function Field({
     <label className="block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <input
+        autoComplete="off"
         className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+        maxLength={label === '标题' ? 120 : 1000}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}

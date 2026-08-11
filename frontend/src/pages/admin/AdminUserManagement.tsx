@@ -957,6 +957,7 @@ function RoleModal({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">管理员备注</span>
             <textarea
               className="mt-2 min-h-24 w-full resize-none rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={500}
               onChange={(event) => setReason(event.target.value)}
               placeholder="填写角色调整原因，便于审计追踪"
               value={reason}
@@ -1080,7 +1081,9 @@ function ResetPasswordDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">新密码</span>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">默认为 tmp + 统一码，可直接点确认或修改后再确认</p>
             <input
+              autoComplete="new-password"
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              maxLength={128}
               onChange={(e) => { setPassword(e.target.value); setValidationError('') }}
               placeholder={defaultPassword}
               type="text"
@@ -1180,6 +1183,8 @@ function AiQuotaDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">日 token 额度</span>
             <input
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              max={100000000}
+              min={0}
               onChange={(e) => { setDailyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={dailyLimit}
@@ -1189,6 +1194,8 @@ function AiQuotaDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">周 token 额度</span>
             <input
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              max={100000000}
+              min={0}
               onChange={(e) => { setWeeklyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={weeklyLimit}
@@ -1198,6 +1205,8 @@ function AiQuotaDialog({
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">月 token 额度</span>
             <input
               className="mt-2 w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10  dark:text-white"
+              max={100000000}
+              min={0}
               onChange={(e) => { setMonthlyLimit(e.target.value); setValidationError('') }}
               type="number"
               value={monthlyLimit}
