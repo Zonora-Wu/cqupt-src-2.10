@@ -48,3 +48,6 @@ test-results/
 # Docker local data
 .docker-data/
 frontend/public/models/*.glb
+
+# Local-only GitHub Actions workflow
+.github/workflows/quality.yml
