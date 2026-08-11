@@ -120,4 +120,11 @@ esac
 log '服务状态'
 "${COMPOSE[@]}" ps
 
+if [[ "$DEPLOY_SCOPE" != '7' && "${VERIFY_DEPLOYMENT:-1}" == '1' ]]; then
+  log '部署后验收'
+  BASE_URL="${BASE_URL:-https://test.cquptsrc.asia}" \
+    DEPLOY_ENV_FILE="$DEPLOY_DIR/.env" \
+    "$PROJECT_DIR/deploy/scripts/verify-production.sh"
+fi
+
 log '更新完成'

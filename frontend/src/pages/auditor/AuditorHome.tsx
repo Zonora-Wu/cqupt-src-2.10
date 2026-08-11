@@ -2,7 +2,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
-  Bot,
   Eye,
   FileCheck2,
   FileSearch,
@@ -38,7 +37,7 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { auditorNavItems, auditorUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
 import { type AuthUser } from '../../services/auth'
-import { getAuditorDashboard } from '../../services/dashboard'
+import { getAuditorDashboard, type AuditorDashboardStats } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 import {
@@ -93,17 +92,6 @@ type ReviewReport = {
   points: number
 }
 
-type RetestItem = {
-  id: string
-  title: string
-  asset: string
-  owner: string
-  level: ReviewLevel
-  status: RetestStatus
-  fixedAt: string
-  note: string
-}
-
 type AuditorAnnouncement = {
   id: string
   title: string
@@ -129,151 +117,12 @@ const auditorMenuItems = auditorNavItems.map((item) => item.label)
 const reviewStatusOptions = ['全部状态', '待初审', '审核中', '待补充', '已确认', '已驳回']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
 const reviewPageSizeDefault = 10
-
-const reviewReports: ReviewReport[] = [
-  {
-    attachments: [],
-    id: 'SRC-2026-0008',
-    reportId: 'mock-src-2026-0008',
-    title: '统一认证入口弱口令策略绕过风险',
-    asset: 'auth.cqupt.edu.cn',
-    owner: '信息化办公室',
-    submitter: '星火同学',
-    level: '高危',
-    status: '待初审',
-    submittedAt: '2026-04-27 10:24',
-    updatedAt: '2026-04-27 14:36',
-    aiScore: 86,
-    aiTags: ['疑似高价值', '建议优先', '材料待补充'],
-    aiSummary: 'AI 判断该漏洞影响统一认证入口，建议优先复现。需补充测试边界和影响账号范围。',
-    description: '统一认证入口在特定弱口令策略组合下可能绕过校验，导致低强度口令账号仍可完成登录。',
-    reproduce: '1. 使用授权测试账号进入统一认证登录页。\n2. 构造弱口令边界条件。\n3. 观察服务端策略校验结果。\n4. 记录前后端响应差异。',
-    requestPacket: 'POST /cas/login HTTP/1.1\nHost: auth.cqupt.edu.cn\nContent-Type: application/x-www-form-urlencoded\n\nusername=test&password=******',
-    repair: '统一服务端密码策略校验逻辑，补充弱口令命中日志，并对历史弱口令账号进行强制改密。',
-    points: 0,
-  },
-  {
-    attachments: [],
-    id: 'SRC-2026-0007',
-    reportId: 'mock-src-2026-0007',
-    title: '实验教学平台越权访问课程附件',
-    asset: 'lab.cqupt.edu.cn',
-    owner: '教务处',
-    submitter: '南山同学',
-    level: '中危',
-    status: '审核中',
-    submittedAt: '2026-04-26 21:18',
-    updatedAt: '2026-04-27 09:12',
-    aiScore: 74,
-    aiTags: ['复现完整', '建议确认责任单位'],
-    aiSummary: 'AI 判断复现路径较完整，建议重点确认课程关系校验是否缺失。',
-    description: '不同课程之间的附件下载接口存在权限校验不足，授权账号可能访问未选课程资料。',
-    reproduce: '1. 登录授权学生账号。\n2. 获取本人课程附件下载链接。\n3. 替换 courseId 与 fileId。\n4. 验证是否可下载非授权课程资料。',
-    requestPacket: 'GET /api/course/file/download?courseId=1024&fileId=7788 HTTP/1.1\nHost: lab.cqupt.edu.cn',
-    repair: '下载接口应校验用户与课程、班级、附件之间的授权关系，并记录异常访问日志。',
-    points: 0,
-  },
-  {
-    attachments: [],
-    id: 'SRC-2026-0006',
-    reportId: 'mock-src-2026-0006',
-    title: '校园门户接口敏感信息返回过多',
-    asset: 'portal.cqupt.edu.cn/api/user',
-    owner: '信息化办公室',
-    submitter: '青木同学',
-    level: '中危',
-    status: '已确认',
-    submittedAt: '2026-04-24 16:42',
-    updatedAt: '2026-04-26 11:30',
-    aiScore: 68,
-    aiTags: ['可复测', '可签发证书'],
-    aiSummary: 'AI 建议进入复测队列，若修复确认通过可由审核员直接签发贡献证书。',
-    description: '用户信息接口返回了不必要的联系方式、组织关系等字段。',
-    reproduce: '1. 登录普通账号。\n2. 请求用户详情接口。\n3. 检查响应字段。\n4. 验证是否返回超出业务需要的数据。',
-    requestPacket: 'GET /api/user/profile HTTP/1.1\nHost: portal.cqupt.edu.cn\nAuthorization: Bearer ******',
-    repair: '按业务场景拆分接口字段，默认隐藏敏感字段，增加字段级访问控制。',
-    points: 260,
-  },
-]
-
-export const retestItems: RetestItem[] = [
-  {
-    id: 'SRC-2026-0006',
-    title: '校园门户接口敏感信息返回过多',
-    asset: 'portal.cqupt.edu.cn/api/user',
-    owner: '信息化办公室',
-    level: '中危',
-    status: '待复测',
-    fixedAt: '2026-04-26 11:30',
-    note: '责任单位已提交接口字段收敛说明，需验证历史敏感字段是否仍返回。',
-  },
-  {
-    id: 'SRC-2026-0004',
-    title: '在线靶场资源下载链接未鉴权',
-    asset: 'range.cqupt-src.edu.cn',
-    owner: '网络安全学院',
-    level: '高危',
-    status: '复测中',
-    fixedAt: '2026-04-22 10:16',
-    note: '需验证旧临时链接、缓存链接和未登录状态下的访问结果。',
-  },
-  {
-    id: 'SRC-2026-0005',
-    title: '学生社团系统后台登录验证码复用',
-    asset: 'club.cqupt.edu.cn',
-    owner: '团委',
-    level: '低危',
-    status: '复测通过',
-    fixedAt: '2026-04-25 16:30',
-    note: '验证码已改为一次性使用，可归档。',
-  },
-]
-
-const reviewHistory = [
-  { id: 'HIS-001', action: '进入审核', target: 'SRC-2026-0007', time: '2026-04-28 09:20', result: '进行中' },
-  { id: 'HIS-002', action: '要求补充材料', target: 'SRC-2026-0008', time: '2026-04-27 14:36', result: '已通知' },
-  { id: 'HIS-003', action: '复测通过', target: 'SRC-2026-0005', time: '2026-04-25 16:30', result: '已归档' },
-  { id: 'HIS-004', action: '签发证书', target: 'SRC-2026-0006', time: '2026-04-26 15:08', result: '已完成' },
-]
-
-const auditorAnnouncements: AuditorAnnouncement[] = [
-  {
-    id: 'ANN-AUD-003',
-    title: '高危漏洞优先审核提醒',
-    category: '审核通知',
-    status: '已发布',
-    range: '审核员',
-    pinned: true,
-    date: '2026-04-28',
-    summary: '统一认证、账号安全和数据暴露类漏洞应优先处理。',
-    content: '统一认证、账号安全、敏感数据暴露和影响业务连续性的漏洞需要优先进入审核流程。审核员应先确认授权边界、复现证据、影响范围和修复建议，再给出最终审核结论。',
-    readCount: 86,
-  },
-  {
-    id: 'ANN-AUD-002',
-    title: '审核意见填写规范更新',
-    category: '规则更新',
-    status: '草稿',
-    range: '审核员',
-    pinned: false,
-    date: '2026-04-26',
-    summary: '要求补充材料时需明确缺失项、补充原因和截止时间。',
-    content: '审核员在要求用户补充材料时，应明确说明缺失项、补充原因、补充截止时间和可接受的材料格式。涉及敏感信息时，应提醒用户脱敏后再上传。',
-    readCount: 0,
-  },
-  {
-    id: 'ANN-AUD-001',
-    title: '复测归档材料留存要求',
-    category: '安全提醒',
-    status: '已下架',
-    range: '全体用户',
-    pinned: false,
-    date: '2026-04-24',
-    summary: '复测通过后需保留修复前后证据、时间线和责任单位反馈。',
-    content: '复测归档应包含修复前后证据、时间线、责任单位反馈、复测结论和证书签发依据。涉及漏洞细节的材料仅在平台内留存，不应公开传播。',
-    readCount: 142,
-  },
-]
+const auditorAnnouncements: AuditorAnnouncement[] = []
+const announcementStatusStyles: Record<AnnouncementStatus, string> = {
+  草稿: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  已发布: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  已下架: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+}
 
 const levelStyles: Record<ReviewLevel, string> = {
   严重: 'bg-red-600 text-white',
@@ -298,12 +147,6 @@ const retestStatusStyles: Record<RetestStatus, string> = {
   退回修复: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   修复中: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   已归档: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
-}
-
-const announcementStatusStyles: Record<AnnouncementStatus, string> = {
-  草稿: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
-  已发布: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  已下架: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
 }
 
 export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
@@ -397,12 +240,20 @@ export function AuditorHome({ onLogout, user }: AuditorHomeProps) {
 }
 
 function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }) {
-  const [stats, setStats] = useState({ pendingInitReview: 0, pendingRetest: 0, pendingCerts: 0, pendingArchive: 0 })
+  const [stats, setStats] = useState<AuditorDashboardStats>({
+    pendingArchive: 0,
+    pendingCerts: 0,
+    pendingInitReview: 0,
+    pendingRetest: 0,
+    priorityReports: [],
+    recentActions: [],
+  })
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     getAuditorDashboard()
       .then((data) => setStats(data))
-      .catch(() => { /* 静默失败 */ })
+      .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : '审核工作台加载失败'))
   }, [])
 
   const overview = [
@@ -420,6 +271,7 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
         title="审核员工作台"
         description="聚合漏洞初审、复测归档、证书管理和 AI 辅助判断，帮助审核员按优先级完成从提交到证书的闭环响应。"
       />
+      {loadError && <FloatingNotice message={loadError} onClose={() => setLoadError('')} variant="error" />}
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
         {overview.map((item) => {
@@ -449,34 +301,35 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
             <ShieldAlert className="h-5 w-5 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3">
-            {reviewReports.slice(0, 3).map((item) => (
-              <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 " key={item.id}>
+            {stats.priorityReports.map((item) => (
+              <button className="block w-full rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 text-left dark:border-white/10 " key={item.id} onClick={() => onNavigate('漏洞审核')} type="button">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.id}</span>
-                  <LevelBadge level={item.level} />
-                  <ReviewStatusBadge status={item.status} />
+                  <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.reportNo}</span>
+                  <LevelBadge level={formatDashboardSeverity(item.severity)} />
+                  <ReviewStatusBadge status={formatDashboardStatus(item.status)} />
                 </div>
                 <p className="mt-3 font-medium">{item.title}</p>
                 <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  {item.asset} · {item.owner} · AI {item.aiScore}
+                  {item.assetName} · {item.ownerUnit || '责任单位待确认'} · 更新于 {formatDateTime(item.updatedAt)}
                 </p>
-              </div>
+              </button>
             ))}
+            {stats.priorityReports.length === 0 && <EmptyState label="当前没有待审核漏洞" />}
           </div>
         </SurfacePanel>
 
         <SurfacePanel className="p-6">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">AI 今日摘要</h2>
-            <Bot className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+            <h2 className="text-xl font-semibold">处理提示</h2>
+            <Activity className="h-5 w-5 text-brand-700 dark:text-brand-300" />
           </div>
           <div className="mt-5 space-y-3 text-sm">
             <div className="rounded-lg border border-black/5 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10 ">
-              <p className="font-medium">建议优先处理统一认证相关报告</p>
-              <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">该类漏洞影响面较大，应先确认授权边界、复现材料和实际风险。</p>
+              <p className="font-medium">当前有 {stats.pendingInitReview} 条报告等待初审</p>
+              <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">按提交时间处理高优先级队列，审核结论和附件访问会记录审计日志。</p>
             </div>
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
-              2 份报告缺少测试边界说明，建议先要求补充再进入正式复现。
+              待复测 {stats.pendingRetest} 条，待推进修复或归档 {stats.pendingArchive} 条。
             </div>
           </div>
         </SurfacePanel>
@@ -1125,6 +978,17 @@ function AuditorAIAssistant() {
 }
 
 function AuditorReviewHistory() {
+  const [actions, setActions] = useState<AuditorDashboardStats['recentActions']>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    getAuditorDashboard()
+      .then((data) => setActions(data.recentActions))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '审核记录加载失败'))
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <PageShell>
       <PageHeader
@@ -1133,6 +997,7 @@ function AuditorReviewHistory() {
         title="审核记录"
         description="查看你的审核动作、复测结论、证书签发和补充材料通知记录。"
       />
+      {error && <FloatingNotice message={error} onClose={() => setError('')} variant="error" />}
       <SurfacePanel className="mt-6 overflow-hidden p-0">
         <div className="grid grid-cols-[160px_minmax(0,1fr)_160px_120px] gap-4 border-b border-black/10 px-4 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
           <span>时间</span>
@@ -1141,14 +1006,16 @@ function AuditorReviewHistory() {
           <span>结果</span>
         </div>
         <div className="divide-y divide-black/10 dark:divide-white/10">
-          {reviewHistory.map((item) => (
+          {actions.map((item) => (
             <div className="grid gap-4 px-4 py-3 text-sm md:grid-cols-[160px_minmax(0,1fr)_160px_120px]" key={item.id}>
-              <span className="text-slate-500 dark:text-slate-400">{item.time}</span>
-              <span className="font-medium">{item.action}</span>
-              <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.target}</span>
-              <span>{item.result}</span>
+              <span className="text-slate-500 dark:text-slate-400">{formatDateTime(item.createdAt)}</span>
+              <span className="font-medium">{item.actionLabel}</span>
+              <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{item.targetLabel}</span>
+              <span>{item.resultLabel}</span>
             </div>
           ))}
+          {!loading && actions.length === 0 && <EmptyState label="暂无审核操作记录" />}
+          {loading && <p className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载审核记录...</p>}
         </div>
       </SurfacePanel>
     </PageShell>
@@ -1555,6 +1422,28 @@ function defaultPointsForLevel(level: ReviewLevel) {
   if (level === '中危') return 260
   if (level === '低危') return 80
   return 20
+}
+
+function formatDashboardSeverity(value: string): ReviewLevel {
+  const labels: Record<string, ReviewLevel> = {
+    CRITICAL: '严重',
+    HIGH: '高危',
+    INFO: '信息',
+    LOW: '低危',
+    MEDIUM: '中危',
+  }
+  return labels[value] ?? (levelOptions.includes(value) ? value as ReviewLevel : '信息')
+}
+
+function formatDashboardStatus(value: string): ReviewStatus {
+  const labels: Record<string, ReviewStatus> = {
+    CONFIRMED: '已确认',
+    NEEDS_SUPPLEMENT: '待补充',
+    PENDING_REVIEW: '审核中',
+    REJECTED: '已驳回',
+    SUBMITTED: '待初审',
+  }
+  return labels[value] ?? (reviewStatusOptions.includes(value) ? value as ReviewStatus : '待初审')
 }
 
 function formatDateTime(value: string | null) {

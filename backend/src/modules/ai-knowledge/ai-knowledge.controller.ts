@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
-import { AiKnowledgeJobStatus } from '@prisma/client'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -8,8 +7,6 @@ import { AiKnowledgeMaintenanceWorker } from './ai-knowledge-maintenance.worker'
 import { AiKnowledgeService } from './ai-knowledge.service'
 import {
   normalizeCreateKnowledgeBody,
-  normalizeConversationListQuery,
-  normalizeConversationReviewBody,
   normalizeKnowledgeFeedbackBody,
   normalizeKnowledgeListQuery,
   normalizeKnowledgeReviewBody,
@@ -17,8 +14,6 @@ import {
   normalizeMaintenanceResolveBody,
   normalizeRevisionCreateBody,
   normalizeRevisionRestoreBody,
-  normalizeSkillCandidateBody,
-  normalizeSkillCandidateReviewBody,
 } from './ai-knowledge.validation'
 
 type RequestLike = {
@@ -61,38 +56,6 @@ export class AiKnowledgeController {
     return this.knowledge.getStats()
   }
 
-  @Get('capture-jobs')
-  @RequirePermissions('ai:manage_skills')
-  captureJobs(@Query() query: Record<string, unknown>) {
-    const page = positiveInt(query.page, 1)
-    const pageSize = Math.min(positiveInt(query.pageSize, 20), 100)
-    const status = typeof query.status === 'string' && Object.values(AiKnowledgeJobStatus).includes(query.status as AiKnowledgeJobStatus)
-      ? (query.status as AiKnowledgeJobStatus)
-      : undefined
-    return this.knowledge.listCaptureJobs({ page, pageSize, status })
-  }
-
-  @Get('conversations')
-  @RequirePermissions('ai:manage_skills')
-  conversations(@Query() query: Record<string, unknown>) {
-    return this.knowledge.listConversations(normalizeConversationListQuery(query))
-  }
-
-  @Post('conversations/:id/summarize')
-  @RequirePermissions('ai:manage_skills')
-  summarizeConversation(@Param('id') id: string) {
-    return this.knowledge.summarizeConversation(id)
-  }
-
-  @Post('conversations/:id/review')
-  @RequirePermissions('ai:manage_skills')
-  reviewConversation(
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-    @CurrentUser() user: AuthenticatedRequestUser,
-  ) {
-    return this.knowledge.reviewConversation(id, normalizeConversationReviewBody(body), user.id)
-  }
 
   @Post()
   @RequirePermissions('ai:manage_skills')
@@ -100,11 +63,6 @@ export class AiKnowledgeController {
     return this.knowledge.createKnowledge(normalizeCreateKnowledgeBody(body), user.id)
   }
 
-  @Post('process-captures')
-  @RequirePermissions('ai:manage_skills')
-  processCaptures() {
-    return this.knowledge.processPendingCaptures()
-  }
 
   @Post(':id/review')
   @RequirePermissions('ai:manage_skills')
@@ -149,40 +107,6 @@ export class AiKnowledgeController {
     return this.knowledge.restoreRevision(id, normalizeRevisionRestoreBody(body), user.id, getRequestMeta(req))
   }
 
-  @Get('skill-candidates')
-  @RequirePermissions('ai:manage_skills')
-  listSkillCandidates() {
-    return this.knowledge.listSkillCandidates()
-  }
-
-  @Get('skill-audit')
-  @RequirePermissions('ai:manage_skills')
-  listSkillAudit() {
-    return this.knowledge.listSkillAudit()
-  }
-
-  @Post('skill-candidates')
-  @RequirePermissions('ai:manage_skills')
-  createSkillCandidate(@Body() body: Record<string, unknown>) {
-    return this.knowledge.createSkillCandidate(normalizeSkillCandidateBody(body))
-  }
-
-  @Post('skill-candidates/:id/install')
-  @RequirePermissions('ai:manage_skills')
-  installSkillCandidate(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) {
-    return this.knowledge.installSkillCandidate(id, user.id)
-  }
-
-  @Post('skill-candidates/:id/review')
-  @RequirePermissions('ai:manage_skills')
-  reviewSkillCandidate(
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-    @CurrentUser() user: AuthenticatedRequestUser,
-  ) {
-    return this.knowledge.reviewSkillCandidate(id, normalizeSkillCandidateReviewBody(body), user.id)
-  }
-
   // ─── Maintenance task endpoints ─────────────────────────────────
 
   @Get('maintenance/tasks')
@@ -218,10 +142,4 @@ export class AiKnowledgeController {
   runMaintenance() {
     return this.maintenanceWorker.runMaintenanceScan()
   }
-}
-
-function positiveInt(value: unknown, fallback: number) {
-  if (value === undefined || value === null || value === '') return fallback
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
 }

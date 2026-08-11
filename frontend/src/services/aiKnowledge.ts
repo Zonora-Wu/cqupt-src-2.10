@@ -24,7 +24,7 @@ export type AiKnowledgeMaintenanceTaskPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4
 export type AiKnowledgeMaintenanceTaskStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED'
 export type AiKnowledgeMaintenanceTaskType = 'STALE_REVIEW' | 'LOW_QUALITY' | 'DUPLICATE' | 'SECURITY' | 'ARCHIVE' | 'EXPIRY'
 export type AiKnowledgeConversationStatus = 'ACTIVE' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'
-export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED' | 'ARCHIVED'
+export type AiProblemSessionStatus = 'ACTIVE' | 'AWAITING_RESOLUTION' | 'RESOLVED' | 'READY_REVIEW' | 'APPROVED_TO_KB' | 'DISCARDED' | 'ARCHIVED'
 export type AiSkillCandidateStatus = 'DRAFT' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED' | 'INSTALLED' | 'FAILED'
 export type AiSpace = 'STUDENT' | 'AUDITOR' | 'ADMIN'
 
@@ -41,6 +41,8 @@ export type AiKnowledgeEntry = {
   visibility: AiKnowledgeVisibility
   sensitivity: AiKnowledgeSensitivity
   status: AiKnowledgeStatus
+  source: 'USER_CHAT' | 'ADMIN_CREATED' | 'SYSTEM_GENERATED' | string
+  sourceSessionIds: string[]
   maintenanceStatus: AiKnowledgeMaintenanceStatus
   retrievalEnabled: boolean
   directAnswerEnabled: boolean
@@ -146,7 +148,7 @@ export type AiProblemSessionSummary = {
     reuse: number
     safety: number
   }
-  recommendation: 'KB' | 'SKILL' | 'DISCARD'
+  recommendation: 'KB' | 'DISCARD'
   rejectionReason?: string
   similarKnowledgeMatches: Array<{
     id: string
@@ -210,19 +212,40 @@ export type AiSkillAudit = {
 export type AiKnowledgeStats = {
   totals: {
     approved: number
-    discardedCaptures: number
-    installedSkills: number
+    directAnswers: number
+    estimatedTokensSaved: number
+    injectedAnswers: number
     needsReview: number
-    pendingCaptures: number
+    openMaintenance: number
     recentHits: number
     rejected: number
-    skillCandidates: number
+    reviewBacklog: number
+    sessionReviewBacklog: number
     total: number
+    usedHits: number
   }
+  feedback30d: { abuseReports: number; helpful: number; rate: number; unhelpful: number }
   byCategory: Array<{ category: AiKnowledgeCategory; count: number }>
   byStatus: Array<{ status: AiKnowledgeStatus; count: number }>
-  recentQueue: AiKnowledgeCaptureJob[]
 }
+
+export type AiKnowledgeRevision = {
+  id: string
+  knowledgeId: string
+  editorId?: string | null
+  title: string
+  canonicalQuestion: string
+  canonicalAnswer: string
+  version: number
+  changeType: string
+  changeReason: string
+  diffSummary?: string | null
+  createdAt: string
+}
+
+export type AiKnowledgeRevisionInput = Partial<Pick<AiKnowledgeEntry,
+  'agentInjectEnabled' | 'canonicalAnswer' | 'canonicalQuestion' | 'category' | 'directAnswerEnabled' | 'retrievalEnabled' | 'roleScope' | 'sensitivity' | 'tags' | 'title' | 'visibility'
+>> & { changeReason: string; changeType?: 'MANUAL_EDIT' | 'OUTDATED_FIX' | 'SAFETY_FIX' | 'MERGE' }
 
 export type AiKnowledgeMaintenanceTask = {
   id: string
@@ -260,7 +283,7 @@ export function summarizeAiProblemSession(id: string) {
   return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/summarize`, { auth: true, method: 'POST' })
 }
 
-export function reviewAiProblemSession(id: string, status: Extract<AiProblemSessionStatus, 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'>, note?: string) {
+export function reviewAiProblemSession(id: string, status: Extract<AiProblemSessionStatus, 'APPROVED_TO_KB' | 'DISCARDED'>, note?: string) {
   return apiRequest<AiProblemSession>(`/ai/problem-sessions/${id}/review`, { auth: true, body: { note, status }, method: 'POST' })
 }
 
@@ -321,6 +344,27 @@ export function runAiKnowledgeMaintenance() {
 
 export function reviewAiKnowledge(id: string, status: Extract<AiKnowledgeStatus, 'APPROVED' | 'REJECTED' | 'ARCHIVED'>, note?: string) {
   return apiRequest<AiKnowledgeEntry>(`/ai/knowledge/${id}/review`, { auth: true, body: { note, status }, method: 'POST' })
+}
+
+export function listAiKnowledgeRevisions(id: string) {
+  return apiRequest<AiKnowledgeRevision[]>(`/ai/knowledge/${id}/revisions`, { auth: true, method: 'GET' })
+}
+
+export function createAiKnowledgeRevision(id: string, body: AiKnowledgeRevisionInput) {
+  const { canonicalAnswer, canonicalQuestion, ...rest } = body
+  return apiRequest<{ entry: AiKnowledgeEntry; revision: AiKnowledgeRevision }>(`/ai/knowledge/${id}/revisions`, {
+    auth: true,
+    body: { ...rest, answer: canonicalAnswer, question: canonicalQuestion },
+    method: 'POST',
+  })
+}
+
+export function restoreAiKnowledgeRevision(id: string, revisionId: string, reason: string) {
+  return apiRequest<{ entry: AiKnowledgeEntry; revision: AiKnowledgeRevision; restoredFrom: AiKnowledgeRevision }>(`/ai/knowledge/${id}/restore`, {
+    auth: true,
+    body: { reason, revisionId },
+    method: 'POST',
+  })
 }
 
 export function processAiKnowledgeCaptures() {

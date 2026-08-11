@@ -13,6 +13,8 @@
     "test:ai-problem-session": "node ../tests/e2e/ai-problem-session-phase2.mjs",
     "test:chat": "tsx --test test/chat-*.test.ts",
     "test:security": "tsx --test test/security-boundaries.test.ts",
+    "test:ai-knowledge": "tsx --test test/ai-knowledge-boundary.test.ts",
+    "test:malware-scan": "tsx --test test/malware-scan-interceptor.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:validate": "prisma validate --schema ../database/prisma/schema.prisma",
     "prisma:generate": "node scripts/prisma-generate.cjs",

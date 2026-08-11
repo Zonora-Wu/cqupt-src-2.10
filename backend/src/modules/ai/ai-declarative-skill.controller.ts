@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -18,7 +19,7 @@ export class AiDeclarativeSkillController {
   create(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) { return this.skills.create(body, user) }
 
   @Post('ai/skills/upload')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }), MalwareScanInterceptor)
   upload(@UploadedFile() file: { buffer?: Buffer; originalname?: string; size?: number } | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
     return this.skills.upload(file, user)
   }

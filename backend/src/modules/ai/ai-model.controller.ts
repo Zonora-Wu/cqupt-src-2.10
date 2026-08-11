@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, MessageEvent, Param, Patch, Post, Put, Sse, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, MessageEvent, Param, Patch, Post, Put, Query, Sse, UseGuards } from '@nestjs/common'
 import { interval, map, mergeMap, startWith, takeWhile } from 'rxjs'
 import { AiAgentRunStatus } from '@prisma/client'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
@@ -96,6 +96,10 @@ export class AiModelController {
   @Delete('system-settings/platform-ai/:id')
   @RequirePermissions('system:manage')
   deletePlatformAi(@Param('id') id: string) { return this.models.deletePlatformRoute(id) }
+
+  @Get('system-settings/ai-runtime-metrics')
+  @RequirePermissions('system:manage')
+  metrics(@Query('days') days: string | undefined) { return this.runtime.metrics(Number(days ?? 7)) }
 
   @Get('ai/runs/:id')
   run(@Param('id') id: string, @CurrentUser() user: AuthenticatedRequestUser) { return this.runtime.get(id, user.id) }

@@ -14,6 +14,7 @@ import { type AuthUser } from '../../services/auth'
 import { type AdminDashboardStats, getAdminDashboard, runAdminDashboardAiInsight } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
+import { getAiKnowledgeStats } from '../../services/aiKnowledge'
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
@@ -56,6 +57,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [dashboardError, setDashboardError] = useState('')
   const [dashboardLoading, setDashboardLoading] = useState(true)
   const [insightRefreshing, setInsightRefreshing] = useState(false)
+  const [knowledgeReviewCount, setKnowledgeReviewCount] = useState(0)
   const [selectedTrendKey, setSelectedTrendKey] = useState<ActivityTrendKey | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -64,12 +66,21 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const navBadges = {
     '漏洞管理': notificationUnread.menu['admin-vulnerabilities'] ?? 0,
     '证书管理': notificationUnread.menu['admin-certificates'] ?? 0,
+    'AI 管理': knowledgeReviewCount,
   }
 
   const openMenu = (label: string) => {
     const path = getPathFromLabel(label, adminNavItems, adminUtilityPaths)
     if (path) navigate(path)
   }
+
+  useEffect(() => {
+    let active = true
+    getAiKnowledgeStats()
+      .then((data) => { if (active) setKnowledgeReviewCount(data.totals.reviewBacklog) })
+      .catch(() => { if (active) setKnowledgeReviewCount(0) })
+    return () => { active = false }
+  }, [location.pathname])
 
   useEffect(() => {
     if (!isKnownWorkspacePath(location.pathname, adminNavItems, adminUtilityPaths)) {

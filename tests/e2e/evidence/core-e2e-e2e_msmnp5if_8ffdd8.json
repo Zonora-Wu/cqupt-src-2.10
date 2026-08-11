@@ -1,0 +1,26 @@
+{
+  "apiBaseUrl": "http://localhost:3001/api",
+  "failed": [
+    {
+      "duration": 22,
+      "label": "health check",
+      "message": "fetch failed",
+      "ok": false
+    }
+  ],
+  "generatedAt": "2026-08-10T03:12:56.129Z",
+  "marker": "[e2e_msmnp5if_8ffdd8]",
+  "reportId": null,
+  "runId": "e2e_msmnp5if_8ffdd8",
+  "skillName": "cqupt_e2e_e2e_msmnp5if_8ffdd8",
+  "skillPath": null,
+  "status": "failed",
+  "steps": [
+    {
+      "duration": 22,
+      "label": "health check",
+      "message": "fetch failed",
+      "ok": false
+    }
+  ]
+}

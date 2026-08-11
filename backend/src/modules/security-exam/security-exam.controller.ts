@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -93,14 +94,14 @@ export class SecurityExamAdminController {
 
   @Post('import')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }), MalwareScanInterceptor)
   importFile(@UploadedFile() file: UploadedFileLike | undefined, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.securityExam.importQuestionsFromFile(file, user, getRequestMeta(req))
   }
 
   @Post('knowledge-generate')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }), MalwareScanInterceptor)
   generateFromKnowledgeFile(@UploadedFile() file: UploadedFileLike | undefined, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
     return this.securityExam.generateQuestionsFromKnowledgeFile(file, user, getRequestMeta(req))
   }

@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { CurrentUser } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -80,7 +81,7 @@ export class AccountController {
   }
 
   @Post('avatar')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }), MalwareScanInterceptor)
   uploadAvatar(
     @UploadedFile() file: UploadedImageFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,

@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
@@ -62,7 +63,7 @@ export class LearningController {
 
   @Post('manage/upload-cover')
   @RequirePermissions('learning:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 }, storage: undefined }), MalwareScanInterceptor)
   uploadCoverImage(@UploadedFile() file: UploadedImageFile | undefined) {
     if (!file) throw new BadRequestException('请选择图片文件')
     return this.learning.uploadCoverImage(file)

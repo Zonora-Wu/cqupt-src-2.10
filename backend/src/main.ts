@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
+import { randomUUID } from 'node:crypto'
 import { json, type NextFunction, type Request, type Response } from 'express'
 import { AppModule } from './app.module'
 
@@ -18,6 +19,30 @@ async function bootstrap() {
     next()
   })
   app.use(json({ limit: '5mb' }))
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const receivedRequestId = req.header('x-request-id')?.trim()
+    const requestId = receivedRequestId && /^[a-zA-Z0-9._-]{8,80}$/.test(receivedRequestId)
+      ? receivedRequestId
+      : randomUUID()
+    const startedAt = process.hrtime.bigint()
+    res.setHeader('X-Request-Id', requestId)
+    res.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000
+      if (process.env.HTTP_LOG_ALL !== 'true' && res.statusCode < 400 && durationMs < 1_000) return
+      const entry = JSON.stringify({
+        durationMs: Math.round(durationMs * 10) / 10,
+        method: req.method,
+        path: req.path,
+        requestId,
+        statusCode: res.statusCode,
+        timestamp: new Date().toISOString(),
+        type: 'http_request',
+      })
+      const output = res.statusCode >= 500 ? process.stderr : process.stdout
+      output.write(`${entry}\n`)
+    })
+    next()
+  })
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
     res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
@@ -38,4 +63,11 @@ async function bootstrap() {
   await app.listen(port)
 }
 
-void bootstrap()
+void bootstrap().catch((error: unknown) => {
+  process.stderr.write(`${JSON.stringify({
+    message: error instanceof Error ? error.message : 'unknown startup error',
+    timestamp: new Date().toISOString(),
+    type: 'startup_failure',
+  })}\n`)
+  process.exitCode = 1
+})

@@ -1174,7 +1174,7 @@ function getAiSpace(mode: NormalizedAiChatInput['mode']) {
 
 
 function formatKnowledgeHitsForPrompt(hits: Array<{ answer: string; category: string; similarity: number; title: string }>) {
-  return hits.map((hit) => ({
+  return hits.slice(0, 3).map((hit) => ({
     answer: hit.answer.slice(0, 1200),
     category: hit.category,
     confidence: Number(hit.similarity.toFixed(2)),
@@ -1225,7 +1225,7 @@ function selectKnowledgeHitsForRoute<T extends {
   if (!policy.agentInjectEnabled || policy.injectTopK <= 0) return []
   return hits
     .filter((hit) => hit.retrievalEnabled !== false && hit.agentInjectEnabled !== false && hit.similarity >= policy.injectThreshold)
-    .slice(0, policy.injectTopK)
+    .slice(0, Math.min(policy.injectTopK, 3))
 }
 
 function serializeKnowledgeUsagePolicy(policy: AiKnowledgeUsagePolicy) {

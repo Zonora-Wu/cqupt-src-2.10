@@ -89,7 +89,10 @@ if (typeof window !== 'undefined') window.addEventListener(AUTH_ACCESS_TOKEN_CHA
 
 export function useChatSocket(onEvent: (event: string, payload: unknown) => void) {
   const callbackRef = useRef(onEvent)
-  callbackRef.current = onEvent
+
+  useEffect(() => {
+    callbackRef.current = onEvent
+  }, [onEvent])
 
   useEffect(() => {
     const token = getAccessToken()

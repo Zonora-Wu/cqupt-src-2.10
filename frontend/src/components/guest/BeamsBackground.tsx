@@ -151,7 +151,7 @@ export function BeamsBackground({
 }: BeamsProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const isActive = useCanvasActivity(containerRef)
-  const performanceProfile = useMemo(getGraphicsPerformanceProfile, [])
+  const performanceProfile = useMemo(() => getGraphicsPerformanceProfile(), [])
   const beamMaterial = useMemo(
     () => extendMaterial(THREE.MeshStandardMaterial, {
       header: `

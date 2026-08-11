@@ -36,12 +36,15 @@ let memoryAccessToken: string | null = null
 
 export class ApiError extends Error {
   data: unknown
+  requestId: string | null
   status: number | null
 
-  constructor(message: string, options: { data?: unknown; status?: number | null } = {}) {
-    super(message)
+  constructor(message: string, options: { data?: unknown; requestId?: string | null; status?: number | null } = {}) {
+    const requestId = options.requestId?.trim() || null
+    super(requestId ? `${message}（请求编号：${requestId}）` : message)
     this.name = 'ApiError'
     this.data = options.data ?? null
+    this.requestId = requestId
     this.status = options.status ?? null
   }
 }
@@ -182,6 +185,7 @@ function assertOk(response: Response, data: unknown, authenticatedRequest: boole
 
   throw new ApiError(getApiErrorMessage(data), {
     data,
+    requestId: response.headers.get('X-Request-Id'),
     status: response.status,
   })
 }

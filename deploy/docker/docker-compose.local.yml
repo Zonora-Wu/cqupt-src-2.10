@@ -55,7 +55,23 @@ services:
       timeout: 5s
       retries: 5
 
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: cqupt-src-local-clamav
+    restart: unless-stopped
+    ports:
+      - "13310:3310"
+    volumes:
+      - cqupt_src_clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
 volumes:
   cqupt_src_postgres_data:
   cqupt_src_redis_data:
   cqupt_src_minio_data:
+  cqupt_src_clamav_data:

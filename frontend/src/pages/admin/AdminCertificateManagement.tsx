@@ -239,7 +239,7 @@ export function AdminCertificateManagement() {
     void Promise.all(reads)
       .then(() => window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT)))
       .catch(() => {})
-  }, [selectedCertificate?.id])
+  }, [selectedCertificate])
 
   async function previewPdf(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId) {

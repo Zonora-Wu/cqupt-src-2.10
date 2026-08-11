@@ -89,7 +89,7 @@ export class AiProblemSessionController {
   @RequirePermissions('ai:manage_skills')
   review(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
     const status = body.status
-    if (status !== 'APPROVED_TO_KB' && status !== 'SKILL_CANDIDATE' && status !== 'DISCARDED') {
+    if (status !== 'APPROVED_TO_KB' && status !== 'DISCARDED') {
       throw new BadRequestException('问题会话审核状态不正确')
     }
     return this.sessions.reviewResolvedSession(id, { note: typeof body.note === 'string' ? body.note : undefined, status }, user.id)

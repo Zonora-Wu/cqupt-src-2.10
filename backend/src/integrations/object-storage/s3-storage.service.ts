@@ -47,6 +47,15 @@ export class S3StorageService {
     }
   }
 
+  async checkHealth() {
+    const result = await this.request({
+      expectedStatuses: [200],
+      method: 'HEAD',
+      path: `/${this.bucket}`,
+    })
+    return result.statusCode === 200
+  }
+
   async putObject(input: PutObjectInput) {
     await this.ensureBucket()
     await this.request({

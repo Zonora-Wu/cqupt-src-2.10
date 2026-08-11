@@ -110,6 +110,24 @@ export type AuditorDashboardStats = {
   pendingCerts: number
   pendingInitReview: number
   pendingRetest: number
+  priorityReports: Array<{
+    assetName: string
+    id: string
+    ownerUnit: string | null
+    reportNo: string
+    severity: string
+    status: string
+    title: string
+    updatedAt: Date
+  }>
+  recentActions: Array<{
+    actionLabel: string
+    createdAt: Date
+    id: string
+    resultLabel: string
+    summary: string
+    targetLabel: string
+  }>
 }
 
 export type AdminDashboardAiInsight = {
@@ -392,8 +410,8 @@ export class DashboardService {
     }
   }
 
-  async getAuditorDashboard(): Promise<AuditorDashboardStats> {
-    const [pendingInitReview, pendingRetest, pendingArchiveGroup, pendingCerts] = await Promise.all([
+  async getAuditorDashboard(user: AuthenticatedRequestUser): Promise<AuditorDashboardStats> {
+    const [pendingInitReview, pendingRetest, pendingArchiveGroup, pendingCerts, priorityReports, recentActions] = await Promise.all([
       this.prisma.vulnerabilityReport.count({
         where: {
           deletedAt: null,
@@ -425,6 +443,41 @@ export class DashboardService {
           },
         },
       }),
+      this.prisma.vulnerabilityReport.findMany({
+        where: {
+          deletedAt: null,
+          status: { in: [VulnerabilityStatus.SUBMITTED, VulnerabilityStatus.PENDING_REVIEW] },
+        },
+        orderBy: [{ submittedAt: 'asc' }, { updatedAt: 'asc' }],
+        select: {
+          assetName: true,
+          id: true,
+          ownerUnit: true,
+          reportNo: true,
+          selfSeverity: true,
+          status: true,
+          title: true,
+          updatedAt: true,
+        },
+        take: 3,
+      }),
+      this.prisma.auditLog.findMany({
+        where: {
+          actorId: user.id,
+          action: {
+            in: [
+              AuditAction.REVIEW_VULNERABILITY,
+              AuditAction.CHANGE_VULNERABILITY_STATUS,
+              AuditAction.ISSUE_CERTIFICATE,
+              AuditAction.REVOKE_CERTIFICATE,
+              AuditAction.VIEW_SENSITIVE_ATTACHMENT,
+            ],
+          },
+        },
+        include: { actor: { include: { role: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
     ])
 
     return {
@@ -432,6 +485,27 @@ export class DashboardService {
       pendingCerts,
       pendingInitReview,
       pendingRetest,
+      priorityReports: priorityReports.map((report) => ({
+        assetName: report.assetName,
+        id: report.id,
+        ownerUnit: report.ownerUnit,
+        reportNo: report.reportNo,
+        severity: report.selfSeverity,
+        status: report.status,
+        title: report.title,
+        updatedAt: report.updatedAt,
+      })),
+      recentActions: recentActions.map((action) => {
+        const mapped = mapAuditLogItem(action)
+        return {
+          actionLabel: mapped.actionLabel,
+          createdAt: mapped.createdAt,
+          id: mapped.id,
+          resultLabel: mapped.resultLabel,
+          summary: mapped.summary,
+          targetLabel: mapped.targetLabel,
+        }
+      }),
     }
   }
 

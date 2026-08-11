@@ -12,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { SecurityRateLimitService } from '../../common/security/security-rate-limit.service'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -90,7 +91,7 @@ export class AiController {
 
   @Post('report-drafts')
   @RequirePermissions('ai:use_student')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }), MalwareScanInterceptor)
   async extractReportDrafts(@UploadedFile() file: UploadedPdfFile | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
     await this.rateLimit.consume('ai-pdf-user', user.id, 10, 10 * 60_000)
     return this.reportDrafts.extractVulnerabilityDrafts(file)
@@ -98,7 +99,7 @@ export class AiController {
 
   @Post('report-analysis')
   @RequirePermissions('ai:use_student')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }), MalwareScanInterceptor)
   async analyzeReport(
     @UploadedFile() file: UploadedPdfFile | undefined,
     @Body('draftId') draftId: string | undefined,
@@ -123,7 +124,7 @@ export class AiController {
   }
 
   @Post('attachments/text')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }), MalwareScanInterceptor)
   async extractAttachmentText(@UploadedFile() file: UploadedPdfFile | undefined, @CurrentUser() user: AuthenticatedRequestUser) {
     await this.rateLimit.consume('ai-pdf-user', user.id, 10, 10 * 60_000)
     return this.reportDrafts.extractAttachmentText(file)

@@ -8,8 +8,8 @@ test('platform runtime switches to the next configured route after an upstream f
   const modelService = {
     recordPlatformRouteResult: async (id: string | undefined, success: boolean) => { routeResults.push([id, success]) },
     resolvePlatformCandidates: async () => [
-      { apiKey: 'first', baseUrl: 'https://first.example/v1/', model: 'model-a', providerId: 'first', routeId: 'route-a', source: AiModelSource.PLATFORM },
-      { apiKey: 'second', baseUrl: 'https://second.example/v1/', model: 'model-b', providerId: 'second', routeId: 'route-b', source: AiModelSource.PLATFORM },
+      { apiKey: 'first', baseUrl: 'https://1.1.1.1/v1/', model: 'model-a', providerId: 'first', routeId: 'route-a', source: AiModelSource.PLATFORM },
+      { apiKey: 'second', baseUrl: 'https://8.8.8.8/v1/', model: 'model-b', providerId: 'second', routeId: 'route-b', source: AiModelSource.PLATFORM },
     ],
   }
   const runtime = { isCancelled: () => false, register: () => undefined, unregister: () => undefined }
@@ -19,7 +19,7 @@ test('platform runtime switches to the next configured route after an upstream f
   global.fetch = (async (input: string | URL | Request) => {
     const url = String(input)
     requested.push(url)
-    return url.includes('first.example')
+    return url.includes('1.1.1.1')
       ? new Response(JSON.stringify({ error: { message: 'primary failed' } }), { status: 500 })
       : new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 })
   }) as typeof fetch
@@ -34,7 +34,7 @@ test('platform runtime switches to the next configured route after an upstream f
       timeoutMs: 1000,
     })
 
-    assert.deepEqual(requested, ['https://first.example/v1/chat/completions', 'https://second.example/v1/chat/completions'])
+    assert.deepEqual(requested, ['https://1.1.1.1/v1/chat/completions', 'https://8.8.8.8/v1/chat/completions'])
     assert.equal(result.model.model, 'model-b')
     assert.deepEqual(routeResults, [['route-a', false], ['route-b', true]])
   } finally {

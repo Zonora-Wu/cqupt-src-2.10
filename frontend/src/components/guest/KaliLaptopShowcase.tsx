@@ -75,7 +75,7 @@ export function KaliLaptopShowcase() {
   const [lidOpen, setLidOpen] = useState(false)
   const theme = useSceneTheme()
   const sceneActive = useSceneActivity(sceneRef)
-  const performanceProfile = useMemo(getGraphicsPerformanceProfile, [])
+  const performanceProfile = useMemo(() => getGraphicsPerformanceProfile(), [])
 
   useEffect(() => {
     let frame = 0

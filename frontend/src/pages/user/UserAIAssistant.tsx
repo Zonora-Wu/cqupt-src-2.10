@@ -301,6 +301,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
     setInput('')
     onInitialPromptConsumed?.()
     void sendMessage(content)
+  // The consumed prompt ref provides idempotency; rerunning on the recreated send callback is unnecessary.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt])
 
   useEffect(() => {

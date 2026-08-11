@@ -1,6 +1,6 @@
 import { CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { BorderGlow } from '../../components/ui/BorderGlow'
 import { publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
@@ -16,14 +16,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   const [result, setResult] = useState<PublicCertificateVerifyResult | null>(null)
   const [notice, setNotice] = useState<{ message: string; variant: FloatingNoticeVariant } | null>(null)
 
-  useEffect(() => {
-    const normalized = initialCertificateNo.trim()
-    if (!normalized) return
-    setCertificateNo(normalized)
-    void searchCertificate(normalized)
-  }, [initialCertificateNo, queryNonce])
-
-  async function searchCertificate(nextCertificateNo = certificateNo) {
+  const searchCertificate = useCallback(async (nextCertificateNo: string) => {
     const normalized = nextCertificateNo.trim()
     setResult(null)
     setNotice(null)
@@ -46,7 +39,14 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const normalized = initialCertificateNo.trim()
+    if (!normalized) return
+    setCertificateNo(normalized)
+    void searchCertificate(normalized)
+  }, [initialCertificateNo, queryNonce, searchCertificate])
 
   return (
     <main className="relative z-10 flex min-h-[calc(100vh-4rem)] flex-col justify-center px-5 py-24 md:px-8">
@@ -85,7 +85,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
               className="w-full rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] py-3 pl-11 pr-3 font-mono text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-brand-600/60 focus:ring-1 focus:ring-brand-600/40 dark:border-white/10 dark:text-white dark:placeholder:text-slate-600"
               onChange={(event) => setCertificateNo(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void searchCertificate()
+                if (event.key === 'Enter') void searchCertificate(certificateNo)
               }}
               placeholder="CQUPT-SRC-CERT-2026-XXXXXX"
               type="text"
@@ -95,7 +95,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
           <button
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-[0_10px_24px_rgba(var(--app-primary-rgb),0.24)] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
-            onClick={() => void searchCertificate()}
+            onClick={() => void searchCertificate(certificateNo)}
             type="button"
           >
             <FileSearch className="h-4 w-4" />

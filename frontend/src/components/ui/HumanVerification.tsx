@@ -32,7 +32,6 @@ type AltchaEvent = Event & {
 const altchaLogoUrl = '/assets/logos/ALTCHA_logo.png'
 
 export function HumanVerification({
-  compact: _compact = false,
   disabled = false,
   helperText,
   onChange,

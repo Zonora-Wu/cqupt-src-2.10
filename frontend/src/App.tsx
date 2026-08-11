@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { FloatingNotice } from './components/ui/FloatingNotice'
+import { AppErrorBoundary } from './components/ui/AppErrorBoundary'
 import { FullScreenLoader } from './components/ui/FullScreenLoader'
 import { GuestHome } from './pages/guest/GuestHome'
 import { PublicOnly, RequireRole } from './routes/guards'
@@ -145,7 +146,7 @@ function AppShell() {
   }
 
   return (
-    <>
+    <AppErrorBoundary resetKey={location.pathname}>
       <Routes>
         {['/', '/rules', '/announcements', '/certificates', '/about'].map((path) => (
           <Route
@@ -229,7 +230,7 @@ function AppShell() {
         />
       )}
       <FullScreenLoader visible={!isInitialVisualReady || !isAppearanceReady} />
-    </>
+    </AppErrorBoundary>
   )
 
   function handleLogout() {

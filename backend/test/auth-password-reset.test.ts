@@ -49,7 +49,7 @@ test('password reset code uses an isolated purpose', async () => {
   assert.equal(createdCodes[0]?.userId, 'user-1')
 })
 
-test('an unregistered email is rejected before sending a reset code', async () => {
+test('an unregistered email receives a generic response without sending a reset code', async () => {
   let emailSent = false
   const prisma = {
     user: {
@@ -60,14 +60,12 @@ test('an unregistered email is rejected before sending a reset code', async () =
   const email = { sendVerificationCode: async () => { emailSent = true } }
   const service = new AuthService(prisma as never, null as never, humanVerification as never, email as never, null as never)
 
-  await assert.rejects(
-    service.sendPasswordResetCode(
-      'missing@example.com',
-      { payload: 'verified', provider: 'altcha' },
-      { ipAddress: '127.0.0.1' },
-    ),
-    /该邮箱未绑定可用账号/,
+  const result = await service.sendPasswordResetCode(
+    'missing@example.com',
+    { payload: 'verified', provider: 'altcha' },
+    { ipAddress: '127.0.0.1' },
   )
+  assert.equal(result.message, '若该邮箱已绑定可用账号，验证码将发送至该邮箱')
   assert.equal(emailSent, false)
 })
 

@@ -62,6 +62,14 @@ export class SecurityRateLimitService implements OnModuleDestroy, OnModuleInit {
     current.count += 1
   }
 
+  getHealth() {
+    const configured = Boolean(process.env.REDIS_URL?.trim())
+    return {
+      configured,
+      ready: configured ? Boolean(this.client?.isReady) : process.env.NODE_ENV !== 'production',
+    }
+  }
+
   async onModuleDestroy() {
     clearInterval(this.cleanupTimer)
     this.windows.clear()

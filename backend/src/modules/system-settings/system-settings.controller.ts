@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common'
 import { Response } from 'express'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { EmailService } from '../email/email.service'
@@ -62,7 +63,7 @@ export class SystemSettingsController {
 
   @Post('certificate-template/background')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }), MalwareScanInterceptor)
   uploadCertificateTemplateBackground(
     @UploadedFile() file: UploadedSettingsFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,
@@ -73,7 +74,7 @@ export class SystemSettingsController {
 
   @Post('certificate-template/seal')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }), MalwareScanInterceptor)
   uploadCertificateSeal(
     @UploadedFile() file: UploadedSettingsFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,
@@ -153,7 +154,7 @@ export class SystemSettingsController {
 
   @Post('platform/logo')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }), MalwareScanInterceptor)
   uploadSchoolLogo(
     @UploadedFile() file: UploadedSettingsFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,
@@ -164,7 +165,7 @@ export class SystemSettingsController {
 
   @Post('platform/logo/:slot')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }), MalwareScanInterceptor)
   uploadPlatformLogo(
     @Param('slot') slot: string,
     @Query('mode') mode: string | undefined,
@@ -206,7 +207,7 @@ export class SystemSettingsController {
 
   @Post('ai-appearance/avatar')
   @RequirePermissions('system:manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }), MalwareScanInterceptor)
   uploadAiAssistantAvatar(
     @UploadedFile() file: UploadedSettingsFile | undefined,
     @CurrentUser() user: AuthenticatedRequestUser,

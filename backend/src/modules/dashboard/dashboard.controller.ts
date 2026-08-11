@@ -33,8 +33,8 @@ export class DashboardController {
 
   @Get('auditor')
   @RequirePermissions('vulnerability:review')
-  getAuditorDashboard() {
-    return this.dashboard.getAuditorDashboard()
+  getAuditorDashboard(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.dashboard.getAuditorDashboard(user)
   }
 
   @Get('admin')

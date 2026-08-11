@@ -71,6 +71,8 @@ export function UserCertificates() {
     if (!certificate) return
     void previewCertificate(certificate)
     setSearchParams({}, { replace: true })
+  // URL consumption is keyed by route state; previewCertificate intentionally uses current component state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [certificates, searchParams, setSearchParams])
 
   const filteredCertificates = useMemo(() => {

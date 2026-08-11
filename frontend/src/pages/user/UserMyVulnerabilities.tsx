@@ -1,5 +1,5 @@
 import { Check, Copy, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageSection } from '../../components/layout/PageSection'
 import { AlertMessage } from '../../components/ui/AlertMessage'
@@ -65,6 +65,23 @@ export function UserMyVulnerabilities() {
     }
   }
 
+  const openDetail = useCallback(async (item: MyVulnerabilityItem) => {
+    setDetailTarget(item)
+    setDetail(null)
+    setDetailError('')
+    setDetailLoading(true)
+    try {
+      const nextDetail = await getMyVulnerabilityDetail(item.id)
+      setDetail(nextDetail)
+      await markNotificationEntityRead('VulnerabilityReport', item.id)
+      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : '详情加载失败')
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void loadReports()
   }, [])
@@ -76,7 +93,7 @@ export function UserMyVulnerabilities() {
     if (!item) return
     void openDetail(item)
     setSearchParams({}, { replace: true })
-  }, [data, searchParams, setSearchParams])
+  }, [data, openDetail, searchParams, setSearchParams])
 
   const vulnerabilityStats = useMemo(() => {
     const stats = data?.stats ?? { confirmed: 0, needSupplement: 0, pending: 0, total: 0 }
@@ -135,23 +152,6 @@ export function UserMyVulnerabilities() {
     navigate('/user/ai', {
       state: { aiAdviceReportId: item.id },
     })
-  }
-
-  const openDetail = async (item: MyVulnerabilityItem) => {
-    setDetailTarget(item)
-    setDetail(null)
-    setDetailError('')
-    setDetailLoading(true)
-    try {
-      const d = await getMyVulnerabilityDetail(item.id)
-      setDetail(d)
-      await markNotificationEntityRead('VulnerabilityReport', item.id)
-      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
-    } catch (err) {
-      setDetailError(err instanceof Error ? err.message : '详情加载失败')
-    } finally {
-      setDetailLoading(false)
-    }
   }
 
   const closeDetail = () => {

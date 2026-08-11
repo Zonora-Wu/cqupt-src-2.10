@@ -16,7 +16,6 @@ import {
 } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
-import { AiSkillLifecycleService } from './ai-skill-lifecycle.service'
 
 type AiProblemSessionMode = 'student' | 'auditor' | 'admin'
 
@@ -32,7 +31,7 @@ type ResolveProblemSessionInput = {
 
 type ReviewProblemSessionInput = {
   note?: string
-  status: 'APPROVED_TO_KB' | 'SKILL_CANDIDATE' | 'DISCARDED'
+  status: 'APPROVED_TO_KB' | 'DISCARDED'
 }
 
 type TurnFeedbackInput = {
@@ -67,7 +66,7 @@ type ProblemSessionSummary = {
     ruleFlags: string[]
     scoringVersion: string
   }
-  recommendation: 'KB' | 'SKILL' | 'DISCARD'
+  recommendation: 'KB' | 'DISCARD'
   rejectionReason?: string
   similarKnowledgeMatches: Array<{
     id: string
@@ -123,6 +122,7 @@ const AUTO_APPROVAL_THRESHOLDS = {
   maxPrivacyRisk: 0.1,
   minAskCount: 5,
   minQualityScore: 0.72,
+  minDistinctUsers: 2,
   minResolvedSessionCount: 3,
   minReuseScore: 0.82,
   minSafetyScore: 0.9,
@@ -130,10 +130,7 @@ const AUTO_APPROVAL_THRESHOLDS = {
 
 @Injectable()
 export class AiProblemSessionService {
-  constructor(
-    @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(AiSkillLifecycleService) private readonly skillLifecycle: AiSkillLifecycleService,
-  ) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async create(input: CreateProblemSessionInput, user: AuthenticatedRequestUser) {
     const mode = normalizeMode(input.mode)
@@ -194,7 +191,7 @@ export class AiProblemSessionService {
 
   async listReviewQueue(query: { page: number; pageSize: number; status?: AiProblemSessionStatus }) {
     const where: Prisma.AiProblemSessionWhereInput = {
-      status: query.status ?? { in: [AiProblemSessionStatus.READY_REVIEW, AiProblemSessionStatus.RESOLVED, AiProblemSessionStatus.SKILL_CANDIDATE] },
+      status: query.status ?? { in: [AiProblemSessionStatus.READY_REVIEW, AiProblemSessionStatus.RESOLVED] },
     }
     const [total, items] = await Promise.all([
       this.prisma.aiProblemSession.count({ where }),
@@ -320,7 +317,6 @@ export class AiProblemSessionService {
     const summarizableStatuses = new Set<AiProblemSessionStatus>([
       AiProblemSessionStatus.RESOLVED,
       AiProblemSessionStatus.READY_REVIEW,
-      AiProblemSessionStatus.SKILL_CANDIDATE,
     ])
     if (!summarizableStatuses.has(session.status)) {
       throw new BadRequestException('只有用户确认已解决的问题会话可以总结')
@@ -401,22 +397,6 @@ export class AiProblemSessionService {
     if (!fresh) throw new NotFoundException('问题会话不存在')
     const summary = parseProblemSessionSummary(fresh.summaryJson)
 
-    if (input.status === 'SKILL_CANDIDATE') {
-      const skillCandidateReason = getProblemSessionSkillCandidateBlockReason(summary)
-      if (skillCandidateReason) {
-        throw new BadRequestException(`该会话不能晋升为 Skill Candidate：${skillCandidateReason}`)
-      }
-      const marked = await this.prisma.aiProblemSession.update({
-        data: {
-          summaryJson: { ...(summary as object), reviewNote: input.note, reviewedById: reviewerId } as Prisma.InputJsonValue,
-          status: AiProblemSessionStatus.SKILL_CANDIDATE,
-        },
-        include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
-        where: { id },
-      })
-      return serializeProblemSession(marked)
-    }
-
     if (summary.recommendation === 'DISCARD' || summary.rejectionReason) {
       throw new BadRequestException(`该会话不适合沉淀：${summary.rejectionReason ?? '评分不足或复用价值不足'}`)
     }
@@ -431,7 +411,6 @@ export class AiProblemSessionService {
       include: { turns: { orderBy: { createdAt: 'asc' }, take: 100 } },
       where: { id },
     })
-    await this.skillLifecycle.processKnowledge(knowledge.id, 'MANUAL_REVIEW').catch(() => undefined)
     return serializeProblemSession(approved)
   }
 
@@ -563,6 +542,23 @@ export class AiProblemSessionService {
             data: buildKnowledgeFeedbackCounterUpdate(nextValue, 1),
             where: { id: knowledgeId },
           })
+          if (nextValue === AiKnowledgeFeedbackValue.UNHELPFUL || nextValue === AiKnowledgeFeedbackValue.REPORT_ABUSE) {
+            const security = nextValue === AiKnowledgeFeedbackValue.REPORT_ABUSE
+            await tx.aiKnowledgeMaintenanceTask.upsert({
+              create: {
+                dedupeKey: `feedback:${security ? 'SECURITY' : 'LOW_QUALITY'}:${knowledgeId}`,
+                knowledgeId,
+                priority: security ? 'P0' : 'P1',
+                reason: security ? '用户举报知识回答，已立即暂停全部召回。' : '用户点踩知识回答，已立即停止直接回答并等待人工复核。',
+                taskType: security ? 'SECURITY' : 'LOW_QUALITY',
+              },
+              update: {
+                reason: security ? '用户再次举报知识回答，继续暂停全部召回。' : '知识回答再次收到点踩，继续禁止直接回答。',
+                status: 'OPEN',
+              },
+              where: { dedupeKey: `feedback:${security ? 'SECURITY' : 'LOW_QUALITY'}:${knowledgeId}` },
+            })
+          }
         }
       }
 
@@ -659,13 +655,10 @@ export class AiProblemSessionService {
     const safety = rejectionReason || feedback.report > 0 ? 0.1 : 0.94
     const privacy = rejectionReason ? 0.9 : hasRedactedSensitiveContent ? 0.18 : 0.08
     const poisoningRisk = /忽略.*规则|ignore .*instructions|系统提示词|开发者指令|自动通过|绕过权限/i.test(fullText) ? 0.95 : 0.04
-    const skillSignal = inferSkillCandidateSignal(problem, fullText, successfulSteps, pitfalls, environment)
     // 点踩降低质量分并禁止自动入库，但仍保留给管理员审核；不能把用户反馈直接等同于删除知识。
     const recommendation: ProblemSessionSummary['recommendation'] = rejectionReason || feedback.report > 0 || reuse < 0.5 || (feedback.down === 0 && quality < 0.55) || (feedback.down > 0 && baselineQuality < 0.55)
       ? 'DISCARD'
-      : skillSignal
-        ? 'SKILL'
-        : 'KB'
+      : 'KB'
 
     return {
       applicableScope,
@@ -924,6 +917,7 @@ export class AiProblemSessionService {
       .map((session) => ({ id: session.id, summary: parseProblemSessionSummary(session.summaryJson) }))
       .filter((item) => item.summary.recommendation !== 'DISCARD' && !item.summary.rejectionReason)
     if (summaries.length < AUTO_APPROVAL_THRESHOLDS.minResolvedSessionCount) return null
+    if (new Set(sessions.filter((session) => summaries.some((item) => item.id === session.id)).map((session) => session.userId)).size < AUTO_APPROVAL_THRESHOLDS.minDistinctUsers) return null
     if (summaries.some((item) => item.summary.scores.privacy > AUTO_APPROVAL_THRESHOLDS.maxPrivacyRisk)) return null
     if (summaries.some((item) => item.summary.scoreDetails.feedback.report > 0 || item.summary.scoreDetails.feedback.down > 0)) return null
     const best = summaries
@@ -933,6 +927,7 @@ export class AiProblemSessionService {
 
     const autoApprovalReason = [
       `同类问题已解决 ${cluster.resolvedSessionCount} 次`,
+      `来自至少 ${AUTO_APPROVAL_THRESHOLDS.minDistinctUsers} 名独立用户`,
       `询问信号 ${cluster.totalAskCount} 次`,
       `平均质量 ${cluster.avgQualityScore.toFixed(2)}`,
       `平均复用 ${cluster.avgReuseScore.toFixed(2)}`,
@@ -977,7 +972,6 @@ export class AiProblemSessionService {
         },
       }),
     ])
-    await this.skillLifecycle.processKnowledge(knowledge.id, 'AUTO_APPROVAL').catch(() => undefined)
     return knowledge
   }
 
@@ -993,7 +987,7 @@ export class AiProblemSessionService {
         maintenanceStatus: { in: [AiKnowledgeMaintenanceStatus.HEALTHY, AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW, AiKnowledgeMaintenanceStatus.DUPLICATE_REVIEW] },
         retrievalEnabled: true,
         sensitivity: { in: [AiKnowledgeSensitivity.PUBLIC, AiKnowledgeSensitivity.INTERNAL] },
-        status: { in: [AiKnowledgeStatus.APPROVED, AiKnowledgeStatus.AUTO_APPROVED, AiKnowledgeStatus.PROMOTED_TO_SKILL, AiKnowledgeStatus.NEEDS_REVIEW] },
+        status: { in: [AiKnowledgeStatus.APPROVED, AiKnowledgeStatus.AUTO_APPROVED, AiKnowledgeStatus.NEEDS_REVIEW] },
         OR: tokens.slice(0, 8).flatMap((token) => [
           { title: { contains: token, mode: 'insensitive' as const } },
           { canonicalQuestion: { contains: token, mode: 'insensitive' as const } },
@@ -1182,8 +1176,19 @@ function mapTurnRatingToKnowledgeFeedbackValue(rating: TurnFeedbackInput['rating
 
 function buildKnowledgeFeedbackCounterUpdate(value: AiKnowledgeFeedbackValue, delta: 1 | -1): Prisma.AiKnowledgeEntryUpdateInput {
   if (value === AiKnowledgeFeedbackValue.HELPFUL) return { helpfulCount: { increment: delta } }
-  if (value === AiKnowledgeFeedbackValue.UNHELPFUL) return { unhelpfulCount: { increment: delta } }
-  return { abuseReportCount: { increment: delta } }
+  if (value === AiKnowledgeFeedbackValue.UNHELPFUL) return {
+    ...(delta === 1 ? { directAnswerEnabled: false, maintenanceStatus: AiKnowledgeMaintenanceStatus.LOW_QUALITY_REVIEW } : {}),
+    unhelpfulCount: { increment: delta },
+  }
+  return {
+    abuseReportCount: { increment: delta },
+    ...(delta === 1 ? {
+      agentInjectEnabled: false,
+      directAnswerEnabled: false,
+      maintenanceStatus: AiKnowledgeMaintenanceStatus.SECURITY_SUSPENDED,
+      retrievalEnabled: false,
+    } : {}),
+  }
 }
 
 function normalizeMode(mode: AiProblemSessionMode | undefined): AiProblemSessionMode {
@@ -1523,6 +1528,7 @@ function parseProblemSessionSummary(value: Prisma.JsonValue | null): ProblemSess
     throw new BadRequestException('问题会话总结不存在或格式不正确')
   }
   const summary = value as unknown as ProblemSessionSummary
+  if ((summary.recommendation as string) === 'SKILL') summary.recommendation = 'KB'
   if (!summary.problem || !summary.resolution || !summary.scores) {
     throw new BadRequestException('问题会话总结字段不完整')
   }
@@ -1616,36 +1622,6 @@ function getNonReusableProblemReason(problem: string) {
   if (/(我的|我有|当前|账户|账号|个人).{0,12}(积分|余额|商品|兑换|漏洞|证书|公告|排名|状态)|SRC-\d|今天|现在|实时/.test(normalized)) {
     return '实时个人业务数据不进入长期知识库'
   }
-  return undefined
-}
-
-function inferSkillCandidateSignal(
-  problem: string,
-  fullText: string,
-  successfulSteps: string[],
-  pitfalls: string[],
-  environment: string[],
-) {
-  const text = `${problem}\n${fullText}`
-  if (isDirectAnswerOrLookupQuestion(text)) return false
-  const hasWorkflowSignal = /脚本|批量|扫描|收集|自动化|工作流|流程|pipeline|runbook|playbook|checklist|清单|规范|模板|规程|治理|运维|回滚|部署|审计|验收/i.test(text)
-  const hasReusableProcedureShape = successfulSteps.length >= 3 && (pitfalls.length > 0 || environment.length > 0)
-  const hasImplementationDepth = /(新增|封装|抽象|模块|服务|worker|队列|schema|migration|迁移|索引|权限|审计|测试|e2e|回归|脚本)/i.test(text)
-  return hasWorkflowSignal && hasReusableProcedureShape && hasImplementationDepth
-}
-
-function getProblemSessionSkillCandidateBlockReason(summary: ProblemSessionSummary) {
-  if (summary.rejectionReason) return summary.rejectionReason
-  if (summary.recommendation === 'DISCARD') return '该会话已被规则判定为不沉淀'
-  if (summary.recommendation !== 'SKILL') return '普通问答或单次排错只能进入知识库，不能晋升为 Hermes Skill'
-  if (summary.scores.quality < 0.8) return '质量分不足，Skill 需要稳定、完整、可复用的方法论'
-  if (summary.scores.reuse < 0.85) return '复用价值不足，不能作为跨用户方法论'
-  if (summary.scores.safety < 0.9 || summary.scores.privacy > 0.1 || summary.scores.poisoningRisk > 0.1) {
-    return '安全、隐私或投毒风险未达到 Skill 候选门槛'
-  }
-  if (summary.successfulSteps.length < 3) return '缺少足够的可执行步骤'
-  const combined = [summary.problem, summary.resolution, ...summary.successfulSteps, ...summary.pitfalls, ...summary.environment].join('\n')
-  if (isDirectAnswerOrLookupQuestion(combined)) return '下载链接、版本地址、一次性查询或静态答案应沉淀为 KB，不能晋升为 Skill'
   return undefined
 }
 

@@ -110,27 +110,30 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const activeChat = selection?.kind === 'chat'
     ? conversations.find((item) => item.id === selection.id) ?? null
     : null
+  const activeChatId = activeChat?.id ?? ''
   const activeChannel = selection?.kind === 'notification'
     ? channels.find((item) => item.id === selection.id) ?? null
     : null
+  const activeChannelId = activeChannel?.id ?? ''
+  const activeChannelUnread = activeChannel?.messages.filter((message) => message.readAt === null).length ?? 0
 
   useEffect(() => {
-    if (!activeChat) {
+    if (!activeChatId) {
       loadedConversationIdRef.current = ''
       replaceMessages([])
       return
     }
 
-    loadedConversationIdRef.current = activeChat.id
+    loadedConversationIdRef.current = activeChatId
     replaceMessages([])
     let cancelled = false
-    void getChatMessages(activeChat.id)
+    void getChatMessages(activeChatId)
       .then((data) => {
         if (cancelled) return
         replaceMessages(data.messages)
         const latest = data.messages.at(-1)
         if (latest) {
-          void markChatRead(activeChat.id, latest.id)
+          void markChatRead(activeChatId, latest.id)
             .then(() => {
               window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
               return refreshChat()
@@ -140,19 +143,19 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
       })
       .catch((reason) => setError(messageOf(reason)))
     return () => { cancelled = true }
-  }, [activeChat?.id, refreshChat, replaceMessages])
+  }, [activeChatId, refreshChat, replaceMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, selection])
 
   useEffect(() => {
-    if (!activeChat) return
+    if (!activeChatId) return
     const markVisibleMessagesRead = () => {
       if (document.visibilityState !== 'visible') return
       const latest = messages.at(-1)
       if (!latest) return
-      void markChatRead(activeChat.id, latest.id)
+      void markChatRead(activeChatId, latest.id)
         .then(() => {
           window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
           return refreshChat()
@@ -165,21 +168,22 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
       document.removeEventListener('visibilitychange', markVisibleMessagesRead)
       window.removeEventListener('focus', markVisibleMessagesRead)
     }
-  }, [activeChat?.id, messages, refreshChat])
+  }, [activeChatId, messages, refreshChat])
 
   useEffect(() => {
-    if (!activeChannel) return
-    markNotificationSeen(activeChannel.id)
-    void markNotificationChannelRead(activeChannel.id).then(() => {
+    if (!activeChannelId) return
+    markNotificationSeen(activeChannelId)
+    setNotificationReadVersion((current) => current + 1)
+    if (activeChannelUnread === 0) return
+    void markNotificationChannelRead(activeChannelId).then(() => {
       const readAt = new Date().toISOString()
-      setChannels((current) => current.map((channel) => channel.id === activeChannel.id
+      setChannels((current) => current.map((channel) => channel.id === activeChannelId
         ? { ...channel, messages: channel.messages.map((message) => ({ ...message, readAt: message.readAt === null ? readAt : message.readAt })) }
         : channel))
-      setServerNotificationUnread((current) => Math.max(0, current - activeChannel.messages.filter((message) => message.readAt === null).length))
+      setServerNotificationUnread((current) => Math.max(0, current - activeChannelUnread))
       window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
     }).catch(() => {})
-    setNotificationReadVersion((current) => current + 1)
-  }, [activeChannel?.id])
+  }, [activeChannelId, activeChannelUnread])
 
   const onSocket = useCallback((event: string, payload: unknown) => {
     if (event === 'message.created') {
@@ -237,10 +241,9 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
 
   useChatSocket(onSocket)
 
-  const notificationCount = serverNotificationUnread + useMemo(
-    () => getNotificationUnreadCount(channels.filter((channel) => channel.messages.every((message) => message.readAt === undefined))),
-    [channels, notificationReadVersion],
-  )
+  void notificationReadVersion
+  const notificationCount = serverNotificationUnread
+    + getNotificationUnreadCount(channels.filter((channel) => channel.messages.every((message) => message.readAt === undefined)))
   const chatUnread = useMemo(
     () => conversations.reduce((total, item) => total + item.unread, 0),
     [conversations],

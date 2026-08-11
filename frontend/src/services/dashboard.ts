@@ -37,6 +37,24 @@ export type AuditorDashboardStats = {
   pendingCerts: number
   pendingInitReview: number
   pendingRetest: number
+  priorityReports: Array<{
+    assetName: string
+    id: string
+    ownerUnit: string | null
+    reportNo: string
+    severity: string
+    status: string
+    title: string
+    updatedAt: string
+  }>
+  recentActions: Array<{
+    actionLabel: string
+    createdAt: string
+    id: string
+    resultLabel: string
+    summary: string
+    targetLabel: string
+  }>
 }
 
 export type AdminDashboardStats = {

@@ -372,16 +372,18 @@ function ProductDetailModal({
   onRedeem: (product: MallProductItem) => void
   product: MallProductItem | null
 }) {
+  const [lightbox, setLightbox] = useState(false)
+
+  useEffect(() => {
+    if (!product) return
+    document.documentElement.classList.add('auth-modal-open')
+    return () => document.documentElement.classList.remove('auth-modal-open')
+  }, [product])
+
   if (!product) return null
 
   const canExchange = product.stock > 0 && product.canRedeem
   const disabledReason = product.stock <= 0 ? '库存不足' : '积分不足'
-  const [lightbox, setLightbox] = useState(false)
-
-  useEffect(() => {
-    document.documentElement.classList.add('auth-modal-open')
-    return () => document.documentElement.classList.remove('auth-modal-open')
-  }, [])
 
   return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[9998] isolate flex items-center justify-center p-4">

@@ -103,6 +103,50 @@ export class AiRuntimeControlService {
     return run
   }
 
+  async metrics(days = 7) {
+    const normalizedDays = Math.min(Math.max(Math.trunc(days) || 7, 1), 90)
+    const since = new Date(Date.now() - normalizedDays * 86_400_000)
+    const runs = await this.prisma.aiAgentRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      select: {
+        completedAt: true,
+        errorCode: true,
+        inputTokens: true,
+        modelName: true,
+        outputTokens: true,
+        purpose: true,
+        source: true,
+        startedAt: true,
+        status: true,
+      },
+      take: 10_000,
+      where: { startedAt: { gte: since } },
+    })
+    const completed = runs.filter((run) => run.completedAt)
+    const durations = completed
+      .map((run) => Math.max(0, run.completedAt!.getTime() - run.startedAt.getTime()))
+      .sort((a, b) => a - b)
+    const failed = runs.filter((run) => run.status === AiAgentRunStatus.FAILED)
+    const tokens = runs.reduce((total, run) => total + (run.inputTokens ?? 0) + (run.outputTokens ?? 0), 0)
+
+    return {
+      byPurpose: groupRuns(runs, (run) => run.purpose),
+      bySource: groupRuns(runs, (run) => run.source),
+      days: normalizedDays,
+      failureRate: runs.length ? failed.length / runs.length : 0,
+      generatedAt: new Date().toISOString(),
+      p50LatencyMs: percentile(durations, 0.5),
+      p95LatencyMs: percentile(durations, 0.95),
+      running: runs.filter((run) => run.status === AiAgentRunStatus.RUNNING).length,
+      topErrors: Object.entries(countBy(failed, (run) => run.errorCode || 'UNKNOWN'))
+        .map(([code, count]) => ({ code, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5),
+      totalRuns: runs.length,
+      totalTokens: tokens,
+    }
+  }
+
   async cancel(id: string, userId: string) {
     const run = await this.prisma.aiAgentRun.findFirst({ where: { id, userId } })
     if (!run) throw new NotFoundException('AI Run 不存在')
@@ -119,6 +163,32 @@ export class AiRuntimeControlService {
   isCancelled(runId: string) {
     return this.cancelled.has(runId)
   }
+}
+
+function countBy<T>(items: T[], keyOf: (item: T) => string) {
+  return items.reduce<Record<string, number>>((result, item) => {
+    const key = keyOf(item)
+    result[key] = (result[key] ?? 0) + 1
+    return result
+  }, {})
+}
+
+function groupRuns<T extends { inputTokens: number | null; outputTokens: number | null; status: AiAgentRunStatus }>(items: T[], keyOf: (item: T) => string) {
+  const groups = new Map<string, { failed: number; runs: number; tokens: number }>()
+  for (const item of items) {
+    const key = keyOf(item)
+    const current = groups.get(key) ?? { failed: 0, runs: 0, tokens: 0 }
+    current.runs += 1
+    current.tokens += (item.inputTokens ?? 0) + (item.outputTokens ?? 0)
+    if (item.status === AiAgentRunStatus.FAILED) current.failed += 1
+    groups.set(key, current)
+  }
+  return [...groups].map(([key, value]) => ({ key, ...value })).sort((a, b) => b.runs - a.runs)
+}
+
+function percentile(values: number[], ratio: number) {
+  if (!values.length) return 0
+  return values[Math.min(values.length - 1, Math.ceil(values.length * ratio) - 1)]
 }
 
 function envLimit(name: string, fallback: number, hardMax: number) {

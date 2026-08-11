@@ -382,8 +382,8 @@ export class AiToolsService {
     }
   }
 
-  private execGetReviewQueueStats: ToolExecutor = async (_args, _userId, _user) => {
-    const stats = await this.dashboard.getAuditorDashboard()
+  private execGetReviewQueueStats: ToolExecutor = async (_args, _userId, user) => {
+    const stats = await this.dashboard.getAuditorDashboard(user)
     return {
       pendingArchive: stats.pendingArchive,
       pendingCerts: stats.pendingCerts,

@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { MalwareScanInterceptor } from '../../common/security/malware-scan.interceptor'
 import { SecurityRateLimitService } from '../../common/security/security-rate-limit.service'
 import { CurrentUser } from '../auth/auth.decorators'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
@@ -53,7 +54,7 @@ export class AttachmentsController {
   ) {}
 
   @Post('vulnerabilities/:reportId/attachments')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }), MalwareScanInterceptor)
   async uploadVulnerabilityReportPdf(
     @Param('reportId') reportId: string,
     @UploadedFile() file: UploadedPdfFile | undefined,
