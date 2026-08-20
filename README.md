@@ -1,516 +1,333 @@
-# CQUPT-SRC
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./CQUPT/CQUPT_03_logo_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./CQUPT/CQUPT_03_logo.png">
+    <img alt="重庆邮电大学" src="./CQUPT/CQUPT_03_logo.png" width="360">
+  </picture>
+</p>
 
-cd ~/projcets/cqupt-src-test
-./update-all-test.sh             #更新脚本命令
+<h1 align="center">CQUPT-SRC</h1>
+
+<p align="center">
+  校园漏洞响应与安全学习平台
+  <br>
+  连接漏洞提交、审核协同、修复复测、贡献激励与安全知识复用。
+</p>
+
+<p align="center">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white">
+  <img alt="TypeScript 5.9" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white">
+  <img alt="NestJS 11" src="https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white">
+  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="#核心能力">核心能力</a> ·
+  <a href="#平台工作流">平台工作流</a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#系统架构">系统架构</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#项目文档">项目文档</a>
+</p>
+
+![CQUPT-SRC 未登录首页](./docs/assets/screenshots/guest-home.png)
 
 <!-- CQUPT-SRC-DOCS-SYNC:START -->
-> 文档同步状态：2026-06-01 已按当前代码、运行环境和 AI 问题会话 Phase 2 进度更新。当前项目已完成认证/RBAC、漏洞全流程、PDF 附件受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心、安全答题准入、AI Gateway、邮宝前端助手、最小上下文 + dataRequests、AI Knowledge Base 问题会话生命周期、已解决会话总结、AI+规则评分、相似聚类、管理员审核、高频高质自动入库、Skill Candidate 审核与 Hermes Skill 受控安装链路。
->
-> 平台 Hermes 与 CLI Hermes 是两套环境：平台后端调用 `/home/cocking/cqupt-src-hermes-linux/` 的 Docker 容器（`http://localhost:5000/v1/chat/completions`，模型路由为 DeepSeek 系列），当前 CLI 会话使用 `/home/cocking/.hermes/`。前端禁止直连模型，所有 AI 调用必须经过 NestJS AI Gateway。
->
-> 当前仍待实现/验收：Knowledge Retrieval 命中回答、来源标注写回、turn 级点赞/点踩持久化、问题会话 fork/archive/title 接口、maintenanceStatus/retrievalPolicy、维护任务 Worker、不可变 revision 回滚、知识投毒暂停与恢复闭环。
->
-> 关键权威文档：`docs/AI.md`、`docs/AI_KNOWLEDGE_BASE.md`、`docs/AI_SKILLS.md`、`docs/HERMES_RUNTIME.md`、`docs/api/README.md`、`docs/architecture/AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md`、`database/prisma/schema.prisma`。
+> 文档状态：本 README 于 2026-08-20 按当前 `main` 分支的代码、Prisma Schema、环境变量示例和本地运行结果重新整理。历史设计文档可能记录过渡方案；发生冲突时，以当前代码、数据库迁移和接口行为为准。
 <!-- CQUPT-SRC-DOCS-SYNC:END -->
 
-校园漏洞响应与安全学习平台。项目连接学生、审核员、管理员与校园资产责任单位，形成从漏洞提交、审核、修复、复测、归档、证书、积分、学习资源到 AI 辅助的完整闭环。
+## 项目定位
 
-## 当前状态
+CQUPT-SRC 面向校园网络安全治理场景，将学生或白帽用户、审核员和平台管理员连接到同一套可追踪流程中。平台不只接收漏洞报告，还负责提交前安全准入、材料补充、审核与修复协同、复测归档、证书与积分激励、通知触达、学习资源和 AI 辅助。
 
-```text
-已完成：认证/RBAC、漏洞全流程、PDF 附件上传与受控预览、证书、公告、学习资源、积分商城、用户管理、审计日志、账号中心。
-已完成：个人中心头像上传、邮箱修改、密码修改（邮箱验证码）、账号安全日志页。
-已完成：安全答题准入（题库、随机组卷、提交判分、管理员题库接口）。
-已完成：后端 AI Gateway、Context Injection、按角色 Skill 路由、确定性业务响应、邮宝用户端 AI 助手。
-已完成：附件问答与渗透报告草稿解析，明确报告意图才生成可编辑漏洞草稿卡片。
-已完成：AI Knowledge Base 多轮会话沉淀、AI 评分自动流转、相似知识去重、Skill Candidate 审核与受控安装链路。
-已完成：平台 Hermes skills 目录宿主写入权限已按最小权限修正，并通过后端真实 Skill Candidate 安装链路验证。
-```
+平台的目标是让一次校园漏洞报告具备清晰的责任边界、稳定的处理状态、完整的审计记录和可复用的安全知识，同时避免 AI 越权替代人工审核。
 
-## 技术栈
+> 当前仓库处于持续开发阶段。用于生产环境前，必须完成独立安全评审、密钥轮换、邮件与对象存储配置、恶意文件扫描和备份恢复演练。
 
-| 模块 | 技术 |
+## 核心能力
+
+| 能力 | 说明 |
 |---|---|
-            | 前端 | React 19 + TypeScript + Vite 6 + Tailwind CSS 4 + Three.js (@react-three/fiber + drei) |
-| 后端 | NestJS 11 + TypeScript + Express |
-| 数据库 | PostgreSQL + Prisma |
-| 队列/缓存 | Redis（缓存与分布式锁），后端 Worker 使用 NestJS Injectable + setInterval 调度（非 BullMQ） |
-| 认证 | JWT（HS256，access + refresh 双令牌） |
-| 文件存储 | MinIO（PDF 附件受控存储与预览） |
-| PDF 处理 | pdf-lib（PDF 生成/字体嵌入） + pdf-parse（PDF 文本提取，用于附件问答） |
-| AI | NestJS AI Gateway + Hermes Agent OpenAI-compatible API |
-| 平台 Hermes | `/home/cocking/cqupt-src-hermes-linux/` Docker 容器，宿主机 `5000` 端口 |
-| 部署 | Docker Compose + Nginx，目标环境 Ubuntu 服务器 |
-| 开发/测试 | tsx（后端热加载）、ESLint + TypeScript ESLint、自定义 MJS E2E 测试脚本 |
+| 漏洞全生命周期 | 提交、材料补充、审核、责任单位协同、修复、复测、归档和状态追踪形成闭环。 |
+| 安全准入 | 用户提交漏洞前完成网络安全责任书签署与知识答题；题库、通过分数和责任书由管理员维护。 |
+| 报告与附件 | 支持漏洞报告附件上传、受控预览、补充材料和操作留痕；生产环境可接入 ClamAV 扫描。 |
+| 审核工作台 | 审核员集中处理待审、待补充、修复中和待复测报告，并形成审核记录。 |
+| 证书与激励 | 已归档贡献可关联积分与证书；访客可通过公开页面核验证书真伪。 |
+| 学习与社区 | 提供学习资源、积分商城、全校排行榜、平台公告、通知中心和受控即时聊天。 |
+| 邮宝 AI 助手 | 通过后端 AI Gateway 提供平台问答、报告分析、可编辑提交卡片、Skills 和历史会话。 |
+| AI 知识库 | 对已解决且具有复用价值的会话进行脱敏、总结、聚类、审核和检索，命中时标注知识来源。 |
+| 模型配置 | 管理员配置平台模型；用户可在策略允许时配置 OpenAI-compatible 模型供应商与多个凭据。 |
+| 平台治理 | RBAC、用户管理、公告、系统外观、题库、AI 管理、审计日志和运营驾驶舱集中配置。 |
 
-## 核心文档
+## 角色与边界
 
-| 文档 | 内容 |
+| 角色 | 主要能力 | 关键限制 |
+|---|---|---|
+| 用户 | 完成安全准入、提交与跟踪漏洞、补充材料、查看证书和积分、使用学习资源与 AI 助手 | 只能访问自己的敏感业务数据，不能执行审核或平台管理操作 |
+| 审核员 | 审阅报告、要求补充、协同修复与复测、管理证书相关流程、查看审核记录 | AI 只提供辅助建议，审核结论仍由人工确认 |
+| 管理员 | 管理用户、权限、系统设置、题库、公告、积分商城、AI、知识库和审计 | 高风险操作必须经过后端权限校验并写入审计日志 |
+| 访客 | 阅读平台规则与公告、查询证书、进入登录注册流程 | 不可访问内部业务和用户数据 |
+
+## 平台工作流
+
+```mermaid
+flowchart LR
+  A[注册与登录] --> B[签署责任书]
+  B --> C[安全知识答题]
+  C --> D[提交漏洞与附件]
+  D --> E[审核员初审]
+  E -->|材料不足| F[用户补充材料]
+  F --> E
+  E -->|确认有效| G[责任单位修复]
+  G --> H[复测]
+  H -->|未通过| G
+  H -->|通过| I[归档]
+  I --> J[积分与证书]
+```
+
+重要状态变化通过站内通知触达；要求补充、审核驳回、确认有效、归档和证书签发等关键事件可进入邮件通知链路。通知读取状态同时驱动顶部铃铛和对应业务菜单的未读提示。
+
+## 界面预览
+
+以下截图来自本地演示环境，页面中的账号、域名、编号和漏洞内容均为演示数据。
+
+### 用户漏洞工作台
+
+用户可以按编号、标题、资产、状态、等级和提交日期检索自己的报告，并从同一列表查看详情、获取 AI 建议或补充材料。
+
+![用户漏洞工作台](./docs/assets/screenshots/user-vulnerabilities.png)
+
+### 邮宝 AI 助手
+
+AI 助手提供历史会话、模型配置、声明式 Skill、附件分析和结构化回复。平台业务数据由后端按当前用户权限注入，前端不直接持有平台模型密钥。
+
+![邮宝 AI 助手](./docs/assets/screenshots/user-ai-assistant.png)
+
+### 审核员漏洞管理
+
+审核员使用统一队列筛选待审、修复中和待复测报告，并在详情流程中完成判断、补充要求和复测记录。
+
+![审核员漏洞管理](./docs/assets/screenshots/auditor-review.png)
+
+### 管理驾驶舱
+
+管理员首页聚合待审核、高风险漏洞、活跃用户、审计事件和平台分析，面向日常运营而非单纯数据展示。
+
+![管理驾驶舱](./docs/assets/screenshots/admin-dashboard.png)
+
+## AI 能力边界
+
+邮宝不是可以绕过平台权限的通用 Agent。所有平台 AI 请求必须经过 NestJS AI Gateway：
+
+1. 身份、角色和权限以 JWT 与后端 RBAC 为准，模型输出不能改变授权结果。
+2. 积分、库存、漏洞状态和证书状态等实时数据由业务服务查询，知识库不替代实时数据源。
+3. 附件文本在后端提取并按规则脱敏后再进入模型上下文；无法可靠脱敏的字段不发送给模型。
+4. AI 可以生成报告建议和可编辑草稿，但漏洞有效性、风险等级、审核、归档和证书签发由人工或确定性业务规则决定。
+5. 已解决会话只有在具备复用价值时才进入知识沉淀流程；用户来源知识不会自动转换为 Skill。
+6. 模型调用、知识命中、用户反馈和管理操作均保留审计所需的结构化记录。
+
+平台兼容 OpenAI-compatible API。Hermes Agent 可以作为模型与 Agent 网关使用，但前端始终只访问 CQUPT-SRC 后端，不直接连接 Hermes 或第三方模型服务。
+
+## 系统架构
+
+```mermaid
+flowchart TB
+  Browser[React 19 Web App]
+  Proxy[Nginx / Nginx Proxy Manager]
+  API[NestJS 11 API + Socket.IO]
+  DB[(PostgreSQL 16)]
+  Cache[(Redis 7)]
+  Object[(MinIO)]
+  Mail[SMTP]
+  Scan[ClamAV]
+  AI[OpenAI-compatible Provider / Hermes]
+
+  Browser -->|HTTPS / WebSocket| Proxy
+  Proxy -->|REST / Socket.IO| API
+  API --> DB
+  API --> Cache
+  API --> Object
+  API --> Mail
+  API --> Scan
+  API -->|Server-side only| AI
+```
+
+### 技术栈
+
+| 层级 | 主要技术 |
 |---|---|
-| `docs/AI.md` | 邮宝 / AI Gateway 总体架构、角色路由、卡片协议、附件处理、降级策略 |
-| `docs/AI_KNOWLEDGE_BASE.md` | AI 知识沉淀、Skill Candidate、去重、评分、审核与安装链路 |
-| `docs/AI_SKILLS.md` | CQUPT-SRC 平台 Hermes skills 规划、职责边界和当前清单 |
-| `docs/HERMES_RUNTIME.md` | 平台 Hermes 独立容器、目录、模型、skills 同步与权限说明 |
-| `docs/api/README.md` | REST API 汇总，包括认证、AI、知识沉淀、安全答题等接口 |
-| `database/DATABASE_DESIGN.md` | PostgreSQL / Prisma 数据模型设计 |
-| `docs/PROJECT_STRUCTURE.md` | 项目目录结构与入口说明 |
-
-## Hermes Agent 与模型路由
-
-平台用户端 AI 助手名称为“邮宝”。Hermes Agent 是底层 OpenAI-compatible Agent / skills 运行时，不直接作为用户侧品牌名。
-
-```text
-CLI Hermes：/home/cocking/.hermes/
-平台 Hermes：/home/cocking/cqupt-src-hermes-linux/
-平台 API：http://localhost:5000/v1/chat/completions
-平台后端模型名：OPENAI_MODEL=hermes-agent（后端虚拟名）
-平台容器实际模型：由 Hermes config.yaml 路由，目前用于平台/微信回复的模型为 DeepSeek 系列
-```
-
-后端环境变量示例：
-
-```env
-OPENAI_BASE_URL=http://localhost:5000/v1
-OPENAI_API_KEY=API_SERVER_KEY
-OPENAI_MODEL=hermes-agent
-```
-
-若后端也运行在 Docker 容器内，`OPENAI_BASE_URL` 应改为 Docker 网络内服务名：
-
-```env
-OPENAI_BASE_URL=http://hermes-agent:5000/v1
-```
-
-健康检查：
-
-```bash
-curl -s http://localhost:5000/health
-```
+| Web | React 19、TypeScript 5.9、Vite 6、Tailwind CSS 4、Motion、Three.js、React Three Fiber |
+| API | NestJS 11、Express、Socket.IO、Node.js 原生 Fetch |
+| 数据 | PostgreSQL 16、Prisma 6、Redis 7 |
+| 文件 | MinIO、pdf-lib、pdf-parse、可选 ClamAV |
+| 认证与安全 | Access/Refresh JWT、RBAC、ALTCHA、AES-GCM 凭据加密、审计日志 |
+| AI | NestJS AI Gateway、OpenAI-compatible Provider、声明式 Skills、AI Knowledge Base |
+| 工程化 | Docker Compose、Nginx、ESLint、Playwright、自定义 API/E2E 测试 |
 
 ## 项目结构
 
 ```text
-cqupt-src-2.10/
-├── frontend/       # React 前端
-├── backend/        # NestJS 后端
-├── database/       # Prisma schema、数据库设计、seed、迁移
-├── deploy/         # Docker、Nginx、部署脚本
-├── docs/           # API、架构、安全、部署、AI 文档
-├── tests/          # E2E 测试和测试数据
-├── storage/        # 本地上传文件临时目录，不提交真实文件
-├── tmp/            # 临时文件目录，不提交真实文件
-├── start-local.sh / .ps1
-├── stop-local.sh / .ps1
-├── PROJECT_HANDOFF.md
-├── VibeCoding.md
-└── 文档/           # 早期需求与过程记录，已加同步说明
+.
+├── frontend/             # React 单页应用、组件、页面和 Playwright 配置
+├── backend/              # NestJS API、Socket.IO、业务模块与 Prisma Client
+├── database/             # Prisma Schema、迁移、seed 与数据库文档
+├── retest-runner/        # 受约束的复测执行器
+├── retest-egress-proxy/  # 复测出网控制代理
+├── deploy/               # Docker、Nginx、Hermes 与部署脚本
+├── docs/                 # 架构、AI、安全、API、部署和实施文档
+├── tests/                # API、E2E 与测试夹具
+├── CQUPT/                # 平台品牌资源
+├── resource/             # 模板等业务资源
+├── start-local.sh        # Linux / WSL / macOS 本地启动入口
+└── stop-local.sh         # 本地服务停止入口
 ```
 
-完整结构说明见 `docs/PROJECT_STRUCTURE.md`。
+## 快速开始
 
-## 目录结构详解
+### 环境要求
 
-以下基于当前代码实际内容整理。
+- Node.js 22 LTS 或兼容版本
+- npm
+- Docker 与 Docker Compose v2
+- Git、curl、OpenSSL
 
-### `backend/` — NestJS 后端
+### 1. 获取代码
 
-```text
-backend/
-├── package.json                    # 后端依赖：NestJS、Prisma、pdf-lib、pdf-parse 等
-├── tsconfig.json / tsconfig.build.json
-├── main.ts                         # 入口：NestFactory 创建 AppModule，配置 CORS、前缀、端口
-│
-├── src/
-│   ├── app.module.ts               # 根模块，集中注册所有业务模块、配置模块、Prisma 模块
-│   │
-│   ├── config/
-│   │   ├── env.ts                  # 环境变量校验：强制读取 DATABASE_URL、JWT_ACCESS_SECRET、JWT_REFRESH_SECRET 等
-│   │
-│   ├── database/
-│   │   └── seed.ts                 # 数据库种子：初始化角色、权限、演示账号、系统配置等
-│   │
-│   ├── common/
-│   │   ├── crypto/
-│   │   │   ├── jwt.ts              # JWT 工具：HS256 签名/验签、access + refresh 双令牌生成与解析
-│   │   │   └── password.ts         # 密码哈希：bcrypt 比对
-│   │
-│   ├── modules/                    # 业务模块（按领域划分）
-│   │   │
-│   │   ├── auth/                   # 认证模块
-│   │   │   ├── auth.controller.ts   # 登录、注册、刷新令牌、邮箱验证码发送
-│   │   │   ├── auth.service.ts      # 认证逻辑：学校统一码校验、JWT 签发与刷新
-│   │   │   ├── auth.module.ts
-│   │   │   ├── auth.types.ts / auth.validation.ts
-│   │   │   ├── jwt-auth.guard.ts    # JWT 鉴权 Guard
-│   │   │   └── permissions.guard.ts # RBAC 权限 Guard
-│   │   │
-│   │   ├── users/                  # 用户管理模块
-│   │   │   ├── users.controller.ts
-│   │   │   ├── users.service.ts
-│   │   │   ├── users.types.ts / users.validation.ts
-│   │   │
-│   │   ├── rbac/                   # RBAC 权限管理
-│   │   │   ├── permissions.ts       # 权限常量定义
-│   │   │   ├── rbac.service.ts      # 角色-权限映射、用户权限查询
-│   │   │
-│   │   ├── vulnerabilities/        # 漏洞管理模块（核心）
-│   │   │   ├── vulnerabilities.controller.ts
-│   │   │   ├── vulnerabilities.service.ts
-│   │   │   ├── vulnerability.types.ts / vulnerability.validation.ts
-│   │   │   # 支持漏洞提交、草稿、审核、修复、复测、归档全流程
-│   │   │
-│   │   ├── attachments/            # PDF 附件模块
-│   │   │   ├── attachments.controller.ts
-│   │   │   ├── attachments.service.ts
-│   │   │   ├── attachments.types.ts
-│   │   │   # MinIO 上传、受控下载（预签名 URL）、访问审计
-│   │   │
-│   │   ├── certificates/           # 证书模块
-│   │   │   ├── certificates.controller.ts
-│   │   │   ├── certificates.service.ts
-│   │   │   ├── certificate-pdf.generator.ts  # pdf-lib 生成 PDF 证书
-│   │   │   ├── certificate.types.ts / certificate.validation.ts
-│   │   │
-│   │   ├── access/                 # 漏洞详情页访问控制
-│   │   │   ├── access.controller.ts
-│   │   │   ├── access.service.ts
-│   │   │   ├── access.validation.ts
-│   │   │   ├── access.types.ts
-│   │   │
-│   │   ├── audit-logs/             # 审计日志
-│   │   │   ├── audit-logs.controller.ts
-│   │   │   ├── audit-logs.service.ts
-│   │   │   ├── audit-logs.types.ts / audit-logs.validation.ts
-│   │   │   ├── audit-log-mapper.ts   # 日志字段脱敏映射
-│   │   │   └── audit-log-sanitizer.ts
-│   │   │
-│   │   ├── account/                # 账号中心
-│   │   │   ├── account.controller.ts
-│   │   │   ├── account.service.ts
-│   │   │   ├── account.types.ts / account.validation.ts
-│   │   │   # 头像上传、邮箱修改（验证码）、密码修改
-│   │   │
-│   │   ├── notifications/          # 通知模块
-│   │   │   ├── notifications.controller.ts
-│   │   │   ├── notifications.service.ts
-│   │   │
-│   │   ├── announcements/          # 公告模块
-│   │   │   ├── announcements.controller.ts
-│   │   │   ├── announcements.service.ts
-│   │   │   ├── announcement.types.ts / announcement.validation.ts
-│   │   │
-│   │   ├── learning/               # 学习资源模块
-│   │   │   ├── learning.controller.ts
-│   │   │   ├── learning.service.ts
-│   │   │   ├── learning.types.ts / learning.validation.ts
-│   │   │
-│   │   ├── points-mall/            # 积分商城模块
-│   │   │   ├── points-mall.controller.ts
-│   │   │   ├── points-mall.service.ts
-│   │   │   ├── points-mall.types.ts / points-mall.validation.ts
-│   │   │
-│   │   ├── security-exam/          # 安全答题模块
-│   │   │   ├── security-exam.controller.ts
-│   │   │   ├── security-exam.service.ts
-│   │   │   ├── security-exam.types.ts / security-exam.validation.ts
-│   │   │
-│   │   ├── dashboard/              # 仪表盘模块
-│   │   │   ├── dashboard.controller.ts
-│   │   │   ├── dashboard.service.ts
-│   │   │
-│   │   ├── system-settings/        # 系统设置模块
-│   │   │   ├── system-settings.controller.ts
-│   │   │   ├── system-settings.service.ts
-│   │   │   ├── system-settings.types.ts
-│   │   │
-│   │   ├── health/                 # 健康检查
-│   │   │   ├── health.controller.ts
-│   │   │
-│   │   ├── school/                 # 学校策略
-│   │   │   ├── school-policy.service.ts
-│   │   │   ├── school-policy.module.ts
-│   │   │
-│   │   ├── captcha/                # 验证码模块
-│   │   │   ├── captcha.controller.ts
-│   │   │   ├── captcha.service.ts
-│   │   │   ├── captcha.types.ts / captcha.validation.ts
-│   │   │
-│   │   ├── prisma/                 # Prisma 客户端封装
-│   │   │   ├── prisma.module.ts
-│   │   │   └── prisma.service.ts
-│   │   │
-│   │   ├── ai/                     # AI Gateway 模块
-│   │   │   ├── ai.controller.ts          # AI 对话 API 入口（邮宝助手）
-│   │   │   ├── ai.module.ts
-│   │   │   ├── ai.service.ts             # OpenAI-compatible API 调用封装
-│   │   │   ├── ai.prompt.service.ts      # 系统提示词组装
-│   │   │   ├── ai.response.service.ts    # 响应处理与卡片生成
-│   │   │   ├── ai.data-request.service.ts# 最小上下文数据请求（dataRequests JSON 协议）
-│   │   │   ├── ai.tools.service.ts       # AI 工具注册与调用
-│   │   │   ├── ai.tools.registry.ts      # 工具清单注册
-│   │   │   ├── ai.guards.ts              # AI 模块鉴权 Guard
-│   │   │   ├── ai.skill-router.service.ts# 按角色路由 Hermes Skill
-│   │   │   ├── ai.report-draft.service.ts# 渗透报告草稿解析
-│   │   │   ├── ai.types.ts / ai.validation.ts
-│   │   │
-│   │   ├── ai-knowledge/           # AI 知识沉淀模块
-│   │   │   ├── ai-knowledge.controller.ts
-│   │   │   ├── ai-knowledge.service.ts
-│   │   │   ├── ai-knowledge.module.ts
-│   │   │   ├── ai-knowledge.types.ts / ai-knowledge.validation.ts
-│   │   │   ├── ai-knowledge.utils.ts
-│   │   │   ├── ai-knowledge.worker.ts          # setInterval 调度的后台 Worker
-│   │   │   ├── ai-knowledge-maintenance.worker.ts # 维护扫描 Worker
-│   │   │   ├── ai-problem-session.controller.ts
-│   │   │   └── ai-problem-session.service.ts   # 问题会话管理（多轮对话、知识沉淀）
-│   │   │
-│   │   └── integrations/         # 外部集成（见下方）
-│   │
-│   └── integrations/
-│       └── object-storage/
-│           ├── object-storage.module.ts
-│           └── s3-storage.service.ts  # MinIO S3 客户端封装
-│
-└── scripts/
-    ├── prisma-generate.cjs         # Prisma Client 生成脚本（避免误在项目根目录生成）
-    ├── prisma-migrate-dev.cjs      # 开发环境迁移脚本
-    └── prisma-migrate-deploy.cjs   # 生产环境迁移脚本
+```bash
+git clone https://github.com/Zonora-Wu/cqupt-src-2.10.git
+cd cqupt-src-2.10
 ```
 
-**后端模块设计原则**：
+### 2. 创建本地配置
 
-- 每个业务模块自包含 Controller / Service / Module / Types / Validation，职责单一。
-- 认证、权限、审计、脱敏、限流通过 `common/` 和 Guard/Interceptor 实现，不侵入业务逻辑。
-- AI 模块（`ai/`）和知识模块（`ai-knowledge/`）通过 `integrations/` 中的 Hermes Agent 集成，前端不直连模型。
-- Worker 使用 NestJS `OnModuleInit` + `setInterval` 调度，通过 PostgreSQL 行锁实现简单分布式锁（非 BullMQ）。
-
-### `frontend/` — React 前端
-
-```text
-frontend/
-├── package.json                    # 前端依赖：React 19、Vite 6、Tailwind CSS 4、Three.js
-├── vite.config.ts
-├── index.html
-├── tsconfig.json
-│
-├── public/
-├── src/
-│   ├── main.tsx                    # 入口：ReactDOM.createRoot 挂载 App
-│   ├── App.tsx                     # 根组件：路由、主题 Provider、布局
-│   │
-│   ├── components/                 # 公共组件
-│   │   ├── GlobeSceneWrapper.tsx   # 首页粒子地球 3D 场景（Three.js + @react-three/fiber）
-│   │   ├── TypewriterTitle.tsx     # 打字机动画标题
-│   │   ├── NavHeader.tsx           # 导航栏（响应式、暗/亮主题切换）
-│   │   └── ...
-│   │
-│   ├── pages/                      # 页面组件
-│   │   ├── home/page.tsx           # 首页：3D 地球 + 打字机标题 + 底部备案号
-│   │   ├── about/page.tsx          # 关于页
-│   │   ├── blog/                   # 博客列表与详情（Markdown 渲染）
-│   │   ├── projects/               # 项目展示
-│   │   ├── models/                 # 3D 模型展示页（Three.js）
-│   │   ├── gallery/                # 绘画页
-│   │   ├── photography/            # 摄影页
-│   │   ├── contact/page.tsx        # 联系页
-│   │   └── ...
-│   │
-│   ├── hooks/                      # 自定义 Hooks
-│   ├── lib/                        # 工具函数、常量、API 客户端
-│   └── styles/                     # 全局样式、Tailwind 配置
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-### `database/` — 数据库
+至少替换以下后端密钥。四个命令应分别执行，并将结果写入对应变量；Access 与 Refresh 密钥不能相同。
 
-```text
-database/
-├── DATABASE_DESIGN.md              # PostgreSQL / Prisma 数据模型设计文档
-├── prisma/
-│   ├── schema.prisma               # 完整 Prisma Schema（1366 行）
-│   │   # 核心模型：User、Vulnerability、Certificate、AuditLog、SecurityQuestion 等
-│   │   # 枚举：RoleCode、VulnerabilitySeverity、VulnerabilityStatus、AuthorizationLevel 等
-│   ├── migrations/                 # Prisma 迁移文件
-│   └── README.md                   # Prisma 迁移/生成命令说明
-└── seed/
-    ├── README.md                   # 种子数据说明
-    └── ...                         # 初始数据脚本
+```bash
+openssl rand -hex 32       # JWT_ACCESS_SECRET
+openssl rand -hex 32       # JWT_REFRESH_SECRET
+openssl rand -hex 32       # ALTCHA_HMAC_SECRET
+openssl rand -base64 32    # AI_CREDENTIAL_ENCRYPTION_KEY
 ```
 
-### `deploy/` — 部署
+本地开发还应将 `PUBLIC_SITE_URL` 设为 `http://localhost:5173`。未配置模型服务时，非 AI 功能仍可开发；AI 请求会进入明确的不可用或降级状态。
 
-```text
-deploy/
-├── README.md                       # 部署总体说明
-├── docker/
-│   ├── docker-compose.local.yml    # 本地开发环境：PostgreSQL + Redis + MinIO
-│   ├── Dockerfile.backend          # 后端 Docker 镜像构建
-│   ├── Dockerfile.frontend         # 前端 Docker 镜像构建
-│   └── ...
-├── nginx/
-│   └── README.md                   # Nginx 职责说明与配置示例
-└── scripts/
-    └── README.md                   # 脚本迁移说明；本地启动脚本位于项目根目录
-```
-
-### `tests/` — 测试
-
-```text
-tests/
-├── api/
-│   └── core-api-smoke.mjs          # 核心 API 冒烟测试
-├── e2e/
-│   ├── core-e2e.mjs                # 端到端集成测试（安全答题、附件、报告草稿等）
-│   └── ai-problem-session-phase2.mjs # AI 问题会话 Phase 2 E2E 测试
-└── fixtures/                       # 测试数据
-```
-
-### `docs/` — 文档
-
-```text
-docs/
-├── AI.md                           # AI 目标效果、当前进度、部署和接口链路
-├── AI_KNOWLEDGE_BASE.md            # AI 知识沉淀、Skill Candidate、去重、评分、审核与安装链路
-├── AI_SKILLS.md                    # CQUPT-SRC 平台 Hermes skills 规划与清单
-├── HERMES_RUNTIME.md               # 平台 Hermes 容器、目录、模型、skills 同步
-├── PROJECT_STRUCTURE.md            # 本文件：项目目录结构与入口说明
-├── PROJECT_DEEP_DIVE.md            # 深度剖析：代码阅读顺序、面试表述、版本漂移
-├── PROJECT_IMPLEMENTATION_REPORT.md # 实施报告
-├── api/                            # REST API 契约文档
-│   └── README.md                   # API 汇总（认证、AI、知识沉淀、安全答题等）
-├── architecture/                   # 架构设计文档
-│   └── AI_PROBLEM_SESSION_KNOWLEDGE_CAPTURE.md
-├── security/                       # 安全设计文档
-└── deployment/                     # 部署文档
-```
-
-### 根目录其他文件
-
-```text
-├── storage/                      # 本地开发临时存储（不提交真实上传文件）
-├── tmp/                          # 临时文件（不提交真实运行数据）
-├── start-local.sh / .ps1         # 一键启动本地开发环境
-├── stop-local.sh / .ps1          # 停止本地开发环境
-├── CQUPT/                        # Logo 原始资源
-├── 文档/                         # 早期需求与过程记录
-│   └── 总体建议.md               # 总体技术推进建议
-├── PROJECT_HANDOFF.md            # 交接说明
-├── VibeCoding.md                 # 开发流程约束
-└── README.md                     # 本文件
-```
-
-## 本地运行
-
-### 方式一：一键启动（推荐）
-
-Linux / WSL / macOS：
+### 3. 启动平台
 
 ```bash
 bash start-local.sh
 ```
 
-关闭：
+启动脚本会按需安装前后端依赖，启动 PostgreSQL、Redis 和 MinIO，生成 Prisma Client，执行迁移与 seed，然后启动前后端开发服务器。
+
+| 服务 | 地址 |
+|---|---|
+| 前端 | http://localhost:5173 |
+| 后端健康检查 | http://localhost:3001/api/health |
+| MinIO 控制台 | http://localhost:9001 |
+| PostgreSQL | `127.0.0.1:15432` |
+
+本地 seed 演示账号仅用于开发环境：
+
+| 角色 | 统一认证码 | 密码 |
+|---|---|---|
+| 用户 | `2025001` | `123456+-` |
+| 审核员 | `0000001` | `auditor123456+-` |
+| 管理员 | `0000000` | `admin123456+-` |
+
+> 不要在公网环境保留 seed 账号、示例密码或 `.env.example` 中的默认基础设施凭据。
+
+### 4. 停止平台
 
 ```bash
 bash stop-local.sh
 ```
 
-Windows PowerShell：
+启动和停止脚本的运行日志位于 `tmp/logs/`。启动脚本支持跳过 PostgreSQL、Redis、MinIO 或数据库初始化，具体选项见脚本头部说明。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-local.ps1
-```
+## 关键配置
 
-Windows 关闭：
+| 变量 | 用途 | 生产要求 |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL 连接 | 使用独立账号、强密码和受限网络 |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | 签发访问与刷新令牌 | 至少 32 字节、互不相同、禁止提交仓库 |
+| `ALTCHA_HMAC_SECRET` | 签发与校验人机验证挑战 | 使用独立随机密钥 |
+| `REDIS_URL` | 缓存、锁与实时功能辅助 | 仅内网访问并配置持久化策略 |
+| `MINIO_*` | 漏洞附件与证书对象存储 | 独立凭据、私有 Bucket、备份与生命周期策略 |
+| `SMTP_*` | 验证码和重要业务邮件 | 使用专用发信账号并检查送达率 |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | 加密数据库中的模型 API Key | 32 字节 Base64 或 64 位十六进制值，必须备份且限制读取 |
+| `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `OPENAI_MODEL` | 平台默认 AI 模型 | 只在后端配置，不得暴露到 `VITE_*` |
+| `MALWARE_SCAN_*` / `CLAMAV_*` | 上传文件恶意内容扫描 | 生产环境建议强制启用并采用失败关闭策略 |
+| `FRONTEND_ORIGIN` / `PUBLIC_SITE_URL` | CORS 与公开站点来源绑定 | 设置为实际 HTTPS 域名 |
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\stop-local.ps1
-```
+完整字段和开发默认值见 [`backend/.env.example`](./backend/.env.example) 与 [`frontend/.env.example`](./frontend/.env.example)。生产部署步骤见 [`docs/deployment/README.md`](./docs/deployment/README.md)。
 
-启动后访问：
+## 开发与验证
 
-| 服务 | 地址 |
-|---|---|
-| 前端页面 | http://localhost:5173 |
-| 后端 API 健康检查 | http://localhost:3001/api/health |
-| 平台 Hermes Gateway | http://localhost:5000/health |
-| MinIO 控制台 | http://localhost:9001 |
-
-可选参数：
-
-```bash
-bash start-local.sh --skip-postgres --skip-minio --skip-redis --skip-db-init
-bash stop-local.sh --keep-postgres --keep-minio --keep-redis
-```
-
-### 方式二：手动分步启动
+前后端是两个独立的 npm 工程。
 
 ```bash
-# 1. 基础服务
-cd /home/cocking/projects/cqupt-src-2.10
-docker compose -f deploy/docker/docker-compose.local.yml up -d
-
-# 2. 数据库迁移与种子
-cd backend
-npm run prisma:migrate:dev
-npm run db:seed
-
-# 3. 后端
-npm run dev
-
-# 4. 前端（另开终端）
-cd ../frontend
-npm run dev
-```
-
-## 验证命令
-
-```bash
-# 后端
-cd backend
-npm run build
-npm run prisma:validate
-
 # 前端
-cd ../frontend
-npm run build
+cd frontend
 npm run lint
+npm run build
+npm run test:performance-budget
+npm run test:e2e
 
-# 健康检查
-curl -s http://localhost:3001/api/health
-curl -s http://localhost:5000/health
+# 后端
+cd ../backend
+npm run typecheck
+npm run build
+npm run test:security
+npm run test:chat
+npm run test:ai-knowledge
 ```
 
-## 演示账号
+部分 API/E2E 测试要求本地数据库、对象存储和后端服务已启动。可按变更范围继续运行：
 
-```text
-学生：2025001@stu.cqupt.edu.cn  /  123456+-
-审核员：0000001@cqupt.edu.cn       /  auditor123456+-
-管理员：0000000@cqupt.edu.cn       /  admin123456+-
-邮箱/修改密码验证码：123456（开发环境固定值）
+```bash
+cd backend
+npm run test:core-api
+npm run test:core-e2e
+npm run test:ai-problem-session
 ```
 
-## 数据库模型要点
+数据库变更必须通过 Prisma 迁移交付：
 
-- 用户只允许校内注册，访客不入库。
-- 用户只能绑定一个角色：学生、审核员、管理员。
-- 授权等级：`BASIC / TRUSTED / STAFF`。
-- 漏洞支持草稿，提交后不可撤回；一个漏洞只分配一个审核员；一个漏洞最多一张证书。
-- 附件只允许 PDF，单文件 10MB，访问必须鉴权并写审计日志。
-- 安全答题准入使用 `SecurityQuestion` 与 `SecurityExamAttempt`。
-- AI 知识沉淀使用 `AiProblemSession`、`AiProblemSessionTurn`、`AiKnowledgeCluster`、`AiKnowledgeEntry`、`AiKnowledgeConversation`、`AiKnowledgeConversationTurn` 与 Skill Candidate 状态字段。
-- AI 原始对话不作为长期知识直接复用；先按问题会话保存脱敏 turns，用户确认解决后再生成脱敏、泛化、审核后的知识条目或候选 Skill。
+```bash
+cd backend
+npm run prisma:validate
+npm run prisma:generate
+npm run prisma:migrate:deploy
+```
 
-## 安全原则
+## 项目文档
 
-- 不提交 `.env`、真实密钥、真实漏洞附件。
-- 前端校验只做体验，后端必须重新校验所有字段。
-- AI 调用必须经过后端代理、脱敏、限流、审计和角色边界控制。
-- 模型输出不可信，业务 ID、库存、积分、权限、状态必须由后端查库确认。
-- 写操作必须走 Action Proposal / 用户确认 / 后端事务 / AuditLog。
-- 审核结论、知识沉淀、Skill 晋升必须保留人工审核与安全兜底。
+| 文档 | 内容 |
+|---|---|
+| [`docs/PROJECT_STRUCTURE.md`](./docs/PROJECT_STRUCTURE.md) | 仓库结构与主要入口 |
+| [`docs/TECH_STACK.md`](./docs/TECH_STACK.md) | 技术栈与工程约束 |
+| [`docs/api/README.md`](./docs/api/README.md) | REST API 与接口分组 |
+| [`database/DATABASE_DESIGN.md`](./database/DATABASE_DESIGN.md) | 数据库模型和业务关系 |
+| [`docs/AI.md`](./docs/AI.md) | AI Gateway、上下文、权限和降级策略 |
+| [`docs/AI_KNOWLEDGE_BASE.md`](./docs/AI_KNOWLEDGE_BASE.md) | 知识沉淀、检索、审核和维护 |
+| [`docs/AI_SKILLS.md`](./docs/AI_SKILLS.md) | 系统 Skill 与用户声明式 Skill 设计 |
+| [`docs/HERMES_RUNTIME.md`](./docs/HERMES_RUNTIME.md) | Hermes 兼容运行时与运维说明 |
+| [`docs/security/README.md`](./docs/security/README.md) | 安全控制、密钥和上线检查 |
+| [`docs/deployment/README.md`](./docs/deployment/README.md) | Ubuntu、Nginx 与生产部署说明 |
 
-## 近期待处理
+## 安全说明
 
-1. 生产部署时复核 `/home/cocking/cqupt-src-hermes-linux/platform-skills/cqupt-src` 是否保持 `cocking:cocking` 与 `775`，且 Docker Compose 是否把它挂载到容器 `/opt/data/skills/cqupt-src`；后端 `CQUPT_HERMES_SKILLS_ROOT` 应指向该宿主目录。
-2. 在生产数据规模下继续观察 AI 知识沉淀去重效果、评分阈值和审核工作量。
-3. 生产部署后复跑 `cd backend && npm run test:core-e2e` 与 `npm run test:ai-problem-session`，确认安全答题、附件、报告草稿、知识沉淀、问题会话和 Skill 安装链路在服务器拓扑下仍通过。
+- 不要提交 `.env`、模型 API Key、JWT 密钥、SMTP 凭据、真实漏洞附件或数据库备份。
+- 上传文件、AI 上下文、聊天记录和审计导出都可能包含敏感信息，应遵循最小权限和最短保留原则。
+- 公开截图、Issue 和日志必须先移除姓名、统一认证码、邮箱、真实资产、漏洞细节、令牌和请求头。
+- 发现安全问题时，不要在公开 Issue 中披露利用细节；请通过项目维护方指定的私密渠道报告。当前公开安全联系地址未确认。
+
+## 许可
+
+仓库根目录当前未提供统一的开源许可证。外部使用、修改和分发权限因此未确认；在补充明确许可证前，请勿默认本项目可以被自由复制或商用。`backend/src/modules/ai/runtime-derived/` 下的第三方衍生代码应分别遵循其目录内许可证。
