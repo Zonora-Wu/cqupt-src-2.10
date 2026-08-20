@@ -71,20 +71,9 @@ CQUPT-SRC 面向校园网络安全治理场景，将学生或白帽用户、审�
 
 ## 平台工作流
 
-```mermaid
-flowchart LR
-  A[注册与登录] --> B[签署责任书]
-  B --> C[安全知识答题]
-  C --> D[提交漏洞与附件]
-  D --> E[审核员初审]
-  E -->|材料不足| F[用户补充材料]
-  F --> E
-  E -->|确认有效| G[责任单位修复]
-  G --> H[复测]
-  H -->|未通过| G
-  H -->|通过| I[归档]
-  I --> J[积分与证书]
-```
+![CQUPT-SRC 平台工作流](./docs/assets/diagrams/platform-workflow.svg)
+
+[查看可编辑 FigureSpec 源文件](./docs/assets/diagrams/specs/platform-workflow.json)
 
 重要状态变化通过站内通知触达；要求补充、审核驳回、确认有效、归档和证书签发等关键事件可进入邮件通知链路。通知读取状态同时驱动顶部铃铛和对应业务菜单的未读提示。
 
@@ -131,27 +120,9 @@ AI 助手提供历史会话、模型配置、声明式 Skill、附件分析和�
 
 ## 系统架构
 
-```mermaid
-flowchart TB
-  Browser[React 19 Web App]
-  Proxy[Nginx / Nginx Proxy Manager]
-  API[NestJS 11 API + Socket.IO]
-  DB[(PostgreSQL 16)]
-  Cache[(Redis 7)]
-  Object[(MinIO)]
-  Mail[SMTP]
-  Scan[ClamAV]
-  AI[OpenAI-compatible Provider / Hermes]
+![CQUPT-SRC 系统架构](./docs/assets/diagrams/system-architecture.svg)
 
-  Browser -->|HTTPS / WebSocket| Proxy
-  Proxy -->|REST / Socket.IO| API
-  API --> DB
-  API --> Cache
-  API --> Object
-  API --> Mail
-  API --> Scan
-  API -->|Server-side only| AI
-```
+[查看可编辑 FigureSpec 源文件](./docs/assets/diagrams/specs/system-architecture.json)
 
 ### 技术栈
 

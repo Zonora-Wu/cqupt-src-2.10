@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 820" width="1600" height="820" font-family="Smiley Sans, Microsoft YaHei, PingFang SC, Arial, sans-serif">
+  <rect width="1600" height="820" fill="#FFFFFF"/>
+  <defs>
+    <marker id="arrow-default" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#555555"/>
+    </marker>
+    <marker id="arrow-c0" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#2A6438"/>
+    </marker>
+    <marker id="arrow-c1" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#64748B"/>
+    </marker>
+    <marker id="arrow-c2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#D97706"/>
+    </marker>
+    <marker id="arrow-c3" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-c4" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#0284C7"/>
+    </marker>
+    <marker id="arrow-c5" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 8 4, 0 8" fill="#059669"/>
+    </marker>
+  </defs>
+  <path d="M 210.0,270.0 L 265.0,270.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 435.0,270.0 L 490.0,270.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 670.0,270.0 L 720.0,270.0" stroke="#64748B" stroke-width="2.5" fill="none" marker-end="url(#arrow-c1)"/>
+  <rect x="671.5" y="252.0" width="47.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="695.0" y="264.0" font-size="13" fill="#777777" text-anchor="middle">待审核</text>
+  <path d="M 900.0,270.0 L 965.0,270.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 1095.0,270.0 L 1150.0,270.0" stroke="#059669" stroke-width="2.5" fill="none" marker-end="url(#arrow-c5)"/>
+  <rect x="1092.5" y="252.0" width="60.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="1122.5" y="264.0" font-size="13" fill="#777777" text-anchor="middle">确认有效</text>
+  <path d="M 1330.0,270.0 L 1380.0,270.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 1030.0,217.0 L 1030.0,153.0" stroke="#DC2626" stroke-width="2.2" fill="none" marker-end="url(#arrow-c3)"/>
+  <rect x="1006.5" y="167.0" width="47.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="1030.0" y="179.0" font-size="13" fill="#777777" text-anchor="middle">不成立</text>
+  <path d="M 1030.0,323.0 L 1030.0,385.0" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#arrow-c2)"/>
+  <rect x="1000.0" y="336.0" width="60.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="1030.0" y="348.0" font-size="13" fill="#777777" text-anchor="middle">材料不足</text>
+  <path d="M 940.0,420.0 L 900.0,420.0" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#arrow-c2)"/>
+  <path d="M 810.0,385.0 L 810.0,309.0" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#arrow-c2)"/>
+  <rect x="780.0" y="329.0" width="60.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="810.0" y="341.0" font-size="13" fill="#777777" text-anchor="middle">重新提交</text>
+  <path d="M 350.0,153.0 L 350.0,231.0" stroke="#0284C7" stroke-width="1.8" fill="none" marker-end="url(#arrow-c4)" stroke-dasharray="8,4"/>
+  <rect x="287.5" y="174.0" width="125.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="350.0" y="186.0" font-size="13" fill="#777777" text-anchor="middle">仅辅助，不参与审核</text>
+  <path d="M 1470.0,309.0 L 1470.0,522.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 1380.0,560.0 L 1305.0,560.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 1175.0,560.0 L 1110.0,560.0" stroke="#059669" stroke-width="2.5" fill="none" marker-end="url(#arrow-c5)"/>
+  <rect x="1125.5" y="542.0" width="34.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="1142.5" y="554.0" font-size="13" fill="#777777" text-anchor="middle">通过</text>
+  <path d="M 930.0,560.0 L 880.0,560.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 700.0,560.0 L 645.0,560.0" stroke="#2A6438" stroke-width="2.5" fill="none" marker-end="url(#arrow-c0)"/>
+  <path d="M 1240.0,612.0 L 1240.0,667.0" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#arrow-c2)"/>
+  <rect x="1216.5" y="621.5" width="47.0" height="16" fill="#FFFFFF" rx="3" opacity="0.85"/>
+  <text x="1240.0" y="633.5" font-size="13" fill="#777777" text-anchor="middle">未通过</text>
+  <rect x="255.0" y="87.0" width="190.0" height="66.0" fill="#F0F9FF" stroke="#0284C7" stroke-width="2" rx="8"/>
+  <text x="350.0" y="116.6" font-size="16" fill="#075985" text-anchor="middle" font-weight="bold">邮宝 AI 辅助</text>
+  <text x="350.0" y="134.6" font-size="13" fill="#888888" text-anchor="middle">解析报告 · 完善建议</text>
+  <rect x="940.0" y="87.0" width="180.0" height="66.0" fill="#FEF2F2" stroke="#DC2626" stroke-width="2" rx="8"/>
+  <text x="1030.0" y="116.6" font-size="16" fill="#991B1B" text-anchor="middle" font-weight="bold">审核驳回</text>
+  <text x="1030.0" y="134.6" font-size="13" fill="#888888" text-anchor="middle">保留结论与审计记录</text>
+  <rect x="30.0" y="231.0" width="180.0" height="78.0" fill="#EEF7F0" stroke="#2A6438" stroke-width="2" rx="8"/>
+  <text x="120.0" y="266.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">安全准入</text>
+  <text x="120.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">邮箱 · 资料 · 责任书 · 答题</text>
+  <rect x="265.0" y="231.0" width="170.0" height="78.0" fill="#EEF7F0" stroke="#2A6438" stroke-width="2" rx="8"/>
+  <text x="350.0" y="266.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">提交漏洞</text>
+  <text x="350.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">报告 · 证据附件</text>
+  <rect x="490.0" y="231.0" width="180.0" height="78.0" fill="#F8FAFC" stroke="#64748B" stroke-width="2" rx="8"/>
+  <text x="580.0" y="266.6" font-size="16" fill="#334155" text-anchor="middle" font-weight="bold">平台受理</text>
+  <text x="580.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">完整性校验 · 编号 · 入队</text>
+  <rect x="720.0" y="231.0" width="180.0" height="78.0" fill="#EEF7F0" stroke="#2A6438" stroke-width="2" rx="8"/>
+  <text x="810.0" y="266.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">人工初审</text>
+  <text x="810.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">有效性 · 定级 · 责任单位</text>
+  <polygon points="1030.0,217.0 1095.0,270.0 1030.0,323.0 965.0,270.0" fill="#FFFFFF" stroke="#2A6438" stroke-width="2"/>
+  <text x="1030.0" y="266.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">审核</text>
+  <text x="1030.0" y="284.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">结论</text>
+  <rect x="1150.0" y="231.0" width="180.0" height="78.0" fill="#ECFDF5" stroke="#059669" stroke-width="2" rx="8"/>
+  <text x="1240.0" y="266.6" font-size="16" fill="#065F46" text-anchor="middle" font-weight="bold">确认有效</text>
+  <text x="1240.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">记录等级与积分</text>
+  <rect x="1380.0" y="231.0" width="180.0" height="78.0" fill="#F8FAFC" stroke="#64748B" stroke-width="2" rx="8"/>
+  <text x="1470.0" y="266.6" font-size="16" fill="#334155" text-anchor="middle" font-weight="bold">修复协同</text>
+  <text x="1470.0" y="284.6" font-size="13" fill="#888888" text-anchor="middle">责任单位定位并修复</text>
+  <rect x="940.0" y="385.0" width="180.0" height="70.0" fill="#FFFBEB" stroke="#D97706" stroke-width="2" rx="8"/>
+  <text x="1030.0" y="416.6" font-size="16" fill="#92400E" text-anchor="middle" font-weight="bold">要求补充</text>
+  <text x="1030.0" y="434.6" font-size="13" fill="#888888" text-anchor="middle">说明缺失材料</text>
+  <rect x="720.0" y="385.0" width="180.0" height="70.0" fill="#FFFBEB" stroke="#D97706" stroke-width="2" rx="8"/>
+  <text x="810.0" y="416.6" font-size="16" fill="#92400E" text-anchor="middle" font-weight="bold">补充材料</text>
+  <text x="810.0" y="434.6" font-size="13" fill="#888888" text-anchor="middle">用户追加说明与附件</text>
+  <rect x="1380.0" y="522.0" width="180.0" height="76.0" fill="#EEF7F0" stroke="#2A6438" stroke-width="2" rx="8"/>
+  <text x="1470.0" y="556.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">人工复测</text>
+  <text x="1470.0" y="574.6" font-size="13" fill="#888888" text-anchor="middle">审核员 / 管理员</text>
+  <polygon points="1240.0,508.0 1305.0,560.0 1240.0,612.0 1175.0,560.0" fill="#FFFFFF" stroke="#2A6438" stroke-width="2"/>
+  <text x="1240.0" y="556.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">复测</text>
+  <text x="1240.0" y="574.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">结论</text>
+  <rect x="930.0" y="522.0" width="180.0" height="76.0" fill="#EEF7F0" stroke="#2A6438" stroke-width="2" rx="8"/>
+  <text x="1020.0" y="556.6" font-size="16" fill="#23532F" text-anchor="middle" font-weight="bold">漏洞归档</text>
+  <text x="1020.0" y="574.6" font-size="13" fill="#888888" text-anchor="middle">完整保留处置记录</text>
+  <rect x="700.0" y="522.0" width="180.0" height="76.0" fill="#F0F9FF" stroke="#0284C7" stroke-width="2" rx="8"/>
+  <text x="790.0" y="556.6" font-size="16" fill="#075985" text-anchor="middle" font-weight="bold">证书签发</text>
+  <text x="790.0" y="574.6" font-size="13" fill="#888888" text-anchor="middle">支持公开核验</text>
+  <rect x="455.0" y="522.0" width="190.0" height="76.0" fill="#ECFDF5" stroke="#059669" stroke-width="2" rx="8"/>
+  <text x="550.0" y="556.6" font-size="16" fill="#065F46" text-anchor="middle" font-weight="bold">可验证贡献</text>
+  <text x="550.0" y="574.6" font-size="13" fill="#888888" text-anchor="middle">积分 · 证书 · 个人记录</text>
+  <rect x="1140.0" y="667.0" width="200.0" height="66.0" fill="#FFFBEB" stroke="#D97706" stroke-width="2" rx="8"/>
+  <text x="1240.0" y="696.6" font-size="16" fill="#92400E" text-anchor="middle" font-weight="bold">退回修复</text>
+  <text x="1240.0" y="714.6" font-size="13" fill="#888888" text-anchor="middle">修复后重新发起复测</text>
+  <rect x="65.0" y="767.0" width="1450.0" height="46.0" fill="#F8FAFC" stroke="#DDE5DE" stroke-width="2" rx="8"/>
+  <text x="790.0" y="794.9" font-size="14" fill="#334155" text-anchor="middle" font-weight="bold">贯穿全流程：权限控制 · 站内通知 / 关键邮件 · 操作审计 · 敏感信息保护</text>
+  <text x="800.0" y="38.0" font-size="28" fill="#111827" text-anchor="middle">CQUPT-SRC 平台工作流</text>
+  <text x="800.0" y="66.0" font-size="15" fill="#64748B" text-anchor="middle">安全准入、漏洞提交、人工审核、修复复测、归档与贡献确认</text>
+  <text x="580.0" y="210.0" font-size="14" fill="#64748B" text-anchor="middle">提交与审核</text>
+  <text x="1360.0" y="500.0" font-size="14" fill="#64748B" text-anchor="middle">修复与复测</text>
+  <text x="790.0" y="500.0" font-size="14" fill="#64748B" text-anchor="middle">归档与成果</text>
+</svg>
