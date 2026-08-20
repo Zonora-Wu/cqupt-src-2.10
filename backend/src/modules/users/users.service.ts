@@ -1,6 +1,14 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { AuditAction, PointDirection, Prisma, RoleCode, UserStatus } from '@prisma/client'
 import { randomBytes } from 'node:crypto'
+import {
+  getActiveTokenLimit,
+  getNextQuotaPeriodStart,
+  getQuotaPeriodStart,
+  normalizeQuotaPeriod,
+  normalizeStoredTokenLimit,
+  type AiQuotaPeriod,
+} from '../../common/ai-quota-period'
 import { hashPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -19,7 +27,6 @@ const AI_DEFAULT_DAILY_TOKENS_KEY = 'ai_default_daily_tokens'
 const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
-type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 @Injectable()
 export class UsersService {
@@ -402,7 +409,7 @@ export class UsersService {
           _sum: { tokensUsed: true },
           by: ['userId'],
           where: {
-            createdAt: { gte: getPeriodStart(quotaPeriod) },
+            createdAt: { gte: getQuotaPeriodStart(quotaPeriod) },
             userId: { in: userIds },
           },
         })
@@ -414,7 +421,7 @@ export class UsersService {
       defaultMonthlyTokens: normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS),
       defaultWeeklyTokens: normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
       quotaPeriod,
-      resetAt: getNextPeriodStart(quotaPeriod),
+      resetAt: getNextQuotaPeriodStart(quotaPeriod),
       usageByUser,
     }
   }
@@ -594,7 +601,7 @@ function summarizeAiQuota(user: ManagedUser, quotaContext: QuotaContext) {
   const dailyLimit = user.aiQuota?.dailyLimit ?? user.aiQuota?.monthlyLimit ?? quotaContext.defaultDailyTokens
   const weeklyLimit = user.aiQuota?.weeklyLimit ?? user.aiQuota?.monthlyLimit ?? quotaContext.defaultWeeklyTokens
   const monthlyLimit = user.aiQuota?.monthlyLimit ?? quotaContext.defaultMonthlyTokens
-  const activeLimit = getActiveLimit({ daily: dailyLimit, monthly: monthlyLimit, weekly: weeklyLimit }, quotaContext.quotaPeriod)
+  const activeLimit = getActiveTokenLimit({ daily: dailyLimit, monthly: monthlyLimit, weekly: weeklyLimit }, quotaContext.quotaPeriod)
   const usedThisPeriod = quotaContext.usageByUser.get(user.id) ?? 0
   return {
     activeLimit,
@@ -644,62 +651,4 @@ function formatUserStatus(status: UserStatus) {
   }
 
   return map[status]
-}
-
-function getActiveLimit(limits: { daily: number; monthly: number; weekly: number }, period: AiQuotaPeriod) {
-  if (period === 'DAY') return limits.daily
-  if (period === 'WEEK') return limits.weekly
-  return limits.monthly
-}
-
-function getPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getDayStart()
-  if (period === 'WEEK') return getWeekStart()
-  return getMonthStart()
-}
-
-function getNextPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getNextDayStart()
-  if (period === 'WEEK') return getNextWeekStart()
-  return getNextMonthStart()
-}
-
-function getDayStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
-function getNextDayStart() {
-  const start = getDayStart()
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
-}
-
-function getWeekStart() {
-  const now = new Date()
-  const day = now.getDay() || 7
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1)
-}
-
-function getNextWeekStart() {
-  const start = getWeekStart()
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-}
-
-function getMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1)
-}
-
-function getNextMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
-}
-
-function normalizeStoredTokenLimit(value: unknown, fallback: number) {
-  const numberValue = Number(value)
-  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
-}
-
-function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
-  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }

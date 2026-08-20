@@ -85,7 +85,6 @@ src/components/ui/SurfacePanel.tsx
 src/components/ui/PageHeader.tsx
 src/components/ui/SearchInput.tsx
 src/components/ui/SelectInput.tsx
-src/components/ui/SlideVerify.tsx
 ```
 
 ## 注意事项

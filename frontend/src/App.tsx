@@ -11,6 +11,7 @@ import { clearSavedSession, getCurrentUser, getSavedSession, logout, type AuthUs
 import { getPublicPlatformAppearance } from './services/systemSettings'
 import { applyBrandTheme } from './utils/brandTheme'
 import { applyPlatformBranding } from './utils/platformBranding'
+import { applyPlatformFont } from './utils/platformFont'
 
 const AdminHome = lazy(() =>
   import('./pages/admin/AdminHome').then((module) => ({ default: module.AdminHome })),
@@ -83,10 +84,12 @@ function AppShell() {
         const appearance = await getPublicPlatformAppearance()
         if (active) {
           applyBrandTheme(appearance.themeColor, appearance.themePalette)
-          applyPlatformBranding(appearance)
+          await applyPlatformFont(appearance)
+          if (active) applyPlatformBranding(appearance)
         }
       } catch {
         applyBrandTheme('#2A6438')
+        await applyPlatformFont()
         applyPlatformBranding()
       } finally {
         if (active) setIsAppearanceReady(true)

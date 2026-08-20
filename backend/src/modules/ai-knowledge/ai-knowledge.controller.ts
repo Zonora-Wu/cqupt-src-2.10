@@ -56,6 +56,18 @@ export class AiKnowledgeController {
     return this.knowledge.getStats()
   }
 
+  @Get('management-unread')
+  @RequirePermissions('ai:manage_skills')
+  managementUnread(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.knowledge.getManagementUnread(user.id)
+  }
+
+  @Post('management-viewed')
+  @RequirePermissions('ai:manage_skills')
+  managementViewed(@Body() body: Record<string, unknown>, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.knowledge.markManagementViewed(user.id, body.viewedThrough)
+  }
+
 
   @Post()
   @RequirePermissions('ai:manage_skills')

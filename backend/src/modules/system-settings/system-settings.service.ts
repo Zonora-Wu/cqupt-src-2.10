@@ -8,6 +8,7 @@ import { AuditAction, UserStatus } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
+import { getNextQuotaPeriodStart, normalizeQuotaPeriod, normalizeStoredTokenLimit } from '../../common/ai-quota-period'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { generateCertificatePdf } from '../certificates/certificate-pdf.generator'
@@ -18,7 +19,15 @@ const MAX_TEMPLATE_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_SEAL_SIZE_BYTES = 5 * 1024 * 1024
 const MAX_AI_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
 const MAX_SCHOOL_LOGO_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_PLATFORM_FONT_SIZE_BYTES = 5 * 1024 * 1024
 const DEFAULT_THEME_COLOR = '#2A6438'
+const DEFAULT_PLATFORM_FONT = { displayName: '平台默认', family: '"Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif' }
+const PLATFORM_FONT_PRESETS: Record<string, { displayName: string; family: string }> = {
+  default: DEFAULT_PLATFORM_FONT,
+  sans: { displayName: '系统中文无衬线', family: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif' },
+  serif: { displayName: '系统中文衬线', family: '"Songti SC", SimSun, "Noto Serif CJK SC", serif' },
+  mono: { displayName: '系统等宽', family: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace' },
+}
 const BRAND_PALETTE_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'] as const
 const BRAND_PALETTE_SLOTS = ['lightBg', 'lightSurface', 'lightMuted', 'lightBorder', 'lightText', 'darkBg', 'darkSurface', 'darkMuted', 'darkBorder', 'darkText', 'primary'] as const
 const BRAND_PALETTE_KEYS = [...BRAND_PALETTE_SLOTS, ...BRAND_PALETTE_SHADES] as const
@@ -537,6 +546,7 @@ export class SystemSettingsService {
       'auth_logo_url',
       'auth_logo_url_dark',
       'favicon_url',
+      'platform_font',
       'theme_color',
       'theme_palette',
     ]
@@ -544,11 +554,16 @@ export class SystemSettingsService {
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
     const themePalette = normalizeThemePalette(map['theme_palette'])
     const themeColor = typeof map['theme_color'] === 'string' && isHexColor(map['theme_color']) ? map['theme_color'].toUpperCase() : DEFAULT_THEME_COLOR
+    const font = normalizePlatformFontSetting(map['platform_font'])
     const legacyLogoUrl = typeof map['school_logo_url'] === 'string' ? map['school_logo_url'] : null
     return {
       authLogoUrl: typeof map['auth_logo_url'] === 'string' ? map['auth_logo_url'] : legacyLogoUrl,
       authLogoUrlDark: typeof map['auth_logo_url_dark'] === 'string' ? map['auth_logo_url_dark'] : null,
       faviconUrl: typeof map['favicon_url'] === 'string' ? map['favicon_url'] : legacyLogoUrl,
+      fontDisplayName: font.displayName,
+      fontFamily: font.family,
+      fontSource: font.source,
+      fontUrl: font.source === 'CUSTOM' ? `/public/platform/font?v=${font.sha256}` : null,
       logoUrl: legacyLogoUrl,
       navigationLogoUrl: typeof map['navigation_logo_url'] === 'string' ? map['navigation_logo_url'] : legacyLogoUrl,
       navigationLogoUrlDark: typeof map['navigation_logo_url_dark'] === 'string' ? map['navigation_logo_url_dark'] : null,
@@ -560,6 +575,39 @@ export class SystemSettingsService {
       themeColor: typeof themePalette.primary === 'string' ? themePalette.primary : typeof themePalette['600'] === 'string' ? themePalette['600'] : themeColor,
       themePalette,
     }
+  }
+
+  async uploadPlatformFont(file: UploadedSettingsFile | undefined, user: AuthenticatedRequestUser, meta: ClientRequestMeta): Promise<PlatformSettings> {
+    const validated = validatePlatformFontFile(file)
+    const sha256 = createHash('sha256').update(validated.buffer).digest('hex')
+    const storageKey = `platform-fonts/${sha256}.${validated.extension}`
+    const displayName = sanitizeFontDisplayName(validated.originalname)
+    await this.storage.putObject({ body: validated.buffer, contentType: validated.mimeType, key: storageKey })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.upsert({
+        where: { key: 'platform_font' },
+        update: { value: { displayName, family: 'CQUPT Custom Font', mimeType: validated.mimeType, sha256, source: 'CUSTOM', storageKey }, updatedById: user.id },
+        create: { key: 'platform_font', value: { displayName, family: 'CQUPT Custom Font', mimeType: validated.mimeType, sha256, source: 'CUSTOM', storageKey }, description: '平台全局字体', updatedById: user.id },
+      })
+      await tx.auditLog.create({ data: { action: AuditAction.CHANGE_SYSTEM_SETTING, actorId: user.id, ipAddress: meta.ipAddress, metadata: { displayName, mimeType: validated.mimeType, sha256, size: validated.buffer.length }, requestPath: meta.requestPath, result: 'success', targetType: 'SystemSetting', userAgent: meta.userAgent } })
+    })
+    return this.getPlatformSettings()
+  }
+
+  async getPlatformFontFile() {
+    const row = await this.prisma.systemSetting.findUnique({ where: { key: 'platform_font' } })
+    const font = normalizePlatformFontSetting(row?.value)
+    if (font.source !== 'CUSTOM' || !font.storageKey || !font.mimeType) throw new NotFoundException('未配置自定义字体')
+    const object = await this.storage.getObject(font.storageKey)
+    return { body: object.body, contentType: font.mimeType, sha256: font.sha256 }
+  }
+
+  async resetPlatformFont(user: AuthenticatedRequestUser, meta: ClientRequestMeta) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.deleteMany({ where: { key: 'platform_font' } })
+      await tx.auditLog.create({ data: { action: AuditAction.CHANGE_SYSTEM_SETTING, actorId: user.id, ipAddress: meta.ipAddress, metadata: { key: 'platform_font', resetToDefault: true }, requestPath: meta.requestPath, result: 'success', targetType: 'SystemSetting', userAgent: meta.userAgent } })
+    })
+    return this.getPlatformSettings()
   }
 
   async uploadSchoolLogo(
@@ -733,7 +781,7 @@ export class SystemSettingsService {
       defaultMonthlyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS),
       defaultWeeklyTokens: normalizeStoredTokenLimit(map[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS),
       quotaPeriod,
-      resetAt: getNextPeriodStart(quotaPeriod),
+      resetAt: getNextQuotaPeriodStart(quotaPeriod),
     }
   }
 
@@ -789,7 +837,7 @@ export class SystemSettingsService {
       })
     })
 
-    return { defaultDailyTokens, defaultMonthlyTokens, defaultWeeklyTokens, quotaPeriod, resetAt: getNextPeriodStart(quotaPeriod) }
+    return { defaultDailyTokens, defaultMonthlyTokens, defaultWeeklyTokens, quotaPeriod, resetAt: getNextQuotaPeriodStart(quotaPeriod) }
   }
 
   async getAiKnowledgeUsagePolicySettings(): Promise<AiKnowledgeUsagePolicySettings> {
@@ -862,7 +910,7 @@ export class SystemSettingsService {
     user: AuthenticatedRequestUser,
     meta: ClientRequestMeta,
   ): Promise<PlatformSettings> {
-    const { platformName, schoolName, orgName, platformDomain, publicCertVerify, themeColor, themePalette } = body
+    const { fontFamily, fontDisplayName, fontSource, platformName, schoolName, orgName, platformDomain, publicCertVerify, themeColor, themePalette } = body
 
     if (platformName !== undefined && (typeof platformName !== 'string' || platformName.trim().length === 0 || platformName.length > 100)) {
       throw new BadRequestException('平台名称不能为空且不超过 100 个字符')
@@ -888,6 +936,12 @@ export class SystemSettingsService {
 
     type UpsertEntry = { key: string; value: import('@prisma/client').Prisma.InputJsonValue; description: string }
     const updates: UpsertEntry[] = []
+    if (fontSource !== undefined || fontFamily !== undefined) {
+      if (fontSource !== 'PRESET') throw new BadRequestException('自定义字体请使用字体上传接口')
+      const preset = Object.values(PLATFORM_FONT_PRESETS).find((item) => item.family === fontFamily)
+      if (!preset) throw new BadRequestException('请选择有效的内置字体')
+      updates.push({ key: 'platform_font', value: { displayName: fontDisplayName === preset.displayName ? fontDisplayName : preset.displayName, family: preset.family, source: 'PRESET' }, description: '平台全局字体' })
+    }
     if (platformName !== undefined) updates.push({ key: 'platform_name', value: platformName.trim(), description: '平台名称' })
     if (schoolName !== undefined) updates.push({ key: 'school_name', value: schoolName.trim(), description: '学校名称' })
     if (orgName !== undefined) updates.push({ key: 'org_name', value: orgName.trim(), description: '主管单位' })
@@ -1019,6 +1073,35 @@ function validateImageFile(file: UploadedSettingsFile | undefined, maxBytes: num
   return validated
 }
 
+function validatePlatformFontFile(file: UploadedSettingsFile | undefined) {
+  if (!file?.buffer?.length || !file.originalname) throw new BadRequestException('请选择字体文件')
+  if (file.buffer.length > MAX_PLATFORM_FONT_SIZE_BYTES) throw new BadRequestException('字体文件不能超过 5MB')
+  const extension = extname(file.originalname).slice(1).toLowerCase()
+  const formats: Record<string, { mimeType: string; valid: (buffer: Buffer) => boolean }> = {
+    otf: { mimeType: 'font/otf', valid: (buffer) => buffer.subarray(0, 4).toString('ascii') === 'OTTO' },
+    ttf: { mimeType: 'font/ttf', valid: (buffer) => buffer.subarray(0, 4).equals(Buffer.from([0, 1, 0, 0])) || buffer.subarray(0, 4).toString('ascii') === 'true' },
+    woff: { mimeType: 'font/woff', valid: (buffer) => buffer.subarray(0, 4).toString('ascii') === 'wOFF' },
+    woff2: { mimeType: 'font/woff2', valid: (buffer) => buffer.subarray(0, 4).toString('ascii') === 'wOF2' },
+  }
+  const format = formats[extension]
+  if (!format || !format.valid(file.buffer)) throw new BadRequestException('仅支持有效的 WOFF2、WOFF、TTF 或 OTF 字体文件')
+  return { buffer: file.buffer, extension, mimeType: format.mimeType, originalname: file.originalname }
+}
+
+function sanitizeFontDisplayName(originalName: string) {
+  const value = originalName.replace(/\.[^.]+$/, '').replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, 80)
+  return value || '自定义字体'
+}
+
+function normalizePlatformFontSetting(value: unknown): { displayName: string; family: string; mimeType?: string; sha256?: string; source: 'CUSTOM' | 'PRESET'; storageKey?: string } {
+  if (!isRecord(value)) return { ...DEFAULT_PLATFORM_FONT, source: 'PRESET' }
+  if (value.source === 'CUSTOM' && typeof value.storageKey === 'string' && typeof value.sha256 === 'string' && typeof value.mimeType === 'string') {
+    return { displayName: typeof value.displayName === 'string' ? value.displayName : '自定义字体', family: 'CQUPT Custom Font', mimeType: value.mimeType, sha256: value.sha256, source: 'CUSTOM', storageKey: value.storageKey }
+  }
+  const preset = Object.values(PLATFORM_FONT_PRESETS).find((item) => item.family === value.family) ?? DEFAULT_PLATFORM_FONT
+  return { ...preset, source: 'PRESET' }
+}
+
 function isHexColor(value: string) {
   return /^#[0-9A-Fa-f]{6}$/.test(value.trim())
 }
@@ -1147,43 +1230,6 @@ function optionalNumber(value: unknown, min: number, max: number) {
 function validateQuotaPeriod(value: unknown): AiQuotaSettings['quotaPeriod'] {
   if (value === 'DAY' || value === 'WEEK' || value === 'MONTH') return value
   throw new BadRequestException('AI token 重置周期必须是 DAY、WEEK 或 MONTH')
-}
-
-function normalizeStoredTokenLimit(value: unknown, fallback: number) {
-  const numberValue = Number(value)
-  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
-}
-
-function normalizeQuotaPeriod(value: unknown): AiQuotaSettings['quotaPeriod'] {
-  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
-}
-
-function getNextPeriodStart(period: AiQuotaSettings['quotaPeriod']) {
-  if (period === 'DAY') return getNextDayStart()
-  if (period === 'WEEK') return getNextWeekStart()
-  return getNextMonthStart()
-}
-
-function getNextDayStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-}
-
-function getWeekStart() {
-  const now = new Date()
-  const day = now.getDay()
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
-}
-
-function getNextWeekStart() {
-  const start = getWeekStart()
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-}
-
-function getNextMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
 }
 
 function hasPdfMagicBytes(buffer: Buffer) {

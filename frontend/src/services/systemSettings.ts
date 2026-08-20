@@ -17,6 +17,10 @@ export type PlatformSettings = {
   authLogoUrl: string | null
   authLogoUrlDark: string | null
   faviconUrl: string | null
+  fontDisplayName: string
+  fontFamily: string
+  fontSource: 'CUSTOM' | 'PRESET'
+  fontUrl: string | null
   logoUrl: string | null
   navigationLogoUrl: string | null
   navigationLogoUrlDark: string | null
@@ -228,6 +232,16 @@ export async function uploadPlatformLogo(slot: PlatformLogoSlot, file: File, mod
 
 export async function resetPlatformLogo(slot: PlatformLogoSlot, mode: PlatformLogoMode = 'light') {
   return request<PlatformSettings>(`/system-settings/platform/logo/${slot}?mode=${mode}`, { method: 'DELETE' })
+}
+
+export async function uploadPlatformFont(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return requestForm<PlatformSettings>('/system-settings/platform/font', formData)
+}
+
+export async function resetPlatformFont() {
+  return request<PlatformSettings>('/system-settings/platform/font', { method: 'DELETE' })
 }
 
 export async function getAiAssistantAppearance() {

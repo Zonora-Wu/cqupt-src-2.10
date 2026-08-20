@@ -299,6 +299,14 @@ export function getAiKnowledgeStats() {
   return apiRequest<AiKnowledgeStats>('/ai/knowledge/stats', { auth: true, method: 'GET' })
 }
 
+export function getAiManagementUnread() {
+  return apiRequest<{ knowledge: number; sessions: number; skillReviews: number; total: number; viewedThrough: string }>('/ai/knowledge/management-unread', { auth: true, method: 'GET' })
+}
+
+export function markAiManagementViewed(viewedThrough: string) {
+  return apiRequest<{ viewedAt: string }>('/ai/knowledge/management-viewed', { auth: true, body: { viewedThrough }, method: 'POST' })
+}
+
 export function listAiKnowledge(params: { page?: number; pageSize?: number; status?: AiKnowledgeStatus; category?: AiKnowledgeCategory; roleScope?: AiKnowledgeRoleScope; keyword?: string } = {}) {
   const search = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {

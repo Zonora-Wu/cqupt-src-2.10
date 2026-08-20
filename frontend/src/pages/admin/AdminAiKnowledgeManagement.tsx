@@ -10,7 +10,9 @@ import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
   createAiKnowledgeRevision,
   dismissAiKnowledgeMaintenanceTask,
+  getAiManagementUnread,
   getAiKnowledgeStats,
+  markAiManagementViewed,
   listAiKnowledge,
   listAiKnowledgeMaintenanceTasks,
   listAiKnowledgeRevisions,
@@ -41,7 +43,7 @@ const statusLabel: Record<string, string> = {
 const categoryOptions = ['VULNERABILITY_REPORTING', 'XSS', 'SQL_INJECTION', 'SSRF', 'FILE_UPLOAD', 'ACCESS_CONTROL', 'AUTHENTICATION', 'SECURITY_LEARNING', 'SRC_RULES', 'PLATFORM_USAGE', 'AUDITOR_REVIEW', 'ADMIN_ANALYTICS']
 const inputClass = 'w-full rounded-lg border border-black/10 bg-[var(--app-panel-bg)] px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-600 dark:border-white/10 dark:text-slate-100'
 
-export function AdminAiKnowledgeManagement() {
+export function AdminAiKnowledgeManagement({ onViewed }: { onViewed?: () => void }) {
   const [workspace, setWorkspace] = useState<Workspace>('KNOWLEDGE')
   const [tab, setTab] = useState<KnowledgeTab>('REVIEW')
   const [entries, setEntries] = useState<AiKnowledgeEntry[]>([])
@@ -57,17 +59,20 @@ export function AdminAiKnowledgeManagement() {
     setLoading(true)
     try {
       const status: AiKnowledgeStatus | undefined = tab === 'AUTO_APPROVED' ? 'AUTO_APPROVED' : undefined
-      const [nextStats, knowledge, reviewQueue, maintenance] = await Promise.all([
+      const [nextStats, knowledge, reviewQueue, maintenance, unread] = await Promise.all([
         getAiKnowledgeStats(),
         listAiKnowledge({ page: 1, pageSize: 50, status }),
         listAiProblemSessionsForReview({ page: 1, pageSize: 30 }),
         listAiKnowledgeMaintenanceTasks({ page: 1, pageSize: 50, status: 'OPEN' }),
+        getAiManagementUnread(),
       ])
       setStats(nextStats); setEntries(knowledge.items); setSessions(reviewQueue.items); setTasks(maintenance.items)
+      await markAiManagementViewed(unread.viewedThrough)
+      onViewed?.()
     } catch (error) {
       setNotice({ error: true, message: error instanceof Error ? error.message : 'AI 知识数据加载失败' })
     } finally { setLoading(false) }
-  }, [tab])
+  }, [onViewed, tab])
 
   useEffect(() => { void load() }, [load])
 

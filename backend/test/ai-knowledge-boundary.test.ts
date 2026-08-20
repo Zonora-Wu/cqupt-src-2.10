@@ -32,6 +32,38 @@ test('abuse report suspends every knowledge route and opens security maintenance
   assert.equal(observed.task.priority, 'P0')
 })
 
+test('AI management unread combines knowledge, sessions, and skill reviews', async () => {
+  const whereClauses: unknown[] = []
+  const prisma = {
+    user: { findUniqueOrThrow: async () => ({ aiManagementViewedAt: null }) },
+    aiKnowledgeEntry: { count: async ({ where }: { where: unknown }) => { whereClauses.push(where); return 2 } },
+    aiProblemSession: { count: async ({ where }: { where: unknown }) => { whereClauses.push(where); return 3 } },
+    aiSkillReview: { count: async ({ where }: { where: unknown }) => { whereClauses.push(where); return 4 } },
+  }
+  const result = await new AiKnowledgeService(prisma as never).getManagementUnread('admin-1')
+
+  assert.equal(result.total, 9)
+  assert.equal(result.knowledge, 2)
+  assert.equal(result.sessions, 3)
+  assert.equal(result.skillReviews, 4)
+  assert.equal(whereClauses.every((where) => !('updatedAt' in (where as Record<string, unknown>)) && !('submittedAt' in (where as Record<string, unknown>))), true)
+})
+
+test('AI management viewed cursor only moves forward', async () => {
+  let updateArgs: Record<string, unknown> | undefined
+  const prisma = {
+    user: { updateMany: async (args: Record<string, unknown>) => { updateArgs = args; return { count: 1 } } },
+  }
+  const viewedThrough = '2025-08-11T08:00:00.000Z'
+  const result = await new AiKnowledgeService(prisma as never).markManagementViewed('admin-1', viewedThrough)
+
+  assert.equal(result.viewedAt, viewedThrough)
+  assert.deepEqual(updateArgs?.where, {
+    id: 'admin-1',
+    OR: [{ aiManagementViewedAt: null }, { aiManagementViewedAt: { lt: new Date(viewedThrough) } }],
+  })
+})
+
 async function runFeedback(value: AiKnowledgeFeedbackValue) {
   const observed: { task: Record<string, unknown>; update: Record<string, unknown> } = { task: {}, update: {} }
   const entry = {

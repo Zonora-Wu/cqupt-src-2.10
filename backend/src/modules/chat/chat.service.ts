@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { AuditAction, ChatConversationStatus, ChatConversationType, ChatMemberRole, Prisma, RoleCode, UserStatus } from '@prisma/client'
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { SecurityRateLimitService } from '../../common/security/security-rate-limit.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
-import { ChatRateLimitService } from './chat-rate-limit.service'
 import { ChatRealtimePublisher } from './chat-realtime.publisher'
 
 const MAX_GROUP_MEMBERS = 200
@@ -18,7 +18,7 @@ export class ChatService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ChatRealtimePublisher) private readonly realtime: ChatRealtimePublisher,
-    @Inject(ChatRateLimitService) private readonly rateLimit: ChatRateLimitService,
+    @Inject(SecurityRateLimitService) private readonly rateLimit: SecurityRateLimitService,
   ) {}
 
   async bootstrap(user: AuthenticatedRequestUser) {
@@ -50,8 +50,8 @@ export class ChatService {
   }
 
   async searchContact(unifiedCode: string, user: AuthenticatedRequestUser, ipAddress?: string) {
-    await this.rateLimit.consume(`chat-search:user:${user.id}`, 10, 60_000)
-    if (ipAddress) await this.rateLimit.consume(`chat-search:ip:${ipAddress}`, 30, 60_000)
+    await this.rateLimit.consume('chat', `chat-search:user:${user.id}`, 10, 60_000)
+    if (ipAddress) await this.rateLimit.consume('chat', `chat-search:ip:${ipAddress}`, 30, 60_000)
     const normalized = unifiedCode.trim()
     if (!/^[A-Za-z0-9]{4,64}$/.test(normalized)) throw new NotFoundException('未找到可聊天用户')
     const target = await this.prisma.user.findFirst({
@@ -168,8 +168,8 @@ export class ChatService {
         await this.audit(tx, user, AuditAction.CHAT_MESSAGE_BLOCKED, 'ChatConversation', id, 'blocked', meta, { contentHash: sha256(input.content), sensitiveWordId: sensitive.id })
         return { blocked: true as const, message: null }
       }
-      await this.rateLimit.consume(`chat-send:short:${user.id}`, 10, 10_000)
-      await this.rateLimit.consume(`chat-send:minute:${user.id}`, 60, 60_000)
+      await this.rateLimit.consume('chat', `chat-send:short:${user.id}`, 10, 10_000)
+      await this.rateLimit.consume('chat', `chat-send:minute:${user.id}`, 60, 60_000)
       await this.consumeStrangerQuota(tx, conversation, user)
       const message = await tx.chatMessage.create({ data: { conversationId: id, senderId: user.id, clientMessageId: input.clientMessageId, content: input.content }, include: { sender: { include: { role: true } } } })
       await tx.chatConversation.update({ where: { id }, data: { updatedAt: new Date() } })

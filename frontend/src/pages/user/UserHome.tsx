@@ -5,24 +5,19 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileSignature,
-  Moon,
   RefreshCw,
-  Sun,
   X,
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
-import { BrandLogo } from '../../components/layout/BrandLogo'
-import { ScrollableNav } from '../../components/navigation/ScrollableNav'
-import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
+import { WorkspaceHeader } from '../../components/layout/WorkspaceHeader'
 import { CompleteProfileModal } from '../../components/profile/CompleteProfileModal'
 import { ResponsibilityAgreementDialog } from '../../components/security/ResponsibilityAgreementDialog'
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
-import { NotificationBell } from '../../components/ui/NotificationPanel'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { type AuthUser } from '../../services/auth'
@@ -322,38 +317,22 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
 
   return (
     <AppBackground className={preferences.compactMode ? 'user-compact-mode' : ''}>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
-        <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
-          <div className="flex min-w-0 items-center gap-4">
-            <BrandLogo />
-          </div>
-
-          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={menuItems} onChange={openMenu} />
-
-          <div className="flex items-center justify-end gap-2">
-            <NotificationBell notificationUnreadCount={notificationUnread.bell} onClick={() => navigate('/user/notifications')} />
-            <button
-              aria-label="切换主题"
-              className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={(event) => changeThemeMode(theme === 'dark' ? 'light' : 'dark', event)}
-              type="button"
-            >
-              {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </button>
-            <UserAvatarMenu
-              avatarUrl={navAvatarUrl}
-              name={user.name}
-              onAccountSecurity={() => navigate('/user/account-security')}
-              onLogout={onLogout}
-              onProfile={() => navigate('/user/profile')}
-              onSystemSettings={() => navigate('/user/settings')}
-            />
-          </div>
-        </div>
-        <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={menuItems} mobile onChange={openMenu} />
-        </div>
-      </header>
+      <WorkspaceHeader
+        activeItem={activeMenu}
+        avatarUrl={navAvatarUrl}
+        badges={navBadges}
+        items={menuItems}
+        name={user.name}
+        notificationUnreadCount={notificationUnread.bell}
+        onAccountSecurity={() => navigate('/user/account-security')}
+        onItemChange={openMenu}
+        onLogout={onLogout}
+        onNotificationClick={() => navigate('/user/notifications')}
+        onProfile={() => navigate('/user/profile')}
+        onSystemSettings={() => navigate('/user/settings')}
+        onThemeChange={changeThemeMode}
+        theme={theme}
+      />
 
       {activeMenu !== '首页' ? (
         <Suspense fallback={<FullScreenLoader label="正在加载页面" />}>

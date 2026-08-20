@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SecurityRateLimitService } from '../src/common/security/security-rate-limit.service'
-import { ChatRateLimitService } from '../src/modules/chat/chat-rate-limit.service'
 import { getUnreadBaseline, isMessageCursorAfter } from '../src/modules/chat/chat.service'
 import { normalizeChatText, normalizeGroupBody, normalizeMessageBody } from '../src/modules/chat/chat.validation'
 
@@ -25,11 +24,10 @@ test('caps normal group members before creator is added', () => {
 
 test('enforces message rate window', async () => {
   const securityLimiter = new SecurityRateLimitService()
-  const limiter = new ChatRateLimitService(securityLimiter)
-  await limiter.consume('sender', 3, 60_000)
-  await limiter.consume('sender', 3, 60_000)
-  await limiter.consume('sender', 3, 60_000)
-  await assert.rejects(limiter.consume('sender', 3, 60_000), /操作过于频繁/)
+  await securityLimiter.consume('chat', 'sender', 3, 60_000)
+  await securityLimiter.consume('chat', 'sender', 3, 60_000)
+  await securityLimiter.consume('chat', 'sender', 3, 60_000)
+  await assert.rejects(securityLimiter.consume('chat', 'sender', 3, 60_000), /操作过于频繁/)
   await securityLimiter.onModuleDestroy()
 })
 

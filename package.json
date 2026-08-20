@@ -1,7 +1,4 @@
 {
-  "name": "cqupt-src",
-  "private": true,
-  "description": "CQUPT 校级漏洞响应与安全学习平台",
   "devDependencies": {
     "prisma": "^6.19.3"
   },

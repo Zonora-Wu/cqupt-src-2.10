@@ -13,7 +13,7 @@ import {
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
-import { PlatformHumanVerification } from '../security/PlatformHumanVerification'
+import { HumanVerification } from '../ui/HumanVerification'
 import {
   isValidEmail,
   isValidUnifiedCode,
@@ -289,7 +289,7 @@ export function RegisterModal({ onClose, onRegisterSuccess, onSwitchToLogin }: R
               <Input icon={<LockKeyhole />} onChange={(value) => updateField('passwordConfirm', value)} placeholder="确认密码" required type="password" value={form.passwordConfirm} />
 
               {!emailCodeIsCurrent && (
-                <PlatformHumanVerification
+                <HumanVerification
                   onChange={setEmailHumanPayload}
                   onError={setError}
                   purpose="REGISTER_EMAIL_CODE"

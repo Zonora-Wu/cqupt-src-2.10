@@ -28,7 +28,7 @@
 }
 
 @theme {
-  --font-sans: "Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-sans: var(--platform-font-family, "Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif);
   --font-mono: "Space Grotesk", "JetBrains Mono", ui-monospace, monospace;
 
   --color-brand-50: #eef7f0;
@@ -488,7 +488,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100%;
-  font-family: "Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--platform-font-family, "Smiley Sans", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif);
   background: var(--app-bg);
 }
 

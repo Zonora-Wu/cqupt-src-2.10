@@ -31,7 +31,7 @@ export function ScrollableNav({
       }}
     >
       <div
-        className="max-w-full overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative z-10 max-w-full overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         ref={scrollRef}
       >
         <div className={mobile ? 'flex w-max gap-2' : 'flex w-max items-center justify-center gap-7 px-1'}>
@@ -55,7 +55,7 @@ export function ScrollableNav({
               <span className="relative inline-flex items-center">
                 {item}
                 {(badges[item] ?? 0) > 0 && (
-                  <span aria-label={`${item}有未读通知`} className="absolute -right-2 -top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+                  <span aria-label={`${item}有未读通知`} className="absolute -right-2 -top-0.5 z-20 h-1.5 w-1.5 rounded-full bg-red-500" />
                 )}
               </span>
             </button>

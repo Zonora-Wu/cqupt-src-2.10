@@ -252,6 +252,53 @@ export class AiKnowledgeService {
     }
   }
 
+  async getManagementUnread(userId: string) {
+    const viewedThrough = new Date()
+    const user = await this.prisma.user.findUniqueOrThrow({
+      select: { aiManagementViewedAt: true },
+      where: { id: userId },
+    })
+    const since = user.aiManagementViewedAt
+    const updatedAfterView = since ? { gt: since } : undefined
+    const [knowledge, sessions, skillReviews] = await Promise.all([
+      this.prisma.aiKnowledgeEntry.count({
+        where: {
+          status: AiKnowledgeStatus.NEEDS_REVIEW,
+          ...(updatedAfterView ? { updatedAt: updatedAfterView } : {}),
+        },
+      }),
+      this.prisma.aiProblemSession.count({
+        where: {
+          status: { in: ['READY_REVIEW', 'RESOLVED'] },
+          ...(updatedAfterView ? { updatedAt: updatedAfterView } : {}),
+        },
+      }),
+      this.prisma.aiSkillReview.count({
+        where: {
+          status: 'PENDING',
+          ...(updatedAfterView ? { submittedAt: updatedAfterView } : {}),
+        },
+      }),
+    ])
+
+    return { knowledge, sessions, skillReviews, total: knowledge + sessions + skillReviews, viewedThrough: viewedThrough.toISOString() }
+  }
+
+  async markManagementViewed(userId: string, rawViewedThrough: unknown) {
+    const viewedAt = typeof rawViewedThrough === 'string' ? new Date(rawViewedThrough) : new Date(Number.NaN)
+    if (!Number.isFinite(viewedAt.getTime()) || viewedAt.getTime() > Date.now() + 5_000) {
+      throw new BadRequestException('无效的 AI 管理浏览截止时间')
+    }
+    await this.prisma.user.updateMany({
+      data: { aiManagementViewedAt: viewedAt },
+      where: {
+        id: userId,
+        OR: [{ aiManagementViewedAt: null }, { aiManagementViewedAt: { lt: viewedAt } }],
+      },
+    })
+    return { viewedAt: viewedAt.toISOString() }
+  }
+
   async listKnowledge(query: AiKnowledgeListQuery) {
     const where: Prisma.AiKnowledgeEntryWhereInput = {
       ...(query.category ? { category: query.category } : {}),

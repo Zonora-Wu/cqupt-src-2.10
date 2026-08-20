@@ -1,11 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { BookOpen, ChevronRight, Megaphone, Moon, Network, RefreshCw, ShoppingBag, Sun } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { BookOpen, ChevronRight, Megaphone, Network, RefreshCw, ShoppingBag } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
-import { BrandLogo } from '../../components/layout/BrandLogo'
-import { ScrollableNav } from '../../components/navigation/ScrollableNav'
-import { UserAvatarMenu } from '../../components/navigation/UserAvatarMenu'
-import { NotificationBell, NotificationPanel } from '../../components/ui/NotificationPanel'
+import { WorkspaceHeader } from '../../components/layout/WorkspaceHeader'
+import { NotificationPanel } from '../../components/ui/NotificationPanel'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -14,7 +12,7 @@ import { type AuthUser } from '../../services/auth'
 import { type AdminDashboardStats, getAdminDashboard, runAdminDashboardAiInsight } from '../../services/dashboard'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
-import { getAiKnowledgeStats } from '../../services/aiKnowledge'
+import { getAiManagementUnread } from '../../services/aiKnowledge'
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
@@ -74,13 +72,16 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
     if (path) navigate(path)
   }
 
+  const handleAiManagementViewed = useCallback(() => setKnowledgeReviewCount(0), [])
+
   useEffect(() => {
+    if (activeMenu === 'AI 管理') return
     let active = true
-    getAiKnowledgeStats()
-      .then((data) => { if (active) setKnowledgeReviewCount(data.totals.reviewBacklog) })
+    getAiManagementUnread()
+      .then((data) => { if (active) setKnowledgeReviewCount(data.total) })
       .catch(() => { if (active) setKnowledgeReviewCount(0) })
     return () => { active = false }
-  }, [location.pathname])
+  }, [activeMenu, location.pathname])
 
   useEffect(() => {
     if (!isKnownWorkspacePath(location.pathname, adminNavItems, adminUtilityPaths)) {
@@ -132,39 +133,24 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
 
   return (
     <AppBackground>
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] ">
-        <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
-          <BrandLogo />
-
-          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={adminMenuItems} onChange={openMenu} />
-
-          <div className="flex items-center justify-end gap-2">
-            <NotificationBell notificationUnreadCount={notificationUnread.bell} onClick={() => navigate('/admin/notifications')} />
-            <button
-              aria-label="切换主题"
-              className="theme-toggle-button rounded-lg p-2 text-slate-600 transition hover:bg-black/5 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={(event) => {
-                const nextTheme = theme === 'dark' ? 'light' : 'dark'
-                transitionColorTheme(nextTheme, event)
-                setTheme(nextTheme)
-              }}
-              type="button"
-            >
-              {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </button>
-            <UserAvatarMenu
-              name={user.name}
-              onAccountSecurity={() => navigate('/admin/account-security')}
-              onLogout={onLogout}
-              onProfile={() => navigate('/admin/profile')}
-              onSystemSettings={() => navigate('/admin/settings')}
-            />
-          </div>
-        </div>
-        <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
-          <ScrollableNav activeItem={activeMenu} badges={navBadges} items={adminMenuItems} mobile onChange={openMenu} />
-        </div>
-      </header>
+      <WorkspaceHeader
+        activeItem={activeMenu}
+        badges={navBadges}
+        items={adminMenuItems}
+        name={user.name}
+        notificationUnreadCount={notificationUnread.bell}
+        onAccountSecurity={() => navigate('/admin/account-security')}
+        onItemChange={openMenu}
+        onLogout={onLogout}
+        onNotificationClick={() => navigate('/admin/notifications')}
+        onProfile={() => navigate('/admin/profile')}
+        onSystemSettings={() => navigate('/admin/settings')}
+        onThemeChange={(nextTheme, event) => {
+          transitionColorTheme(nextTheme, event)
+          setTheme(nextTheme)
+        }}
+        theme={theme}
+      />
 
       {activeMenu === '通知' ? (
         <NotificationPanel onClose={() => navigate('/admin')} />
@@ -185,7 +171,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
           ) : activeMenu === '审计日志' ? (
             <AdminAuditLogManagement />
           ) : activeMenu === 'AI 管理' ? (
-            <AdminAiKnowledgeManagement />
+            <AdminAiKnowledgeManagement onViewed={handleAiManagementViewed} />
           ) : (
             <AdminSystemSettings />
           )}

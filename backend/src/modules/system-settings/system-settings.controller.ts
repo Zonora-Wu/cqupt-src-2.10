@@ -199,6 +199,19 @@ export class SystemSettingsController {
     return this.settings.resetPlatformLogo(slot, user, getRequestMeta(req), mode)
   }
 
+  @Post('platform/font')
+  @RequirePermissions('system:manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }), MalwareScanInterceptor)
+  uploadPlatformFont(@UploadedFile() file: UploadedSettingsFile | undefined, @CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.settings.uploadPlatformFont(file, user, getRequestMeta(req))
+  }
+
+  @Delete('platform/font')
+  @RequirePermissions('system:manage')
+  resetPlatformFont(@CurrentUser() user: AuthenticatedRequestUser, @Req() req: RequestLike) {
+    return this.settings.resetPlatformFont(user, getRequestMeta(req))
+  }
+
   @Get('ai-appearance')
   @RequirePermissions('system:manage')
   getAiAssistantAppearance() {
@@ -342,12 +355,15 @@ export class SystemSettingsController {
   @Post('platform')
   @RequirePermissions('system:manage')
   updatePlatformSettings(
-    @Body() body: { platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown; themeColor?: unknown; themePalette?: unknown },
+    @Body() body: { fontDisplayName?: unknown; fontFamily?: unknown; fontSource?: unknown; platformName?: unknown; schoolName?: unknown; orgName?: unknown; platformDomain?: unknown; publicCertVerify?: unknown; themeColor?: unknown; themePalette?: unknown },
     @CurrentUser() user: AuthenticatedRequestUser,
     @Req() req: RequestLike,
   ) {
     return this.settings.updatePlatformSettings(
       {
+        fontDisplayName: typeof body.fontDisplayName === 'string' ? body.fontDisplayName : undefined,
+        fontFamily: typeof body.fontFamily === 'string' ? body.fontFamily : undefined,
+        fontSource: body.fontSource === 'PRESET' || body.fontSource === 'CUSTOM' ? body.fontSource : undefined,
         platformName: typeof body.platformName === 'string' ? body.platformName : undefined,
         schoolName: typeof body.schoolName === 'string' ? body.schoolName : undefined,
         orgName: typeof body.orgName === 'string' ? body.orgName : undefined,
@@ -413,5 +429,15 @@ export class PublicPlatformController {
   @Get('appearance')
   getPlatformAppearance() {
     return this.settings.getPlatformSettings()
+  }
+
+  @Get('font')
+  async getPlatformFont(@Res() res: Response) {
+    const font = await this.settings.getPlatformFontFile()
+    res.setHeader('Content-Type', font.contentType)
+    res.setHeader('Content-Length', font.body.length)
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    res.setHeader('ETag', `"${font.sha256}"`)
+    res.send(font.body)
   }
 }

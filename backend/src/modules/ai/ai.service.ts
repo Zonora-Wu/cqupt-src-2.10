@@ -1,6 +1,14 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiModelPurpose, AiModelSource, AiSpace, AuditAction, RoleCode } from '@prisma/client'
 import { createHash } from 'node:crypto'
+import {
+  getActiveTokenLimit,
+  getNextQuotaPeriodStart,
+  getQuotaPeriodStart,
+  normalizeQuotaPeriod,
+  normalizeStoredTokenLimit,
+  type AiQuotaPeriod,
+} from '../../common/ai-quota-period'
 import { assertPublicOutboundUrl } from '../../common/security/outbound-url'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { AiKnowledgeService } from '../ai-knowledge/ai-knowledge.service'
@@ -49,7 +57,6 @@ const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
 const AI_KNOWLEDGE_USAGE_POLICY_KEY = 'ai_knowledge_usage_policy'
-type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 const FALLBACK_SKILLS: AiSkillLibraryItem[] = [
   {
@@ -969,7 +976,7 @@ export class AiService {
       this.prisma.aiCallLog.aggregate({
         _sum: { tokensUsed: true },
         where: {
-          createdAt: { gte: getPeriodStart(quotaSettings.quotaPeriod) },
+          createdAt: { gte: getQuotaPeriodStart(quotaSettings.quotaPeriod) },
           userId,
         },
       }),
@@ -980,7 +987,7 @@ export class AiService {
       monthly: quotaOverride?.monthlyLimit ?? quotaSettings.defaultMonthlyTokens,
       weekly: quotaOverride?.weeklyLimit ?? quotaOverride?.monthlyLimit ?? quotaSettings.defaultWeeklyTokens,
     }
-    const activeLimit = getActiveLimit(limits, quotaSettings.quotaPeriod)
+    const activeLimit = getActiveTokenLimit(limits, quotaSettings.quotaPeriod)
     const usedThisPeriod = usage._sum.tokensUsed ?? 0
     const remaining = Math.max(0, activeLimit - usedThisPeriod)
 
@@ -992,7 +999,7 @@ export class AiService {
       overridden: Boolean(quotaOverride),
       quotaPeriod: quotaSettings.quotaPeriod,
       remaining,
-      resetAt: getNextPeriodStart(quotaSettings.quotaPeriod).toISOString(),
+      resetAt: getNextQuotaPeriodStart(quotaSettings.quotaPeriod).toISOString(),
       usedPercent: activeLimit > 0 ? Math.min(100, Math.round((usedThisPeriod / activeLimit) * 100)) : 100,
       usedThisMonth: usedThisPeriod,
       usedThisPeriod,
@@ -1528,68 +1535,6 @@ function extractRunId(body: unknown) {
   if (!body || typeof body !== 'object') return undefined
   const id = (body as { id?: unknown }).id
   return typeof id === 'string' ? id : undefined
-}
-
-// ══════════════════════════════════════════════════════════════
-// Quota 周期计算
-// ══════════════════════════════════════════════════════════════
-
-function getActiveLimit(limits: { daily: number; monthly: number; weekly: number }, period: AiQuotaPeriod) {
-  if (period === 'DAY') return limits.daily
-  if (period === 'WEEK') return limits.weekly
-  return limits.monthly
-}
-
-function getPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getDayStart()
-  if (period === 'WEEK') return getWeekStart()
-  return getMonthStart()
-}
-
-function getNextPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getNextDayStart()
-  if (period === 'WEEK') return getNextWeekStart()
-  return getNextMonthStart()
-}
-
-function getDayStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
-function getNextDayStart() {
-  const now = getDayStart()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-}
-
-function getWeekStart() {
-  const now = new Date()
-  const day = now.getDay() || 7
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1)
-}
-
-function getNextWeekStart() {
-  const start = getWeekStart()
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-}
-
-function getMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1)
-}
-
-function getNextMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
-}
-
-function normalizeStoredTokenLimit(value: unknown, fallback: number) {
-  const numberValue = Number(value)
-  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
-}
-
-function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
-  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }
 
 const KNOWLEDGE_USAGE_PRESETS: Record<number, {

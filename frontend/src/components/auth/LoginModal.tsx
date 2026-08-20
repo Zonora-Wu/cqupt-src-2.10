@@ -2,7 +2,7 @@ import { ArrowRight, Eye, EyeOff, Lock, Mail, User, X } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
 import { AlertMessage } from '../ui/AlertMessage'
-import { PlatformHumanVerification } from '../security/PlatformHumanVerification'
+import { HumanVerification } from '../ui/HumanVerification'
 import { ApiError } from '../../services/apiClient'
 import {
   type AuthUser,
@@ -267,7 +267,7 @@ export function LoginModal({ onClose, onLoginSuccess, onSwitchToRegister }: Logi
             />
           )}
 
-          <PlatformHumanVerification
+          <HumanVerification
             compact={mode === 'sso'}
             disabled={mode === 'email' && countdown > 0}
             helperText={mode === 'email' ? '完成后可获取邮箱验证码。' : undefined}

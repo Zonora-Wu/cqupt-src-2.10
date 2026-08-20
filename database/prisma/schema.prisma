@@ -400,6 +400,7 @@ model User {
   identityText          String?
   avatarUrl             String?
   aiAssistantTutorialCompletedAt DateTime?
+  aiManagementViewedAt DateTime?
   authorizationLevel    AuthorizationLevel  @default(BASIC)
   authorizationSourceId String?
   status                UserStatus          @default(PENDING)
@@ -586,38 +587,6 @@ model EmailVerificationCode {
 
   @@index([email])
   @@index([expiresAt])
-}
-
-model CaptchaChallenge {
-  id          String         @id @default(cuid())
-  purpose     String
-  answerRatio Float
-  expiresAt   DateTime
-  verifiedAt  DateTime?
-  attempts    Int            @default(0)
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime       @default(now())
-  tokens      CaptchaToken[]
-
-  @@index([purpose, expiresAt])
-  @@index([ipAddress, createdAt])
-}
-
-model CaptchaToken {
-  id          String           @id @default(cuid())
-  challengeId String
-  tokenHash   String           @unique
-  purpose     String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime         @default(now())
-  challenge   CaptchaChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-
-  @@index([challengeId])
-  @@index([purpose, expiresAt])
 }
 
 model HumanVerificationNonce {

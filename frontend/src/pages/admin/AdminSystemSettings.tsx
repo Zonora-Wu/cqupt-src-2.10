@@ -49,6 +49,7 @@ import {
   updatePlatformSettings,
   uploadAiAssistantAvatar,
   uploadPlatformLogo,
+  uploadPlatformFont,
   updateAiQuotaSettings,
   uploadCertificateSeal,
   uploadCertificateTemplateBackground,
@@ -87,6 +88,7 @@ import {
   type BrandColorSlot,
 } from '../../utils/brandTheme'
 import { applyPlatformBranding, defaultPlatformLogos, getPlatformLogos, subscribePlatformBranding } from '../../utils/platformBranding'
+import { applyPlatformFont, platformFontPresets, type PlatformFontAppearance } from '../../utils/platformFont'
 import { AdminAiPolicyPanel } from '../../components/ai/AdminAiPolicyPanel'
 import { AdminAiModelConfigurationLauncher } from '../../components/ai/AiModelConfigurationLauncher'
 
@@ -406,6 +408,7 @@ export function AdminSystemSettings() {
   const templateInputRef = useRef<HTMLInputElement | null>(null)
   const sealInputRef = useRef<HTMLInputElement | null>(null)
   const aiAvatarInputRef = useRef<HTMLInputElement | null>(null)
+  const platformFontInputRef = useRef<HTMLInputElement | null>(null)
   const platformLogoInputRefs = useRef<Record<PlatformLogoSlot, HTMLInputElement | null>>({
     auth: null,
     favicon: null,
@@ -423,6 +426,10 @@ export function AdminSystemSettings() {
   const [themePalette, setThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
   const [savedThemeColor, setSavedThemeColor] = useState(() => getAppliedThemeColor())
   const [savedThemePalette, setSavedThemePalette] = useState<BrandPalette>(() => getAppliedThemePalette())
+  const [platformFont, setPlatformFont] = useState<PlatformFontAppearance>({ fontDisplayName: platformFontPresets[0].displayName, fontFamily: platformFontPresets[0].family, fontSource: 'PRESET', fontUrl: null })
+  const [savedPlatformFontFamily, setSavedPlatformFontFamily] = useState<string>(platformFontPresets[0].family)
+  const [isUploadingPlatformFont, setIsUploadingPlatformFont] = useState(false)
+  const [fontSettingsLoaded, setFontSettingsLoaded] = useState(false)
   const [editingPaletteKey, setEditingPaletteKey] = useState<BrandColorSlot | null>(null)
   const [paletteDraftColor, setPaletteDraftColor] = useState('')
   const [canApplyThemePreview, setCanApplyThemePreview] = useState(false)
@@ -543,6 +550,9 @@ export function AdminSystemSettings() {
           setSchoolName(platform.schoolName)
           setOrgName(platform.orgName)
           setPublicCertVerify(platform.publicCertVerify)
+          setPlatformFont({ fontDisplayName: platform.fontDisplayName, fontFamily: platform.fontFamily, fontSource: platform.fontSource, fontUrl: platform.fontUrl })
+          setSavedPlatformFontFamily(platform.fontFamily)
+          setFontSettingsLoaded(true)
           const savedPalette = createEditableThemePalette(platform.themeColor, platform.themePalette)
           const draft = readAppearanceDraft()
           const appliedThemeColor = getAppliedThemeColor()
@@ -618,6 +628,11 @@ export function AdminSystemSettings() {
     if (!normalizedThemeColor) return
     applyBrandTheme(normalizedThemeColor, themePalette)
   }, [canApplyThemePreview, themeColor, themePalette])
+
+  useEffect(() => {
+    if (!fontSettingsLoaded) return
+    void applyPlatformFont(platformFont)
+  }, [fontSettingsLoaded, platformFont])
 
   // Load pending registrations when entering the auth section and registration is closed
   useEffect(() => {
@@ -1032,6 +1047,27 @@ export function AdminSystemSettings() {
     }
   }
 
+  const handlePlatformFontUpload = async (file: File | undefined) => {
+    if (!file) return
+    setIsUploadingPlatformFont(true)
+    setAppearanceMessage('')
+    try {
+      const result = await uploadPlatformFont(file)
+      const next = { fontDisplayName: result.fontDisplayName, fontFamily: result.fontFamily, fontSource: result.fontSource, fontUrl: result.fontUrl }
+      setPlatformFont(next)
+      setSavedPlatformFontFamily(result.fontFamily)
+      setAppearanceMessage(`自定义字体“${result.fontDisplayName}”已全局应用`)
+      showNotice('自定义字体已上传并同步到全平台。', 'success', '字体已更新')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '字体上传失败'
+      setAppearanceMessage(message)
+      showNotice(message, 'error', '字体上传失败')
+    } finally {
+      setIsUploadingPlatformFont(false)
+      if (platformFontInputRef.current) platformFontInputRef.current.value = ''
+    }
+  }
+
   const handleApplyPlatformLogoAlternative = async (slot: PlatformLogoSlot, alternative: { darkUrl?: string; label: string; lightUrl: string }) => {
     setAppearanceMessage('')
     setUploadingPlatformLogoSlot(slot)
@@ -1091,13 +1127,23 @@ export function AdminSystemSettings() {
     setAppearanceMessage('')
     setIsSavingAppearance(true)
     try {
-      const result = await updatePlatformSettings({ themeColor: normalizedThemeColor, themePalette: serializeThemePalette(normalizedThemeColor, themePalette) })
+      const result = await updatePlatformSettings({
+        ...(platformFont.fontSource === 'PRESET' ? {
+          fontDisplayName: platformFont.fontDisplayName,
+          fontFamily: platformFont.fontFamily,
+          fontSource: platformFont.fontSource,
+        } : {}),
+        themeColor: normalizedThemeColor,
+        themePalette: serializeThemePalette(normalizedThemeColor, themePalette),
+      })
       clearAppearanceDraft()
       setCanApplyThemePreview(true)
       setThemeColor(result.themeColor)
       setSavedThemeColor(result.themeColor)
       setSavedThemePalette(createEditableThemePalette(result.themeColor, result.themePalette))
       setThemePalette(createEditableThemePalette(result.themeColor, result.themePalette))
+      setPlatformFont({ fontDisplayName: result.fontDisplayName, fontFamily: result.fontFamily, fontSource: result.fontSource, fontUrl: result.fontUrl })
+      setSavedPlatformFontFamily(result.fontFamily)
       setAppearanceMessage('外观设置已保存')
       showNotice('主题色、色卡和品牌资产已保存，已同步到全平台。', 'success', '外观设置已保存')
     } catch (error) {
@@ -1227,7 +1273,7 @@ export function AdminSystemSettings() {
   const effectiveThemeColor = normalizeHexColor(themeColor) ?? '#2A6438'
   const generatedBrandPalette = themePalette
   const baseGeneratedBrandPalette = generateBrandPalette(effectiveThemeColor)
-  const appearanceDirty = savedThemeColor !== themeColor || !areThemePalettesEqual(savedThemePalette, themePalette)
+  const appearanceDirty = savedThemeColor !== themeColor || !areThemePalettesEqual(savedThemePalette, themePalette) || savedPlatformFontFamily !== platformFont.fontFamily
   const effectivePlatformLogos = appliedPlatformLogos
 
   return (
@@ -1436,6 +1482,40 @@ export function AdminSystemSettings() {
                           </div>
                         )
                       })}
+                    </div>
+                  </div>
+                  <div className="border-b border-black/10 px-6 py-5 dark:border-white/10">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950 dark:text-white">全局字体</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">应用于公开页面、用户端、审核端和管理端界面，不影响证书 PDF 字体。</p>
+                      </div>
+                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
+                        <button className="rounded-lg border border-black/10 px-3 py-2 text-sm font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10" disabled={isUploadingPlatformFont} onClick={() => platformFontInputRef.current?.click()} type="button">
+                          {isUploadingPlatformFont ? '上传中...' : '上传字体'}
+                        </button>
+                        <SelectInput
+                          className="min-w-40 flex-1 sm:w-44 sm:flex-none"
+                          onChange={(family) => {
+                            const preset = platformFontPresets.find((item) => item.family === family)
+                            if (preset) setPlatformFont({ fontDisplayName: preset.displayName, fontFamily: preset.family, fontSource: 'PRESET', fontUrl: null })
+                          }}
+                          options={[
+                            ...(platformFont.fontSource === 'CUSTOM' ? [{ label: `${platformFont.fontDisplayName}（自定义）`, value: platformFont.fontFamily }] : []),
+                            ...platformFontPresets.map((preset) => ({ label: preset.displayName, value: preset.family })),
+                          ]}
+                          value={platformFont.fontFamily}
+                        />
+                        <input accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" className="hidden" onChange={(event) => void handlePlatformFontUpload(event.target.files?.[0])} ref={platformFontInputRef} type="file" />
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] px-4 py-3 dark:border-white/10">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">字体预览</p>
+                      <p className="mt-1 truncate text-base text-slate-700 dark:text-slate-200" style={{ fontFamily: platformFont.fontFamily }}>校园漏洞响应平台 Aa 123</p>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                      <span>当前：{platformFont.fontDisplayName}{platformFont.fontSource === 'CUSTOM' ? '（自定义）' : ''}</span>
+                      <span>支持 WOFF2 / WOFF / TTF / OTF，最大 5MB；建议优先使用 WOFF2。</span>
                     </div>
                   </div>
                   <SettingRow

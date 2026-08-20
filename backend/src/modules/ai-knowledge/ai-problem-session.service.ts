@@ -1,5 +1,4 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { createHash } from 'crypto'
 import {
   AiKnowledgeFeedbackValue,
   AiKnowledgeCategory,
@@ -16,6 +15,7 @@ import {
 } from '@prisma/client'
 import { AuthenticatedRequestUser } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
+import { stableHash } from './ai-knowledge.utils'
 
 type AiProblemSessionMode = 'student' | 'auditor' | 'admin'
 
@@ -1519,10 +1519,6 @@ function buildClusterDecisionSuggestion(decision: ClusterDecisionEvidence, merge
 
 function estimateTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 2))
-}
-
-function stableHash(text: string) {
-  return createHash('sha256').update(text).digest('hex')
 }
 
 function parseProblemSessionSummary(value: Prisma.JsonValue | null): ProblemSessionSummary {

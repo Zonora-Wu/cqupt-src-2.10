@@ -38,6 +38,10 @@ export type PlatformSettings = {
   authLogoUrl: string | null
   authLogoUrlDark: string | null
   faviconUrl: string | null
+  fontDisplayName: string
+  fontFamily: string
+  fontSource: 'CUSTOM' | 'PRESET'
+  fontUrl: string | null
   logoUrl: string | null
   navigationLogoUrl: string | null
   navigationLogoUrlDark: string | null

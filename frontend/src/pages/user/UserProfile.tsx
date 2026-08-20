@@ -23,7 +23,7 @@ import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { CompleteProfileModal } from '../../components/profile/CompleteProfileModal'
-import { PlatformHumanVerification } from '../../components/security/PlatformHumanVerification'
+import { HumanVerification } from '../../components/ui/HumanVerification'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -511,7 +511,7 @@ function ChangeEmailModal({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               点击下方按钮，将向当前邮箱发送一条验证码，用于确认身份后修改新邮箱。
             </p>
-            <PlatformHumanVerification
+            <HumanVerification
               compact
               onChange={setSendHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -562,7 +562,7 @@ function ChangeEmailModal({
                 />
               </div>
             </label>
-            <PlatformHumanVerification
+            <HumanVerification
               compact
               onChange={setSubmitHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -774,7 +774,7 @@ function ChangePasswordModal({
                 {showOldPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            <PlatformHumanVerification
+            <HumanVerification
               compact
               onChange={setSubmitHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}
@@ -811,7 +811,7 @@ function ChangePasswordModal({
                 </button>
               </div>
             </div>
-            <PlatformHumanVerification
+            <HumanVerification
               compact
               onChange={codeSent ? setSubmitHumanPayload : setSendHumanPayload}
               onError={(text) => setNotice({ text, type: 'error' })}

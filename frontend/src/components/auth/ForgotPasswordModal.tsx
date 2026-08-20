@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
 import { isValidEmail, resetPassword, sendPasswordResetCode } from '../../services/auth'
 import { createHumanVerificationPayload } from '../../services/humanVerification'
-import { PlatformHumanVerification } from '../security/PlatformHumanVerification'
+import { HumanVerification } from '../ui/HumanVerification'
 import { AlertMessage } from '../ui/AlertMessage'
 
 type ForgotPasswordModalProps = {
@@ -116,7 +116,7 @@ export function ForgotPasswordModal({ onBack, onClose }: ForgotPasswordModalProp
             <Field className="min-w-0 flex-1" icon={<Lock />}><input autoComplete="one-time-code" className={inputClass} inputMode="numeric" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6 位验证码" value={code} /></Field>
             <button className="w-28 shrink-0 rounded-lg border border-black/10 px-3 text-sm font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10" disabled={sending || countdown > 0} onClick={() => void sendCode()} type="button">{sending ? '发送中' : countdown > 0 ? `${countdown}s` : '获取验证码'}</button>
           </div>
-          <PlatformHumanVerification compact disabled={countdown > 0} helperText="完成后可获取找回密码验证码。" onChange={handleHumanChange} onError={(text) => setNotice({ text, type: 'error' })} purpose="RESET_PASSWORD" resetKey={`reset-${humanResetKey}`} />
+          <HumanVerification compact disabled={countdown > 0} helperText="完成后可获取找回密码验证码。" onChange={handleHumanChange} onError={(text) => setNotice({ text, type: 'error' })} purpose="RESET_PASSWORD" resetKey={`reset-${humanResetKey}`} />
           <Field icon={<Lock />}><input autoComplete="new-password" className={`${inputClass} pr-11`} maxLength={128} onChange={(event) => setNewPassword(event.target.value)} placeholder="新密码，至少 8 位" type={showPassword ? 'text' : 'password'} value={newPassword} /><button aria-label={showPassword ? '隐藏密码' : '显示密码'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" onClick={() => setShowPassword((value) => !value)} type="button"><EyeIcon className="h-5 w-5" /></button></Field>
           <Field icon={<Lock />}><input autoComplete="new-password" className={inputClass} maxLength={128} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再次输入新密码" type={showPassword ? 'text' : 'password'} value={confirmPassword} /></Field>
           {notice && <AlertMessage message={notice.text} onClose={() => setNotice(null)} variant={notice.type} />}

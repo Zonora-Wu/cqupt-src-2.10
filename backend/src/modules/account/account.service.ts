@@ -1,6 +1,14 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { AuditAction, VulnerabilityStatus } from '@prisma/client'
 import { createHash, randomInt } from 'node:crypto'
+import {
+  getActiveTokenLimit,
+  getNextQuotaPeriodStart,
+  getQuotaPeriodStart,
+  normalizeQuotaPeriod,
+  normalizeStoredTokenLimit,
+  type AiQuotaPeriod,
+} from '../../common/ai-quota-period'
 import { hashPassword, verifyPassword } from '../../common/crypto/password'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { EmailService } from '../email/email.service'
@@ -18,7 +26,6 @@ const AI_DEFAULT_WEEKLY_TOKENS_KEY = 'ai_default_weekly_tokens'
 const AI_DEFAULT_MONTHLY_TOKENS_KEY = 'ai_default_monthly_tokens'
 const AI_QUOTA_PERIOD_KEY = 'ai_quota_period'
 const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
-type AiQuotaPeriod = 'DAY' | 'WEEK' | 'MONTH'
 
 @Injectable()
 export class AccountService {
@@ -220,14 +227,14 @@ export class AccountService {
     const usage = await this.prisma.aiCallLog.aggregate({
       _sum: { tokensUsed: true },
       where: {
-        createdAt: { gte: getPeriodStart(quotaPeriod) },
+        createdAt: { gte: getQuotaPeriodStart(quotaPeriod) },
         userId,
       },
     })
     const dailyLimit = quotaOverride?.dailyLimit ?? quotaOverride?.monthlyLimit ?? normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_DAILY_TOKENS_KEY], DEFAULT_AI_DAILY_TOKENS)
     const weeklyLimit = quotaOverride?.weeklyLimit ?? quotaOverride?.monthlyLimit ?? normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_WEEKLY_TOKENS_KEY], DEFAULT_AI_WEEKLY_TOKENS)
     const monthlyLimit = quotaOverride?.monthlyLimit ?? normalizeStoredTokenLimit(settingsMap[AI_DEFAULT_MONTHLY_TOKENS_KEY], DEFAULT_AI_MONTHLY_TOKENS)
-    const activeLimit = getActiveLimit({ daily: dailyLimit, monthly: monthlyLimit, weekly: weeklyLimit }, quotaPeriod)
+    const activeLimit = getActiveTokenLimit({ daily: dailyLimit, monthly: monthlyLimit, weekly: weeklyLimit }, quotaPeriod)
     const usedThisPeriod = usage._sum.tokensUsed ?? 0
 
     return {
@@ -238,7 +245,7 @@ export class AccountService {
       overridden: Boolean(quotaOverride),
       quotaPeriod,
       remaining: Math.max(0, activeLimit - usedThisPeriod),
-      resetAt: getNextPeriodStart(quotaPeriod),
+      resetAt: getNextQuotaPeriodStart(quotaPeriod),
       usedPercent: activeLimit > 0 ? Math.min(100, Math.round((usedThisPeriod / activeLimit) * 100)) : 100,
       usedThisMonth: usedThisPeriod,
       usedThisPeriod,
@@ -642,65 +649,6 @@ const moduleActionMap: Record<string, string[]> = {
 
 function getModuleActions(module: string): AuditAction[] {
   return ((moduleActionMap[module] ?? []) as AuditAction[])
-}
-
-function getActiveLimit(limits: { daily: number; monthly: number; weekly: number }, period: AiQuotaPeriod) {
-  if (period === 'DAY') return limits.daily
-  if (period === 'WEEK') return limits.weekly
-  return limits.monthly
-}
-
-function getPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getDayStart()
-  if (period === 'WEEK') return getWeekStart()
-  return getMonthStart()
-}
-
-function getNextPeriodStart(period: AiQuotaPeriod) {
-  if (period === 'DAY') return getNextDayStart()
-  if (period === 'WEEK') return getNextWeekStart()
-  return getNextMonthStart()
-}
-
-function getDayStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
-function getNextDayStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-}
-
-function getWeekStart() {
-  const now = new Date()
-  const day = now.getDay()
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
-}
-
-function getNextWeekStart() {
-  const start = getWeekStart()
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-}
-
-function getMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1)
-}
-
-function getNextMonthStart() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 1)
-}
-
-function normalizeStoredTokenLimit(value: unknown, fallback: number) {
-  const numberValue = Number(value)
-  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : fallback
-}
-
-function normalizeQuotaPeriod(value: unknown): AiQuotaPeriod {
-  return value === 'DAY' || value === 'WEEK' || value === 'MONTH' ? value : 'MONTH'
 }
 
 function isProfileComplete(user: { college: string | null; identityText: string | null; studentNo: string | null }) {
