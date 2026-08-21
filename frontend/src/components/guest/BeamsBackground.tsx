@@ -209,7 +209,7 @@ if (uLightTheme > 0.5) {
         envMapIntensity: 10,
         uNoiseIntensity: noiseIntensity,
         uScale: scale,
-        uBeamColor: { value: new THREE.Color(theme === 'light' ? '#DFE9E3' : '#ffffff') },
+        uBeamColor: { value: new THREE.Color(theme === 'light' ? '#F1F5F2' : '#ffffff') },
         uLightTheme: theme === 'light' ? 1 : 0,
       },
     }),

@@ -29,7 +29,7 @@ export function FullScreenLoader({ label = '页面加载中', visible = true }: 
     <div
       aria-busy="true"
       aria-live="polite"
-      className={`app-fullscreen-loader fixed inset-0 z-[100000] flex items-center justify-center bg-[var(--app-bg)] transition-opacity duration-[260ms] ${leaving ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+      className={`app-fullscreen-loader fixed inset-0 z-[100000] flex items-center justify-center transition-opacity duration-[260ms] ${leaving ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
       role="status"
     >
       <span aria-hidden="true" className="app-fullscreen-loader__spinner" />

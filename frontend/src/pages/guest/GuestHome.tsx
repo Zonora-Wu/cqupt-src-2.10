@@ -268,7 +268,7 @@ export function GuestHome({ onLogin, onRegister }: GuestHomeProps) {
               noiseIntensity={1.25}
               rotation={310}
               scale={0.1}
-              speed={reduceMotion ? 0 : 2.8}
+              speed={reduceMotion ? 0 : 3.4}
               theme={theme}
             />
           </Suspense>

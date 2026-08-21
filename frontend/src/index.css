@@ -19,6 +19,14 @@
   animation: app-fullscreen-loader-spin 720ms linear infinite;
 }
 
+.app-fullscreen-loader {
+  background: #fff;
+}
+
+.dark .app-fullscreen-loader {
+  background: #000;
+}
+
 @keyframes app-fullscreen-loader-spin {
   to { transform: rotate(360deg); }
 }
