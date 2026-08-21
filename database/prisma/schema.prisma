@@ -74,6 +74,12 @@ enum ReviewDecision {
   ARCHIVE
 }
 
+enum AiVulnerabilityReviewRecommendation {
+  CONFIRM
+  NEEDS_SUPPLEMENT
+  REJECT
+}
+
 enum CertificateStatus {
   PENDING
   ISSUED
@@ -465,6 +471,8 @@ model User {
   aiAgentRuns           AiAgentRun[]
   aiSkillReviews        AiSkillReview[]            @relation("AiSkillReviewer")
   aiConversationSkillPins AiConversationSkillPin[]
+  generatedVulnerabilityAiAdvices VulnerabilityAiAdvice[] @relation("VulnerabilityAiAdviceGenerator")
+  editedVulnerabilityAiReviewDrafts VulnerabilityAiReviewDraft[] @relation("VulnerabilityAiReviewDraftEditor")
 
   @@index([roleId])
   @@index([authorizationLevel])
@@ -730,12 +738,66 @@ model VulnerabilityReport {
   certificate         Certificate?
   pointEntries        PointLedgerEntry[]
   aiActionProposals   AiActionProposal[]
+  aiAdvices           VulnerabilityAiAdvice[]
+  aiReviewDraft       VulnerabilityAiReviewDraft?
 
   @@index([submitterId])
   @@index([assetId])
   @@index([status])
   @@index([finalSeverity])
   @@index([createdAt])
+}
+
+model VulnerabilityAiAdvice {
+  id                     String   @id @default(cuid())
+  reportId               String
+  generatedById          String
+  version                Int
+  score                  Int
+  summary                String   @db.Text
+  strengths              Json
+  improvements           Json
+  limitations            Json
+  reviewOpinion          String   @db.Text
+  recommendedAction      AiVulnerabilityReviewRecommendation?
+  recommendationReason   String?  @db.Text
+  disclaimer             String   @db.Text
+  imageEvidenceNotice    String?  @db.Text
+  sourceFingerprint      String
+  sourceReportUpdatedAt  DateTime
+  generationReason       String?  @db.Text
+  modelName              String
+  providerId             String
+  tokensUsed             Int?
+  redactionCount         Int      @default(0)
+  omittedFields          Json
+  attachmentCount        Int      @default(0)
+  attachmentTextCount    Int      @default(0)
+  createdAt              DateTime @default(now())
+
+  report                  VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  generatedBy             User                @relation("VulnerabilityAiAdviceGenerator", fields: [generatedById], references: [id])
+  reviewDrafts            VulnerabilityAiReviewDraft[]
+
+  @@unique([reportId, version])
+  @@index([reportId, createdAt])
+  @@index([generatedById, createdAt])
+}
+
+model VulnerabilityAiReviewDraft {
+  reportId       String   @id
+  sourceAdviceId String?
+  content        String   @db.Text
+  updatedById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  report         VulnerabilityReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sourceAdvice   VulnerabilityAiAdvice?    @relation(fields: [sourceAdviceId], references: [id], onDelete: SetNull)
+  updatedBy      User                     @relation("VulnerabilityAiReviewDraftEditor", fields: [updatedById], references: [id])
+
+  @@index([sourceAdviceId])
+  @@index([updatedById, updatedAt])
 }
 
 model VulnerabilityAttachment {

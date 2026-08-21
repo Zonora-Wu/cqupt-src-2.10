@@ -213,6 +213,9 @@ export type AiReportAssessment = {
   score: number
   strengths: string[]
   summary: string
+  reviewOpinion?: string
+  recommendedAction?: 'CONFIRM' | 'NEEDS_SUPPLEMENT' | 'REJECT'
+  recommendationReason?: string
 }
 
 export type AiReportAnalysisResponse = {
@@ -221,6 +224,35 @@ export type AiReportAnalysisResponse = {
   fileName: string
   omittedFields: string[]
   redactionCount: number
+}
+
+export type AiAuditorAdviceVersion = {
+  attachmentCount: number
+  attachmentTextCount: number
+  assessment: AiReportAssessment
+  createdAt: Date
+  generatedBy: { id: string; name: string }
+  generationReason: string | null
+  id: string
+  modelName: string
+  providerId: string
+  sourceReportUpdatedAt: Date
+  tokensUsed: number | null
+  version: number
+}
+
+export type AiAuditorAdviceState = {
+  cooldownUntil: Date | null
+  history: AiAuditorAdviceVersion[]
+  latest: AiAuditorAdviceVersion | null
+  reportUpdatedAt: Date
+  reviewDraft: {
+    content: string
+    sourceAdviceId: string | null
+    updatedAt: Date
+    updatedBy: { id: string; name: string }
+  } | null
+  stale: boolean
 }
 
 export type AiCard =

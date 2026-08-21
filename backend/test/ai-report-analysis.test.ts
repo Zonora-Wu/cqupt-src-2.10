@@ -61,6 +61,17 @@ describe('AI report analysis preparation', () => {
       /关键信息超过 5000 字/,
     )
   })
+
+  it('compacts auditor request and attachment evidence within the shared 5000 character budget', () => {
+    const prepared = buildReportAnalysisPreparation([draft({ reproductionSteps: `复现步骤${'有效证据'.repeat(900)}` })], 'draft_1', {
+      extraFields: [['requestPacket', `GET /account/1\n${'响应字段'.repeat(900)}`]],
+      truncateToFit: true,
+    })
+
+    assert.ok(prepared.contextText.length <= 5000)
+    assert.ok(prepared.truncatedFields.length > 0)
+    assert.match(prepared.contextText, /内容已按上下文预算截断/)
+  })
 })
 
 describe('Hermes report assessment response', () => {
@@ -81,5 +92,18 @@ describe('Hermes report assessment response', () => {
       () => parseAiReportAssessment('这是一段普通文本', { imageEvidenceDetected: false, omittedFields: [] }),
       /无法解析/,
     )
+  })
+
+  it('keeps the shared score while accepting an auditor review opinion', () => {
+    const assessment = parseAiReportAssessment(
+      '{"score":73,"summary":"材料具备初审基础。","strengths":["边界明确"],"improvements":["补充响应证据"],"limitations":[],"recommendedAction":"NEEDS_SUPPLEMENT","recommendationReason":"缺少响应差异证据。","reviewOpinion":"报告具备初审基础，请补充响应差异和影响范围。"}',
+      { imageEvidenceDetected: false, omittedFields: [] },
+    )
+
+    assert.equal(assessment.score, 73)
+    assert.equal(assessment.recommendedAction, 'NEEDS_SUPPLEMENT')
+    assert.match(assessment.recommendationReason ?? '', /响应差异证据/)
+    assert.match(assessment.reviewOpinion ?? '', /请补充/)
+    assert.match(assessment.disclaimer, /不代表漏洞有效/)
   })
 })

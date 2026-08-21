@@ -121,6 +121,9 @@ export type AiReportAssessment = {
   score: number
   strengths: string[]
   summary: string
+  reviewOpinion?: string
+  recommendedAction?: 'CONFIRM' | 'NEEDS_SUPPLEMENT' | 'REJECT'
+  recommendationReason?: string
 }
 
 export type AiReportAnalysisResponse = {
@@ -129,6 +132,35 @@ export type AiReportAnalysisResponse = {
   fileName: string
   omittedFields: string[]
   redactionCount: number
+}
+
+export type AiAuditorAdviceVersion = {
+  attachmentCount: number
+  attachmentTextCount: number
+  assessment: AiReportAssessment
+  createdAt: string
+  generatedBy: { id: string; name: string }
+  generationReason: string | null
+  id: string
+  modelName: string
+  providerId: string
+  sourceReportUpdatedAt: string
+  tokensUsed: number | null
+  version: number
+}
+
+export type AiAuditorAdviceState = {
+  cooldownUntil: string | null
+  history: AiAuditorAdviceVersion[]
+  latest: AiAuditorAdviceVersion | null
+  reportUpdatedAt: string
+  reviewDraft: {
+    content: string
+    sourceAdviceId: string | null
+    updatedAt: string
+    updatedBy: { id: string; name: string }
+  } | null
+  stale: boolean
 }
 
 export type AiChatResponse = {
@@ -455,6 +487,29 @@ export function analyzeStoredVulnerabilityReport(reportId: string) {
   return apiRequest<AiReportAnalysisResponse>(`/ai/vulnerability-advice/${encodeURIComponent(reportId)}`, {
     auth: true,
     method: 'POST',
+  })
+}
+
+export function getAuditorVulnerabilityAdvice(reportId: string) {
+  return apiRequest<AiAuditorAdviceState>(`/ai/auditor/vulnerability-advice/${encodeURIComponent(reportId)}`, {
+    auth: true,
+    method: 'GET',
+  })
+}
+
+export function generateAuditorVulnerabilityAdvice(reportId: string, reason?: string) {
+  return apiRequest<AiAuditorAdviceState>(`/ai/auditor/vulnerability-advice/${encodeURIComponent(reportId)}`, {
+    auth: true,
+    body: { reason },
+    method: 'POST',
+  })
+}
+
+export function saveAuditorVulnerabilityReviewDraft(reportId: string, content: string) {
+  return apiRequest<AiAuditorAdviceState['reviewDraft']>(`/ai/auditor/vulnerability-advice/${encodeURIComponent(reportId)}/review-draft`, {
+    auth: true,
+    body: { content },
+    method: 'PUT',
   })
 }
 

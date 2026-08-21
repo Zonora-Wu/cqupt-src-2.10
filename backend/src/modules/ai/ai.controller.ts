@@ -6,6 +6,7 @@ import {
   Inject,
   Param,
   Post,
+  Put,
   Req,
   UploadedFile,
   UseGuards,
@@ -121,6 +122,39 @@ export class AiController {
     @Req() req: RequestLike,
   ) {
     return this.ai.analyzeStoredVulnerabilityReport(reportId, user, getRequestMeta(req))
+  }
+
+  @Get('auditor/vulnerability-advice/:reportId')
+  @RequirePermissions('vulnerability:read_all')
+  getAuditorVulnerabilityAdvice(
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.ai.getAuditorVulnerabilityAdvice(reportId, user)
+  }
+
+  @Post('auditor/vulnerability-advice/:reportId')
+  @RequirePermissions('vulnerability:read_all')
+  async generateAuditorVulnerabilityAdvice(
+    @Param('reportId') reportId: string,
+    @Body('reason') reason: unknown,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    await this.rateLimit.consume('ai-auditor-advice-report', reportId, 1, 60_000)
+    await this.rateLimit.consume('ai-auditor-advice-user', user.id, 10, 10 * 60_000)
+    return this.ai.generateAuditorVulnerabilityAdvice(reportId, reason, user, getRequestMeta(req))
+  }
+
+  @Put('auditor/vulnerability-advice/:reportId/review-draft')
+  @RequirePermissions('vulnerability:read_all')
+  saveAuditorVulnerabilityReviewDraft(
+    @Param('reportId') reportId: string,
+    @Body('content') content: unknown,
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    return this.ai.saveAuditorVulnerabilityReviewDraft(reportId, content, user, getRequestMeta(req))
   }
 
   @Post('attachments/text')
