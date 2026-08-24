@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { AdminAiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
 import { AdminSkillManagementPanel } from '../../components/ai/AdminSkillManagementPanel'
 import { AdminSkillReviewPanel } from '../../components/ai/AdminSkillReviewPanel'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -83,7 +83,7 @@ export function AdminAiKnowledgeManagement({ onViewed }: { onViewed?: () => void
     finally { setBusy('') }
   }
 
-  return <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+  return <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
     <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
       <PageHeader title="AI 管理" description="平台模型、独立 Skill 与可复用对话知识分别治理。" />
       <div className="flex flex-wrap gap-2">
@@ -93,7 +93,7 @@ export function AdminAiKnowledgeManagement({ onViewed }: { onViewed?: () => void
       </div>
     </div>
 
-    {notice ? <FloatingNotice message={notice.message} onClose={() => setNotice(null)} variant={notice.error ? 'error' : 'success'} /> : null}
+    {notice ? <AlertMessage message={notice.message} onClose={() => setNotice(null)} variant={notice.error ? 'error' : 'success'} /> : null}
 
     <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Stat label="审核积压" value={stats?.totals.reviewBacklog ?? 0} />
@@ -172,7 +172,7 @@ function KnowledgeEditor({ entry, onClose, onSaved }: { entry: AiKnowledgeEntry;
   async function restore(revision: AiKnowledgeRevision) { const rollbackReason = window.prompt(`回滚到 v${revision.version}，请输入原因：`)?.trim(); if (!rollbackReason) return; setBusy(true); try { await restoreAiKnowledgeRevision(entry.id, revision.id, rollbackReason); await onSaved() } catch (e) { setError(e instanceof Error ? e.message : '回滚失败') } finally { setBusy(false) } }
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div aria-modal="true" className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-black/10 bg-[var(--app-menu-bg)] p-5 shadow-2xl dark:border-white/10" role="dialog">
     <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">知识详情与修订</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">每次保存生成不可变版本，回滚同样写入审计。</p></div><button aria-label="关闭" className="rounded-lg p-2 hover:bg-black/5 dark:hover:bg-white/10" onClick={onClose} type="button"><X className="h-5 w-5" /></button></div>
-    {error ? <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
+    {error ? <AlertMessage message={error} onClose={() => setError('')} variant="error" /> : null}
     <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]"><div className="space-y-4"><Field label="标题"><input autoComplete="off" className={inputClass} maxLength={120} value={form.title} onChange={(e) => set('title', e.target.value)} /></Field><Field label="标准问题"><textarea className={`${inputClass} min-h-24`} maxLength={3000} value={form.canonicalQuestion} onChange={(e) => set('canonicalQuestion', e.target.value)} /></Field><Field label="标准答案"><textarea className={`${inputClass} min-h-56`} maxLength={12000} value={form.canonicalAnswer} onChange={(e) => set('canonicalAnswer', e.target.value)} /></Field><Field label="标签（逗号分隔）"><input autoComplete="off" className={inputClass} maxLength={1000} value={form.tags.join(', ')} onChange={(e) => set('tags', e.target.value.split(/[,，]/).map((v) => v.trim()).filter(Boolean))} /></Field><Field label="修订原因（必填）"><textarea className={`${inputClass} min-h-20`} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} /></Field></div>
       <aside className="space-y-4"><SelectInput label="分类" options={categoryOptions} value={form.category} onChange={(v) => set('category', v as AiKnowledgeEntry['category'])} /><SelectInput label="角色范围" options={['ALL', 'STUDENT', 'AUDITOR', 'ADMIN']} value={form.roleScope} onChange={(v) => set('roleScope', v as AiKnowledgeEntry['roleScope'])} /><SelectInput label="敏感级别" options={['PUBLIC', 'INTERNAL', 'SENSITIVE', 'REJECTED']} value={form.sensitivity} onChange={(v) => set('sensitivity', v as AiKnowledgeEntry['sensitivity'])} /><SelectInput label="可见范围" options={['PLATFORM_PUBLIC', 'ROLE_ONLY', 'REVIEW_REQUIRED', 'PRIVATE']} value={form.visibility} onChange={(v) => set('visibility', v as AiKnowledgeEntry['visibility'])} />
         <div className="space-y-2 border-y border-black/10 py-3 dark:border-white/10"><Switch label="参与检索" checked={form.retrievalEnabled} onChange={(v) => { set('retrievalEnabled', v); if (!v) { set('directAnswerEnabled', false); set('agentInjectEnabled', false) } }} /><Switch label="高置信直接回答" checked={form.directAnswerEnabled} disabled={!form.retrievalEnabled} onChange={(v) => set('directAnswerEnabled', v)} /><Switch label="中置信上下文注入" checked={form.agentInjectEnabled} disabled={!form.retrievalEnabled} onChange={(v) => set('agentInjectEnabled', v)} /></div>

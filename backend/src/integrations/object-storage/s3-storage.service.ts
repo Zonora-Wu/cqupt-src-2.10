@@ -80,11 +80,15 @@ export class S3StorageService {
     }
   }
 
+  async deleteObject(key: string) {
+    await this.request({ expectedStatuses: [204, 404], method: 'DELETE', path: `/${this.bucket}/${encodeObjectKey(key)}` })
+  }
+
   private request(input: {
     body?: Buffer
     contentType?: string
     expectedStatuses: number[]
-    method: 'GET' | 'HEAD' | 'PUT'
+    method: 'DELETE' | 'GET' | 'HEAD' | 'PUT'
     path: string
   }) {
     const body = input.body ?? Buffer.alloc(0)

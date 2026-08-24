@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { platformNotice } from '../../services/platformNotice'
 import { getAiModelPolicy, updateAiModelPolicy, type AiUserModelPolicy } from '../../services/systemSettings'
 
 const options: Array<{ description: string; label: string; value: AiUserModelPolicy }> = [
@@ -11,11 +12,10 @@ export function AdminAiPolicyPanel() {
   const [value, setValue] = useState<AiUserModelPolicy>('USER_PLATFORM_ONLY')
   const [saved, setSaved] = useState<AiUserModelPolicy>('USER_PLATFORM_ONLY')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
 
   useEffect(() => {
     void getAiModelPolicy().then((result) => { setValue(result.userMode); setSaved(result.userMode) })
-      .catch((error) => setMessage(error instanceof Error ? error.message : '策略加载失败'))
+      .catch((error) => platformNotice.error(error instanceof Error ? error.message : '策略加载失败', { title: 'AI 策略加载失败' }))
   }, [])
 
   const save = async () => {
@@ -25,9 +25,9 @@ export function AdminAiPolicyPanel() {
     try {
       const result = await updateAiModelPolicy(value)
       setSaved(result.userMode)
-      setMessage('用户 AI 模式已更新')
+      platformNotice.success('用户 AI 模式已更新', { title: 'AI 策略已保存' })
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '策略保存失败')
+      platformNotice.error(error instanceof Error ? error.message : '策略保存失败', { title: 'AI 策略保存失败' })
     } finally {
       setBusy(false)
     }
@@ -48,7 +48,7 @@ export function AdminAiPolicyPanel() {
         </button>)}
       </div>
       <div className="mt-4 flex items-center justify-between gap-4">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{message}</p>
+        <span aria-hidden="true" />
         <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || value === saved} onClick={() => void save()} type="button">
           {busy ? '保存中...' : '保存模式'}
         </button>

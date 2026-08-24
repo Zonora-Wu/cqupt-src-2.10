@@ -1,8 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-
-export type FloatingNoticeVariant = 'error' | 'info' | 'success' | 'warning'
+import type { PlatformNoticeVariant } from '../../services/platformNotice'
 
 type FloatingNoticeProps = {
   action?: ReactNode
@@ -11,10 +10,10 @@ type FloatingNoticeProps = {
   message: ReactNode
   onClose?: () => void
   title?: string
-  variant?: FloatingNoticeVariant
+  variant?: PlatformNoticeVariant
 }
 
-const variantStyles: Record<FloatingNoticeVariant, { background: string; border: string; color: string }> = {
+const variantStyles: Record<PlatformNoticeVariant, { background: string; border: string; color: string }> = {
   error: {
     background: 'color-mix(in srgb, var(--app-danger-soft) 94%, var(--app-menu-bg))',
     border: 'color-mix(in srgb, var(--app-danger) 32%, transparent)',
@@ -37,13 +36,14 @@ const variantStyles: Record<FloatingNoticeVariant, { background: string; border:
   },
 }
 
-const iconMap: Record<FloatingNoticeVariant, ReactNode> = {
+const iconMap: Record<PlatformNoticeVariant, ReactNode> = {
   error: <AlertTriangle className="h-4 w-4" />,
   info: <Info className="h-4 w-4" />,
   success: <CheckCircle2 className="h-4 w-4" />,
   warning: <TriangleAlert className="h-4 w-4" />,
 }
 
+// Internal renderer. Feature code should call platformNotice or use AlertMessage.
 export function FloatingNotice({
   action,
   autoCloseMs = 6400,

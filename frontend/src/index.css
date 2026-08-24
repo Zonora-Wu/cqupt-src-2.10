@@ -500,6 +500,13 @@ body {
   background: var(--app-bg);
 }
 
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
@@ -943,6 +950,17 @@ html.auth-modal-open body {
 .select-dropdown-scrollbar::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:hover {
   background: var(--app-primary-scrollbar-thumb-hover);
+}
+
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+  height: 0;
+  width: 0;
 }
 
 .border-black\/5,

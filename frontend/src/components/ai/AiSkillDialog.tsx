@@ -1,6 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { platformNotice } from '../../services/platformNotice'
 import {
   createAiSkill,
   deleteAiSkill,
@@ -30,14 +31,13 @@ export function AiSkillDialog({
   pinnedSkillIds,
 }: AiSkillDialogProps) {
   const [skills, setSkills] = useState<AiSkillLibraryItem[]>([])
-  const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [viewingSkill, setViewingSkill] = useState<AiSkillLibraryItem | null>(null)
 
   const reload = () => getAiSkills().then((result) => setSkills(result.skills.filter(isUsableAiSkill)))
   useEffect(() => {
-    const timer = window.setTimeout(() => void reload().catch(() => setMessage('Skill 加载失败')), 0)
+    const timer = window.setTimeout(() => void reload().catch(() => platformNotice.error('Skill 加载失败', { title: 'Skill 加载失败' })), 0)
     return () => window.clearTimeout(timer)
   }, [])
 
@@ -47,10 +47,10 @@ export function AiSkillDialog({
       await action()
       await reload()
       onChanged()
-      setMessage(success)
+      platformNotice.success(success, { title: 'Skill 已更新' })
       return true
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '操作失败')
+      platformNotice.error(error instanceof Error ? error.message : '操作失败', { title: 'Skill 操作失败' })
       return false
     } finally {
       setBusy(false)
@@ -69,7 +69,7 @@ export function AiSkillDialog({
       return
     }
     if (activeSkillIds.length >= 3) {
-      setMessage('一次最多使用 3 个 Skill')
+      platformNotice.warning('一次最多使用 3 个 Skill', { title: '已达到使用上限' })
       return
     }
     onActiveChange([...activeSkillIds, skillId])
@@ -115,7 +115,6 @@ export function AiSkillDialog({
               ))}
             </div>
             {!skills.length && <p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">暂无可用 Skill</p>}
-            {message && <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{message}</p>}
           </div>
         </section>
       </div>

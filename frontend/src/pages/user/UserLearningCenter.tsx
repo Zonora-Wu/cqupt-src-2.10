@@ -110,7 +110,7 @@ export function UserLearningCenter() {
   }
 
   return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <SurfacePanel className="overflow-hidden p-0">
           <div className="relative p-7 md:p-8">

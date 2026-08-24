@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Put, Req, UseGuards } from '@nestjs/common'
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -6,6 +6,7 @@ import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { normalizeCreateVulnerabilityBody, normalizeRetestBody, normalizeReviewVulnerabilityBody } from './vulnerability.validation'
 import { CreateVulnerabilityBody, RetestBody, ReviewVulnerabilityBody } from './vulnerability.types'
 import { VulnerabilitiesService } from './vulnerabilities.service'
+import { UpdateVulnerabilityDraftBody, VulnerabilityDraftsService } from './vulnerability-drafts.service'
 type RequestLike = {
   ip?: string
   path?: string
@@ -29,7 +30,56 @@ function getRequestMeta(req: RequestLike): ClientRequestMeta {
 @Controller('vulnerabilities')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class VulnerabilitiesController {
-  constructor(@Inject(VulnerabilitiesService) private readonly vulnerabilities: VulnerabilitiesService) {}
+  constructor(
+    @Inject(VulnerabilitiesService) private readonly vulnerabilities: VulnerabilitiesService,
+    @Inject(VulnerabilityDraftsService) private readonly drafts: VulnerabilityDraftsService,
+  ) {}
+
+  @Get('drafts')
+  @RequirePermissions('vulnerability:create')
+  listDrafts(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.drafts.list(user)
+  }
+
+  @Post('drafts')
+  @RequirePermissions('vulnerability:create')
+  createDraft(@Body() body: { name?: unknown }, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.drafts.create(user, body)
+  }
+
+  @Get('drafts/:draftId')
+  @RequirePermissions('vulnerability:create')
+  getDraft(@Param('draftId') draftId: string, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.drafts.get(draftId, user)
+  }
+
+  @Put('drafts/:draftId')
+  @RequirePermissions('vulnerability:create')
+  updateDraft(
+    @Param('draftId') draftId: string,
+    @Body() body: UpdateVulnerabilityDraftBody,
+    @CurrentUser() user: AuthenticatedRequestUser,
+  ) {
+    return this.drafts.update(draftId, body, user)
+  }
+
+  @Delete('drafts/:draftId')
+  @RequirePermissions('vulnerability:create')
+  deleteDraft(@Param('draftId') draftId: string, @CurrentUser() user: AuthenticatedRequestUser) {
+    return this.drafts.remove(draftId, user)
+  }
+
+  @Post('drafts/:draftId/submit')
+  @RequirePermissions('vulnerability:create')
+  submitDraft(
+    @Param('draftId') draftId: string,
+    @Body() body: { version?: unknown },
+    @CurrentUser() user: AuthenticatedRequestUser,
+    @Req() req: RequestLike,
+  ) {
+    if (!Number.isInteger(body.version) || Number(body.version) < 1) throw new BadRequestException('草稿版本不正确')
+    return this.vulnerabilities.submitDraft(user, draftId, Number(body.version), getRequestMeta(req))
+  }
 
   @Get('my')
   @RequirePermissions('vulnerability:read_own')

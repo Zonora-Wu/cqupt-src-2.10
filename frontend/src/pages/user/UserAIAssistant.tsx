@@ -8,11 +8,11 @@ import { markdownTemplate, vulnerabilityTypes } from '../../constants/vulnerabil
 import { analyzeAiReportDraft, analyzeStoredVulnerabilityReport, createAiProblemSession, getActiveAiProblemSession, getAiAppearance, getAiProblemSession, getAiQuota, getAiSkills, heartbeatAiProblemSession, isUsableAiSkill, leaveAiProblemSession, listAiProblemSessions, listAiUserModels, requestAiProblemSessionResolutionPrompt, resolveAiProblemSession, resumeAiProblemSessionResolutionPrompt, sendAiChat, snoozeAiProblemSessionResolutionPrompt, submitAiTurnFeedback, uploadAiReportDraft, type AiCard, type AiChatResponse, type AiPendingAction, type AiProblemSession, type AiQuota, type AiReportAssessment, type AiSkillLibraryItem, type AiTurnFeedbackRating, type AiVulnerabilityDraft } from '../../services/ai'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { clickLearningResource } from '../../services/learning'
-import { createVulnerability, uploadVulnerabilityAttachment, type CreateVulnerabilityPayload } from '../../services/vulnerabilities'
+import { createVulnerabilityDraft, submitVulnerabilityDraft, updateVulnerabilityDraft, uploadVulnerabilityDraftAttachment } from '../../services/vulnerabilities'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { AiSkillDialog } from '../../components/ai/AiSkillDialog'
 import { AiModelConfigurationButton } from '../../components/ai/AiModelConfigurationLauncher'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { SkillComposerEditor, type SkillComposerEditorHandle } from '../../components/ai/SkillComposerEditor'
 import { AiAssistantTutorial } from '../../components/ai/AiAssistantTutorial'
 
@@ -173,7 +173,7 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
   const shouldAutoCollapseHistory = viewportWidth >= DESKTOP_HISTORY_BREAKPOINT
     && viewportWidth < historyPanelWidth + HISTORY_PANEL_MIN_CHAT_WIDTH + HISTORY_PANEL_GAP
   const historyIsCollapsed = historyCollapsed || shouldAutoCollapseHistory
-  const historyContentInset = !historyIsCollapsed
+  const historyContentInset = viewportWidth >= DESKTOP_HISTORY_BREAKPOINT && !historyIsCollapsed
     ? getHistoryContentInset(viewportWidth, historyPanelWidth)
     : 0
 
@@ -862,8 +862,8 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
 
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'never'} transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}>
-    <FloatingNotice message={modelNotice} onClose={() => setModelNotice('')} variant="success" />
-    <FloatingNotice
+    <AlertMessage message={modelNotice} onClose={() => setModelNotice('')} variant="success" />
+    <AlertMessage
       message={reportNotice?.message ?? ''}
       onClose={() => setReportNotice(null)}
       title={reportNotice?.title}
@@ -898,14 +898,14 @@ export function UserAIAssistant({ initialAdviceReportId, initialPrompt, onInitia
       onWidthChange={setHistoryPanelWidth}
     />
     <section
-      className={`relative z-10 mx-auto flex min-h-screen max-w-[1360px] flex-col px-5 pb-6 transition-[padding-left] duration-300 ease-out md:px-8 ${
-        hasStarted ? 'pt-24' : 'pt-16'
+      className={`relative z-10 mx-auto flex min-h-screen max-w-[1360px] flex-col px-4 pb-6 transition-[padding-left] duration-300 ease-out sm:px-5 md:px-8 ${
+        hasStarted ? 'pt-32 md:pt-24' : 'pt-32 md:pt-16'
       }`}
       style={historyContentInset ? { paddingLeft: `${historyContentInset + 32}px` } : undefined}
     >
       <button
         aria-label="使用教程"
-        className="fixed right-5 top-20 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-500 shadow-sm backdrop-blur-xl transition-[background-color,color,transform] duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white md:right-8"
+        className="fixed right-5 top-32 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 bg-[var(--app-menu-bg)] text-slate-500 shadow-sm backdrop-blur-xl transition-[background-color,color,transform] duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white md:right-8 md:top-20"
         onClick={() => setTutorialOpen(true)}
         title="使用教程"
         type="button"
@@ -1388,7 +1388,7 @@ function ProblemSessionResolutionCard({
 }) {
   if (typeof document === 'undefined') return null
   return createPortal(
-    <div className="pointer-events-none fixed left-1/2 top-20 z-[2147483646] w-[min(760px,calc(100vw-32px))] -translate-x-1/2">
+    <div className="pointer-events-none fixed left-1/2 top-32 z-[2147483646] w-[min(760px,calc(100vw-32px))] -translate-x-1/2 md:top-20">
     <motion.aside
       animate={{ opacity: 1, y: 0 }}
       className="pointer-events-auto flex flex-col gap-4 rounded-lg border border-brand-600/20 bg-[var(--app-panel-bg)] px-4 py-3 shadow-xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between"
@@ -2175,37 +2175,22 @@ function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessmen
       return
     }
 
-    const payload: CreateVulnerabilityPayload = {
-      assetName: draft.assetName.trim(),
-      assetUrl: draft.assetUrl?.trim() || undefined,
-      detailMarkdown: buildDraftMarkdown(draft),
-      impactAssessment: draft.impactAssessment.trim(),
-      ownerUnit: draft.ownerUnit?.trim() || undefined,
-      repairSuggestion: draft.repairSuggestion.trim(),
-      reproductionSteps: draft.reproductionSteps.trim(),
-      selfSeverity: draft.selfSeverity,
-      testBoundary: draft.testBoundary?.trim(),
-      title: draft.title.trim(),
-      vulnerabilityType: draft.vulnerabilityType.trim(),
-    }
-
     try {
       setSubmitStates((current) => ({ ...current, [draft.id]: { status: 'submitting' } }))
-      const result = await createVulnerability(payload)
-      try {
-        await uploadVulnerabilityAttachment(result.id, attachmentFile)
-      } catch (error) {
-        setSubmitStates((current) => ({
-          ...current,
-          [draft.id]: {
-            message: error instanceof Error ? error.message : '原始报告附件上传失败',
-            reportId: result.id,
-            reportNo: result.reportNo,
-            status: 'attachment-error',
-          },
-        }))
-        return
-      }
+      const serverDraft = await createVulnerabilityDraft(`AI 解析：${draft.title.trim()}`)
+      const saved = await updateVulnerabilityDraft(serverDraft.id, {
+        assetName: draft.assetName.trim(),
+        assetUrl: draft.assetUrl?.trim() || null,
+        bodyMarkdown: buildDraftMarkdown(draft),
+        name: serverDraft.name,
+        ownerUnit: draft.ownerUnit?.trim() || null,
+        selfSeverity: draft.selfSeverity,
+        title: draft.title.trim(),
+        version: serverDraft.version,
+        vulnerabilityType: draft.vulnerabilityType.trim(),
+      })
+      await uploadVulnerabilityDraftAttachment(serverDraft.id, 'SUPPLEMENTARY', attachmentFile)
+      const result = await submitVulnerabilityDraft(serverDraft.id, saved.version)
       setSubmitStates((current) => ({ ...current, [draft.id]: { reportId: result.id, reportNo: result.reportNo, status: 'submitted' } }))
     } catch (error) {
       setSubmitStates((current) => ({
@@ -2457,9 +2442,9 @@ function getDraftMissingFields(draft: AiVulnerabilityDraft) {
   if (!draft.assetName?.trim()) missing.push('影响资产')
   if (!draft.vulnerabilityType?.trim() || !vulnerabilityTypes.includes(draft.vulnerabilityType as (typeof vulnerabilityTypes)[number])) missing.push('漏洞类型')
   if (!draft.selfSeverity?.trim()) missing.push('自评等级')
-  if (!draft.reproductionSteps?.trim() || draft.reproductionSteps.trim().length < 8) missing.push('复现步骤')
-  if (!draft.impactAssessment?.trim() || draft.impactAssessment.trim().length < 8) missing.push('影响评估')
-  if (!draft.repairSuggestion?.trim() || draft.repairSuggestion.trim().length < 8) missing.push('修复建议')
+  if (!draft.reproductionSteps?.trim() || draft.reproductionSteps.trim().length < 30) missing.push('复现步骤（至少 30 字）')
+  if (!draft.impactAssessment?.trim() || draft.impactAssessment.trim().length < 10) missing.push('影响评估（至少 10 字）')
+  if (!draft.repairSuggestion?.trim() || draft.repairSuggestion.trim().length < 10) missing.push('修复建议（至少 10 字）')
   if (!draft.testBoundary?.trim() || draft.testBoundary.trim().length < 10) missing.push('测试边界')
   return missing
 }
@@ -2471,31 +2456,32 @@ function buildDraftMarkdown(draft: AiVulnerabilityDraft) {
     : '已上传原始报告作为利用证明附件，请审核员结合附件核验证据。'
 
   return [
-    '## 【漏洞标题】',
-    draft.title?.trim() || '',
-    '',
-    '## 【影响资产】',
-    draft.assetName?.trim() || '',
-    draft.assetUrl?.trim() ? `\n资产 URL：${draft.assetUrl.trim()}` : '',
-    '',
-    '## 【漏洞描述】',
+    '## 漏洞描述',
     draft.impactAssessment?.trim()
       ? `AI 根据报告内容判断：${draft.impactAssessment.trim()}`
       : '',
     '',
-    '## 【复现步骤】',
+    '## 复现环境与前置条件',
+    '请审核员结合原始报告核验测试环境与前置条件。',
+    '',
+    '## 复现步骤',
     normalizeSteps(draft.reproductionSteps),
     '',
-    '## 【利用证明】',
+    '## 触发请求包',
+    '```http',
+    '',
+    '```',
+    '',
+    '## 利用证明',
     proof,
     '',
-    '## 【影响评估】',
+    '## 影响评估',
     draft.impactAssessment?.trim() || '',
     '',
-    '## 【修复建议】',
+    '## 修复建议',
     draft.repairSuggestion?.trim() || '',
     '',
-    '## 【测试边界说明】',
+    '## 测试边界说明',
     testBoundary,
   ].join('\n').replace(/\n{3,}/g, '\n\n').trim() || markdownTemplate
 }

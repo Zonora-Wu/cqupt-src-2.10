@@ -1,7 +1,7 @@
 import { Loader2, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FloatingNotice } from '../ui/FloatingNotice'
+import { AlertMessage } from '../ui/AlertMessage'
 import { ExitConfirmationDialog } from './ExitConfirmationDialog'
 import { getSecurityExamPaper, submitSecurityExamAnswers, type SecurityExamPaper, type SecurityExamQuestion } from '../../services/securityExam'
 
@@ -104,7 +104,7 @@ export function SecurityExamDialog({ onClose, onPassed, open }: Props) {
         </div>
 
         {message && (
-          <FloatingNotice
+          <AlertMessage
             message={message.text}
             onClose={() => setMessage(null)}
             variant={message.type}

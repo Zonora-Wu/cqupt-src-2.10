@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -318,7 +318,7 @@ export function AdminPointsMallManagement() {
 
   return (
     <>
-      <FloatingNotice
+      <AlertMessage
         message={message || error}
         variant={error ? 'error' : 'success'}
         onClose={() => {
@@ -326,7 +326,7 @@ export function AdminPointsMallManagement() {
           setError('')
         }}
       />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrowIcon={<ShoppingBag className="h-3.5 w-3.5" />}

@@ -90,7 +90,7 @@ export function NotificationContent({ onClose, onOpenChat }: { onClose?: () => v
   }, [activeChannel])
 
   return (
-    <section className="relative z-10 mx-auto flex max-w-[1180px] gap-0 px-5 pb-8 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto flex max-w-[1180px] gap-0 px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
       <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10 ">
 
         {/* 左侧频道列表 */}

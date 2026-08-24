@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -379,7 +379,7 @@ export function AdminUserManagement() {
   if (selectedId) {
     return (
       <>
-        <FloatingNotice
+        <AlertMessage
           message={message || error}
           variant={error ? 'error' : 'success'}
           onClose={() => {
@@ -387,7 +387,7 @@ export function AdminUserManagement() {
             setError('')
           }}
         />
-        <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+        <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
             onClick={() => {
@@ -632,7 +632,7 @@ export function AdminUserManagement() {
 
   return (
     <>
-      <FloatingNotice
+      <AlertMessage
         message={message || error}
         variant={error ? 'error' : 'success'}
         onClose={() => {
@@ -640,7 +640,7 @@ export function AdminUserManagement() {
           setError('')
         }}
       />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             title="用户管理"

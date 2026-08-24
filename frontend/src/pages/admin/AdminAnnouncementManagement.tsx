@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertMessage } from '../../components/ui/AlertMessage'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -304,7 +303,7 @@ export function AdminAnnouncementManagement() {
   if (selectedAnnouncement) {
     return (
       <>
-        <FloatingNotice
+        <AlertMessage
           message={message || error}
           variant={error ? 'error' : 'success'}
           onClose={() => {
@@ -312,7 +311,7 @@ export function AdminAnnouncementManagement() {
             setError('')
           }}
         />
-        <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+        <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
             onClick={() => setSelectedId(null)}
@@ -416,7 +415,7 @@ export function AdminAnnouncementManagement() {
 
   return (
     <>
-      <FloatingNotice
+      <AlertMessage
         message={message || error}
         variant={error ? 'error' : 'success'}
         onClose={() => {
@@ -424,7 +423,7 @@ export function AdminAnnouncementManagement() {
           setError('')
         }}
       />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrowIcon={<Megaphone className="h-3.5 w-3.5" />}

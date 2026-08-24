@@ -40,14 +40,14 @@ export function WorkspaceHeader({
 }: WorkspaceHeaderProps) {
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.08] bg-[var(--app-header-bg)] backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06]">
-      <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 md:px-8">
-        <div className="flex min-w-0 items-center gap-4">
-          <BrandLogo />
+      <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 sm:gap-4 sm:px-5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:px-8">
+        <div className="flex min-w-0 items-center gap-4 overflow-hidden">
+          <BrandLogo className="h-8 max-w-full object-contain object-left sm:h-10" />
         </div>
 
         <ScrollableNav activeItem={activeItem} badges={badges} items={items} onChange={onItemChange} />
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-2">
           <NotificationBell notificationUnreadCount={notificationUnreadCount} onClick={onNotificationClick} />
           <button
             aria-label="切换主题"
@@ -67,7 +67,7 @@ export function WorkspaceHeader({
           />
         </div>
       </div>
-      <div className="border-t border-black/5 px-5 py-2 md:hidden dark:border-white/10">
+      <div className="border-t border-black/5 px-4 py-2 sm:px-5 md:hidden dark:border-white/10">
         <ScrollableNav activeItem={activeItem} badges={badges} items={items} mobile onChange={onItemChange} />
       </div>
     </header>

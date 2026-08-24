@@ -32,8 +32,42 @@ export type UploadVulnerabilityAttachmentResponse = {
   uploadedAt: string
 }
 
+export type VulnerabilityDraftAttachment = {
+  contentUrl: string
+  id: string
+  kind: 'INLINE_IMAGE' | 'SUPPLEMENTARY'
+  mimeType: string
+  originalName: string
+  sizeBytes: number
+  thumbnailUrl: string | null
+  uploadedAt: string
+}
+
+export type VulnerabilitySubmissionDraft = {
+  assetName: string
+  assetUrl: string | null
+  attachments: VulnerabilityDraftAttachment[]
+  bodyMarkdown: string
+  createdAt: string
+  expiresAt: string
+  expiresSoon: boolean
+  id: string
+  name: string
+  ownerUnit: string | null
+  selfSeverity: string | null
+  title: string
+  updatedAt: string
+  version: number
+  vulnerabilityType: string
+}
+
+export type UpdateVulnerabilityDraftPayload = Pick<VulnerabilitySubmissionDraft,
+  'assetName' | 'assetUrl' | 'bodyMarkdown' | 'name' | 'ownerUnit' | 'selfSeverity' | 'title' | 'version' | 'vulnerabilityType'>
+
 export type MyVulnerabilityAttachment = {
   id: string
+  kind?: string
+  mimeType?: string
   originalName: string
   sizeBytes: number
   uploadedAt: string
@@ -96,6 +130,7 @@ export type MyVulnerabilityDetail = {
   repairSuggestion: string
   requestPacket: string | null
   testBoundary: string | null
+  detailMarkdown: string
   reviewerName: string | null
   points: number
   submittedAt: string | null
@@ -103,13 +138,23 @@ export type MyVulnerabilityDetail = {
   updatedAt: string
   attachments: MyVulnerabilityAttachment[]
   events: VulnerabilityEventRecord[]
+  supplements: Array<{ id: string; version: number; markdown: string; authorName: string; createdAt: string }>
 }
 
 export type SupplementVulnerabilityResponse = {
   id: string
   reportNo: string
   status: string
+  supplementId: string
   updatedAt: string
+}
+
+export function uploadVulnerabilitySupplementAttachment(reportId: string, supplementId: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiFormRequest<VulnerabilityDraftAttachment>(`/vulnerabilities/${reportId}/supplements/${supplementId}/attachments`, {
+    auth: true, formData, unauthenticatedMessage: '请先登录后再上传补充附件',
+  })
 }
 
 export type ReviewQueueItem = {
@@ -119,6 +164,7 @@ export type ReviewQueueItem = {
   finalSeverity: string | null
   id: string
   impactAssessment: string
+  detailMarkdown: string
   lastEvent: {
     action: string
     createdAt: string
@@ -180,6 +226,63 @@ export async function createVulnerability(payload: CreateVulnerabilityPayload) {
   })
 }
 
+export function listVulnerabilityDrafts() {
+  return apiRequest<{ items: VulnerabilitySubmissionDraft[] }>('/vulnerabilities/drafts', {
+    auth: true, method: 'GET', unauthenticatedMessage: '请先登录后再编辑漏洞草稿',
+  })
+}
+
+export function createVulnerabilityDraft(name?: string) {
+  return apiRequest<VulnerabilitySubmissionDraft>('/vulnerabilities/drafts', {
+    auth: true, body: { name }, method: 'POST', unauthenticatedMessage: '请先登录后再创建漏洞草稿',
+  })
+}
+
+export function getVulnerabilityDraft(draftId: string) {
+  return apiRequest<VulnerabilitySubmissionDraft>(`/vulnerabilities/drafts/${draftId}`, {
+    auth: true, method: 'GET', unauthenticatedMessage: '请先登录后再编辑漏洞草稿',
+  })
+}
+
+export function updateVulnerabilityDraft(draftId: string, payload: UpdateVulnerabilityDraftPayload) {
+  return apiRequest<VulnerabilitySubmissionDraft>(`/vulnerabilities/drafts/${draftId}`, {
+    auth: true, body: payload, method: 'PUT', unauthenticatedMessage: '请先登录后再保存漏洞草稿',
+  })
+}
+
+export function deleteVulnerabilityDraft(draftId: string) {
+  return apiRequest<{ deleted: boolean; id: string }>(`/vulnerabilities/drafts/${draftId}`, {
+    auth: true, method: 'DELETE', unauthenticatedMessage: '请先登录后再删除漏洞草稿',
+  })
+}
+
+export function submitVulnerabilityDraft(draftId: string, version: number) {
+  return apiRequest<CreateVulnerabilityResponse>(`/vulnerabilities/drafts/${draftId}/submit`, {
+    auth: true, body: { version }, method: 'POST', unauthenticatedMessage: '请先登录后再提交漏洞',
+  })
+}
+
+export function uploadVulnerabilityDraftAttachment(draftId: string, kind: VulnerabilityDraftAttachment['kind'], file: File) {
+  const formData = new FormData()
+  formData.append('kind', kind)
+  formData.append('file', file)
+  return apiFormRequest<VulnerabilityDraftAttachment>(`/vulnerabilities/drafts/${draftId}/attachments`, {
+    auth: true, formData, unauthenticatedMessage: '请先登录后再上传附件',
+  })
+}
+
+export function deleteVulnerabilityDraftAttachment(attachmentId: string) {
+  return apiRequest<{ deleted: boolean; id: string }>(`/vulnerabilities/drafts/attachments/${attachmentId}`, {
+    auth: true, method: 'DELETE', unauthenticatedMessage: '请先登录后再删除附件',
+  })
+}
+
+export function getPrivateAttachmentBlob(attachmentId: string, thumbnail = false) {
+  return apiBlobRequest(`/attachments/${attachmentId}/content${thumbnail ? '?thumbnail=true' : ''}`, {
+    auth: true, unauthenticatedMessage: '请先登录后再查看附件',
+  })
+}
+
 export async function listMyVulnerabilities() {
   return apiRequest<MyVulnerabilityListResponse>('/vulnerabilities/my', {
     auth: true,
@@ -234,7 +337,7 @@ export async function uploadVulnerabilityAttachment(reportId: string, file: File
 }
 
 export async function openAttachmentPreview(attachmentId: string) {
-  const blob = await apiBlobRequest(`/attachments/${attachmentId}/preview`, {
+  const blob = await apiBlobRequest(`/attachments/${attachmentId}/content`, {
     auth: true,
     unauthenticatedMessage: '请先登录后再预览附件',
   })
@@ -299,6 +402,7 @@ export type AdminVulnerabilityDetail = {
   repairSuggestion: string
   requestPacket: string | null
   testBoundary: string | null
+  detailMarkdown: string
   submitterName: string
   submitterEmail: string
   submitterUnifiedCode: string
@@ -319,10 +423,13 @@ export type AdminVulnerabilityDetail = {
   } | null
   attachments: Array<{
     id: string
+    kind?: string
+    mimeType?: string
     originalName: string
     sizeBytes: number
     uploadedAt: string
   }>
+  supplements: Array<{ id: string; version: number; markdown: string; authorName: string; createdAt: string }>
   events: Array<{
     id: string
     action: string
@@ -359,6 +466,7 @@ export async function getVulnerabilityDetail(reportId: string) {
     repairSuggestion: string
     requestPacket: string | null
     testBoundary: string | null
+    detailMarkdown: string
     submitter: { id: string; name: string; email: string; unifiedCode: string }
     reviewer: { id: string; name: string; email: string } | null
     points: number
@@ -367,7 +475,8 @@ export async function getVulnerabilityDetail(reportId: string) {
     updatedAt: string
     certificateContribution: string
     certificate: AdminVulnerabilityDetail['certificate']
-    attachments: Array<{ id: string; originalName: string; sizeBytes: number; uploadedAt: string }>
+    attachments: Array<{ id: string; kind?: string; mimeType?: string; originalName: string; sizeBytes: number; uploadedAt: string }>
+    supplements: Array<{ id: string; version: number; markdown: string; authorName: string; createdAt: string }>
     events: Array<{
       id: string
       action: string

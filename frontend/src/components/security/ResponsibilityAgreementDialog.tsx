@@ -1,7 +1,7 @@
 import { FileSignature, Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FloatingNotice } from '../ui/FloatingNotice'
+import { AlertMessage } from '../ui/AlertMessage'
 import { ExitConfirmationDialog } from './ExitConfirmationDialog'
 import {
   getCurrentResponsibilityAgreement,
@@ -120,7 +120,7 @@ export function ResponsibilityAgreementDialog({ accessStatus, onClose, onSigned,
         </div>
 
         {message && (
-          <FloatingNotice
+          <AlertMessage
             message={message.text}
             onClose={() => setMessage(null)}
             variant={message.type}

@@ -15,9 +15,9 @@ export function PageHeader({ title, description, align = 'left' }: PageHeaderPro
 
   return (
     <div className={centerClass}>
-      <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
+      <h1 className="mt-0 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">{title}</h1>
       {description && (
-        <p className={`mt-3 max-w-2xl leading-7 text-slate-600 dark:text-slate-400 ${descCenterClass}`}>
+        <p className={`mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:mt-3 sm:text-base sm:leading-7 dark:text-slate-400 ${descCenterClass}`}>
           {description}
         </p>
       )}

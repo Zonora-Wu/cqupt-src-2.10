@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listAiProviders, type AiProviderPreset } from '../../services/ai'
+import { platformNotice } from '../../services/platformNotice'
 import { deletePlatformAiRoute, getPlatformAiConfig, savePlatformAiRoute, type PlatformAiRoute } from '../../services/systemSettings'
 import { ProviderPresetForm, type ProviderFormValue } from './ProviderPresetForm'
 
@@ -7,7 +8,6 @@ export function AdminPlatformAiPanel() {
   const [routes, setRoutes] = useState<PlatformAiRoute[]>([])
   const [providers, setProviders] = useState<AiProviderPreset[]>([])
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
   const [providersLoading, setProvidersLoading] = useState(true)
   const [form, setForm] = useState<ProviderFormValue & { priority: number }>({
     apiKey: '', baseUrl: '', model: '', name: '', notes: '', priority: 0, providerId: 'custom', websiteUrl: '',
@@ -20,12 +20,12 @@ export function AdminPlatformAiPanel() {
     const config = await getPlatformAiConfig()
     setRoutes(config.routes.filter((route) => route.purpose === 'GLOBAL'))
   }
-  useEffect(() => { const timer = window.setTimeout(() => void reload().catch(() => setMessage('平台模型配置加载失败')), 0); return () => window.clearTimeout(timer) }, [])
+  useEffect(() => { const timer = window.setTimeout(() => void reload().catch(() => platformNotice.error('平台模型配置加载失败', { title: '配置加载失败' })), 0); return () => window.clearTimeout(timer) }, [])
 
   const run = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true)
-    try { await action(); await reload(); setMessage(success); setForm((current) => ({ ...current, apiKey: '' })) }
-    catch (error) { setMessage(error instanceof Error ? error.message : '操作失败') }
+    try { await action(); await reload(); platformNotice.success(success, { title: '平台模型配置已更新' }); setForm((current) => ({ ...current, apiKey: '' })) }
+    catch (error) { platformNotice.error(error instanceof Error ? error.message : '操作失败', { title: '平台模型配置失败' }) }
     finally { setBusy(false) }
   }
 
@@ -62,7 +62,7 @@ export function AdminPlatformAiPanel() {
           value={form}
         />
         <div className="flex flex-col-reverse gap-3 border-t border-black/10 pt-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
-          <p className="min-h-5 text-sm text-slate-500 dark:text-slate-400">{message}</p>
+          <span aria-hidden="true" className="min-h-5" />
           <button className={primaryClass} disabled={busy} onClick={() => void run(() => savePlatformAiRoute({ ...form, purpose: 'GLOBAL', automaticFailover: true }), '平台模型已保存')} type="button">确定并保存</button>
         </div>
         <div className="space-y-2">

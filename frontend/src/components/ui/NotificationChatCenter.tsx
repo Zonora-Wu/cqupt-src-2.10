@@ -22,6 +22,7 @@ import {
 } from '../../services/notificationReadState'
 import { getNotifications, markNotificationChannelRead, markNotificationRead } from '../../services/notifications'
 import type { NotificationChannel } from '../../services/notifications'
+import { AlertMessage } from './AlertMessage'
 import { SurfacePanel } from './SurfacePanel'
 
 type Selection = { id: string; kind: 'chat' | 'notification' }
@@ -281,8 +282,8 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
   const showDetail = Boolean(selection)
 
   return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-      <SurfacePanel className="relative flex h-[calc(100dvh-7rem)] min-h-[34rem] w-full overflow-hidden p-0">
+    <section className="relative z-10 mx-auto flex h-dvh max-w-[1360px] flex-col px-4 pb-4 pt-32 sm:px-5 md:px-8 md:pb-8 md:pt-24">
+      <SurfacePanel className="relative flex min-h-0 w-full flex-1 overflow-hidden p-0">
         <aside className={`flex w-full shrink-0 flex-col md:w-72 md:border-r md:border-black/10 dark:md:border-white/10 ${showDetail ? 'max-md:hidden' : ''}`}>
           <div className="flex h-14 shrink-0 items-center border-b border-black/10 px-4 dark:border-white/10">
             <h1 className="text-sm font-semibold">通知中心</h1>
@@ -326,10 +327,7 @@ export function NotificationChatCenter({ onClose }: { onClose?: () => void }) {
 
         <main className={`min-w-0 flex-1 flex-col ${showDetail ? 'flex' : 'hidden md:flex'}`}>
           {error && (
-            <div className="flex items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-              <span className="min-w-0 flex-1">{error}</span>
-              <button className="shrink-0 underline underline-offset-2" onClick={() => setError('')} type="button">知道了</button>
-            </div>
+            <AlertMessage message={error} onClose={() => setError('')} variant="error" />
           )}
           {activeChannel && <SystemChannel channel={activeChannel} onBack={() => setSelection(null)} onOpen={async (message) => {
             if (!message.route) return

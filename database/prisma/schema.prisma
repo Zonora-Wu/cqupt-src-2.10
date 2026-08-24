@@ -63,6 +63,8 @@ enum VulnerabilityStatus {
 enum AttachmentKind {
   VULNERABILITY_REPORT
   RETEST_EVIDENCE
+  INLINE_IMAGE
+  SUPPLEMENTARY
 }
 
 enum ReviewDecision {
@@ -473,6 +475,8 @@ model User {
   aiConversationSkillPins AiConversationSkillPin[]
   generatedVulnerabilityAiAdvices VulnerabilityAiAdvice[] @relation("VulnerabilityAiAdviceGenerator")
   editedVulnerabilityAiReviewDrafts VulnerabilityAiReviewDraft[] @relation("VulnerabilityAiReviewDraftEditor")
+  vulnerabilitySubmissionDrafts VulnerabilitySubmissionDraft[]
+  vulnerabilitySupplements VulnerabilitySupplement[]
 
   @@index([roleId])
   @@index([authorizationLevel])
@@ -719,6 +723,7 @@ model VulnerabilityReport {
   impactAssessment    String                  @db.Text
   repairSuggestion    String                  @db.Text
   requestPacket       String?                 @db.Text
+  detailMarkdown      String                  @default("") @db.Text
   testBoundary        String?                 @db.Text
   aiParsed            Boolean                 @default(false)
   submittedAt         DateTime?
@@ -740,12 +745,52 @@ model VulnerabilityReport {
   aiActionProposals   AiActionProposal[]
   aiAdvices           VulnerabilityAiAdvice[]
   aiReviewDraft       VulnerabilityAiReviewDraft?
+  supplements         VulnerabilitySupplement[]
 
   @@index([submitterId])
   @@index([assetId])
   @@index([status])
   @@index([finalSeverity])
   @@index([createdAt])
+}
+
+model VulnerabilitySubmissionDraft {
+  id                String   @id @default(cuid())
+  userId            String
+  name              String
+  title             String   @default("")
+  assetName         String   @default("")
+  assetUrl          String?  @db.Text
+  ownerUnit         String?
+  vulnerabilityType String   @default("")
+  selfSeverity      VulnerabilitySeverity?
+  bodyMarkdown      String   @default("") @db.Text
+  version           Int      @default(1)
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments VulnerabilityAttachment[]
+
+  @@index([userId, updatedAt])
+  @@index([expiresAt])
+}
+
+model VulnerabilitySupplement {
+  id        String   @id @default(cuid())
+  reportId  String
+  authorId  String
+  version   Int
+  markdown  String   @db.Text
+  createdAt DateTime @default(now())
+
+  report      VulnerabilityReport     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author      User                    @relation(fields: [authorId], references: [id])
+  attachments VulnerabilityAttachment[]
+
+  @@unique([reportId, version])
+  @@index([authorId, createdAt])
 }
 
 model VulnerabilityAiAdvice {
@@ -802,21 +847,28 @@ model VulnerabilityAiReviewDraft {
 
 model VulnerabilityAttachment {
   id              String              @id @default(cuid())
-  reportId        String
+  reportId        String?
+  draftId         String?
+  supplementId    String?
   uploaderId      String
   kind            AttachmentKind
   originalName    String
   storageKey      String              @unique
+  thumbnailStorageKey String?         @unique
   mimeType        String
   sizeBytes       Int
   sha256          String
   pageCount       Int?
   uploadedAt      DateTime            @default(now())
   deletedAt       DateTime?
-  report          VulnerabilityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report          VulnerabilityReport? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  draft           VulnerabilitySubmissionDraft? @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  supplement      VulnerabilitySupplement? @relation(fields: [supplementId], references: [id], onDelete: Cascade)
   uploader        User                @relation("AttachmentUploader", fields: [uploaderId], references: [id])
 
   @@index([reportId])
+  @@index([draftId])
+  @@index([supplementId])
   @@index([sha256])
 }
 

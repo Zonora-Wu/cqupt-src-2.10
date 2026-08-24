@@ -177,7 +177,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
           )}
         </Suspense>
       ) : (
-        <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+        <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
           <div className="flex flex-col gap-3 border-b border-black/10 pb-5 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between">
             <PageHeader
               title="管理驾驶舱"
@@ -205,7 +205,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
           </SurfacePanel>
 
           <div className="mt-5 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <SurfacePanel className="flex h-[620px] min-h-0 flex-col overflow-hidden p-0">
+            <SurfacePanel className="flex min-h-[420px] flex-col overflow-hidden p-0 xl:h-[620px] xl:min-h-0">
               <SectionHeader
                 title="最近漏洞"
                 meta={`${dashStats?.recentVulnerabilities.length ?? 0} 条`}
@@ -219,7 +219,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
               />
             </SurfacePanel>
 
-            <SurfacePanel className="flex h-[620px] min-h-0 flex-col overflow-hidden p-0">
+            <SurfacePanel className="flex min-h-[420px] flex-col overflow-hidden p-0 xl:h-[620px] xl:min-h-0">
               <div className="flex items-center justify-between gap-3 border-b border-black/10 px-5 py-4 dark:border-white/10">
                 <div>
                   <h2 className="text-sm font-semibold">Hermes 平台分析</h2>

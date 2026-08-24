@@ -10,12 +10,13 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SeverityBadge } from '../../components/ui/SeverityBadge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { PrivateMarkdown } from '../../components/vulnerabilities/PrivateMarkdown'
 import {
   getMyVulnerabilityDetail,
   listMyVulnerabilities,
   openAttachmentPreview,
   supplementVulnerability,
-  uploadVulnerabilityAttachment,
+  uploadVulnerabilitySupplementAttachment,
 } from '../../services/vulnerabilities'
 import type { MyVulnerabilityDetail, MyVulnerabilityItem, MyVulnerabilityListResponse } from '../../services/vulnerabilities'
 import { markNotificationEntityRead } from '../../services/notifications'
@@ -46,7 +47,7 @@ export function UserMyVulnerabilities() {
   /* 补充材料弹窗 */
   const [supplementTarget, setSupplementTarget] = useState<MyVulnerabilityItem | null>(null)
   const [supplementNote, setSupplementNote] = useState('')
-  const [supplementFile, setSupplementFile] = useState<File | null>(null)
+  const [supplementFiles, setSupplementFiles] = useState<File[]>([])
   const [supplementFileError, setSupplementFileError] = useState('')
   const [supplementSubmitting, setSupplementSubmitting] = useState(false)
   const [supplementError, setSupplementError] = useState('')
@@ -162,7 +163,7 @@ export function UserMyVulnerabilities() {
   const openSupplement = (item: MyVulnerabilityItem) => {
     setSupplementTarget(item)
     setSupplementNote('')
-    setSupplementFile(null)
+    setSupplementFiles([])
     setSupplementFileError('')
     setSupplementError('')
   }
@@ -171,19 +172,20 @@ export function UserMyVulnerabilities() {
     setSupplementTarget(null)
   }
 
-  const handleSupplementFileChange = (file: File | undefined) => {
-    setSupplementFile(null)
+  const handleSupplementFileChange = (files: File[]) => {
+    setSupplementFiles([])
     setSupplementFileError('')
-    if (!file) return
-    if (file.type !== 'application/pdf') {
-      setSupplementFileError('仅支持上传 PDF 文件')
+    if (files.length === 0) return
+    const allowed = /\.(pdf|zip|txt|har|png|jpe?g|webp)$/i
+    if (files.length > 10 || files.some((file) => !allowed.test(file.name) || file.size > 20 * 1024 * 1024)) {
+      setSupplementFileError('最多 10 个附件；仅支持 PDF、ZIP、TXT、HAR、PNG、JPEG、WebP，单个不超过 20MB')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setSupplementFileError('单个 PDF 文件不能超过 10MB')
+    if (files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+      setSupplementFileError('附件总大小不能超过 50MB')
       return
     }
-    setSupplementFile(file)
+    setSupplementFiles(files)
   }
 
   const handleSupplementSubmit = async () => {
@@ -195,10 +197,14 @@ export function UserMyVulnerabilities() {
     setSupplementError('')
     setSupplementSubmitting(true)
     try {
-      if (supplementFile) {
-        await uploadVulnerabilityAttachment(supplementTarget.id, supplementFile)
+      const result = await supplementVulnerability(supplementTarget.id, supplementNote.trim())
+      try {
+        for (const file of supplementFiles) {
+          await uploadVulnerabilitySupplementAttachment(supplementTarget.id, result.supplementId, file)
+        }
+      } catch (error) {
+        throw new Error(`补充说明已提交，但部分附件上传失败：${error instanceof Error ? error.message : '未知错误'}`, { cause: error })
       }
-      await supplementVulnerability(supplementTarget.id, supplementNote.trim())
       closeSupplement()
       await loadReports()
     } catch (err) {
@@ -326,7 +332,7 @@ export function UserMyVulnerabilities() {
       {supplementTarget && (
         <SupplementMaterialsModal
           error={supplementError}
-          file={supplementFile}
+          files={supplementFiles}
           fileError={supplementFileError}
           item={supplementTarget}
           note={supplementNote}
@@ -456,46 +462,23 @@ function VulnerabilityDetailDrawer({
                 </div>
               </section>
 
-              {/* 复现步骤 */}
               <section>
-                <SectionTitle title="复现步骤" />
-                <MarkdownBlock content={detail.reproductionSteps} />
+                <SectionTitle title="漏洞报告（Markdown）" />
+                <PrivateMarkdown className="mt-3 rounded-lg bg-[var(--app-panel-muted-bg)] p-4" content={detail.detailMarkdown} />
               </section>
 
-              {/* 影响评估 */}
-              <section>
-                <SectionTitle title="影响评估" />
-                <MarkdownBlock content={detail.impactAssessment} />
-              </section>
-
-              {/* 修复建议 */}
-              <section>
-                <SectionTitle title="修复建议" />
-                <MarkdownBlock content={detail.repairSuggestion} />
-              </section>
-
-              {/* 请求包 */}
-              {detail.requestPacket && (
-                <section>
-                  <SectionTitle title="请求包" />
-                  <pre className="mt-3 overflow-x-auto rounded-lg bg-[var(--app-panel-muted-bg)] p-4 text-xs leading-6 text-slate-700  dark:text-slate-300">
-                    {detail.requestPacket}
-                  </pre>
+              {detail.supplements.map((supplement) => (
+                <section key={supplement.id}>
+                  <SectionTitle title={`补充材料 v${supplement.version}`} />
+                  <p className="mt-2 text-xs text-slate-400">{supplement.authorName} · {formatDateTime(supplement.createdAt)}</p>
+                  <PrivateMarkdown className="mt-3 rounded-lg bg-[var(--app-panel-muted-bg)] p-4" content={supplement.markdown} />
                 </section>
-              )}
-
-              {/* 测试边界 */}
-              {detail.testBoundary && (
-                <section>
-                  <SectionTitle title="测试边界说明" />
-                  <MarkdownBlock content={detail.testBoundary} />
-                </section>
-              )}
+              ))}
 
               {/* 附件 */}
               {detail.attachments.length > 0 && (
                 <section>
-                  <SectionTitle title={`PDF 附件（${detail.attachments.length}）`} />
+                  <SectionTitle title={`附件材料（${detail.attachments.length}）`} />
                   <div className="mt-3 grid gap-2">
                     {detail.attachments.map((att) => (
                       <div
@@ -561,7 +544,7 @@ function VulnerabilityDetailDrawer({
 /* ─── 补充材料弹窗 ─── */
 function SupplementMaterialsModal({
   error,
-  file,
+  files,
   fileError,
   item,
   note,
@@ -572,12 +555,12 @@ function SupplementMaterialsModal({
   submitting,
 }: {
   error: string
-  file: File | null
+  files: File[]
   fileError: string
   item: MyVulnerabilityItem
   note: string
   onCancel: () => void
-  onFileChange: (f: File | undefined) => void
+  onFileChange: (files: File[]) => void
   onNoteChange: (v: string) => void
   onSubmit: () => void
   submitting: boolean
@@ -635,7 +618,7 @@ function SupplementMaterialsModal({
         {/* 上传附件（可选） */}
         <div className="mt-4">
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            附加 PDF（可选）
+            补充附件（可选）
           </p>
           <div
             className="mt-1.5 flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 border-dashed border-black/10 px-4 py-4 text-sm text-slate-500 transition hover:border-brand-600/40 dark:border-white/10 dark:hover:border-brand-400/40"
@@ -643,19 +626,20 @@ function SupplementMaterialsModal({
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault()
-              onFileChange(e.dataTransfer.files[0])
+              onFileChange(Array.from(e.dataTransfer.files))
             }}
           >
-            {file ? (
-              <span className="truncate font-medium text-slate-700 dark:text-slate-300">{file.name}</span>
+            {files.length > 0 ? (
+              <span className="truncate font-medium text-slate-700 dark:text-slate-300">已选择 {files.length} 个附件</span>
             ) : (
-              <span>拖拽或点击上传 PDF 附件（最大 10MB）</span>
+              <span>拖拽或点击上传补充附件</span>
             )}
           </div>
           <input
-            accept="application/pdf"
+            accept=".pdf,.zip,.txt,.har,.png,.jpg,.jpeg,.webp"
             className="hidden"
-            onChange={(e) => onFileChange(e.target.files?.[0])}
+            multiple
+            onChange={(e) => onFileChange(Array.from(e.target.files ?? []))}
             ref={fileInputRef}
             type="file"
           />
@@ -712,14 +696,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-start gap-2">
       <span className="w-20 shrink-0 text-slate-500 dark:text-slate-400">{label}</span>
       <span className="font-medium text-slate-800 dark:text-slate-200">{value}</span>
-    </div>
-  )
-}
-
-function MarkdownBlock({ content }: { content: string }) {
-  return (
-    <div className="mt-3 rounded-lg bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-7 text-slate-700  dark:text-slate-300 whitespace-pre-wrap">
-      {content || '（无内容）'}
     </div>
   )
 }

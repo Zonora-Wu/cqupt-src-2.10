@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { listAiSkillReviews, reviewAiSkill, type AiSkillReviewItem } from '../../services/ai'
+import { platformNotice } from '../../services/platformNotice'
 import { SurfacePanel } from '../ui/SurfacePanel'
 
 export function AdminSkillReviewPanel() {
   const [items, setItems] = useState<AiSkillReviewItem[]>([])
   const [selected, setSelected] = useState<AiSkillReviewItem | null>(null)
   const [busy, setBusy] = useState('')
-  const [message, setMessage] = useState('')
   const reload = () => listAiSkillReviews().then(setItems)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void reload().catch(() => setMessage('声明式 Skill 审核队列加载失败')), 0)
+    const timer = window.setTimeout(() => void reload().catch(() => platformNotice.error('声明式 Skill 审核队列加载失败', { title: 'Skill 审核加载失败' })), 0)
     return () => window.clearTimeout(timer)
   }, [])
 
@@ -21,9 +21,9 @@ export function AdminSkillReviewPanel() {
       await reviewAiSkill(item.id, decision, note)
       await reload()
       setSelected(null)
-      setMessage('审核结果已记录')
+      platformNotice.success('审核结果已记录', { title: 'Skill 审核完成' })
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '审核失败')
+      platformNotice.error(error instanceof Error ? error.message : '审核失败', { title: 'Skill 审核失败' })
     } finally {
       setBusy('')
     }
@@ -33,7 +33,6 @@ export function AdminSkillReviewPanel() {
     <>
       <SurfacePanel className="overflow-hidden p-0">
         <div className="flex items-end justify-between gap-4 border-b border-black/10 px-5 py-4 dark:border-white/10"><div><h2 className="text-base font-semibold">用户 Skill 审核</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">发布结论由管理员人工作出</p></div><span className="text-sm text-slate-500 dark:text-slate-400">{items.length} 项待处理</span></div>
-        {message && <p className="border-b border-black/10 px-5 py-3 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">{message}</p>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-black/[0.025] text-xs text-slate-500 dark:bg-white/[0.03]"><tr><th className="px-5 py-3 font-medium">Skill</th><th className="px-4 py-3 font-medium">提交人</th><th className="px-4 py-3 font-medium">工具权限</th><th className="px-4 py-3 font-medium">提交时间</th><th className="px-5 py-3 text-right font-medium">操作</th></tr></thead>

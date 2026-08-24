@@ -25,6 +25,7 @@ import {
   ReviewQueueResponse,
   SupplementVulnerabilityResponse,
 } from './vulnerability.types'
+import { validateSupplementMarkdown, VulnerabilityMarkdownService } from './vulnerability-markdown.service'
 
 const DEFAULT_CERTIFICATE_CONTRIBUTION_TEMPLATE =
   '发现并提交 {{vulnerabilityType}} 风险，报告编号 {{reportNo}}，影响资产 {{assetName}}。经平台审核确认，该漏洞等级为 {{finalSeverity}}，为学校网络安全治理和风险修复提供了有效支持。'
@@ -35,6 +36,7 @@ export class VulnerabilitiesService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AccessPolicyService) private readonly accessPolicy: AccessPolicyService,
     @Inject(NotificationDeliveryService) private readonly notifications: NotificationDeliveryService,
+    @Inject(VulnerabilityMarkdownService) private readonly markdown: VulnerabilityMarkdownService,
   ) {}
 
   async listReviewQueue(): Promise<ReviewQueueResponse> {
@@ -90,6 +92,7 @@ export class VulnerabilitiesService {
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
       id: report.id,
       impactAssessment: report.impactAssessment,
+      detailMarkdown: report.detailMarkdown,
       lastEvent: report.events[0] ?? null,
       ownerUnit: report.ownerUnit,
       points: sumPoints(report.pointEntries),
@@ -610,6 +613,63 @@ export class VulnerabilitiesService {
     input: NormalizedCreateVulnerabilityInput,
     meta: ClientRequestMeta,
   ) {
+    return this.persistSubmittedReport(user, input, meta)
+  }
+
+  async submitDraft(
+    user: AuthenticatedRequestUser,
+    draftId: string,
+    version: number,
+    meta: ClientRequestMeta,
+  ) {
+    await this.accessPolicy.assertCanSubmitVulnerability(user.id)
+
+    const draft = await this.prisma.vulnerabilitySubmissionDraft.findFirst({
+      where: { id: draftId, userId: user.id, expiresAt: { gt: new Date() } },
+      include: { attachments: { where: { deletedAt: null } } },
+    })
+    if (!draft) throw new NotFoundException('漏洞草稿不存在或已过期')
+    if (draft.version !== version) throw new BadRequestException('草稿已更新，请刷新后重新提交')
+    if (!draft.selfSeverity) throw new BadRequestException('请选择自评等级')
+    if (draft.title.trim().length < 4) throw new BadRequestException('漏洞标题至少需要 4 个字符')
+    if (draft.assetName.trim().length < 2) throw new BadRequestException('影响资产至少需要 2 个字符')
+    if (draft.vulnerabilityType.trim().length < 2) throw new BadRequestException('请选择漏洞类型')
+
+    const inlineIds = new Set(
+      draft.attachments.filter((attachment) => attachment.kind === 'INLINE_IMAGE').map((attachment) => attachment.id),
+    )
+    const parsed = this.markdown.validate(draft.bodyMarkdown, inlineIds)
+    const detailMarkdown = this.markdown.compose({
+      assetName: draft.assetName,
+      assetUrl: draft.assetUrl,
+      ownerUnit: draft.ownerUnit,
+      selfSeverity: draft.selfSeverity,
+      title: draft.title,
+      vulnerabilityType: draft.vulnerabilityType,
+    }, draft.bodyMarkdown)
+
+    return this.persistSubmittedReport(user, {
+      assetName: draft.assetName,
+      assetUrl: draft.assetUrl ?? undefined,
+      detailMarkdown,
+      impactAssessment: parsed.impactAssessment,
+      ownerUnit: draft.ownerUnit ?? undefined,
+      repairSuggestion: parsed.repairSuggestion,
+      requestPacket: parsed.requestPacket,
+      reproductionSteps: parsed.reproductionSteps,
+      selfSeverity: draft.selfSeverity,
+      testBoundary: parsed.testBoundary,
+      title: draft.title,
+      vulnerabilityType: draft.vulnerabilityType,
+    }, meta, { draftId, version })
+  }
+
+  private async persistSubmittedReport(
+    user: AuthenticatedRequestUser,
+    input: NormalizedCreateVulnerabilityInput,
+    meta: ClientRequestMeta,
+    draftClaim?: { draftId: string; version: number },
+  ) {
     await this.accessPolicy.assertCanSubmitVulnerability(user.id)
 
     const now = new Date()
@@ -617,6 +677,21 @@ export class VulnerabilitiesService {
 
     const notificationIds: string[] = []
     const report = await this.prisma.$transaction(async (tx) => {
+      let draftAttachmentIds: string[] = []
+      if (draftClaim) {
+        const claimedDraft = await tx.vulnerabilitySubmissionDraft.findFirst({
+          where: {
+            expiresAt: { gt: now },
+            id: draftClaim.draftId,
+            userId: user.id,
+            version: draftClaim.version,
+          },
+          select: { attachments: { where: { deletedAt: null }, select: { id: true } }, id: true },
+        })
+        if (!claimedDraft) throw new BadRequestException('草稿已更新或过期，请刷新后重新提交')
+        draftAttachmentIds = claimedDraft.attachments.map((attachment) => attachment.id)
+      }
+
       const created = await tx.vulnerabilityReport.create({
         data: {
           reportNo,
@@ -632,10 +707,25 @@ export class VulnerabilitiesService {
           impactAssessment: input.impactAssessment,
           repairSuggestion: input.repairSuggestion,
           requestPacket: input.requestPacket,
+          detailMarkdown: input.detailMarkdown,
           testBoundary: input.testBoundary,
           submittedAt: now,
         },
       })
+
+      if (draftClaim) {
+        if (draftAttachmentIds.length > 0) {
+          const moved = await tx.vulnerabilityAttachment.updateMany({
+            where: { draftId: draftClaim.draftId, id: { in: draftAttachmentIds }, uploaderId: user.id },
+            data: { draftId: null, reportId: created.id },
+          })
+          if (moved.count !== draftAttachmentIds.length) throw new BadRequestException('草稿附件状态已变化，请刷新后重试')
+        }
+        const deleted = await tx.vulnerabilitySubmissionDraft.deleteMany({
+          where: { id: draftClaim.draftId, userId: user.id, version: draftClaim.version },
+        })
+        if (deleted.count !== 1) throw new BadRequestException('草稿已更新，请刷新后重试')
+      }
 
       await tx.vulnerabilityEvent.create({
         data: {
@@ -758,7 +848,7 @@ export class VulnerabilitiesService {
         attachments: {
           where: { deletedAt: null },
           orderBy: { uploadedAt: 'desc' },
-          select: { id: true, originalName: true, sizeBytes: true, uploadedAt: true },
+          select: { id: true, kind: true, mimeType: true, originalName: true, sizeBytes: true, uploadedAt: true },
         },
         events: {
           orderBy: { createdAt: 'asc' },
@@ -767,6 +857,10 @@ export class VulnerabilitiesService {
         pointEntries: { select: { direction: true, points: true } },
         assignment: {
           select: { auditor: { select: { name: true } } },
+        },
+        supplements: {
+          orderBy: { version: 'asc' },
+          select: { id: true, version: true, markdown: true, createdAt: true, author: { select: { name: true } } },
         },
       },
     })
@@ -795,12 +889,16 @@ export class VulnerabilitiesService {
       repairSuggestion: report.repairSuggestion,
       requestPacket: report.requestPacket,
       testBoundary: report.testBoundary,
+      detailMarkdown: report.detailMarkdown,
       reviewerName: report.assignment?.auditor.name ?? null,
       points: sumPoints(report.pointEntries),
       submittedAt: report.submittedAt,
       confirmedAt: report.confirmedAt,
       updatedAt: report.updatedAt,
       attachments: report.attachments,
+      supplements: report.supplements.map((item) => ({
+        authorName: item.author.name, createdAt: item.createdAt, id: item.id, markdown: item.markdown, version: item.version,
+      })),
       events: report.events.map((e) => ({
         id: e.id,
         action: e.action,
@@ -821,6 +919,7 @@ export class VulnerabilitiesService {
   ): Promise<SupplementVulnerabilityResponse> {
     const report = await this.prisma.vulnerabilityReport.findFirst({
       where: { deletedAt: null, id: reportId },
+      include: { attachments: { where: { deletedAt: null }, select: { id: true } } },
     })
 
     if (!report) {
@@ -835,8 +934,16 @@ export class VulnerabilitiesService {
       throw new BadRequestException('当前状态不需要补充材料，无需操作')
     }
 
+    const supplementMarkdown = validateSupplementMarkdown(note, new Set(report.attachments.map((item) => item.id)))
+
     const notificationIds: string[] = []
     const updated = await this.prisma.$transaction(async (tx) => {
+      const latestSupplement = await tx.vulnerabilitySupplement.findFirst({
+        where: { reportId: report.id }, orderBy: { version: 'desc' }, select: { version: true },
+      })
+      const supplement = await tx.vulnerabilitySupplement.create({
+        data: { authorId: user.id, markdown: supplementMarkdown, reportId: report.id, version: (latestSupplement?.version ?? 0) + 1 },
+      })
       const next = await tx.vulnerabilityReport.update({
         where: { id: report.id },
         data: { status: VulnerabilityStatus.SUBMITTED },
@@ -882,16 +989,17 @@ export class VulnerabilitiesService {
         iconType: 'shield', menuScope: 'auditor-review', route: `/auditor/review?vulnerabilityId=${report.id}`,
       }))
 
-      return next
+      return { next, supplement }
     })
 
     await this.notifications.dispatchAfterCommit(notificationIds)
 
     return {
-      id: updated.id,
-      reportNo: updated.reportNo,
-      status: formatStatus(updated.status),
-      updatedAt: updated.updatedAt,
+      id: updated.next.id,
+      reportNo: updated.next.reportNo,
+      status: formatStatus(updated.next.status),
+      supplementId: updated.supplement.id,
+      updatedAt: updated.next.updatedAt,
     }
   }
 
@@ -902,7 +1010,7 @@ export class VulnerabilitiesService {
         attachments: {
           where: { deletedAt: null },
           orderBy: { uploadedAt: 'desc' },
-          select: { id: true, originalName: true, sizeBytes: true, uploadedAt: true },
+          select: { id: true, kind: true, mimeType: true, originalName: true, sizeBytes: true, uploadedAt: true },
         },
         events: {
           orderBy: { createdAt: 'asc' },
@@ -932,6 +1040,10 @@ export class VulnerabilitiesService {
         assignment: {
           select: { auditor: { select: { id: true, email: true, name: true } } },
         },
+        supplements: {
+          orderBy: { version: 'asc' },
+          select: { id: true, version: true, markdown: true, createdAt: true, author: { select: { name: true } } },
+        },
       },
     })
 
@@ -957,6 +1069,7 @@ export class VulnerabilitiesService {
       repairSuggestion: report.repairSuggestion,
       requestPacket: report.requestPacket,
       testBoundary: report.testBoundary,
+      detailMarkdown: report.detailMarkdown,
       submitter: report.submitter,
       reviewer: report.assignment?.auditor ?? null,
       points: sumPoints(report.pointEntries),
@@ -976,6 +1089,9 @@ export class VulnerabilitiesService {
           }
         : null,
       attachments: report.attachments,
+      supplements: report.supplements.map((item) => ({
+        authorName: item.author.name, createdAt: item.createdAt, id: item.id, markdown: item.markdown, version: item.version,
+      })),
       events: report.events.map((event) => ({
         id: event.id,
         action: formatEventAction(event.action),

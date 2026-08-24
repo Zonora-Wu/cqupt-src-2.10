@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { FloatingNotice } from './FloatingNotice'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { platformNotice } from '../../services/platformNotice'
 
 type AlertVariant = 'error' | 'info' | 'success' | 'warning'
 
@@ -21,14 +21,20 @@ export function AlertMessage({
   variant = 'info',
 }: AlertMessageProps) {
   void className
+  const onCloseRef = useRef(onClose)
 
-  return (
-    <FloatingNotice
-      action={action}
-      message={message}
-      onClose={onClose}
-      title={title}
-      variant={variant}
-    />
-  )
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    const id = platformNotice[variant](message, {
+      action,
+      onClose: () => onCloseRef.current?.(),
+      title,
+    })
+    return () => platformNotice.dismiss(id)
+  }, [action, message, title, variant])
+
+  return null
 }

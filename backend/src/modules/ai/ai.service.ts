@@ -309,6 +309,7 @@ export class AiService {
       select: {
         assetName: true,
         assetUrl: true,
+        detailMarkdown: true,
         impactAssessment: true,
         ownerUnit: true,
         repairSuggestion: true,
@@ -326,7 +327,7 @@ export class AiService {
     const draft: AiVulnerabilityDraft = {
       assetName: report.assetName,
       assetUrl: report.assetUrl ?? '',
-      detailMarkdown: '',
+      detailMarkdown: report.detailMarkdown,
       id: 'stored_report',
       impactAssessment: report.impactAssessment,
       missingFields: [],
@@ -390,7 +391,7 @@ export class AiService {
     const draft: AiVulnerabilityDraft = {
       assetName: report.assetName,
       assetUrl: report.assetUrl ?? '',
-      detailMarkdown: attachmentTexts.join('\n\n'),
+      detailMarkdown: [report.detailMarkdown, ...attachmentTexts].filter(Boolean).join('\n\n'),
       id: 'auditor_stored_report',
       impactAssessment: report.impactAssessment,
       missingFields: [],
@@ -404,6 +405,7 @@ export class AiService {
     }
     const prepared = buildReportAnalysisPreparation([draft], draft.id, {
       extraFields: [
+        ['reportMarkdown', report.detailMarkdown],
         ['currentStatus', String(report.status)],
         ['requestPacket', report.requestPacket ?? undefined],
         ['attachmentEvidence', attachmentTexts.join('\n\n') || undefined],
@@ -1816,6 +1818,7 @@ function normalizeReviewRecommendation(value: unknown): AiReportAssessment['reco
 function buildAuditorAdviceFingerprint(report: {
   assetName: string
   assetUrl: string | null
+  detailMarkdown: string
   attachments: Array<{ sha256: string }>
   impactAssessment: string
   ownerUnit: string | null
@@ -1830,6 +1833,7 @@ function buildAuditorAdviceFingerprint(report: {
   return createHash('sha256').update(JSON.stringify({
     assetName: report.assetName,
     assetUrl: report.assetUrl,
+    detailMarkdown: report.detailMarkdown,
     attachmentHashes: report.attachments.map((attachment) => attachment.sha256).sort(),
     impactAssessment: report.impactAssessment,
     ownerUnit: report.ownerUnit,

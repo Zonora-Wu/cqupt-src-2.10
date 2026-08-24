@@ -27,6 +27,7 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { getAuditLogDetail, getAuditLogStats, listAuditLogs } from '../../services/auditLogs'
 import type { AuditLogDetail, AuditLogItem, AuditRiskLevel, AuditLogStats } from '../../services/auditLogs'
+import { platformNotice } from '../../services/platformNotice'
 
 const moduleOptions = ['全部模块', '认证登录', '漏洞管理', '敏感附件', '证书管理', '公告管理', '学习管理', '积分商城', '用户管理', '系统设置', 'AI 调用']
 const levelOptions = ['全部等级', '普通', '重要', '高风险']
@@ -79,7 +80,6 @@ export function AdminAuditLogManagement() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
   const [exporting, setExporting] = useState(false)
-  const [exportNotice, setExportNotice] = useState('')
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [sortKey, setSortKey] = useState<AuditSortKey | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSort.direction)
@@ -169,7 +169,6 @@ export function AdminAuditLogManagement() {
 
   async function exportFilteredLogs() {
     setError('')
-    setExportNotice('')
     setExporting(true)
     try {
       const firstResponse = await listAuditLogs({
@@ -193,7 +192,9 @@ export function AdminAuditLogManagement() {
         exportItems.push(...response.items)
       }
       downloadAuditCsv(exportItems)
-      setExportNotice(`已导出 ${exportItems.length} 条审计日志。`)
+      platformNotice.success(`已导出 ${exportItems.length} 条审计日志。`, {
+        title: '审计日志导出成功',
+      })
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : '审计日志导出失败')
     } finally {
@@ -243,7 +244,7 @@ export function AdminAuditLogManagement() {
     const Icon = log ? moduleIcons[log.module] ?? Activity : Activity
 
     return (
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <button
           className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
           onClick={() => {
@@ -322,7 +323,7 @@ export function AdminAuditLogManagement() {
   }
 
   return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
       <PageHeader
         title="审计日志"
         description="追踪关键操作、来源环境、风险等级和执行结果，支持按筛选条件导出表格。"
@@ -412,7 +413,6 @@ export function AdminAuditLogManagement() {
       </SurfacePanel>
 
       {error && <AlertMessage className="mt-5" message={error} onClose={() => setError('')} variant="error" />}
-      {exportNotice && <AlertMessage className="mt-5" message={exportNotice} onClose={() => setExportNotice('')} variant="success" />}
 
       <SurfacePanel className="mt-5 overflow-hidden p-0">
         <div className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 dark:border-white/10">

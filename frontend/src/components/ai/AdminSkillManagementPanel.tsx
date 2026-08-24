@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createAiSkill, deleteAiSkill, getAiSkills, setAiSkillActive, updateAiSkill, updateAiSkillPresentation, type AiSkillLibraryItem } from '../../services/ai'
-import { FloatingNotice } from '../ui/FloatingNotice'
+import { AlertMessage } from '../ui/AlertMessage'
 import { SurfacePanel } from '../ui/SurfacePanel'
 
 export function AdminSkillManagementPanel() {
@@ -47,7 +47,7 @@ export function AdminSkillManagementPanel() {
 
   return (
     <>
-      {(message || error) && <FloatingNotice message={error || message} onClose={() => { setMessage(''); setError('') }} variant={error ? 'error' : 'success'} />}
+      {(message || error) && <AlertMessage message={error || message} onClose={() => { setMessage(''); setError('') }} variant={error ? 'error' : 'success'} />}
       <SurfacePanel className="overflow-hidden p-0">
         <div className="flex gap-1 border-b border-black/10 px-5 pt-3 dark:border-white/10" role="tablist" aria-label="Skill 类型">
           <KindTab active={skillKind === 'SYSTEM'} label={`系统 Skill ${systemCount}`} onClick={() => setSkillKind('SYSTEM')} />

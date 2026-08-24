@@ -1,9 +1,10 @@
 import { CheckCircle2, FileSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
-import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { BorderGlow } from '../../components/ui/BorderGlow'
 import { CERTIFICATE_NO_MAX_LENGTH, CERTIFICATE_NO_PATTERN, normalizeCertificateNoInput, publicVerifyCertificate, type PublicCertificateVerifyResult } from '../../services/certificates'
+import type { PlatformNoticeVariant } from '../../services/platformNotice'
 
 type CertificateVerifyProps = {
   initialCertificateNo?: string
@@ -14,7 +15,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   const [certificateNo, setCertificateNo] = useState(initialCertificateNo)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PublicCertificateVerifyResult | null>(null)
-  const [notice, setNotice] = useState<{ message: string; variant: FloatingNoticeVariant } | null>(null)
+  const [notice, setNotice] = useState<{ message: string; variant: PlatformNoticeVariant } | null>(null)
 
   const searchCertificate = useCallback(async (nextCertificateNo: string) => {
     const normalized = normalizeCertificateNoInput(nextCertificateNo)
@@ -51,7 +52,7 @@ export function CertificateVerify({ initialCertificateNo = '', queryNonce = 0 }:
   return (
     <main className="relative z-10 flex min-h-[calc(100vh-4rem)] flex-col justify-center px-5 py-24 md:px-8">
       {notice && (
-        <FloatingNotice
+        <AlertMessage
           message={notice.message}
           onClose={() => setNotice(null)}
           variant={notice.variant}

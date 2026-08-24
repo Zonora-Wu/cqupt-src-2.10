@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
@@ -337,7 +337,7 @@ export function AdminLearningManagement() {
 
   return (
     <>
-      <FloatingNotice
+      <AlertMessage
         message={message || error}
         variant={error ? 'error' : 'success'}
         onClose={() => {
@@ -345,7 +345,7 @@ export function AdminLearningManagement() {
           setError('')
         }}
       />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <PageHeader
             eyebrowIcon={<GraduationCap className="h-3.5 w-3.5" />}
@@ -419,7 +419,7 @@ export function AdminLearningManagement() {
             <span className="rounded-md bg-[var(--app-panel-muted-bg)] px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400">数据视图</span>
           </div>
 
-          <div className="grid grid-cols-[minmax(260px,1fr)_84px] gap-4 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
+          <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-3 border-b border-black/10 bg-[var(--app-panel-muted-bg)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:grid-cols-[minmax(0,1fr)_84px] sm:gap-4 dark:border-white/10 dark:text-slate-500 xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
             {learningSortColumns.map((column) => (
               <SortHeaderButton
                 active={sortKey === column.key}
@@ -519,7 +519,7 @@ function LearningResourceRow({
   const Icon = item.kind === 'RANGE' ? Target : Layers3
 
   return (
-    <div className="grid grid-cols-[minmax(260px,1fr)_84px] gap-4 border-b border-black/10 px-3 py-3 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
+    <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-3 border-b border-black/10 px-3 py-3 transition last:border-b-0 hover:bg-black/[0.025] sm:grid-cols-[minmax(0,1fr)_84px] sm:gap-4 dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[minmax(320px,1fr)_100px_120px_100px_100px_128px] 2xl:grid-cols-[minmax(420px,1fr)_110px_132px_100px_100px_136px_120px]">
       <div className="min-w-0">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-700 dark:text-brand-300">

@@ -30,9 +30,9 @@ import {
 import type { ManagedCertificateItem, SeverityLabel } from '../../services/certificates'
 import { markNotificationEntityRead } from '../../services/notifications'
 import { NOTIFICATION_READ_STATE_EVENT } from '../../services/notificationReadState'
+import { platformNotice } from '../../services/platformNotice'
 
 type CertificateStatus = '待签发' | '已签发' | '已撤销'
-type NoticeState = { text: string; variant: 'error' | 'info' | 'success' | 'warning' }
 
 const statusOptions = ['全部状态', '待签发', '已签发', '已撤销']
 const levelOptions = ['全部等级', '严重', '高危', '中危', '低危', '信息']
@@ -138,7 +138,6 @@ export function AdminCertificateManagement() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState<NoticeState | null>(null)
 
   async function loadCertificates() {
     setError('')
@@ -243,21 +242,23 @@ export function AdminCertificateManagement() {
 
   async function previewPdf(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId) {
-      setNotice({ text: '请先签发证书，再预览 PDF。', variant: 'warning' })
+      platformNotice.warning('请先签发证书，再预览 PDF。', { title: '无法预览证书' })
       return
     }
 
-    setNotice(null)
     try {
       await openCertificatePreview(certificate.certificateId)
     } catch (previewError) {
-      setNotice({ text: previewError instanceof Error ? previewError.message : '证书 PDF 预览失败', variant: 'error' })
+      platformNotice.error(
+        previewError instanceof Error ? previewError.message : '证书 PDF 预览失败',
+        { title: '证书预览失败' },
+      )
     }
   }
 
   async function handleRevoke(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId || certificate.status !== '已签发') {
-      setNotice({ text: '只有已签发证书可以撤销。', variant: 'warning' })
+      platformNotice.warning('只有已签发证书可以撤销。', { title: '无法撤销证书' })
       return
     }
 
@@ -265,19 +266,21 @@ export function AdminCertificateManagement() {
     if (!reason?.trim()) return
     if (!window.confirm('确认撤销该证书？撤销后公开核验将不可用。')) return
 
-    setNotice(null)
     try {
       await revokeCertificate(certificate.certificateId, reason.trim())
-      setNotice({ text: '证书已撤销。', variant: 'success' })
+      platformNotice.success('证书已撤销。', { title: '证书状态已更新' })
       await loadCertificates()
     } catch (revokeError) {
-      setNotice({ text: revokeError instanceof Error ? revokeError.message : '证书撤销失败', variant: 'error' })
+      platformNotice.error(
+        revokeError instanceof Error ? revokeError.message : '证书撤销失败',
+        { title: '证书撤销失败' },
+      )
     }
   }
 
   if (selectedCertificate) {
     return (
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <button
           className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
           onClick={() => setSelectedId(null)}
@@ -286,14 +289,6 @@ export function AdminCertificateManagement() {
           <FileCheck2 className="h-4 w-4" />
           返回证书列表
         </button>
-
-        {notice && (
-          <AlertMessage
-            message={notice.text}
-            onClose={() => setNotice(null)}
-            variant={notice.variant}
-          />
-        )}
 
         <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
@@ -384,7 +379,7 @@ export function AdminCertificateManagement() {
 
   return (
     <>
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrowIcon={<Medal className="h-3.5 w-3.5" />}
@@ -448,14 +443,6 @@ export function AdminCertificateManagement() {
             </button>
           </div>
         </SurfacePanel>
-
-        {notice && (
-          <AlertMessage
-            message={notice.text}
-            onClose={() => setNotice(null)}
-            variant={notice.variant}
-          />
-        )}
 
         {error && (
           <AlertMessage message={error} onClose={() => setError('')} variant="error" />

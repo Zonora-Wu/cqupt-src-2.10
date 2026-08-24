@@ -4,3 +4,5 @@ export type UploadedPdfFile = {
   originalname?: string
   size?: number
 }
+
+export type UploadedAttachmentFile = UploadedPdfFile

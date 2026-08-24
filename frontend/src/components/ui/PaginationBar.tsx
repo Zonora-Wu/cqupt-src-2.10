@@ -72,10 +72,12 @@ export function PaginationBar({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <PageIconButton disabled={safePage <= 1} label="第一页" onClick={() => go(1)}>
-          <ChevronsLeft className="h-4 w-4" />
-        </PageIconButton>
+      <div className="flex w-full flex-wrap items-center justify-between gap-2 lg:w-auto lg:justify-start">
+        <span className="hidden sm:inline-flex">
+          <PageIconButton disabled={safePage <= 1} label="第一页" onClick={() => go(1)}>
+            <ChevronsLeft className="h-4 w-4" />
+          </PageIconButton>
+        </span>
         <PageIconButton disabled={safePage <= 1} label="上一页" onClick={() => go(safePage - 1)}>
           <ChevronLeft className="h-4 w-4" />
         </PageIconButton>
@@ -106,11 +108,13 @@ export function PaginationBar({
         <PageIconButton disabled={safePage >= totalPages} label="下一页" onClick={() => go(safePage + 1)}>
           <ChevronRight className="h-4 w-4" />
         </PageIconButton>
-        <PageIconButton disabled={safePage >= totalPages} label="最后一页" onClick={() => go(totalPages)}>
-          <ChevronsRight className="h-4 w-4" />
-        </PageIconButton>
+        <span className="hidden sm:inline-flex">
+          <PageIconButton disabled={safePage >= totalPages} label="最后一页" onClick={() => go(totalPages)}>
+            <ChevronsRight className="h-4 w-4" />
+          </PageIconButton>
+        </span>
 
-        <label className="ml-0 inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:ml-2">
+        <label className="ml-0 hidden items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:inline-flex sm:ml-2">
           <span>跳至</span>
           <input
             className="h-8 w-16 rounded-md border border-black/10 bg-[var(--app-panel-bg)] px-2 text-center text-xs text-slate-700 outline-none transition focus:border-brand-600/60 dark:border-white/10 dark:text-slate-200"
@@ -126,7 +130,7 @@ export function PaginationBar({
           <span>页</span>
         </label>
         <button
-          className="h-8 rounded-md border border-black/10 px-3 text-xs font-semibold text-slate-600 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+          className="hidden h-8 rounded-md border border-black/10 px-3 text-xs font-semibold text-slate-600 transition hover:bg-black/5 sm:inline-flex sm:items-center dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
           onClick={submitJump}
           type="button"
         >

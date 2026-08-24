@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PageSection } from '../../components/layout/PageSection'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
@@ -126,7 +126,7 @@ export function UserPointsMall() {
 
   return (
     <PageSection>
-      <FloatingNotice
+      <AlertMessage
         message={message || error}
         variant={error ? 'error' : 'success'}
         onClose={() => {

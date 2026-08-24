@@ -24,7 +24,6 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
-import { FloatingNotice, type FloatingNoticeVariant } from '../../components/ui/FloatingNotice'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
@@ -55,6 +54,7 @@ import {
   uploadCertificateTemplateBackground,
 } from '../../services/systemSettings'
 import type { AiQuotaSettings, CertificateTemplateSummary, EmailServiceSettings, PendingRegistrationItem, PlatformLogoMode, PlatformLogoSlot, SmtpSecureMode } from '../../services/systemSettings'
+import { platformNotice, type PlatformNoticeVariant } from '../../services/platformNotice'
 import {
   createSecurityQuestions,
   deleteSecurityQuestion,
@@ -417,6 +417,7 @@ export function AdminSystemSettings() {
   const questionBankInputRef = useRef<HTMLInputElement | null>(null)
   const knowledgeBaseInputRef = useRef<HTMLInputElement | null>(null)
   const responsibilityAgreementInputRef = useRef<HTMLInputElement | null>(null)
+  const settingsContentRef = useRef<HTMLDivElement | null>(null)
   const [activeSection, setActiveSection] = useState<SettingsSection>('基础设置')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [platformName, setPlatformName] = useState('CQUPT-SRC 校园漏洞响应平台')
@@ -440,7 +441,6 @@ export function AdminSystemSettings() {
   const [uploadingPlatformLogoSlot, setUploadingPlatformLogoSlot] = useState<PlatformLogoSlot | null>(null)
   const [platformMessage, setPlatformMessage] = useState('')
   const [appearanceMessage, setAppearanceMessage] = useState('')
-  const [notice, setNotice] = useState<{ message: string; title?: string; variant: FloatingNoticeVariant } | null>(null)
   const [openRegister, setOpenRegister] = useState(true)
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationItem[]>([])
   const [pendingRegLoading, setPendingRegLoading] = useState(false)
@@ -500,8 +500,8 @@ export function AdminSystemSettings() {
     setConfirmState(nextState)
   }
 
-  const showNotice = (message: string, variant: FloatingNoticeVariant = 'success', title?: string) => {
-    setNotice({ message, title, variant })
+  const showNotice = (message: string, variant: PlatformNoticeVariant = 'success', title?: string) => {
+    platformNotice[variant](message, { title })
   }
 
   const applyEmailServiceSettings = (settings: EmailServiceSettings) => {
@@ -522,6 +522,11 @@ export function AdminSystemSettings() {
     setAppliedPlatformLogos(getPlatformLogos())
     return subscribePlatformBranding(setAppliedPlatformLogos)
   }, [])
+
+  useEffect(() => {
+    if (!window.matchMedia('(min-width: 1280px)').matches) return
+    settingsContentRef.current?.scrollTo({ top: 0 })
+  }, [activeSection])
 
   useEffect(() => {
     let active = true
@@ -1278,16 +1283,8 @@ export function AdminSystemSettings() {
 
   return (
     <>
-      {notice && (
-        <FloatingNotice
-          message={notice.message}
-          onClose={() => setNotice(null)}
-          title={notice.title}
-          variant={notice.variant}
-        />
-      )}
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24 xl:flex xl:h-dvh xl:flex-col xl:overflow-hidden">
+        <div className="flex shrink-0 flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrowIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}
             title="系统设置"
@@ -1295,8 +1292,8 @@ export function AdminSystemSettings() {
           />
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="xl:sticky xl:top-24 xl:self-start">
+        <div className="mt-6 grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside aria-label="设置分类" className="platform-scrollbar xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
             <SurfacePanel className="overflow-hidden p-0">
               <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
                 <p className="text-sm font-semibold">设置</p>
@@ -1328,7 +1325,7 @@ export function AdminSystemSettings() {
             </SurfacePanel>
           </aside>
 
-          <div className="space-y-6">
+          <div aria-label="设置内容" className="platform-scrollbar space-y-6 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pr-2 [scrollbar-gutter:stable]" ref={settingsContentRef}>
             {activeSection === '基础设置' && (
               <>
                 <SettingsCard

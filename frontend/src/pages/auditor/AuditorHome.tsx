@@ -24,16 +24,18 @@ import { AppBackground } from '../../components/layout/AppBackground'
 import { WorkspaceHeader } from '../../components/layout/WorkspaceHeader'
 import { CopyableCode } from '../../components/ui/CopyableCode'
 import { NotificationPanel } from '../../components/ui/NotificationPanel'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { PrivateMarkdown } from '../../components/vulnerabilities/PrivateMarkdown'
 import { auditorNavItems, auditorUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard, type AuditorDashboardStats } from '../../services/dashboard'
+import { platformNotice } from '../../services/platformNotice'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 import {
@@ -82,6 +84,7 @@ type ReviewReport = {
   aiTags: string[]
   aiSummary: string
   description: string
+  detailMarkdown: string
   reproduce: string
   requestPacket: string
   repair: string
@@ -247,14 +250,14 @@ function AuditorDashboard({ onNavigate }: { onNavigate: (item: string) => void }
   ]
 
   return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
       <PageHeader
         eyebrow="Auditor Console"
         eyebrowIcon={<ShieldCheck className="h-3.5 w-3.5" />}
         title="审核员工作台"
         description="聚合漏洞初审、复测归档、证书管理和 AI 辅助判断，帮助审核员按优先级完成从提交到证书的闭环响应。"
       />
-      {loadError && <FloatingNotice message={loadError} onClose={() => setLoadError('')} variant="error" />}
+      {loadError && <AlertMessage message={loadError} onClose={() => setLoadError('')} variant="error" />}
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
         {overview.map((item) => {
@@ -331,7 +334,6 @@ export function AuditorReviewQueue() {
   const [errorMessage, setErrorMessage] = useState('')
   const [selectedReport, setSelectedReport] = useState<ReviewReport | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
-  const [done, setDone] = useState('')
   const [reviewNote, setReviewNote] = useState('')
   const [finalSeverity, setFinalSeverity] = useState<ReviewLevel>('中危')
   const [reviewPoints, setReviewPoints] = useState('260')
@@ -384,8 +386,7 @@ export function AuditorReviewQueue() {
   }, [filteredReports, pageSize, safePage])
 
   const complete = (message: string) => {
-    setDone(message)
-    window.setTimeout(() => setDone(''), 2200)
+    platformNotice.success(message, { title: '审核操作成功' })
   }
 
   const openReport = (item: ReviewReport) => {
@@ -434,7 +435,7 @@ export function AuditorReviewQueue() {
   if (selectedReport) {
     return (
       <>
-        <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+        <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
           <button
             className="inline-flex items-center gap-2 rounded-lg border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
             onClick={() => setSelectedReport(null)}
@@ -443,7 +444,6 @@ export function AuditorReviewQueue() {
             <ArrowLeft className="h-4 w-4" />
             返回审核队列
           </button>
-          {done && <SuccessNotice>{done}</SuccessNotice>}
           <div className="mt-5 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
               <SurfacePanel className="p-6">
@@ -547,24 +547,11 @@ export function AuditorReviewQueue() {
 
             <div className="space-y-6">
               <SurfacePanel className="p-6">
-                <h2 className="text-xl font-semibold">漏洞详情</h2>
-                <section className="mt-5">
-                  <h3 className="text-sm font-semibold">漏洞描述</h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-400">{selectedReport.description}</p>
-                </section>
-                <section className="mt-5">
-                  <h3 className="text-sm font-semibold">复现步骤</h3>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 text-sm leading-7 dark:border-white/10 ">
-                    {selectedReport.reproduce}
-                  </pre>
-                </section>
-                <section className="mt-5">
-                  <h3 className="text-sm font-semibold">修复建议</h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-400">{selectedReport.repair}</p>
-                </section>
+                <h2 className="text-xl font-semibold">漏洞报告（Markdown）</h2>
+                <PrivateMarkdown className="platform-scrollbar mt-5 max-h-[680px] overflow-auto rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10" content={selectedReport.detailMarkdown} />
                 {selectedReport.attachments.length > 0 && (
                   <section className="mt-5">
-                    <h3 className="text-sm font-semibold">PDF 附件</h3>
+                    <h3 className="text-sm font-semibold">附件材料</h3>
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {selectedReport.attachments.map((attachment) => (
                         <div
@@ -593,12 +580,6 @@ export function AuditorReviewQueue() {
                 )}
               </SurfacePanel>
 
-              <SurfacePanel className="p-6">
-                <h2 className="text-xl font-semibold">触发请求包</h2>
-                <pre className="mt-5 overflow-x-auto rounded-lg border border-black/10 bg-slate-950 p-4 text-sm leading-7 text-green-100 dark:border-white/10">
-                  {selectedReport.requestPacket}
-                </pre>
-              </SurfacePanel>
             </div>
           </div>
         </section>
@@ -616,8 +597,7 @@ export function AuditorReviewQueue() {
           title="漏洞审核"
           description="处理分派给你的漏洞报告，结合 AI 初评完成复现、价值判断、补充材料要求和审核结论。"
         />
-        {errorMessage && <FloatingNotice message={errorMessage} onClose={() => setErrorMessage('')} variant="error" />}
-        {done && <SuccessNotice>{done}</SuccessNotice>}
+        {errorMessage && <AlertMessage message={errorMessage} onClose={() => setErrorMessage('')} variant="error" />}
         <FilterBar>
           <SearchInput label="搜索漏洞" onChange={setKeyword} placeholder="编号、标题、资产或提交人" value={keyword} />
           <SelectInput label="审核状态" onChange={setStatus} options={reviewStatusOptions} value={status} />
@@ -688,7 +668,6 @@ function AuditorRetestArchive() {
   } | null>(null)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [toast, setToast] = useState('')
 
   const load = () => {
     setLoading(true)
@@ -704,11 +683,6 @@ function AuditorRetestArchive() {
 
   useEffect(() => { load() }, [])
 
-  const showToast = (msg: string) => {
-    setToast(msg)
-    window.setTimeout(() => setToast(''), 2800)
-  }
-
   const openAction = (item: RetestQueueItem, decision: RetestPayload['decision'] | 'MARK_FIXING') => {
     setNote('')
     setActionDialog({ item, decision })
@@ -721,7 +695,7 @@ function AuditorRetestArchive() {
     try {
       if (actionDialog.decision === 'MARK_FIXING') {
         await markFixing(actionDialog.item.id, note.trim())
-        showToast('已标记为待复测')
+        platformNotice.success('已标记为待复测。', { title: '漏洞状态已更新' })
       } else {
         await retestVulnerability(actionDialog.item.id, {
           decision: actionDialog.decision,
@@ -732,12 +706,12 @@ function AuditorRetestArchive() {
           RETURN_TO_FIX: '已退回责任单位继续修复',
           ARCHIVE: '已直接归档',
         }
-        showToast(labels[actionDialog.decision])
+        platformNotice.success(labels[actionDialog.decision], { title: '复测操作成功' })
       }
       setActionDialog(null)
       load()
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : '操作失败')
+      platformNotice.error(e instanceof Error ? e.message : '操作失败', { title: '复测操作失败' })
     } finally {
       setSubmitting(false)
     }
@@ -781,7 +755,6 @@ function AuditorRetestArchive() {
           title="复测归档"
           description="核验资产责任单位提交的修复结果，完成复测通过、退回修复、归档记录和证书签发衔接。"
         />
-        {toast && <SuccessNotice>{toast}</SuccessNotice>}
 
         {/* 分页 tab */}
         <div className="mt-6 flex items-center gap-1 rounded-xl border border-black/10 bg-[var(--app-panel-muted-bg)] p-1 w-fit dark:border-white/10 dark:bg-white/[0.03]">
@@ -982,7 +955,7 @@ function AuditorReviewHistory() {
         title="审核记录"
         description="查看你的审核动作、复测结论、证书签发和补充材料通知记录。"
       />
-      {error && <FloatingNotice message={error} onClose={() => setError('')} variant="error" />}
+      {error && <AlertMessage message={error} onClose={() => setError('')} variant="error" />}
       <SurfacePanel className="mt-6 overflow-hidden p-0">
         <div className="grid grid-cols-[160px_minmax(0,1fr)_160px_120px] gap-4 border-b border-black/10 px-4 py-3 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
           <span>时间</span>
@@ -1013,7 +986,6 @@ function AuditorAnnouncementManagement() {
   const [range, setRange] = useState('全部范围')
   const [editingAnnouncement, setEditingAnnouncement] = useState<AuditorAnnouncement | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
-  const [done, setDone] = useState('')
 
   const filteredAnnouncements = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase()
@@ -1030,8 +1002,7 @@ function AuditorAnnouncementManagement() {
   }, [keyword, range, status])
 
   const complete = (message: string) => {
-    setDone(message)
-    window.setTimeout(() => setDone(''), 2200)
+    platformNotice.success(message, { title: '公告操作成功' })
   }
 
   return (
@@ -1066,7 +1037,6 @@ function AuditorAnnouncementManagement() {
             新建公告
           </button>
         </div>
-        {done && <SuccessNotice>{done}</SuccessNotice>}
 
         <SurfacePanel className="relative z-30 mt-6 p-5">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
@@ -1366,6 +1336,7 @@ function mapReviewQueueItem(item: ReviewQueueItem): ReviewReport {
     asset: item.assetName,
     attachments: item.attachments,
     description: item.impactAssessment,
+    detailMarkdown: item.detailMarkdown,
     id: item.reportNo,
     level: (item.finalSeverity ?? item.selfSeverity) as ReviewLevel,
     owner: item.ownerUnit || '待确认',
@@ -1458,7 +1429,7 @@ function formatFileSize(sizeBytes: number) {
 
 function PageShell({ children, size = 'lg' }: { children: ReactNode; size?: 'md' | 'lg' }) {
   const width = size === 'md' ? 'max-w-[1080px]' : 'max-w-[1360px]'
-  return <section className={`relative z-10 mx-auto ${width} px-5 pb-8 pt-24 md:px-8`}>{children}</section>
+  return <section className={`relative z-10 mx-auto ${width} px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24`}>{children}</section>
 }
 
 function FilterBar({ children }: { children: ReactNode }) {
@@ -1516,12 +1487,6 @@ function InfoBox({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-2 text-sm font-semibold">{value}</p>
     </div>
-  )
-}
-
-function SuccessNotice({ children }: { children: ReactNode }) {
-  return (
-    <FloatingNotice message={children} variant="success" />
   )
 }
 

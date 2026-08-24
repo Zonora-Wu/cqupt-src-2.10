@@ -8,7 +8,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppBackground } from '../../components/layout/AppBackground'
@@ -18,11 +18,13 @@ import { ResponsibilityAgreementDialog } from '../../components/security/Respons
 import { SecurityExamDialog } from '../../components/security/SecurityExamDialog'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
+import { VulnerabilityDraftRecoveryDialog } from '../../components/vulnerabilities/VulnerabilityDraftRecoveryDialog'
 import { getLabelFromPath, getPathFromLabel, isKnownWorkspacePath, userNavItems, userUtilityPaths } from '../../routes/routeConfig'
 import { getAccessStatus, type AccessStatus } from '../../services/access'
 import { type AuthUser } from '../../services/auth'
 import { getUserDashboard, runUserDashboardAiInsight, type UserDashboardAiInsight, type UserDashboardStats } from '../../services/dashboard'
 import { getAccountProfile } from '../../services/account'
+import { deleteVulnerabilityDraft, listVulnerabilityDrafts, type VulnerabilitySubmissionDraft } from '../../services/vulnerabilities'
 import {
   getUserDevicePreferences,
   resolveThemeMode,
@@ -32,6 +34,7 @@ import {
   type UserDevicePreferences,
 } from '../../services/userPreferences'
 import { applyColorTheme, transitionColorTheme } from '../../utils/themeTransition'
+import { isMeaningfulSubmissionDraft } from '../../utils/vulnerabilityDraftRecovery'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 
 const UserAIAssistant = lazy(() =>
@@ -122,6 +125,10 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
   const [showResponsibilityDialog, setShowResponsibilityDialog] = useState(false)
   const [showSecurityExamDialog, setShowSecurityExamDialog] = useState(false)
   const [showProfileDialog, setShowProfileDialog] = useState(false)
+  const [pendingDraftRecovery, setPendingDraftRecovery] = useState<VulnerabilitySubmissionDraft | null>(null)
+  const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false)
+  const [draftRecoveryError, setDraftRecoveryError] = useState('')
+  const draftRecoveryCheckedRef = useRef(false)
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, userNavItems, userUtilityPaths)
@@ -167,6 +174,43 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
       .catch(() => { /* 静默失败，提交时后端仍会强制校验 */ })
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    if (draftRecoveryCheckedRef.current) return
+    draftRecoveryCheckedRef.current = true
+    if (location.pathname === '/user/submit') return
+
+    let active = true
+    void listVulnerabilityDrafts()
+      .then((result) => {
+        const draft = result.items[0]
+        if (active && draft && isMeaningfulSubmissionDraft(draft)) setPendingDraftRecovery(draft)
+      })
+      .catch(() => { /* 提交页面仍会再次检查，不阻断用户登录 */ })
+    return () => { active = false }
+  }, [location.pathname])
+
+  const restorePendingDraft = () => {
+    if (!pendingDraftRecovery || draftRecoveryBusy) return
+    const draftId = pendingDraftRecovery.id
+    setPendingDraftRecovery(null)
+    setDraftRecoveryError('')
+    navigate('/user/submit', { state: { restoreDraftId: draftId } })
+  }
+
+  const discardPendingDraft = async () => {
+    if (!pendingDraftRecovery || draftRecoveryBusy) return
+    setDraftRecoveryBusy(true)
+    setDraftRecoveryError('')
+    try {
+      await deleteVulnerabilityDraft(pendingDraftRecovery.id)
+      setPendingDraftRecovery(null)
+    } catch (error) {
+      setDraftRecoveryError(error instanceof Error ? error.message : '草稿删除失败，请稍后重试')
+    } finally {
+      setDraftRecoveryBusy(false)
+    }
+  }
 
   // 加载头像用于导航栏
   useEffect(() => {
@@ -375,7 +419,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
           </div>
         </Suspense>
       ) : (
-        <section className="user-route-transition relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8" key={location.pathname}>
+        <section className="user-route-transition relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24" key={location.pathname}>
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.45fr)_390px]">
             <SurfacePanel
               className="h-full overflow-hidden p-0"
@@ -383,7 +427,7 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
                 if (!aiPrompt.trim()) setAiFocused(false)
               }}
             >
-              <div className="relative flex min-h-[500px] h-full flex-col p-7 md:p-10">
+              <div className="relative flex h-full min-h-[440px] flex-col p-5 sm:p-7 md:min-h-[500px] md:p-10">
                 <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-brand-600/25 to-transparent dark:via-brand-300/25" />
                 <div className="pointer-events-none absolute right-12 top-12 hidden h-40 w-40 rounded-full bg-brand-600/10 blur-3xl md:block dark:bg-brand-300/10" />
 
@@ -550,8 +594,17 @@ export function UserHome({ onLogout, user }: UserHomeProps) {
         onOpenAgreement={openResponsibilityDialog}
         onOpenProfile={openProfileDialog}
         onStartExam={openSecurityExamDialog}
-        open={showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
+        open={!pendingDraftRecovery && showAccessTodoDialog && hasPendingAccessTasks(accessStatus)}
       />
+      {pendingDraftRecovery && (
+        <VulnerabilityDraftRecoveryDialog
+          busy={draftRecoveryBusy}
+          draft={pendingDraftRecovery}
+          error={draftRecoveryError}
+          onDiscard={() => void discardPendingDraft()}
+          onRestore={restorePendingDraft}
+        />
+      )}
       {showProfileDialog && (
         <CompleteProfileModal
           onClose={() => setShowProfileDialog(false)}

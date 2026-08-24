@@ -15,7 +15,7 @@ const sizeMap = {
 
 export function PageSection({ children, size = 'lg', className = '' }: PageSectionProps) {
   return (
-    <section className={`relative z-10 mx-auto ${sizeMap[size]} px-5 pb-8 pt-24 md:px-8 ${className}`}>
+    <section className={`relative z-10 mx-auto ${sizeMap[size]} px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24 ${className}`}>
       {children}
     </section>
   )

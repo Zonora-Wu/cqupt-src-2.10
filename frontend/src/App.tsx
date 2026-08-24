@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { FloatingNotice } from './components/ui/FloatingNotice'
 import { AppErrorBoundary } from './components/ui/AppErrorBoundary'
 import { FullScreenLoader } from './components/ui/FullScreenLoader'
+import { PlatformNoticeCenter } from './components/ui/PlatformNoticeCenter'
 import { GuestHome } from './pages/guest/GuestHome'
 import { PublicOnly, RequireRole } from './routes/guards'
 import { getDefaultPathForRole } from './routes/routeConfig'
 import { AUTH_SESSION_EXPIRED_EVENT } from './services/apiClient'
 import { clearSavedSession, getCurrentUser, getSavedSession, logout, type AuthUser } from './services/auth'
+import { platformNotice } from './services/platformNotice'
 import { getPublicPlatformAppearance } from './services/systemSettings'
 import { applyBrandTheme } from './utils/brandTheme'
 import { applyPlatformBranding } from './utils/platformBranding'
@@ -31,9 +32,12 @@ const UserHome = lazy(() =>
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <AppShell />
+      </BrowserRouter>
+      <PlatformNoticeCenter />
+    </>
   )
 }
 
@@ -43,7 +47,6 @@ function AppShell() {
   const [isCheckingSession, setIsCheckingSession] = useState(() => Boolean(getSavedSession()?.user))
   const [isAppearanceReady, setIsAppearanceReady] = useState(false)
   const [isInitialVisualReady, setIsInitialVisualReady] = useState(false)
-  const [sessionNotice, setSessionNotice] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -115,13 +118,9 @@ function AppShell() {
   }, [isAppearanceReady, isCheckingSession])
 
   useEffect(() => {
-    let noticeTimer: number | undefined
-
     const routeNotice = (location.state as { notice?: string } | null)?.notice
     if (routeNotice) {
-      setSessionNotice(routeNotice)
-      window.clearTimeout(noticeTimer)
-      noticeTimer = window.setTimeout(() => setSessionNotice(''), 3200)
+      platformNotice.warning(routeNotice, { autoCloseMs: 3200 })
       window.history.replaceState({}, document.title, location.pathname)
     }
 
@@ -130,17 +129,17 @@ function AppShell() {
       setCurrentUser(null)
       setAuthModal(null)
       setIsCheckingSession(false)
-      setSessionNotice('登录状态已失效，请重新登录。')
+      platformNotice.warning('登录状态已失效，请重新登录。', {
+        autoCloseMs: 3200,
+        title: '请重新登录',
+      })
       navigate('/', { replace: true })
-      window.clearTimeout(noticeTimer)
-      noticeTimer = window.setTimeout(() => setSessionNotice(''), 3200)
     }
 
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired)
 
     return () => {
       window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired)
-      window.clearTimeout(noticeTimer)
     }
   }, [location.pathname, location.state, navigate])
 
@@ -225,13 +224,6 @@ function AppShell() {
           />
         )}
       </Suspense>
-      {sessionNotice && (
-        <FloatingNotice
-          message={sessionNotice}
-          onClose={() => setSessionNotice('')}
-          variant="warning"
-        />
-      )}
       <FullScreenLoader visible={!isInitialVisualReady || !isAppearanceReady} />
     </AppErrorBoundary>
   )

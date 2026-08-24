@@ -88,11 +88,11 @@ export function UserNotificationContent({ onOpenChat }: { onOpenChat: () => void
   }, [activeChannel])
 
   return (
-    <section className="relative z-10 mx-auto flex max-w-[1360px] gap-0 px-5 pb-8 pt-24 md:px-8">
-      <div className="flex h-[calc(100vh-7rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl dark:border-white/10 ">
+    <section className="relative z-10 mx-auto flex max-w-[1360px] gap-0 px-4 pb-4 pt-32 sm:px-5 md:px-8 md:pb-8 md:pt-24">
+      <div className="flex h-[calc(100dvh-9rem)] w-full overflow-hidden rounded-lg border border-black/10 bg-[var(--app-panel-bg)] shadow-sm backdrop-blur-xl md:h-[calc(100dvh-7rem)] dark:border-white/10 ">
 
         {/* 左侧频道列表 */}
-        <aside className="flex w-64 shrink-0 flex-col border-r border-black/10 dark:border-white/10">
+        <aside className="flex w-20 shrink-0 flex-col border-r border-black/10 sm:w-64 dark:border-white/10">
           <div className="flex h-14 items-center gap-2 border-b border-black/10 px-4 dark:border-white/10">
             <MessageSquare className="h-4 w-4 text-brand-600 dark:text-brand-300" />
             <span className="text-sm font-semibold">通知中心</span>

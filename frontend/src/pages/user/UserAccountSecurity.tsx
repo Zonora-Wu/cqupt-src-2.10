@@ -45,7 +45,7 @@ export function UserAccountSecurity() {
   const [activeTab, setActiveTab] = useState<SecurityTab>('overview')
 
   return (
-    <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+    <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <PageHeader
           eyebrow="Account Security"

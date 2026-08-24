@@ -6,7 +6,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { type MouseEvent, type ReactNode, useEffect, useState } from 'react'
-import { FloatingNotice } from '../../components/ui/FloatingNotice'
+import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
 import {
@@ -74,8 +74,8 @@ export function UserSystemSettings({
 
   return (
     <>
-      <FloatingNotice message={message} variant="success" onClose={() => setMessage('')} />
-      <section className="relative z-10 mx-auto max-w-[1360px] px-5 pb-8 pt-24 md:px-8">
+      <AlertMessage message={message} variant="success" onClose={() => setMessage('')} />
+      <section className="relative z-10 mx-auto max-w-[1360px] px-4 pb-8 pt-32 sm:px-5 md:px-8 md:pt-24">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <PageHeader
             eyebrow="Device Settings"
