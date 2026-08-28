@@ -54,12 +54,12 @@ export const defaultBrandPalette: BrandPalette = {
   800: '#1F4229',
   900: '#1B3724',
   950: '#0F1F14',
-  lightBg: '#EEF7F0',
+  lightBg: '#FFFFFF',
   lightSurface: '#FFFFFF',
   lightMuted: '#D8ECDD',
   lightBorder: '#DDE5DE',
   lightText: '#111827',
-  darkBg: '#111816',
+  darkBg: '#000000',
   darkSurface: '#171F1C',
   darkMuted: '#202C27',
   darkBorder: '#33413B',
@@ -142,10 +142,10 @@ export function generateBrandPalette(hexColor: string, overrides: BrandPaletteOv
   generatedShades[700] = ensureReadableOnWhite(generatedShades[700])
 
   const neutralHue = hue
-  const lightBg = oklchToHex({ chroma: chroma * 0.08, hue: neutralHue, lightness: 0.972 })
+  const lightBg = '#FFFFFF'
   const lightMuted = oklchToHex({ chroma: chroma * 0.12, hue: neutralHue, lightness: 0.925 })
   const lightBorder = oklchToHex({ chroma: chroma * 0.08, hue: neutralHue, lightness: 0.865 })
-  const darkBg = oklchToHex({ chroma: darkChroma * 0.18, hue: neutralHue, lightness: 0.17 })
+  const darkBg = '#000000'
   const darkSurface = oklchToHex({ chroma: darkChroma * 0.18, hue: neutralHue, lightness: 0.215 })
   const darkMuted = oklchToHex({ chroma: darkChroma * 0.24, hue: neutralHue, lightness: 0.285 })
   const darkBorder = oklchToHex({ chroma: darkChroma * 0.2, hue: neutralHue, lightness: 0.38 })

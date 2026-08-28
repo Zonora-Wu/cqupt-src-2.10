@@ -311,7 +311,7 @@ export function AdminAuditLogManagement() {
 
               <SurfacePanel className="p-6">
                 <h2 className="text-xl font-semibold">脱敏元数据</h2>
-                <pre className="mt-5 max-h-[520px] overflow-auto rounded-lg border border-black/10 bg-slate-950 p-4 text-sm leading-7 text-green-100 dark:border-white/10">
+                <pre className="mt-5 max-h-[520px] overflow-auto rounded-lg border border-black/10 bg-slate-950 p-4 text-sm leading-7 text-brand-100 dark:border-white/10">
                   {JSON.stringify(log.metadata ?? {}, null, 2)}
                 </pre>
               </SurfacePanel>

@@ -69,11 +69,11 @@ const announcementStatusRank: Record<string, number> = {
 }
 
 const categoryStyles: Record<string, string> = {
-  平台通知: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  平台通知: 'border-brand-500/20 bg-brand-500/10 text-brand-700 dark:text-brand-300',
   规则更新: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   安全提醒: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  活动通知: 'border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300',
-  审核通知: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
+  活动通知: 'border-brand-400/25 bg-brand-400/10 text-brand-700 dark:text-brand-300',
+  审核通知: 'border-brand-700/20 bg-brand-700/10 text-brand-800 dark:text-brand-200',
 }
 
 const statusStyles: Record<string, string> = {

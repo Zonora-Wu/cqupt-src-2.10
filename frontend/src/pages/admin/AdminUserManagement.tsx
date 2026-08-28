@@ -85,9 +85,9 @@ const accessStatusRank: Record<string, number> = {
 }
 
 const roleClassMap: Record<RoleCode, string> = {
-  ADMIN: 'border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300',
-  AUDITOR: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  STUDENT: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  ADMIN: 'border-brand-700/25 bg-brand-700/10 text-brand-800 dark:text-brand-200',
+  AUDITOR: 'border-brand-500/25 bg-brand-500/10 text-brand-700 dark:text-brand-300',
+  STUDENT: 'border-brand-300/35 bg-brand-300/15 text-brand-700 dark:text-brand-300',
 }
 
 const statusClassMap: Record<string, string> = {
@@ -101,7 +101,7 @@ const accessClassMap: Record<string, string> = {
   已签责任书: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
   未答题: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   未通过: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
-  答题通过: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  答题通过: 'border-brand-500/25 bg-brand-500/10 text-brand-700 dark:text-brand-300',
 }
 
 const aiQuotaPeriodLabels: Record<'DAY' | 'WEEK' | 'MONTH', string> = {

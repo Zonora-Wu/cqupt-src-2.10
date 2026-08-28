@@ -286,18 +286,18 @@
 }
 
 :root {
-  --app-light-bg: #eef7f0;
+  --app-light-bg: #ffffff;
   --app-light-surface: #ffffff;
   --app-light-muted: #d8ecdd;
   --app-light-border: #dde5de;
   --app-light-text: #111827;
-  --app-dark-bg: #111816;
+  --app-dark-bg: #000000;
   --app-dark-surface: #171f1c;
   --app-dark-muted: #202c27;
   --app-dark-border: #33413b;
   --app-dark-text: #eaf0ec;
-  --app-bg-light: #eef7f0;
-  --app-bg-dark: #111816;
+  --app-bg-light: #ffffff;
+  --app-bg-dark: #000000;
   --app-bg: var(--app-bg-light);
   --app-surface-light: #ffffff;
   --app-surface-dark: #171f1c;
@@ -309,17 +309,17 @@
   --app-border-dark: #33413b;
   --app-text-light: #111827;
   --app-text-dark: #eaf0ec;
-  --app-header-bg-light: rgba(238, 247, 240, 0.86);
-  --app-header-bg-dark: rgba(17, 24, 22, 0.84);
+  --app-header-bg-light: rgba(255, 255, 255, 0.86);
+  --app-header-bg-dark: rgba(0, 0, 0, 0.84);
   --app-header-bg: var(--app-header-bg-light);
-  --app-panel-bg-light: rgba(238, 247, 240, 0.72);
+  --app-panel-bg-light: rgba(255, 255, 255, 0.72);
   --app-panel-bg-dark: rgba(23, 31, 28, 0.9);
   --app-panel-bg: var(--app-panel-bg-light);
   --app-panel-muted-bg-light: rgba(216, 236, 221, 0.78);
   --app-panel-muted-bg-dark: rgba(32, 44, 39, 0.66);
   --app-panel-muted-bg: var(--app-panel-muted-bg-light);
-  --app-menu-bg-light: rgba(238, 247, 240, 0.96);
-  --app-menu-bg-dark: rgba(17, 24, 22, 0.97);
+  --app-menu-bg-light: rgba(255, 255, 255, 0.96);
+  --app-menu-bg-dark: rgba(0, 0, 0, 0.97);
   --app-menu-bg: var(--app-menu-bg-light);
   --app-text: var(--app-text-light);
   --app-text-muted: color-mix(in srgb, var(--app-text-light) 58%, var(--app-light-muted));

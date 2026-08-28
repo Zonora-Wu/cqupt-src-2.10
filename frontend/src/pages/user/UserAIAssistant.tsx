@@ -1718,7 +1718,7 @@ function AssistantMessageBubble({
       )}
       {reportAssessment && !hasReportDrafts && (
         <div className={`px-4 pb-4 ${content ? '' : 'pt-4'}`}>
-          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-4 dark:border-white/10 dark:bg-slate-900">
+          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,var(--app-text-muted)_4%)] p-4 dark:border-white/10 dark:bg-slate-900">
             <ReportAssessmentPanel assessment={reportAssessment} />
           </div>
         </div>
@@ -1726,7 +1726,7 @@ function AssistantMessageBubble({
 
       {hasCards && (
         <div className={`px-4 pb-4 ${content || hasReportDrafts || reportAssessment ? '' : 'pt-4'}`}>
-          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
+          <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,var(--app-text-muted)_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
             <div className="mb-3 flex items-center justify-end">
               <p className="text-[11px] text-slate-400">可直接操作</p>
             </div>
@@ -2202,7 +2202,7 @@ function ReportDraftCards({ assessment, drafts, getAttachmentFile }: { assessmen
 
   return (
     <div>
-      <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,#64748b_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
+      <div className="rounded-lg border border-black/[0.07] bg-[color-mix(in_srgb,var(--app-panel-bg)_96%,var(--app-text-muted)_4%)] p-3 dark:border-white/10 dark:bg-slate-900">
         {assessment && <ReportAssessmentPanel assessment={assessment} />}
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -2777,7 +2777,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
           card.needsSupplement
             ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-800/40'
-            : 'bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-800/40'
+            : 'bg-brand-100 text-brand-700 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:text-brand-300 dark:ring-brand-800/40'
         }`}>
           <Shield className="h-5 w-5" />
         </div>
@@ -2787,7 +2787,7 @@ function VulnerabilityCard({ card, action }: { card: AiCard & { type: 'VULNERABI
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
               card.needsSupplement
                 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
             }`}>
               {card.needsSupplement ? '⚠ 待补充' : card.status}
             </span>

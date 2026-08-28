@@ -154,7 +154,7 @@ export function ChatCenter({ onBackToNotifications }: { onBackToNotifications?: 
               <div className="min-w-0"><p className="truncate text-sm font-semibold">{active.title}</p><p className="text-[11px] text-slate-400">{active.type === 'GLOBAL' ? '全体人员' : active.type === 'GROUP' ? `${active.members.length} 名成员` : active.accepted ? '已建立会话' : `对方回复前可再发 ${active.strangerRemaining ?? 0} 条`}</p></div>
               {active.status !== 'OPEN' && <span className="ml-auto text-xs text-red-500">会话已关闭</span>}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,transparent,rgba(42,100,56,0.025))] px-4 py-5 dark:bg-none">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,transparent,rgba(var(--app-primary-rgb),0.025))] px-4 py-5 dark:bg-none">
               <div className="mx-auto max-w-3xl space-y-3">
                 {messages.length === 0 && <EmptyChat />}
                 {messages.map((message, index) => <MessageBubble currentUserId={currentUser?.id ?? ''} key={message.id} message={message} otherReadAt={active.otherReadAt} showDate={index === 0 || !sameDay(messages[index - 1].createdAt, message.createdAt)} />)}

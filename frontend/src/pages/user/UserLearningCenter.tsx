@@ -25,14 +25,14 @@ const learningPath = [
 ]
 
 const categoryStyles: Record<string, string> = {
-  工具资源: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  工具资源: 'border-brand-500/20 bg-brand-500/10 text-brand-700 dark:text-brand-300',
   文档资料: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
-  视频课程: 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  视频课程: 'border-brand-400/25 bg-brand-400/10 text-brand-700 dark:text-brand-300',
   漏洞报告模板: 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300',
-  Web靶场: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  Web靶场资源: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  权限控制靶场: 'border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-  代码审计靶场: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
+  Web靶场: 'border-brand-600/25 bg-brand-600/10 text-brand-800 dark:text-brand-300',
+  Web靶场资源: 'border-brand-600/25 bg-brand-600/10 text-brand-800 dark:text-brand-300',
+  权限控制靶场: 'border-brand-700/25 bg-brand-700/10 text-brand-800 dark:text-brand-200',
+  代码审计靶场: 'border-brand-800/20 bg-brand-800/10 text-brand-900 dark:text-brand-200',
 }
 
 export function UserLearningCenter() {

@@ -29,9 +29,9 @@ const categoryOptions = ['全部商品', '实体奖励', '学习权益', '证书
 const sortOptions = ['默认排序', '积分从低到高', '积分从高到低', '库存优先']
 
 const categoryStyles: Record<string, string> = {
-  实体奖励: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  实体奖励: 'border-brand-500/20 bg-brand-500/10 text-brand-700 dark:text-brand-300',
   学习权益: 'border-brand-600/20 bg-brand-600/10 text-brand-800 dark:text-brand-300',
-  证书周边: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  证书周边: 'border-brand-700/25 bg-brand-700/10 text-brand-800 dark:text-brand-200',
 }
 
 export function UserPointsMall() {
