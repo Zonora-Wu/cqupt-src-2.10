@@ -4,7 +4,8 @@ set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/projcets/cqupt-src-test}"
 DEPLOY_DIR="$PROJECT_DIR/deploy/test"
 DEPLOY_SCOPE="${DEPLOY_SCOPE:-}"
-COMPOSE=(docker compose -p cqupt-src-test --env-file .env -f docker-compose.test.yml)
+CLAMAV_COMPOSE_FILE="$DEPLOY_DIR/docker-compose.clamav.yml"
+COMPOSE=()
 
 log() {
   printf '\n===== %s =====\n' "$1"
@@ -62,6 +63,26 @@ run_migrations() {
   "${COMPOSE[@]}" exec -T backend npm run prisma:migrate:deploy
 }
 
+configure_compose() {
+  [[ -f "$CLAMAV_COMPOSE_FILE" ]] || fail "缺少安全扫描服务配置: $CLAMAV_COMPOSE_FILE"
+  COMPOSE=(
+    docker compose
+    -p cqupt-src-test
+    --env-file .env
+    -f docker-compose.test.yml
+    -f docker-compose.clamav.yml
+  )
+}
+
+ensure_malware_scanner() {
+  log '启动并检查安全扫描服务'
+  "${COMPOSE[@]}" up -d --wait --wait-timeout 600 clamav
+}
+
+backend_uses_malware_scanner() {
+  [[ "$("${COMPOSE[@]}" exec -T backend printenv CLAMAV_HOST 2>/dev/null || true)" == 'clamav' ]]
+}
+
 [[ -d "$PROJECT_DIR" ]] || fail "项目目录不存在: $PROJECT_DIR"
 [[ -f "$DEPLOY_DIR/docker-compose.test.yml" ]] || fail 'Compose 文件不存在。'
 [[ -f "$DEPLOY_DIR/.env" ]] || fail '部署环境文件不存在。'
@@ -82,8 +103,16 @@ if [[ "$DEPLOY_SCOPE" != '6' ]]; then
 fi
 
 cd "$DEPLOY_DIR"
+configure_compose
+if [[ "$DEPLOY_SCOPE" != '7' ]]; then
+  ensure_malware_scanner
+fi
 case "$DEPLOY_SCOPE" in
   1)
+    if ! backend_uses_malware_scanner; then
+      log '首次应用后端安全扫描配置'
+      "${COMPOSE[@]}" up -d --no-deps --force-recreate backend
+    fi
     log '构建并启动前端'
     "${COMPOSE[@]}" up -d --build --no-deps web
     apply_web_config
@@ -110,7 +139,7 @@ case "$DEPLOY_SCOPE" in
     ;;
   6)
     log '重启前后端服务'
-    "${COMPOSE[@]}" restart backend web
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate backend web
     ;;
   7)
     log '代码已更新，未构建或重启服务'

@@ -1,0 +1,32 @@
+services:
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: cqupt-src-test-clamav
+    restart: unless-stopped
+    networks:
+      - test_net
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+  backend:
+    environment:
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      CLAMAV_TIMEOUT_MS: 15000
+      MALWARE_SCAN_ENABLED: "true"
+      MALWARE_SCAN_REQUIRED: "true"
+    depends_on:
+      clamav:
+        condition: service_healthy
+
+volumes:
+  clamav_data:
+
+networks:
+  test_net:
