@@ -13,6 +13,13 @@ import { type AdminDashboardStats, getAdminDashboard, runAdminDashboardAiInsight
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 import { getAiManagementUnread } from '../../services/aiKnowledge'
+import { platformNotice } from '../../services/platformNotice'
+import {
+  EMAIL_SERVICE_SETTINGS_UPDATED_EVENT,
+  type EmailServiceSettings,
+  getEmailServiceSettings,
+  getPlatformAiConfig,
+} from '../../services/systemSettings'
 
 const AdminAiKnowledgeManagement = lazy(() =>
   import('./AdminAiKnowledgeManagement').then((module) => ({ default: module.AdminAiKnowledgeManagement })),
@@ -48,6 +55,7 @@ type AdminHomeProps = {
 }
 
 const adminMenuItems = adminNavItems.map((item) => item.label)
+const aiConfigurationReminderKeyPrefix = 'admin-ai-configuration-reminder:'
 
 export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSavedColorTheme())
@@ -57,6 +65,7 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
   const [insightRefreshing, setInsightRefreshing] = useState(false)
   const [knowledgeReviewCount, setKnowledgeReviewCount] = useState(0)
   const [selectedTrendKey, setSelectedTrendKey] = useState<ActivityTrendKey | null>(null)
+  const [smtpConfigurationMissing, setSmtpConfigurationMissing] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const activeMenu = getLabelFromPath(location.pathname, adminNavItems, adminUtilityPaths)
@@ -114,6 +123,45 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
     applyColorTheme(theme)
   }, [theme])
 
+  useEffect(() => {
+    let active = true
+
+    const handleEmailSettingsUpdated = (event: Event) => {
+      const settings = (event as CustomEvent<EmailServiceSettings>).detail
+      setSmtpConfigurationMissing(!isSmtpConfigured(settings))
+    }
+    window.addEventListener(EMAIL_SERVICE_SETTINGS_UPDATED_EVENT, handleEmailSettingsUpdated)
+
+    getEmailServiceSettings()
+      .then((settings) => {
+        if (!active) return
+        setSmtpConfigurationMissing(!isSmtpConfigured(settings))
+      })
+      .catch(() => undefined)
+
+    const reminderKey = `${aiConfigurationReminderKeyPrefix}${user.id}`
+    getPlatformAiConfig()
+      .then((settings) => {
+        if (!active || settings.routes.length > 0) return
+        try {
+          if (window.sessionStorage.getItem(reminderKey)) return
+          window.sessionStorage.setItem(reminderKey, 'shown')
+        } catch {
+          // Storage can be unavailable in privacy-restricted browsers.
+        }
+        platformNotice.warning('平台 AI 模型尚未配置，AI 功能暂不可用。', {
+          autoCloseMs: 6400,
+          title: '需要配置平台 AI',
+        })
+      })
+      .catch(() => undefined)
+
+    return () => {
+      active = false
+      window.removeEventListener(EMAIL_SERVICE_SETTINGS_UPDATED_EVENT, handleEmailSettingsUpdated)
+    }
+  }, [user.id])
+
   const primaryMetrics = useMemo(() => buildPrimaryMetrics(dashStats), [dashStats])
   const workloadMetrics = useMemo(() => buildWorkloadMetrics(dashStats), [dashStats])
 
@@ -141,7 +189,14 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         notificationUnreadCount={notificationUnread.bell}
         onAccountSecurity={() => navigate('/admin/account-security')}
         onItemChange={openMenu}
-        onLogout={onLogout}
+        onLogout={() => {
+          try {
+            window.sessionStorage.removeItem(`${aiConfigurationReminderKeyPrefix}${user.id}`)
+          } catch {
+            // Logout must continue even if browser storage is unavailable.
+          }
+          onLogout()
+        }}
         onNotificationClick={() => navigate('/admin/notifications')}
         onProfile={() => navigate('/admin/profile')}
         onSystemSettings={() => navigate('/admin/settings')}
@@ -151,6 +206,19 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
         }}
         theme={theme}
       />
+
+      {smtpConfigurationMissing ? (
+        <div className="fixed left-0 right-0 top-28 z-40 border-b border-amber-500/25 bg-amber-50/95 backdrop-blur-md md:top-16 dark:bg-amber-950/95">
+          <div className="mx-auto flex min-h-11 max-w-[1440px] items-center justify-between gap-4 px-4 py-2 text-sm text-amber-900 sm:px-5 md:px-8 dark:text-amber-100">
+            <span>SMTP 邮件服务尚未配置，验证码和重要邮件通知暂不可用。</span>
+            <button className="shrink-0 font-medium underline-offset-4 hover:underline" onClick={() => navigate('/admin/settings')} type="button">
+              前往配置
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={smtpConfigurationMissing ? 'pt-11' : ''}>
 
       {activeMenu === '通知' ? (
         <NotificationPanel onClose={() => navigate('/admin')} />
@@ -369,7 +437,18 @@ export function AdminHome({ onLogout, user }: AdminHomeProps) {
           </SurfacePanel>
         </section>
       )}
+      </div>
     </AppBackground>
+  )
+}
+
+function isSmtpConfigured(settings: EmailServiceSettings) {
+  return Boolean(
+    settings.enabled
+    && settings.host
+    && settings.fromEmail
+    && settings.username
+    && settings.passwordConfigured,
   )
 }
 

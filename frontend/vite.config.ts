@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:3001'
+const usePolling = process.env.VITE_USE_POLLING === 'true'
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
@@ -37,8 +40,14 @@ export default defineConfig({
     proxy: {
       '/api': {
         changeOrigin: true,
-        target: 'http://127.0.0.1:3001',
+        target: apiProxyTarget,
+      },
+      '/socket.io': {
+        changeOrigin: true,
+        target: apiProxyTarget,
+        ws: true,
       },
     },
+    watch: usePolling ? { interval: 250, usePolling: true } : undefined,
   },
 })

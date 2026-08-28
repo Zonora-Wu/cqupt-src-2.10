@@ -1,0 +1,41 @@
+{
+  "source": "docs/校园漏洞响应与安全学习平台项目系统设计说明书.doc",
+  "converted_reference": "scripts/assets/system-design-reference.docx",
+  "audited_on": "2026-08-26",
+  "document": {
+    "sections": 3,
+    "paragraphs": 225,
+    "tables": 21,
+    "images": 24,
+    "page_orientation": "A4 portrait"
+  },
+  "retained_conventions": [
+    "cover and document-control page structure",
+    "automatic table of contents",
+    "three-level heading hierarchy",
+    "table captions above tables",
+    "figure captions below figures",
+    "five-point Chinese text in tables with all borders"
+  ],
+  "representative_tables": {
+    "0": "cover metadata, 8 rows x 2 columns",
+    "1": "revision record, 9 rows x 4 columns",
+    "2": "review record, 9 rows x 5 columns",
+    "3": "distribution record, 9 rows x 2 columns",
+    "4": "general five-column specification table",
+    "5": "two-column glossary table",
+    "6": "three-column functional requirement table",
+    "7": "three-column nonfunctional requirement table",
+    "8": "two-column runtime environment table",
+    "9-20": "six-column physical data model tables"
+  },
+  "removed_obsolete_content": [
+    "legacy project number and personal names",
+    "Windows-only runtime description",
+    "Spring Boot backend description",
+    "MySQL 8 database description",
+    "IntelliJ IDEA 2020 development environment",
+    "unverified 100-user capacity statement",
+    "legacy roles, modules, screenshots and database fields"
+  ]
+}

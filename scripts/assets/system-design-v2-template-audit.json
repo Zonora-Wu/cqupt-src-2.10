@@ -1,0 +1,28 @@
+{
+  "reference": "scripts/assets/system-design-reference.docx",
+  "source": "docs/校园漏洞响应与安全学习平台项目系统设计说明书.doc",
+  "tables": {
+    "0": {"dimensions": "8x2", "purpose": "cover metadata"},
+    "1": {"dimensions": "9x4", "purpose": "revision record"},
+    "2": {"dimensions": "9x5", "purpose": "review record"},
+    "3": {"dimensions": "9x2", "purpose": "distribution record"},
+    "4": {"dimensions": "3x5", "purpose": "five-column reference or interface table"},
+    "5": {"dimensions": "3x2", "purpose": "two-column glossary table"},
+    "6": {"dimensions": "11x3", "purpose": "three-column functional or component table"},
+    "7": {"dimensions": "8x3", "purpose": "three-column nonfunctional table"},
+    "8": {"dimensions": "8x2", "purpose": "two-column environment table"},
+    "9": {"dimensions": "14x6", "purpose": "six-column physical model table"},
+    "10": {"dimensions": "3x6", "purpose": "compact physical model table"},
+    "11": {"dimensions": "4x6", "purpose": "compact physical model table"},
+    "12": {"dimensions": "3x6", "purpose": "relationship physical model table"},
+    "13": {"dimensions": "17x6", "purpose": "large physical model table"},
+    "14": {"dimensions": "3x6", "purpose": "lookup physical model table"},
+    "15": {"dimensions": "4x6", "purpose": "lookup physical model table"},
+    "16": {"dimensions": "3x6", "purpose": "status physical model table"},
+    "17": {"dimensions": "9x6", "purpose": "mall physical model table"},
+    "18": {"dimensions": "8x6", "purpose": "redemption physical model table"},
+    "19": {"dimensions": "9x6", "purpose": "ledger physical model table"},
+    "20": {"dimensions": "13x6", "purpose": "certificate physical model table"}
+  },
+  "generation_rule": "Every table is a deepcopy of one original table XML. Rows are added only by cloning an existing data row from that table. Cell text is replaced without rebuilding table styling."
+}

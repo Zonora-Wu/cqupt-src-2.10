@@ -29,6 +29,7 @@ import { VulnerabilitiesModule } from './modules/vulnerabilities/vulnerabilities
   imports: [
     ConfigModule.forRoot({
       envFilePath: ['.env.local', '.env'],
+      ignoreEnvFile: process.env.IGNORE_ENV_FILE === 'true',
       isGlobal: true,
       validate: validateEnv,
     }),

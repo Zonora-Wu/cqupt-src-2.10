@@ -110,6 +110,8 @@ export type EmailServiceSettings = {
   username: string
 }
 
+export const EMAIL_SERVICE_SETTINGS_UPDATED_EVENT = 'cqupt-src:email-service-settings-updated'
+
 export type UpdateEmailServiceSettingsPayload = Omit<EmailServiceSettings, 'passwordConfigured'> & {
   clearPassword?: boolean
   password?: string
@@ -296,7 +298,9 @@ export async function getEmailServiceSettings() {
 }
 
 export async function updateEmailServiceSettings(data: UpdateEmailServiceSettingsPayload) {
-  return request<EmailServiceSettings>('/system-settings/email-service', { method: 'POST', body: data as Record<string, unknown> })
+  const settings = await request<EmailServiceSettings>('/system-settings/email-service', { method: 'POST', body: data as Record<string, unknown> })
+  window.dispatchEvent(new CustomEvent(EMAIL_SERVICE_SETTINGS_UPDATED_EVENT, { detail: settings }))
+  return settings
 }
 
 export async function testEmailService(to: string) {

@@ -150,18 +150,20 @@ AI 助手提供历史会话、模型配置、声明式 Skill、附件分析和�
 ├── tests/                # API、E2E 与测试夹具
 ├── CQUPT/                # 平台品牌资源
 ├── resource/             # 模板等业务资源
-├── start-local.sh        # Linux / WSL / macOS 本地启动入口
-└── stop-local.sh         # 本地服务停止入口
+├── compose.yml           # 完整本地开发环境编排
+├── deploy-local.sh       # Linux / WSL / macOS 本地入口
+└── deploy-local.ps1      # Windows PowerShell 本地入口
 ```
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js 22 LTS 或兼容版本
-- npm
-- Docker 与 Docker Compose v2
-- Git、curl、OpenSSL
+- Git
+- Docker Engine + Docker Compose v2，或 Docker Desktop
+- 至少 8 GB 可用内存；ClamAV 病毒库初始化期间建议保留更多内存
+
+宿主机不需要安装 Node.js、npm、PostgreSQL、Redis、MinIO 或 ClamAV。支持 Linux、Windows Docker Desktop + WSL2 和 macOS Docker Desktop，以及 `linux/amd64`、`linux/arm64`。
 
 ### 1. 获取代码
 
@@ -170,31 +172,29 @@ git clone https://github.com/Zonora-Wu/cqupt-src-2.10.git
 cd cqupt-src-2.10
 ```
 
-### 2. 创建本地配置
+### 2. 一键启动
+
+Linux、WSL2 或 macOS：
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+bash deploy-local.sh
 ```
 
-至少替换以下后端密钥。四个命令应分别执行，并将结果写入对应变量；Access 与 Refresh 密钥不能相同。
+Windows PowerShell：
 
-```bash
-openssl rand -hex 32       # JWT_ACCESS_SECRET
-openssl rand -hex 32       # JWT_REFRESH_SECRET
-openssl rand -hex 32       # ALTCHA_HMAC_SECRET
-openssl rand -base64 32    # AI_CREDENTIAL_ENCRYPTION_KEY
+```powershell
+.\deploy-local.ps1
 ```
 
-本地开发还应将 `PUBLIC_SITE_URL` 设为 `http://localhost:5173`。未配置模型服务时，非 AI 功能仍可开发；AI 请求会进入明确的不可用或降级状态。
+首次启动会自动完成以下工作：
 
-### 3. 启动平台
+- 创建仅供本机使用的 `.env.docker.local`，生成并持久保存数据库、JWT、MinIO 和模型凭据加密密钥；
+- 构建前后端开发镜像，启动 PostgreSQL、Redis、MinIO、ClamAV、NestJS 和 Vite；
+- 生成 Prisma Client，执行数据库迁移和幂等 seed；
+- 挂载源代码并启用前后端热更新，依赖保存在 Docker 命名卷中；
+- 等待平台服务就绪，并额外等待最多 5 分钟确认 ClamAV 病毒库完成初始化。
 
-```bash
-bash start-local.sh
-```
-
-启动脚本会按需安装前后端依赖，启动 PostgreSQL、Redis 和 MinIO，生成 Prisma Client，执行迁移与 seed，然后启动前后端开发服务器。
+ClamAV 尚未就绪时平台仍可访问，但上传接口会明确提示“安全扫描服务正在初始化”。SMTP 未配置会在管理员工作台持续提示；平台 AI 未配置只在管理员每次登录后提醒一次，其他非 AI 功能不受影响。
 
 | 服务 | 地址 |
 |---|---|
@@ -202,6 +202,8 @@ bash start-local.sh
 | 后端健康检查 | http://localhost:3001/api/health |
 | MinIO 控制台 | http://localhost:9001 |
 | PostgreSQL | `127.0.0.1:15432` |
+
+Redis、MinIO API 与 ClamAV 不映射到宿主机，只允许 Compose 内部服务访问。所有公开的本地端口均绑定 `127.0.0.1`，不会监听局域网网卡。
 
 本地 seed 演示账号仅用于开发环境：
 
@@ -213,13 +215,29 @@ bash start-local.sh
 
 > 不要在公网环境保留 seed 账号、示例密码或 `.env.example` 中的默认基础设施凭据。
 
-### 4. 停止平台
+### 3. 常用命令
 
 ```bash
-bash stop-local.sh
+bash deploy-local.sh status
+bash deploy-local.sh logs
+bash deploy-local.sh logs backend
+bash deploy-local.sh restart
+bash deploy-local.sh stop
 ```
 
-启动和停止脚本的运行日志位于 `tmp/logs/`。启动脚本支持跳过 PostgreSQL、Redis、MinIO 或数据库初始化，具体选项见脚本头部说明。
+PowerShell 使用相同子命令，例如 `.\deploy-local.ps1 logs backend`。`stop` 只停止并移除容器，数据库、对象存储、Redis、病毒库缓存和依赖卷都会保留。
+
+需要彻底重建本地数据时执行：
+
+```bash
+bash deploy-local.sh reset
+```
+
+`reset` 必须连续输入两次指定确认文本才会删除命名卷。删除后无法恢复。
+
+端口或本地基础设施参数需要调整时，编辑首次启动生成的 `.env.docker.local`，再执行 `bash deploy-local.sh start`。该文件包含本地密钥并已被 Git 忽略。
+
+本地模板默认使用 `https://registry.npmmirror.com` 加速容器内依赖下载。其他网络环境可将 `.env.docker.local` 中的 `NPM_REGISTRY` 改为 `https://registry.npmjs.org`。
 
 ## 关键配置
 
