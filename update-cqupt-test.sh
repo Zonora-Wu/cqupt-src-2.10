@@ -4,8 +4,12 @@ set -Eeuo pipefail
 PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/projcets/cqupt-src-test}"
 DEPLOY_DIR="$PROJECT_DIR/deploy/test"
 DEPLOY_SCOPE="${DEPLOY_SCOPE:-}"
+LOW_RESOURCE_MODE="${LOW_RESOURCE_MODE:-auto}"
+MIN_BUILD_DISK_MB="${MIN_BUILD_DISK_MB:-2048}"
 CLAMAV_COMPOSE_FILE="$DEPLOY_DIR/docker-compose.clamav.yml"
 COMPOSE=()
+LOW_RESOURCE_ACTIVE=false
+BUILD_SERVICES_STOPPED=false
 
 log() {
   printf '\n===== %s =====\n' "$1"
@@ -15,6 +19,86 @@ fail() {
   printf '错误: %s\n' "$1" >&2
   exit 1
 }
+
+memory_mb() {
+  local field="$1"
+  awk -v field="$field" '$1 == field ":" { print int($2 / 1024); exit }' /proc/meminfo
+}
+
+check_build_resources() {
+  local total_mb available_mb swap_mb disk_mb
+  total_mb="$(memory_mb MemTotal)"
+  available_mb="$(memory_mb MemAvailable)"
+  swap_mb="$(memory_mb SwapTotal)"
+  disk_mb="$(df -Pm "$PROJECT_DIR" | awk 'NR == 2 { print $4 }')"
+
+  printf '主机资源：内存总量 %sMiB，可用 %sMiB，Swap %sMiB，磁盘可用 %sMiB\n' \
+    "$total_mb" "$available_mb" "$swap_mb" "$disk_mb"
+
+  [[ "$disk_mb" -ge "$MIN_BUILD_DISK_MB" ]] \
+    || fail "磁盘可用空间不足 ${MIN_BUILD_DISK_MB}MiB，停止构建以避免 Docker 数据损坏。"
+
+  case "$LOW_RESOURCE_MODE" in
+    auto)
+      if [[ "$total_mb" -lt 5120 || "$available_mb" -lt 1536 ]]; then
+        LOW_RESOURCE_ACTIVE=true
+      fi
+      ;;
+    on) LOW_RESOURCE_ACTIVE=true ;;
+    off) LOW_RESOURCE_ACTIVE=false ;;
+    *) fail 'LOW_RESOURCE_MODE 仅支持 auto、on、off。' ;;
+  esac
+
+  if [[ "$LOW_RESOURCE_ACTIVE" == true ]]; then
+    export COMPOSE_PARALLEL_LIMIT=1
+    log '已启用低资源构建模式'
+    printf '将临时停止本项目后端与 ClamAV，前后端镜像串行构建，完成后自动恢复。\n'
+    if [[ "$swap_mb" -eq 0 ]]; then
+      printf '警告: 当前未配置 Swap；建议为低内存主机配置至少 2GiB Swap。\n' >&2
+    fi
+  fi
+}
+
+prepare_build_environment() {
+  [[ "$LOW_RESOURCE_ACTIVE" == true ]] || return 0
+  local available_mb swap_mb
+  log '释放本项目构建所需内存'
+  "${COMPOSE[@]}" stop backend clamav
+  BUILD_SERVICES_STOPPED=true
+  sleep 2
+  available_mb="$(memory_mb MemAvailable)"
+  swap_mb="$(memory_mb SwapTotal)"
+  printf '释放后可用内存：%sMiB\n' "$available_mb"
+  if [[ "$available_mb" -lt 512 && "$swap_mb" -eq 0 ]]; then
+    fail '释放项目服务后可用内存仍不足 512MiB，且未配置 Swap；请停止其他高占用服务或配置 Swap 后重试。'
+  fi
+}
+
+build_services() {
+  if [[ "$LOW_RESOURCE_ACTIVE" == true ]]; then
+    local service
+    for service in "$@"; do
+      log "构建 ${service} 镜像（串行）"
+      "${COMPOSE[@]}" build "$service"
+    done
+    return
+  fi
+  "${COMPOSE[@]}" build "$@"
+}
+
+restore_services_after_failed_build() {
+  local exit_code=$?
+  trap - EXIT
+  if [[ "$exit_code" -ne 0 && "$BUILD_SERVICES_STOPPED" == true && "${#COMPOSE[@]}" -gt 0 ]]; then
+    set +e
+    printf '\n更新失败，正在恢复原有后端与安全扫描服务...\n' >&2
+    "${COMPOSE[@]}" up -d clamav
+    "${COMPOSE[@]}" up -d --no-deps backend
+  fi
+  exit "$exit_code"
+}
+
+trap restore_services_after_failed_build EXIT
 
 validate_ai_credential_key() {
   local env_file="$DEPLOY_DIR/.env"
@@ -131,41 +215,58 @@ fi
 
 cd "$DEPLOY_DIR"
 configure_compose
-if [[ "$DEPLOY_SCOPE" != '7' ]]; then
-  ensure_malware_scanner
+if [[ "$DEPLOY_SCOPE" =~ ^(1|2|3|4|5)$ ]]; then
+  check_build_resources
+  prepare_build_environment
 fi
 case "$DEPLOY_SCOPE" in
   1)
-    if ! backend_uses_malware_scanner; then
-      log '首次应用后端安全扫描配置'
+    log '构建并启动前端'
+    build_services web
+    ensure_malware_scanner
+    if [[ "$BUILD_SERVICES_STOPPED" == true ]] || ! backend_uses_malware_scanner; then
+      log '恢复后端并应用安全扫描配置'
       "${COMPOSE[@]}" up -d --no-deps --force-recreate backend
     fi
-    log '构建并启动前端'
-    "${COMPOSE[@]}" up -d --build --no-deps web
+    "${COMPOSE[@]}" up -d --no-build --no-deps web
+    BUILD_SERVICES_STOPPED=false
     apply_web_config
     ;;
   2)
     log '构建并启动后端'
-    "${COMPOSE[@]}" up -d --build --no-deps backend
+    build_services backend
+    ensure_malware_scanner
+    "${COMPOSE[@]}" up -d --no-build --no-deps backend
+    BUILD_SERVICES_STOPPED=false
     ;;
   3)
     log '构建并启动后端'
-    "${COMPOSE[@]}" up -d --build backend
+    build_services backend
+    ensure_malware_scanner
+    "${COMPOSE[@]}" up -d --no-build backend
+    BUILD_SERVICES_STOPPED=false
     run_migrations
     ;;
   4)
     log '构建并启动前后端'
-    "${COMPOSE[@]}" up -d --build --no-deps web backend
+    build_services backend web
+    ensure_malware_scanner
+    "${COMPOSE[@]}" up -d --no-build --no-deps backend web
+    BUILD_SERVICES_STOPPED=false
     apply_web_config
     ;;
   5)
     log '全量构建并启动服务'
-    "${COMPOSE[@]}" up -d --build --remove-orphans
+    build_services backend web
+    ensure_malware_scanner
+    "${COMPOSE[@]}" up -d --no-build --remove-orphans
+    BUILD_SERVICES_STOPPED=false
     run_migrations
     apply_web_config
     ;;
   6)
     log '重启前后端服务'
+    ensure_malware_scanner
     "${COMPOSE[@]}" up -d --no-deps --force-recreate backend web
     ;;
   7)
