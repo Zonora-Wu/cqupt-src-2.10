@@ -293,30 +293,74 @@ def _allow_automatic_row_height(row):
         tr_pr.remove(height)
 
 
-def _set_cell_margins(cell, top=70, start=90, bottom=70, end=90):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    margins = tc_pr.find(qn("w:tcMar"))
+def _set_table_cell_margins(table, top=36, bottom=36):
+    tbl_pr = table._tbl.tblPr
+    margins = tbl_pr.find(qn("w:tblCellMar"))
     if margins is None:
-        margins = OxmlElement("w:tcMar")
-        tc_pr.append(margins)
-    for side, value in (("top", top), ("start", start), ("bottom", bottom), ("end", end)):
-        node = margins.find(qn(f"w:{side}"))
-        if node is None:
-            node = OxmlElement(f"w:{side}")
-            margins.append(node)
+        margins = OxmlElement("w:tblCellMar")
+        tbl_pr.append(margins)
+    for child in list(margins):
+        margins.remove(child)
+    for side, value in (("top", top), ("bottom", bottom)):
+        node = OxmlElement(f"w:{side}")
         node.set(qn("w:w"), str(value))
         node.set(qn("w:type"), "dxa")
+        margins.append(node)
+
+
+def _set_cell_borders(cell, color="000000", size="4"):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    existing = tc_pr.find(qn("w:tcBorders"))
+    if existing is not None:
+        tc_pr.remove(existing)
+    borders = OxmlElement("w:tcBorders")
+    for side in ("top", "left", "bottom", "right"):
+        border = OxmlElement(f"w:{side}")
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), size)
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), color)
+        borders.append(border)
+    tc_pr.append(borders)
+
+
+def _set_cell_shading(cell, fill):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    shading = tc_pr.find(qn("w:shd"))
+    if shading is None:
+        shading = OxmlElement("w:shd")
+        tc_pr.append(shading)
+    shading.set(qn("w:val"), "clear")
+    shading.set(qn("w:color"), "auto")
+    shading.set(qn("w:fill"), fill)
 
 
 def _format_table(table, has_header=True):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = True
+    table.autofit = False
     tbl_pr = table._tbl.tblPr
     layout = tbl_pr.find(qn("w:tblLayout"))
     if layout is None:
         layout = OxmlElement("w:tblLayout")
         tbl_pr.append(layout)
-    layout.set(qn("w:type"), "autofit")
+    layout.set(qn("w:type"), "fixed")
+
+    look = tbl_pr.find(qn("w:tblLook"))
+    if look is None:
+        look = OxmlElement("w:tblLook")
+        tbl_pr.append(look)
+    for name, value in {
+        "val": "04A0",
+        "firstRow": "1",
+        "lastRow": "0",
+        "firstColumn": "1",
+        "lastColumn": "0",
+        "noHBand": "0",
+        "noVBand": "1",
+    }.items():
+        look.set(qn(f"w:{name}"), value)
+
+    _set_table_cell_margins(table)
 
     borders = tbl_pr.find(qn("w:tblBorders"))
     if borders is None:
@@ -337,7 +381,15 @@ def _format_table(table, has_header=True):
         _prevent_row_split(row)
         for cell_index, cell in enumerate(row.cells):
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-            _set_cell_margins(cell)
+            tc_pr = cell._tc.get_or_add_tcPr()
+            cell_margins = tc_pr.find(qn("w:tcMar"))
+            if cell_margins is not None:
+                tc_pr.remove(cell_margins)
+            _set_cell_borders(cell)
+            if has_header:
+                _set_cell_shading(cell, "D9D9D9" if row_index == 0 else "FFFFFF")
+            else:
+                _set_cell_shading(cell, "E7E7E7" if cell_index == 0 else "FFFFFF")
             for paragraph in cell.paragraphs:
                 paragraph.paragraph_format.left_indent = Pt(0)
                 paragraph.paragraph_format.right_indent = Pt(0)
@@ -347,7 +399,7 @@ def _format_table(table, has_header=True):
                 paragraph.paragraph_format.line_spacing = 1.0
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if (row_index == 0 and has_header) or cell_index == 0 else WD_ALIGN_PARAGRAPH.LEFT
                 for run in paragraph.runs:
-                    set_run_font(run, "宋体", 10.5, bold=(row_index == 0 and has_header))
+                    set_run_font(run, "宋体", 10.5, bold=False)
 
 
 def _set_table_column_widths(table, ratios, total_width_cm=15.8):
@@ -418,7 +470,7 @@ def table_caption(doc, number, title):
     p.paragraph_format.keep_with_next = True
     p.paragraph_format.space_before = Pt(6)
     p.paragraph_format.space_after = Pt(3)
-    prefix = number if str(number).startswith("附表") else f"表{number}"
+    prefix = f"附表 {str(number)[2:]}" if str(number).startswith("附表") else f"表 {number}"
     set_run_font(p.add_run(f"{prefix}  {title}"), "宋体", 10.5)
 
 
@@ -757,9 +809,9 @@ def add_cover(doc, reference):
     for _ in range(4):
         doc.add_paragraph()
     rows = [
-        ("项  目  名  称", PROJECT), ("产　品　类　型", "Web 应用系统"), ("项  目  编  号.", ""),
-        ("版    本    号", VERSION), ("状          态", "受控稿"), ("作          者", ""),
-        ("所  属  部  门", ""), ("提  交  日  期", "2026年8月26日"),
+        ("项目名称", PROJECT), ("产品类型", "Web 应用系统"), ("项目编号", ""),
+        ("版本号", VERSION), ("状态", "受控稿"), ("作者", ""),
+        ("所属部门", ""), ("提交日期", "2026年8月26日"),
     ]
     append_cloned_table(doc, reference, "cover", rows, has_header=False)
     page_break(doc)

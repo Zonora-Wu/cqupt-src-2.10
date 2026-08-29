@@ -76,7 +76,34 @@ configure_compose() {
 
 ensure_malware_scanner() {
   log '启动并检查安全扫描服务'
-  "${COMPOSE[@]}" up -d --wait --wait-timeout 600 clamav
+  local container_name='cqupt-src-test-clamav'
+  local health_status
+
+  "${COMPOSE[@]}" up -d clamav
+  health_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+
+  if [[ "$health_status" == 'unhealthy' ]]; then
+    log '检测到安全扫描容器异常，保留病毒库数据并重建容器'
+    "${COMPOSE[@]}" up -d --force-recreate clamav
+  fi
+
+  if ! "${COMPOSE[@]}" up -d --wait --wait-timeout 600 clamav; then
+    printf '\nClamAV 容器状态：\n' >&2
+    docker inspect \
+      --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} oomKilled={{.State.OOMKilled}} exitCode={{.State.ExitCode}} error={{.State.Error}}' \
+      "$container_name" >&2 || true
+    printf '\nClamAV 最近健康检查：\n' >&2
+    docker inspect \
+      --format '{{if .State.Health}}{{range .State.Health.Log}}{{println .End "exit=" .ExitCode .Output}}{{end}}{{else}}无健康检查记录{{end}}' \
+      "$container_name" >&2 || true
+    printf '\nClamAV 最近日志：\n' >&2
+    "${COMPOSE[@]}" logs --no-color --tail=120 clamav >&2 || true
+    printf '\n主机内存：\n' >&2
+    free -h >&2 || true
+    printf '\n部署目录磁盘：\n' >&2
+    df -h "$DEPLOY_DIR" >&2 || true
+    fail '安全扫描服务未通过健康检查，请根据上方诊断信息处理。'
+  fi
 }
 
 backend_uses_malware_scanner() {
