@@ -1,6 +1,6 @@
 import { BadGatewayException, BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { AiCallPurpose, AiSpace, AuditAction, SecurityQuestion, SecurityQuestionType } from '@prisma/client'
-import { PDFParse } from 'pdf-parse'
+import { PDFParse } from '../../common/pdf/pdf-parser'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { NormalizedSecurityQuestionInput, SecurityExamAnswerInput, SecurityExamQuestionView, SecurityQuestionAdminView, SecurityQuestionOption } from './security-exam.types'

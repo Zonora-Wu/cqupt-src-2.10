@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common'
 import { VulnerabilitySeverity } from '@prisma/client'
 import { createHash } from 'node:crypto'
-import { PDFParse } from 'pdf-parse'
+import { PDFParse } from '../../common/pdf/pdf-parser'
 import { AiAttachmentTextResponse, AiVulnerabilityDraft, AiVulnerabilityReportDraftResponse } from './ai.types'
 
 type UploadedReportFile = {
