@@ -8,7 +8,6 @@ import {
 import { AttachmentKind, AuditAction } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
-import sharp from 'sharp'
 import { S3StorageService } from '../../integrations/object-storage/s3-storage.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -16,6 +15,7 @@ import { UploadedAttachmentFile, UploadedPdfFile } from './attachment.types'
 
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024
 const MB = 1024 * 1024
+const sharp = require('sharp') as typeof import('sharp').default
 const DRAFT_LIMITS = {
   INLINE_IMAGE: { count: 20, fileBytes: 5 * MB, totalBytes: 50 * MB },
   SUPPLEMENTARY: { count: 10, fileBytes: 20 * MB, totalBytes: 50 * MB },
