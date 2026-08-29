@@ -10,7 +10,6 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="$REPO_ROOT/deploy/docker/docker-compose.local.yml"
 STATE_FILE="$REPO_ROOT/tmp/local-dev-processes.json"
 
 KEEP_POSTGRES=false
@@ -64,6 +63,33 @@ if [[ -f "$STATE_FILE" ]]; then
 else
   log_warn "未找到进程状态文件，将按开发端口清理残留进程"
 fi
+
+# ---- 停止两套本地 Compose 模式中的应用容器 ----
+stop_project_service() {
+  local service="$1"
+  local label="$2"
+  local container_ids
+
+  if ! container_ids="$(docker ps -q \
+    --filter 'label=com.docker.compose.project=cqupt-src-local' \
+    --filter "label=com.docker.compose.service=$service")"; then
+    log_warn "无法查询 $label 容器"
+    return 1
+  fi
+
+  if [[ -z "$container_ids" ]]; then
+    log_success "$label 容器未运行"
+    return 0
+  fi
+
+  log_info "停止 $label 容器..."
+  # shellcheck disable=SC2086
+  docker stop $container_ids >/dev/null
+  log_success "$label 已停止"
+}
+
+stop_project_service backend "Docker 后端"
+stop_project_service frontend "Docker 前端"
 
 # ---- 释放前后端固定端口 ----
 port_listener_pids() {
@@ -181,25 +207,24 @@ fi
 stop_required_port 3001 "后端"
 stop_required_port 5173 "前端"
 
-# ---- 停止 Docker 容器 ----
-stop_container() {
-  local service="$1"
-  local container="$2"
-  log_info "停止 $service 容器..."
-  docker compose -f "$COMPOSE_FILE" stop "$service" 2>/dev/null && log_success "$service 已停止" || log_warn "$service 停止失败（可能未运行）"
-}
-
 if [[ "$KEEP_POSTGRES" == false ]]; then
-  stop_container postgres "cqupt-src-local-postgres"
+  stop_project_service postgres "PostgreSQL"
+  stop_required_port 15432 "PostgreSQL"
 fi
 
 if [[ "$KEEP_REDIS" == false ]]; then
-  stop_container redis "cqupt-src-local-redis"
+  stop_project_service redis "Redis"
+  stop_required_port 6379 "Redis"
 fi
 
 if [[ "$KEEP_MINIO" == false ]]; then
-  stop_container minio "cqupt-src-local-minio"
+  stop_project_service minio "MinIO"
+  stop_required_port 9000 "MinIO API"
+  stop_required_port 9001 "MinIO 控制台"
 fi
+
+stop_project_service clamav "ClamAV"
+stop_required_port 13310 "ClamAV"
 
 echo ""
 log_success "关闭完成"
