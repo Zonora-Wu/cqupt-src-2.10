@@ -15,6 +15,7 @@ import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SeverityBadge } from '../../components/ui/SeverityBadge'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { UnreadDot } from '../../components/ui/UnreadDot'
 import {
   createCertificatePreviewUrl,
   downloadCertificatePdf,
@@ -137,8 +138,12 @@ export function UserCertificates() {
       releasePreviewUrl()
       previewUrlRef.current = url
       setPreviewState({ certificate, url })
-      await markNotificationEntityRead('Certificate', certificate.id)
-      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+      void markNotificationEntityRead('Certificate', certificate.id, 'user-certificates')
+        .then(() => {
+          setCertificates((items) => items.map((item) => item.id === certificate.id ? { ...item, hasUnread: false } : item))
+          window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+        })
+        .catch(() => {})
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : '证书 PDF 预览失败')
     } finally {
@@ -299,7 +304,8 @@ export function UserCertificates() {
           <SurfacePanel className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">正在加载证书...</SurfacePanel>
         ) : filteredCertificates.length > 0 ? (
           filteredCertificates.map((item) => (
-            <SurfacePanel className="p-4" key={item.id}>
+            <SurfacePanel className="relative p-4" key={item.id}>
+              <UnreadDot visible={item.hasUnread} />
               <article className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-stretch">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -318,8 +324,8 @@ export function UserCertificates() {
                   </dl>
                 </div>
                 <div className="flex shrink-0 flex-wrap content-end justify-end gap-2 lg:self-end">
-                  <button className="inline-flex items-center gap-2 rounded-lg border border-brand-600/20 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/10 disabled:cursor-not-allowed disabled:opacity-55 dark:text-brand-300" disabled={item.status !== '已签发' || isPreviewLoading} onClick={() => void previewCertificate(item)} type="button"><Eye className="h-4 w-4" />{isPreviewLoading ? '加载中' : '预览'}</button>
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55" disabled={item.status !== '已签发' || downloadingId === item.id} onClick={() => void downloadCertificate(item)} type="button"><Download className="h-4 w-4" />{downloadingId === item.id ? '下载中' : '下载 PDF'}</button>
+                  <button className="inline-flex w-24 items-center justify-center gap-2 rounded-lg border border-brand-600/20 px-3 py-2 text-sm font-medium text-brand-800 transition hover:bg-brand-600/10 disabled:cursor-not-allowed disabled:opacity-55 dark:text-brand-300" disabled={item.status !== '已签发' || isPreviewLoading} onClick={() => void previewCertificate(item)} type="button"><Eye className="h-4 w-4" />{isPreviewLoading ? '加载中' : '预览'}</button>
+                  <button className="inline-flex w-24 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-55" disabled={item.status !== '已签发' || downloadingId === item.id} onClick={() => void downloadCertificate(item)} type="button"><Download className="h-4 w-4" />{downloadingId === item.id ? '下载中' : '下载 PDF'}</button>
                 </div>
               </article>
             </SurfacePanel>

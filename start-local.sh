@@ -130,19 +130,19 @@ wait_healthy() {
 
 if [[ "$SKIP_POSTGRES" == false ]]; then
   log_info "启动 PostgreSQL 容器..."
-  docker compose -f "$COMPOSE_FILE" up -d postgres
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans postgres
   wait_healthy "cqupt-src-local-postgres"
 fi
 
 if [[ "$SKIP_REDIS" == false ]]; then
   log_info "启动 Redis 容器..."
-  docker compose -f "$COMPOSE_FILE" up -d redis
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans redis
   wait_healthy "cqupt-src-local-redis"
 fi
 
 if [[ "$SKIP_MINIO" == false ]]; then
   log_info "启动 MinIO 容器..."
-  docker compose -f "$COMPOSE_FILE" up -d minio
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans minio
   wait_healthy "cqupt-src-local-minio"
 fi
 

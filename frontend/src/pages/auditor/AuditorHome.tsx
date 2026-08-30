@@ -28,25 +28,30 @@ import { AlertMessage } from '../../components/ui/AlertMessage'
 import { FullScreenLoader } from '../../components/ui/FullScreenLoader'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { PaginationBar } from '../../components/ui/PaginationBar'
+import { PlatformDialog } from '../../components/ui/PlatformDialog'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { UnreadDot } from '../../components/ui/UnreadDot'
 import { PrivateMarkdown } from '../../components/vulnerabilities/PrivateMarkdown'
 import { auditorNavItems, auditorUtilityPaths, getLabelFromPath, getPathFromLabel, isKnownWorkspacePath } from '../../routes/routeConfig'
 import { type AuthUser } from '../../services/auth'
 import { getAuditorDashboard, type AuditorDashboardStats } from '../../services/dashboard'
 import { platformNotice } from '../../services/platformNotice'
+import { markNotificationEntityRead } from '../../services/notifications'
+import { NOTIFICATION_READ_STATE_EVENT } from '../../services/notificationReadState'
 import { applyColorTheme, getSavedColorTheme, transitionColorTheme } from '../../utils/themeTransition'
 import { useNotificationUnread } from '../../hooks/useNotificationUnread'
 import {
   listRetestQueue,
   listReviewQueue,
+  getVulnerabilityDetail,
   markFixing,
   openAttachmentPreview,
   retestVulnerability,
   reviewVulnerability,
 } from '../../services/vulnerabilities'
-import type { RetestPayload, RetestQueueItem, ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
+import type { AdminVulnerabilityDetail, RetestPayload, RetestQueueItem, ReviewDecisionPayload, ReviewQueueItem } from '../../services/vulnerabilities'
 
 const AdminAnnouncementManagement = lazy(() =>
   import('../admin/AdminAnnouncementManagement').then((module) => ({ default: module.AdminAnnouncementManagement })),
@@ -71,6 +76,7 @@ type AnnouncementStatus = '草稿' | '已发布' | '已下架'
 type ReviewReport = {
   attachments: ReviewQueueItem['attachments']
   id: string
+  hasUnread: boolean
   reportId: string
   title: string
   asset: string
@@ -394,6 +400,12 @@ export function AuditorReviewQueue() {
     setReviewNote(defaultReviewNote(item.status))
     setFinalSeverity(item.level)
     setReviewPoints(String(item.points || defaultPointsForLevel(item.level)))
+    void markNotificationEntityRead('VulnerabilityReport', item.reportId, 'auditor-review')
+      .then(() => {
+        setReports((current) => current.map((report) => report.reportId === item.reportId ? { ...report, hasUnread: false } : report))
+        window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+      })
+      .catch(() => {})
   }
 
   const submitReview = async (decision: ReviewDecisionPayload['decision']) => {
@@ -668,6 +680,8 @@ function AuditorRetestArchive() {
   } | null>(null)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [detail, setDetail] = useState<AdminVulnerabilityDetail | null>(null)
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -686,6 +700,24 @@ function AuditorRetestArchive() {
   const openAction = (item: RetestQueueItem, decision: RetestPayload['decision'] | 'MARK_FIXING') => {
     setNote('')
     setActionDialog({ item, decision })
+  }
+
+  const openDetail = async (item: RetestQueueItem) => {
+    setDetailLoadingId(item.id)
+    try {
+      const nextDetail = await getVulnerabilityDetail(item.id)
+      setDetail(nextDetail)
+      void markNotificationEntityRead('VulnerabilityReport', item.id, 'auditor-retest')
+        .then(() => {
+          setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, hasUnread: false } : candidate))
+          window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+        })
+        .catch(() => {})
+    } catch (error) {
+      platformNotice.error(error instanceof Error ? error.message : '漏洞详情加载失败', { title: '无法查看详情' })
+    } finally {
+      setDetailLoadingId(null)
+    }
   }
 
   const handleConfirm = async () => {
@@ -807,7 +839,8 @@ function AuditorRetestArchive() {
         ) : (
           <div className="mt-4 grid gap-3">
             {displayed.map((item) => (
-              <SurfacePanel className="p-5" key={item.id}>
+              <SurfacePanel className="relative p-5" key={item.id}>
+                <UnreadDot visible={item.hasUnread} />
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -830,8 +863,17 @@ function AuditorRetestArchive() {
                       </p>
                     )}
                   </div>
-                  {tab === 'pending' && (
-                    <div className="flex flex-wrap items-start justify-end gap-2">
+                  <div className="flex flex-wrap items-start justify-end gap-2">
+                    <button
+                      className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-black/5 disabled:opacity-55 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                      disabled={detailLoadingId === item.id}
+                      onClick={() => void openDetail(item)}
+                      type="button"
+                    >
+                      {detailLoadingId === item.id ? '加载中' : '查看详情'}
+                    </button>
+                    {tab === 'pending' && (
+                      <>
                       {item.status === '修复中' && (
                         <ReviewActionButton
                           label="标记待复测"
@@ -855,15 +897,14 @@ function AuditorRetestArchive() {
                           />
                         </>
                       )}
-                    </div>
-                  )}
-                  {tab === 'archived' && item.archivedAt && (
-                    <div className="text-right">
+                      </>
+                    )}
+                    {tab === 'archived' && item.archivedAt && (
                       <p className="text-xs text-slate-400 dark:text-slate-500">
                         归档于 {new Date(item.archivedAt).toLocaleDateString('zh-CN')}
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </SurfacePanel>
             ))}
@@ -881,6 +922,28 @@ function AuditorRetestArchive() {
           onNoteChange={setNote}
           submitting={submitting}
         />
+      )}
+      {detail && (
+        <PlatformDialog
+          description={`${detail.reportNo} · ${detail.status} · ${detail.finalSeverity ?? detail.selfSeverity}`}
+          maxWidth="5xl"
+          onClose={() => setDetail(null)}
+          title={detail.title}
+        >
+          <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <dl className="space-y-3 text-sm">
+              <QueueCell label="影响资产" value={detail.assetName} strong />
+              <QueueCell label="漏洞类型" value={detail.vulnerabilityType} />
+              <QueueCell label="责任单位" value={detail.ownerUnit ?? '待确认'} />
+              <QueueCell label="提交用户" value={detail.submitterName} />
+              <QueueCell label="最近更新" value={formatDateTime(detail.updatedAt)} />
+            </dl>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">漏洞报告（Markdown）</h3>
+              <PrivateMarkdown className="mt-3 rounded-lg border border-black/10 bg-[var(--app-panel-muted-bg)] p-4 dark:border-white/10" content={detail.detailMarkdown} />
+            </div>
+          </div>
+        </PlatformDialog>
       )}
     </>
   )
@@ -1270,7 +1333,8 @@ function AuditorProfile({ user }: { user: AuthUser }) {
 
 function ReviewReportRow({ item, onOpen }: { item: ReviewReport; onOpen: () => void }) {
   return (
-    <div className="grid grid-cols-[204px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_128px_112px_112px_112px_64px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_64px]">
+    <div className="relative grid grid-cols-[204px_minmax(0,1fr)_64px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_128px_112px_112px_112px_64px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_64px]">
+      <UnreadDot visible={item.hasUnread} />
       <div className="min-w-0">
         <CopyableCode value={item.id} />
         <div className="mt-2 flex items-center gap-1.5">
@@ -1337,6 +1401,7 @@ function mapReviewQueueItem(item: ReviewQueueItem): ReviewReport {
     attachments: item.attachments,
     description: item.impactAssessment,
     detailMarkdown: item.detailMarkdown,
+    hasUnread: item.hasUnread,
     id: item.reportNo,
     level: (item.finalSeverity ?? item.selfSeverity) as ReviewLevel,
     owner: item.ownerUnit || '待确认',

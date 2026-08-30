@@ -112,20 +112,20 @@ export class VulnerabilitiesController {
 
   @Get('retest-queue')
   @RequirePermissions('vulnerability:review')
-  listRetestQueue() {
-    return this.vulnerabilities.listRetestQueue()
+  listRetestQueue(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.vulnerabilities.listRetestQueue(user)
   }
 
   @Get('review-queue')
   @RequirePermissions('vulnerability:review')
-  listReviewQueue() {
-    return this.vulnerabilities.listReviewQueue()
+  listReviewQueue(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.vulnerabilities.listReviewQueue(user)
   }
 
   @Get('manage')
   @RequirePermissions('vulnerability:manage')
-  listAllVulnerabilities() {
-    return this.vulnerabilities.listAllVulnerabilities()
+  listAllVulnerabilities(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.vulnerabilities.listAllVulnerabilities(user)
   }
 
   @Get(':reportId')

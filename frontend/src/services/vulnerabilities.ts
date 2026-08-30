@@ -77,6 +77,7 @@ export type MyVulnerabilityItem = {
   assetName: string
   attachments: MyVulnerabilityAttachment[]
   finalSeverity: string | null
+  hasUnread: boolean
   id: string
   lastEvent: {
     action: string
@@ -162,6 +163,7 @@ export type ReviewQueueItem = {
   assetUrl: string | null
   attachments: MyVulnerabilityAttachment[]
   finalSeverity: string | null
+  hasUnread: boolean
   id: string
   impactAssessment: string
   detailMarkdown: string
@@ -355,6 +357,7 @@ export type AdminVulnerabilityListItem = {
   title: string
   selfSeverity: string
   finalSeverity: string | null
+  hasUnread: boolean
   status: string
   assetName: string
   ownerUnit: string | null
@@ -510,6 +513,7 @@ export type RetestQueueItem = {
   assetName: string
   assetUrl: string | null
   finalSeverity: string | null
+  hasUnread: boolean
   id: string
   lastFixNote: string | null
   lastRetestNote: string | null

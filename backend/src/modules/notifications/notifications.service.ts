@@ -116,12 +116,26 @@ export class NotificationsService {
     return { success: true }
   }
 
-  async markEntityRead(userId: string, entityType: string, entityId: string) {
+  async markEntityRead(userId: string, entityType: string, entityId: string, menuScope?: string) {
     await this.prisma.platformNotification.updateMany({
-      where: { entityId, entityType, recipientId: userId, readAt: null },
+      where: { entityId, entityType, menuScope, recipientId: userId, readAt: null },
       data: { readAt: new Date() },
     })
     return { success: true }
+  }
+
+  async getUnreadEntityKeys(userId: string, entityTypes: string[], menuScopes: string[]) {
+    const rows = await this.prisma.platformNotification.findMany({
+      where: {
+        entityId: { not: null },
+        entityType: { in: entityTypes },
+        menuScope: { in: menuScopes },
+        readAt: null,
+        recipientId: userId,
+      },
+      select: { entityId: true, entityType: true },
+    })
+    return new Set(rows.map((row) => `${row.entityType}:${row.entityId}`))
   }
 
   private async getAuditNotifications(userId: string) {

@@ -10,6 +10,7 @@ import { S3StorageService } from '../../integrations/object-storage/s3-storage.s
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import { normalizePublicCertificateNo } from './certificate.validation'
 import { generateCertificatePdf } from './certificate-pdf.generator'
 import { NormalizedIssueCertificateInput, NormalizedRevokeCertificateInput } from './certificate.types'
@@ -31,10 +32,12 @@ export class CertificatesService {
     private readonly storage: S3StorageService,
     @Inject(NotificationDeliveryService)
     private readonly notifications: NotificationDeliveryService,
+    @Inject(NotificationsService)
+    private readonly notificationReadState: NotificationsService,
   ) {}
 
-  async listManageCertificates() {
-    const reports = await this.prisma.vulnerabilityReport.findMany({
+  async listManageCertificates(user: AuthenticatedRequestUser) {
+    const [reports, unreadEntityKeys] = await Promise.all([this.prisma.vulnerabilityReport.findMany({
       where: {
         deletedAt: null,
         finalSeverity: { not: null },
@@ -70,10 +73,18 @@ export class CertificatesService {
       },
       orderBy: { updatedAt: 'desc' },
       take: 200,
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(
+      user.id,
+      ['Certificate', 'VulnerabilityReport'],
+      [user.role === RoleCode.AUDITOR ? 'auditor-certificates' : 'admin-certificates'],
+    )])
 
     return {
-      items: reports.map((report) => summarizeManageItem(report)),
+      items: reports.map((report) => ({
+        ...summarizeManageItem(report),
+        hasUnread: unreadEntityKeys.has(`VulnerabilityReport:${report.id}`)
+          || Boolean(report.certificate && unreadEntityKeys.has(`Certificate:${report.certificate.id}`)),
+      })),
       stats: {
         issued: reports.filter((report) => report.certificate?.status === CertificateStatus.ISSUED).length,
         pending: reports.filter((report) => !report.certificate).length,
@@ -84,7 +95,7 @@ export class CertificatesService {
   }
 
   async listMyCertificates(user: AuthenticatedRequestUser) {
-    const certificates = await this.prisma.certificate.findMany({
+    const [certificates, unreadEntityKeys] = await Promise.all([this.prisma.certificate.findMany({
       where: {
         recipientId: user.id,
       },
@@ -104,10 +115,13 @@ export class CertificatesService {
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(user.id, ['Certificate'], ['user-certificates'])])
 
     return {
-      items: certificates.map((certificate) => summarizeCertificate(certificate)),
+      items: certificates.map((certificate) => ({
+        ...summarizeCertificate(certificate),
+        hasUnread: unreadEntityKeys.has(`Certificate:${certificate.id}`),
+      })),
       stats: {
         issued: certificates.filter((certificate) => certificate.status === CertificateStatus.ISSUED).length,
         revoked: certificates.filter((certificate) => certificate.status === CertificateStatus.REVOKED).length,

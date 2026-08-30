@@ -8,6 +8,7 @@ export type ManagedCertificateItem = {
   asset: string
   certificateId: string | null
   contribution: string
+  hasUnread: boolean
   id: string
   issueDate: string | null
   issuer: string | null
@@ -44,6 +45,7 @@ export type IssuedCertificate = {
   asset: string
   certificateNo: string
   contribution: string
+  hasUnread: boolean
   id: string
   issuedAt: string | null
   issuer: string | null

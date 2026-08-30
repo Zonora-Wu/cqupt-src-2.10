@@ -25,16 +25,22 @@ export class NotificationsController {
     return this.notifications.markChannelRead(user.id, channelId)
   }
 
-  @Post('entities/read')
+  @Post('entities/mark-read')
   markEntityRead(
     @CurrentUser() user: AuthenticatedRequestUser,
-    @Body() body: { entityId?: unknown; entityType?: unknown },
+    @Body() body: { entityId?: unknown; entityType?: unknown; menuScope?: unknown },
   ) {
     const entityId = typeof body.entityId === 'string' ? body.entityId.trim() : ''
     const entityType = typeof body.entityType === 'string' ? body.entityType.trim() : ''
+    const menuScope = typeof body.menuScope === 'string' ? body.menuScope.trim() : ''
+    const allowedMenuScopes = [
+      'admin-certificates', 'admin-vulnerabilities', 'auditor-certificates', 'auditor-retest',
+      'auditor-review', 'user-certificates', 'user-vulnerabilities',
+    ]
     if (!entityId || !['Certificate', 'SecurityEvent', 'VulnerabilityReport'].includes(entityType)) {
       return { success: false }
     }
-    return this.notifications.markEntityRead(user.id, entityType, entityId)
+    if (menuScope && !allowedMenuScopes.includes(menuScope)) return { success: false }
+    return this.notifications.markEntityRead(user.id, entityType, entityId, menuScope || undefined)
   }
 }

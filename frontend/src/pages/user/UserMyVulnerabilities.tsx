@@ -10,6 +10,7 @@ import { SelectInput } from '../../components/ui/SelectInput'
 import { SeverityBadge } from '../../components/ui/SeverityBadge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { UnreadDot } from '../../components/ui/UnreadDot'
 import { PrivateMarkdown } from '../../components/vulnerabilities/PrivateMarkdown'
 import {
   getMyVulnerabilityDetail,
@@ -74,8 +75,15 @@ export function UserMyVulnerabilities() {
     try {
       const nextDetail = await getMyVulnerabilityDetail(item.id)
       setDetail(nextDetail)
-      await markNotificationEntityRead('VulnerabilityReport', item.id)
-      window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+      void markNotificationEntityRead('VulnerabilityReport', item.id, 'user-vulnerabilities')
+        .then(() => {
+          setData((current) => current ? {
+            ...current,
+            items: current.items.map((candidate) => candidate.id === item.id ? { ...candidate, hasUnread: false } : candidate),
+          } : current)
+          window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+        })
+        .catch(() => {})
     } catch (error) {
       setDetailError(error instanceof Error ? error.message : '详情加载失败')
     } finally {
@@ -279,7 +287,8 @@ export function UserMyVulnerabilities() {
         )}
 
         {filteredVulnerabilities.map((item) => (
-          <SurfacePanel className="p-4" key={item.id}>
+          <SurfacePanel className="relative p-4" key={item.id}>
+            <UnreadDot visible={item.hasUnread} />
             <article className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">

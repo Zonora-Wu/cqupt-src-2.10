@@ -11,6 +11,7 @@ import {
 import { AccessPolicyService } from '../access/access-policy.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import { AuthenticatedRequestUser, ClientRequestMeta } from '../auth/auth.types'
 import {
   AdminVulnerabilityDetailResponse,
@@ -36,11 +37,12 @@ export class VulnerabilitiesService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AccessPolicyService) private readonly accessPolicy: AccessPolicyService,
     @Inject(NotificationDeliveryService) private readonly notifications: NotificationDeliveryService,
+    @Inject(NotificationsService) private readonly notificationReadState: NotificationsService,
     @Inject(VulnerabilityMarkdownService) private readonly markdown: VulnerabilityMarkdownService,
   ) {}
 
-  async listReviewQueue(): Promise<ReviewQueueResponse> {
-    const reports = await this.prisma.vulnerabilityReport.findMany({
+  async listReviewQueue(user: AuthenticatedRequestUser): Promise<ReviewQueueResponse> {
+    const [reports, unreadEntityKeys] = await Promise.all([this.prisma.vulnerabilityReport.findMany({
       where: {
         deletedAt: null,
         status: {
@@ -83,13 +85,14 @@ export class VulnerabilitiesService {
       },
       orderBy: { updatedAt: 'desc' },
       take: 200,
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(user.id, ['VulnerabilityReport'], ['auditor-review'])])
 
     const items = reports.map((report) => ({
       assetName: report.assetName,
       assetUrl: report.assetUrl,
       attachments: report.attachments,
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      hasUnread: unreadEntityKeys.has(`VulnerabilityReport:${report.id}`),
       id: report.id,
       impactAssessment: report.impactAssessment,
       detailMarkdown: report.detailMarkdown,
@@ -123,7 +126,7 @@ export class VulnerabilitiesService {
   }
 
   async listMyReports(user: AuthenticatedRequestUser): Promise<MyVulnerabilityListResponse> {
-    const reports = await this.prisma.vulnerabilityReport.findMany({
+    const [reports, unreadEntityKeys] = await Promise.all([this.prisma.vulnerabilityReport.findMany({
       where: {
         deletedAt: null,
         submitterId: user.id,
@@ -157,12 +160,13 @@ export class VulnerabilitiesService {
       },
       orderBy: { updatedAt: 'desc' },
       take: 100,
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(user.id, ['VulnerabilityReport'], ['user-vulnerabilities'])])
 
     const items = reports.map((report) => ({
       assetName: report.assetName,
       attachments: report.attachments,
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      hasUnread: unreadEntityKeys.has(`VulnerabilityReport:${report.id}`),
       id: report.id,
       lastEvent: report.events[0] ?? null,
       ownerUnit: report.ownerUnit,
@@ -348,14 +352,14 @@ export class VulnerabilitiesService {
     }
   }
 
-  async listRetestQueue(): Promise<RetestQueueResponse> {
+  async listRetestQueue(user: AuthenticatedRequestUser): Promise<RetestQueueResponse> {
     const statuses = [
       VulnerabilityStatus.FIXING,
       VulnerabilityStatus.PENDING_RETEST,
       VulnerabilityStatus.ARCHIVED,
     ]
 
-    const reports = await this.prisma.vulnerabilityReport.findMany({
+    const [reports, unreadEntityKeys] = await Promise.all([this.prisma.vulnerabilityReport.findMany({
       where: {
         deletedAt: null,
         status: { in: statuses },
@@ -374,7 +378,7 @@ export class VulnerabilitiesService {
         },
       },
       orderBy: { updatedAt: 'desc' },
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(user.id, ['VulnerabilityReport'], ['auditor-retest'])])
 
     const items = reports.map((r) => {
       const lastRetest = r.retests[0]
@@ -383,6 +387,7 @@ export class VulnerabilitiesService {
         assetName: r.assetName,
         assetUrl: r.assetUrl,
         finalSeverity: r.finalSeverity ? formatSeverity(r.finalSeverity) : null,
+        hasUnread: unreadEntityKeys.has(`VulnerabilityReport:${r.id}`),
         id: r.id,
         lastFixNote: r.events[0]?.note ?? null,
         lastRetestNote: lastRetest?.note ?? null,
@@ -785,8 +790,8 @@ export class VulnerabilitiesService {
     }
   }
 
-  async listAllVulnerabilities(): Promise<AdminVulnerabilityListResponse> {
-    const reports = await this.prisma.vulnerabilityReport.findMany({
+  async listAllVulnerabilities(user: AuthenticatedRequestUser): Promise<AdminVulnerabilityListResponse> {
+    const [reports, unreadEntityKeys] = await Promise.all([this.prisma.vulnerabilityReport.findMany({
       where: { deletedAt: null, status: { not: VulnerabilityStatus.DRAFT } },
       include: {
         attachments: { where: { deletedAt: null }, select: { id: true } },
@@ -803,7 +808,11 @@ export class VulnerabilitiesService {
       },
       orderBy: { updatedAt: 'desc' },
       take: 500,
-    })
+    }), this.notificationReadState.getUnreadEntityKeys(
+      user.id,
+      ['VulnerabilityReport'],
+      [user.role === RoleCode.AUDITOR ? 'auditor-review' : 'admin-vulnerabilities'],
+    )])
 
     const items = reports.map((report) => ({
       id: report.id,
@@ -811,6 +820,7 @@ export class VulnerabilitiesService {
       title: report.title,
       selfSeverity: formatSeverity(report.selfSeverity),
       finalSeverity: report.finalSeverity ? formatSeverity(report.finalSeverity) : null,
+      hasUnread: unreadEntityKeys.has(`VulnerabilityReport:${report.id}`),
       status: formatAdminStatus(report.status),
       assetName: report.assetName,
       ownerUnit: report.ownerUnit,

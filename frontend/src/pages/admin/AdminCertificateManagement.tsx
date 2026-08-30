@@ -14,7 +14,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { CopyableCode } from '../../components/ui/CopyableCode'
 import { AlertMessage } from '../../components/ui/AlertMessage'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -22,6 +22,7 @@ import { PaginationBar } from '../../components/ui/PaginationBar'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { SelectInput } from '../../components/ui/SelectInput'
 import { SurfacePanel } from '../../components/ui/SurfacePanel'
+import { UnreadDot } from '../../components/ui/UnreadDot'
 import {
   listManagedCertificates,
   openCertificatePreview,
@@ -125,6 +126,7 @@ function SortHeaderButton({
 }
 
 export function AdminCertificateManagement() {
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<ManagedCertificateItem[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, issued: 0, revoked: 0 })
@@ -233,12 +235,16 @@ export function AdminCertificateManagement() {
 
   useEffect(() => {
     if (!selectedCertificate) return
-    const reads = [markNotificationEntityRead('VulnerabilityReport', selectedCertificate.vulnerabilityId)]
-    if (selectedCertificate.certificateId) reads.push(markNotificationEntityRead('Certificate', selectedCertificate.certificateId))
+    const menuScope = location.pathname.startsWith('/auditor/') ? 'auditor-certificates' : 'admin-certificates'
+    const reads = [markNotificationEntityRead('VulnerabilityReport', selectedCertificate.vulnerabilityId, menuScope)]
+    if (selectedCertificate.certificateId) reads.push(markNotificationEntityRead('Certificate', selectedCertificate.certificateId, menuScope))
     void Promise.all(reads)
-      .then(() => window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT)))
+      .then(() => {
+        setItems((current) => current.map((item) => item.id === selectedCertificate.id ? { ...item, hasUnread: false } : item))
+        window.dispatchEvent(new Event(NOTIFICATION_READ_STATE_EVENT))
+      })
       .catch(() => {})
-  }, [selectedCertificate])
+  }, [location.pathname, selectedCertificate])
 
   async function previewPdf(certificate: ManagedCertificateItem) {
     if (!certificate.certificateId) {
@@ -482,9 +488,10 @@ export function AdminCertificateManagement() {
           {!loading &&
             paginatedCertificates.map((item) => (
               <div
-                className="grid grid-cols-[204px_minmax(0,1fr)_88px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_112px_112px_112px_112px_88px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_112px_88px]"
+                className="relative grid grid-cols-[204px_minmax(0,1fr)_88px] gap-4 border-b border-black/10 px-3 py-2.5 transition last:border-b-0 hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.045] xl:grid-cols-[204px_minmax(0,1fr)_112px_112px_112px_112px_88px] 2xl:grid-cols-[204px_minmax(0,1fr)_136px_112px_112px_112px_112px_112px_88px]"
                 key={item.id}
               >
+                <UnreadDot visible={item.hasUnread} />
                 <div className="min-w-0">
                   <CopyableCode value={item.vulnId} />
                   <div className="mt-2 flex items-center gap-1.5">

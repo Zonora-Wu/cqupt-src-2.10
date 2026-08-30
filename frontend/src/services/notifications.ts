@@ -33,10 +33,10 @@ export function markNotificationChannelRead(channelId: string) {
   return apiRequest<{ success: boolean }>(`/notifications/channels/${channelId}/read`, { auth: true, method: 'POST' })
 }
 
-export function markNotificationEntityRead(entityType: string, entityId: string) {
-  return apiRequest<{ success: boolean }>('/notifications/entities/read', {
+export function markNotificationEntityRead(entityType: string, entityId: string, menuScope?: string) {
+  return apiRequest<{ success: boolean }>('/notifications/entities/mark-read', {
     auth: true,
-    body: { entityId, entityType },
+    body: { entityId, entityType, menuScope },
     method: 'POST',
   })
 }

@@ -43,8 +43,8 @@ export class CertificatesController {
   @Get('manage')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('vulnerability:manage')
-  listManageCertificates() {
-    return this.certificates.listManageCertificates()
+  listManageCertificates(@CurrentUser() user: AuthenticatedRequestUser) {
+    return this.certificates.listManageCertificates(user)
   }
 
   @Get('my')
