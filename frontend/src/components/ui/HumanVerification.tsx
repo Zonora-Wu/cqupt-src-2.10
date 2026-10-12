@@ -43,6 +43,7 @@ export function HumanVerification({
   const widgetRef = useRef<AltchaWidgetElement | null>(null)
   const onChangeRef = useRef(onChange)
   const [status, setStatus] = useState<'ready' | 'verified' | 'verifying' | 'error'>('ready')
+  const [verificationIsSlow, setVerificationIsSlow] = useState(false)
   const [challengeKey, setChallengeKey] = useState(0)
   const [open, setOpen] = useState(false)
   const challengeUrl = useMemo(() => getHumanVerificationChallengeUrl(purpose), [purpose])
@@ -51,14 +52,19 @@ export function HumanVerification({
       JSON.stringify({
         hideFooter: true,
         hideLogo: true,
-        minDuration: 450,
-        timeout: 90_000,
+        minDuration: 650,
+        timeout: 30_000,
       }),
     [],
   )
   const workers = useMemo(() => {
     if (typeof window === 'undefined') return 2
-    return Math.max(1, Math.min(4, window.navigator.hardwareConcurrency || 2))
+    const navigatorWithMemory = window.navigator as Navigator & { deviceMemory?: number }
+    const cores = navigatorWithMemory.hardwareConcurrency || 2
+    const memory = navigatorWithMemory.deviceMemory
+    if (cores <= 2 || (memory !== undefined && memory <= 2)) return 1
+    if (cores <= 4 || (memory !== undefined && memory <= 4)) return 2
+    return 3
   }, [])
 
   useEffect(() => {
@@ -74,17 +80,22 @@ export function HumanVerification({
       const payload = (event as AltchaEvent).detail?.payload
       if (payload) {
         setStatus('verified')
+        setVerificationIsSlow(false)
         onChangeRef.current(payload)
         window.setTimeout(() => setOpen(false), 420)
       }
     }
     const handleStateChange = (event: Event) => {
       const state = (event as AltchaEvent).detail?.state
-      if (state === 'verifying') setStatus('verifying')
-      if (state === 'error') {
+      if (state === 'verifying') {
+        setStatus('verifying')
+        setVerificationIsSlow(false)
+      }
+      if (state === 'error' || state === 'expired') {
         setStatus('error')
+        setVerificationIsSlow(false)
         onChangeRef.current('')
-        onError?.('安全校验未通过，请刷新校验后重试')
+        onError?.('安全校验未完成，请重新验证')
       }
     }
 
@@ -97,12 +108,19 @@ export function HumanVerification({
   }, [onError, open])
 
   useEffect(() => {
+    if (status !== 'verifying') return
+    const timer = window.setTimeout(() => setVerificationIsSlow(true), 4_000)
+    return () => window.clearTimeout(timer)
+  }, [status])
+
+  useEffect(() => {
     let active = true
     queueMicrotask(() => {
       if (!active) return
       widgetRef.current?.reset?.()
       onChangeRef.current('')
       setStatus('ready')
+      setVerificationIsSlow(false)
       setOpen(false)
       setChallengeKey((value) => value + 1)
     })
@@ -115,16 +133,18 @@ export function HumanVerification({
     status === 'verified'
       ? '校验已完成，本次操作可继续。'
       : status === 'verifying'
-        ? '正在自动验证，请稍候。'
+        ? verificationIsSlow
+          ? '设备性能不同，计算可能稍久，请保持此窗口开启。'
+          : '正在进行轻量安全计算，通常几秒内完成。'
         : status === 'error'
-          ? '校验失败，请重新验证。'
-        : helperText ?? '点击后自动完成安全校验。'
+          ? '校验未完成，请点击重新验证。'
+          : helperText ?? '点击后将在设备本地完成轻量安全计算。'
 
   const statusLabel =
     status === 'verified'
       ? '已通过'
       : status === 'verifying'
-        ? '校验中'
+        ? '计算中'
         : status === 'error'
           ? '需重试'
           : '待校验'
@@ -136,6 +156,15 @@ export function HumanVerification({
       setChallengeKey((value) => value + 1)
     }
     setOpen(true)
+  }
+  const closeVerification = () => {
+    setOpen(false)
+    if (status === 'verifying') {
+      setStatus('ready')
+      setVerificationIsSlow(false)
+      onChangeRef.current('')
+      setChallengeKey((value) => value + 1)
+    }
   }
 
   return (
@@ -184,14 +213,14 @@ export function HumanVerification({
                 <div className="min-w-0">
                   <h2 className="text-base font-semibold">ALTCHA {title}</h2>
                   <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    系统会自动完成校验，用于确认本次操作由真实用户发起。
+                    系统将在当前设备完成少量计算，不采集行为轨迹，通常几秒内完成。
                   </p>
                 </div>
               </div>
               <button
                 aria-label="关闭安全校验"
                 className="rounded-md p-1.5 text-slate-500 transition hover:bg-black/5 hover:text-slate-950 dark:hover:bg-white/10 dark:hover:text-white"
-                onClick={() => setOpen(false)}
+                onClick={closeVerification}
                 type="button"
               >
                 <X className="h-4 w-4" />

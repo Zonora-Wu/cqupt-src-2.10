@@ -47,6 +47,9 @@ generated/
 /projects/
 /output/
 
+# Local tool archives
+/codex.tgz
+
 # Local documentation and generated document assets
 /docs/
 

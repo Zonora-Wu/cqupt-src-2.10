@@ -1,22 +1,23 @@
 import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { createChallenge, sha, verifySolution, type Challenge, type Solution } from 'altcha/lib'
-import { createHash } from 'node:crypto'
+import { createHash, randomInt } from 'node:crypto'
 import { ClientRequestMeta } from '../auth/auth.types'
 import { PrismaService } from '../prisma/prisma.service'
 import { HumanVerificationInput, HumanVerificationPurpose } from './human-verification.types'
 
-const CHALLENGE_TTL_SECONDS = 2 * 60
+const CHALLENGE_TTL_SECONDS = 5 * 60
 const CONSUMED_NONCE_TTL_MS = 10 * 60 * 1000
-const DEFAULT_COST = 24_000
-const DEFAULT_PURPOSE_COSTS: Record<HumanVerificationPurpose, number> = {
-  CHANGE_EMAIL_CODE: 32_000,
-  CHANGE_EMAIL_SUBMIT: 32_000,
-  CHANGE_PASSWORD: 32_000,
-  LOGIN_EMAIL_CODE: 28_000,
-  LOGIN_PASSWORD: 10_000,
-  REGISTER_EMAIL_CODE: 32_000,
-  REGISTER_SUBMIT: 32_000,
-  RESET_PASSWORD: 32_000,
+const DEFAULT_COST = 1
+const DEFAULT_KEY_PREFIX_LENGTH = 3
+const PURPOSE_COUNTER_RANGES: Record<HumanVerificationPurpose, readonly [number, number]> = {
+  CHANGE_EMAIL_CODE: [3_000, 6_000],
+  CHANGE_EMAIL_SUBMIT: [5_000, 9_000],
+  CHANGE_PASSWORD: [5_000, 9_000],
+  LOGIN_EMAIL_CODE: [2_500, 5_000],
+  LOGIN_PASSWORD: [1_200, 3_000],
+  REGISTER_EMAIL_CODE: [3_000, 6_000],
+  REGISTER_SUBMIT: [4_000, 8_000],
+  RESET_PASSWORD: [4_000, 8_000],
 }
 
 type AltchaPayload = {
@@ -31,9 +32,11 @@ export class HumanVerificationService {
 
   async createChallenge(purpose: HumanVerificationPurpose, meta: ClientRequestMeta) {
     const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS
+    const [counterMin, counterMax] = PURPOSE_COUNTER_RANGES[purpose]
     const challenge = await createChallenge({
       algorithm: 'SHA-256',
-      cost: resolveChallengeCost(purpose),
+      counter: randomInt(counterMin, counterMax + 1),
+      cost: resolveChallengeCost(),
       data: {
         host: normalizeHost(process.env.PUBLIC_SITE_URL ?? process.env.FRONTEND_ORIGIN ?? 'https://test.cquptsrc.asia'),
         ipHash: hashMetaValue(meta.ipAddress),
@@ -148,19 +151,19 @@ function hashMetaValue(value: string | undefined) {
   return createHash('sha256').update(value || 'unknown').digest('hex').slice(0, 24)
 }
 
-function resolveChallengeCost(purpose: HumanVerificationPurpose) {
+function resolveChallengeCost() {
   const override = normalizeCost(process.env.ALTCHA_CHALLENGE_COST)
-  return override ?? DEFAULT_PURPOSE_COSTS[purpose] ?? DEFAULT_COST
+  return override ?? DEFAULT_COST
 }
 
 function normalizeCost(value: string | undefined) {
   const cost = Number(value)
-  return Number.isInteger(cost) && cost >= 10_000 && cost <= 500_000 ? cost : null
+  return Number.isInteger(cost) && cost >= 1 && cost <= 64 ? cost : null
 }
 
 function normalizeKeyPrefixLength(value: string | undefined) {
   const length = Number(value)
-  return Number.isInteger(length) && length >= 1 && length <= 4 ? length : 2
+  return Number.isInteger(length) && length >= 3 && length <= 4 ? length : DEFAULT_KEY_PREFIX_LENGTH
 }
 
 function normalizeHost(value: string) {

@@ -37,6 +37,7 @@ declare module 'altcha/lib' {
 
   export type CreateChallengeOptions = {
     algorithm: string
+    counter?: number
     cost: number
     data?: Record<string, boolean | null | number | string>
     deriveKey: DeriveKeyFunction
@@ -59,6 +60,12 @@ declare module 'altcha/lib' {
   }
 
   export function createChallenge(options: CreateChallengeOptions): Promise<Challenge>
+
+  export function solveChallenge(options: {
+    challenge: Challenge
+    deriveKey: DeriveKeyFunction
+    timeout?: number
+  }): Promise<Solution | null>
 
   export function verifySolution(options: {
     challenge: Challenge
