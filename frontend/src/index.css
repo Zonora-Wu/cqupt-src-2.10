@@ -753,35 +753,6 @@ html {
   background: color-mix(in srgb, var(--guest-accent) 48%, transparent);
 }
 
-.chat-avatar-idea {
-  border-color: color-mix(in srgb, var(--color-brand-400) 42%, transparent);
-  background: color-mix(in srgb, var(--color-brand-400) 14%, var(--app-surface));
-  color: var(--color-brand-700);
-}
-
-.chat-avatar-boundary {
-  border-color: color-mix(in srgb, var(--app-info) 42%, transparent);
-  background: color-mix(in srgb, var(--app-info-soft) 72%, var(--app-surface));
-  color: var(--app-info-text);
-}
-
-.chat-avatar-learning {
-  border-color: color-mix(in srgb, var(--app-warning) 42%, transparent);
-  background: color-mix(in srgb, var(--app-warning-soft) 72%, var(--app-surface));
-  color: var(--app-warning-text);
-}
-
-.chat-avatar-build {
-  border-color: color-mix(in srgb, var(--color-brand-700) 42%, transparent);
-  background: color-mix(in srgb, var(--color-brand-700) 12%, var(--app-surface));
-  color: var(--color-brand-700);
-}
-
-.dark .chat-avatar-idea,
-.dark .chat-avatar-build {
-  color: color-mix(in srgb, var(--color-brand-400) 65%, var(--app-dark-text));
-}
-
 @media (hover: hover) and (pointer: fine) {
   .guest-hover-surface:hover {
     border-color: rgba(var(--app-primary-rgb), 0.3);

@@ -1,45 +1,47 @@
-import { BookOpen, ChevronDown, Code, ExternalLink, FileText, Lightbulb, Shield } from 'lucide-react'
+import { ChevronDown, ExternalLink, FileText } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { SpotlightCard } from '../../components/ui/SpotlightCard'
 
 const PROPOSAL_URL = 'https://lanshanteam.feishu.cn/wiki/GRR6wRh6IinV7QkxIbAc23krnSb'
 
-type Speaker = 'idea' | 'boundary' | 'learning' | 'build'
+type Speaker = 'boundary' | 'engineering' | 'initiator' | 'learning' | 'operations' | 'reviewer'
 
 type ChatEvent =
   | { delay: number; kind: 'message'; speaker: Speaker; text: string }
   | { delay: number; kind: 'document'; speaker: Speaker }
   | { count: number; delay: number; kind: 'read' }
 
-const speakers: Record<Speaker, { Icon: ComponentType<{ className?: string }>; label: string }> = {
-  idea: { Icon: Lightbulb, label: '参与者' },
-  boundary: { Icon: Shield, label: '参与者' },
-  learning: { Icon: BookOpen, label: '参与者' },
-  build: { Icon: Code, label: '参与者' },
+const speakers: Record<Speaker, { avatar: string; label: string }> = {
+  initiator: { avatar: '/assets/avatars/about-discussion/initiator.jpg', label: '匿名同学' },
+  engineering: { avatar: '/assets/avatars/about-discussion/engineering.jpg', label: '匿名同学' },
+  learning: { avatar: '/assets/avatars/about-discussion/learning.jpg', label: '匿名同学' },
+  boundary: { avatar: '/assets/avatars/about-discussion/boundary.jpg', label: '匿名同学' },
+  operations: { avatar: '/assets/avatars/about-discussion/operations.jpg', label: '匿名同学' },
+  reviewer: { avatar: '/assets/avatars/about-discussion/reviewer.jpg', label: '匿名同学' },
 }
 
 const chatEvents: ChatEvent[] = [
-  { delay: 500, kind: 'message', speaker: 'idea', text: '安全组现在发现的漏洞还是零散整理。能不能有一个统一的平台？' },
-  { delay: 1250, kind: 'message', speaker: 'build', text: '如果只是把报告放在一起，那不还是一个漏洞库吗？' },
-  { delay: 1300, kind: 'message', speaker: 'idea', text: '所以不能只收集。提交、审核、修复、复测、归档，整个过程都应该留在平台里。' },
+  { delay: 500, kind: 'message', speaker: 'initiator', text: '安全组现在发现的漏洞还是零散整理。能不能有一个统一的平台？' },
+  { delay: 1250, kind: 'message', speaker: 'engineering', text: '如果只是把报告放在一起，那不还是一个漏洞库吗？' },
+  { delay: 1300, kind: 'message', speaker: 'initiator', text: '所以不能只收集。提交、审核、修复、复测、归档，整个过程都应该留在平台里。' },
   { delay: 1450, kind: 'message', speaker: 'learning', text: '但学生为什么愿意一直参与？真实实践需要有持续的正向反馈。' },
-  { delay: 1250, kind: 'message', speaker: 'idea', text: '可以有积分、校级证书、学习资源，还有参与项目的机会。' },
+  { delay: 1250, kind: 'message', speaker: 'operations', text: '可以有积分、校级证书、学习资源，还有参与项目的机会。' },
   { delay: 1300, kind: 'message', speaker: 'boundary', text: '校园测试必须先明确授权范围。安全答题、责任书和资产边界都不能少。' },
-  { delay: 1450, kind: 'message', speaker: 'build', text: '这样平台既保护学校，也让同学能在合法范围内练习真正需要的能力。' },
-  { delay: 1250, kind: 'message', speaker: 'boundary', text: '审核进度也要透明。需要补材料、确认有效或者进入修复，都应该及时通知提交者。' },
+  { delay: 1450, kind: 'message', speaker: 'engineering', text: '这样平台既保护学校，也让同学能在合法范围内练习真正需要的能力。' },
+  { delay: 1250, kind: 'message', speaker: 'reviewer', text: '审核进度也要透明。需要补材料、确认有效或者进入修复，都应该及时通知提交者。' },
   { delay: 1300, kind: 'message', speaker: 'learning', text: '数据还能帮助学院看到学生什么时候具备了能力，课程和人才培养也有依据。' },
-  { delay: 1250, kind: 'message', speaker: 'learning', text: '证书还应该可以公开验真，让每一份贡献都有可信的成长记录。' },
-  { delay: 1450, kind: 'message', speaker: 'idea', text: '学生成长、学院教学、学校安全治理，可以在同一个闭环里互相推动。' },
-  { delay: 1250, kind: 'message', speaker: 'build', text: '平台要能长期运营，规则、审计和数据都得从一开始就认真设计。' },
-  { delay: 1500, kind: 'document', speaker: 'build' },
-  { count: 3, delay: 1200, kind: 'read' },
-  { count: 9, delay: 1050, kind: 'read' },
-  { count: 14, delay: 1050, kind: 'read' },
+  { delay: 1250, kind: 'message', speaker: 'operations', text: '证书还应该可以公开验真，让每一份贡献都有可信的成长记录。' },
+  { delay: 1450, kind: 'message', speaker: 'initiator', text: '学生成长、学院教学、学校安全治理，可以在同一个闭环里互相推动。' },
+  { delay: 1250, kind: 'message', speaker: 'reviewer', text: '平台要能长期运营，规则、审计和数据都得从一开始就认真设计。' },
+  { delay: 1500, kind: 'document', speaker: 'initiator' },
+  { count: 2, delay: 1200, kind: 'read' },
+  { count: 4, delay: 1050, kind: 'read' },
+  { count: 6, delay: 1050, kind: 'read' },
   { delay: 1000, kind: 'message', speaker: 'boundary', text: '看完了。这个已经不只是漏洞库了。' },
   { delay: 1100, kind: 'message', speaker: 'learning', text: '学生实践和学校安全都能真正受益。' },
-  { delay: 1100, kind: 'message', speaker: 'build', text: '可以做，先把漏洞响应闭环跑起来。' },
-  { delay: 1250, kind: 'message', speaker: 'idea', text: '那就从 CQUPT-SRC 开始。' },
+  { delay: 1100, kind: 'message', speaker: 'engineering', text: '可以做，先把漏洞响应闭环跑起来。' },
+  { delay: 1250, kind: 'message', speaker: 'initiator', text: '那就从 CQUPT-SRC 开始。' },
 ]
 
 const platformReasons = [
@@ -245,7 +247,7 @@ function OriginChat() {
         <header className="flex h-14 items-center justify-between border-b border-black/10 px-5 dark:border-white/10">
           <div>
             <div className="text-sm font-semibold">平台构想讨论</div>
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">14 名参与者</div>
+            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">6 名参与者</div>
           </div>
           <span className="text-xs text-slate-400 dark:text-slate-500">{hoverPaused ? '已暂停' : '讨论中'}</span>
         </header>
@@ -287,7 +289,7 @@ function ChatEntry({
   readCount: number
   side: 'left' | 'right'
 }) {
-  const { Icon, label } = speakers[event.speaker]
+  const { avatar, label } = speakers[event.speaker]
   const right = side === 'right'
 
   return (
@@ -299,9 +301,13 @@ function ChatEntry({
       layout
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className={`chat-avatar-${event.speaker} mt-5 grid h-10 w-10 shrink-0 place-items-center rounded-full border`}>
-        <Icon className="h-[18px] w-[18px]" />
-      </div>
+      <img
+        alt=""
+        className="mt-5 h-10 w-10 shrink-0 rounded-full border border-black/10 object-cover dark:border-white/10"
+        height="40"
+        src={avatar}
+        width="40"
+      />
       <div className={`min-w-0 max-w-[82%] sm:max-w-[72%] ${right ? 'items-end text-right' : 'items-start'} flex flex-col`}>
         <span className="mb-1.5 px-1 text-[11px] text-slate-400 dark:text-slate-500">{label}</span>
         {event.kind === 'message' ? (
@@ -332,7 +338,7 @@ function ChatEntry({
               <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />
             </div>
             <div className="mt-4 border-t border-black/10 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-              {readCount >= 14 ? '14 人全部已读' : readCount > 0 ? `${readCount} 人已查看` : '飞书文档'}
+              {readCount >= 6 ? '6 人全部已读' : readCount > 0 ? `${readCount} 人已查看` : '飞书文档'}
             </div>
           </a>
         )}
