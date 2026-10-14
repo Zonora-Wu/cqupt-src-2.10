@@ -291,6 +291,11 @@ function ChatEntry({
 }) {
   const { avatar, label } = speakers[event.speaker]
   const right = side === 'right'
+  const displayedAvatar = right
+    ? speakers.learning.avatar
+    : event.speaker === 'learning'
+      ? speakers.reviewer.avatar
+      : avatar
 
   return (
     <motion.div
@@ -305,7 +310,7 @@ function ChatEntry({
         alt=""
         className="mt-5 h-10 w-10 shrink-0 rounded-full border border-black/10 object-cover dark:border-white/10"
         height="40"
-        src={avatar}
+        src={displayedAvatar}
         width="40"
       />
       <div className={`min-w-0 max-w-[82%] sm:max-w-[72%] ${right ? 'items-end text-right' : 'items-start'} flex flex-col`}>
